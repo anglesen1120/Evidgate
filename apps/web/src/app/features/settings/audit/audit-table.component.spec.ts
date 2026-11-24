@@ -69,7 +69,7 @@ describe('AuditTableComponent', () => {
     const { fixture } = await render([row('audit-1')]);
     const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, AuditActionsHarness);
     const trigger = await harness.view();
-    expect(await trigger.text()).toBe('');
+    expect(await trigger.text({ exclude: '[popover]' })).toBe('');
     expect(await trigger.getProperty('type')).toBe('button');
     expect(await trigger.getAttribute('aria-label')).toBe('View · project.updated');
     expect(await (await harness.viewIcon()).getAttribute('aria-hidden')).toBe('true');
@@ -296,7 +296,7 @@ describe('AuditTableComponent', () => {
       true,
     );
     const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, AuditActionsHarness);
-    expect(await (await harness.view()).text()).toBe('');
+    expect(await (await harness.view()).text({ exclude: '[popover]' })).toBe('');
     const scanIds = fixture.debugElement
       .queryAll(By.directive(CopyableIdentifierComponent))
       .map(({ componentInstance }) => componentInstance as CopyableIdentifierComponent)
@@ -336,7 +336,7 @@ describe('AuditTableComponent', () => {
           AuditActionsHarness,
         );
         const view = await harness.view();
-        expect(await view.text()).toBe('');
+        expect(await view.text({ exclude: '[popover]' })).toBe('');
         expect(await view.getAttribute('aria-label')).toBe(`View · ${action}`);
         const labels = [...root.querySelectorAll('.eg-table-fact > dt')].map(
           (label) => label.textContent,

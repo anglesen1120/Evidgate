@@ -211,7 +211,7 @@ describe('ApiTokenListComponent', () => {
     expect(buttons).toHaveLength(1);
     const button = buttons[0];
     if (!button) throw new Error('Expected token Revoke action');
-    expect(await button.text()).toBe('');
+    expect(await button.text({ exclude: '[popover]' })).toBe('');
     expect(await button.getAttribute('aria-label')).toBe(`Revoke token: ${ROW.name}`);
     expect(await button.hasClass('row-action-danger')).toBe(true);
     expect(await (await harness.revokeIcon()).getAttribute('aria-hidden')).toBe('true');

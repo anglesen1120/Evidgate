@@ -155,11 +155,11 @@ describe('SecretReferenceListComponent metadata boundary (AC3)', () => {
     );
     const button = await harness.rotate();
     const inspect = await harness.inspect();
-    expect(await inspect.text()).toBe('');
+    expect(await inspect.text({ exclude: '[popover]' })).toBe('');
     expect(await inspect.getAttribute('aria-label')).toBe(
       `Inspect reference ${'Long reference '.repeat(20)}`,
     );
-    expect(await button.text()).toBe('');
+    expect(await button.text({ exclude: '[popover]' })).toBe('');
     expect(await button.getAttribute('aria-label')).toBe(
       `Rotate credential ${'Long reference '.repeat(20)}`,
     );

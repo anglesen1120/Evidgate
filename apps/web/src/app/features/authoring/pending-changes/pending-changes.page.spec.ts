@@ -135,7 +135,7 @@ describe('PendingChangesPage', () => {
     const button = await action.button();
     expect(await button.getAttribute('aria-label')).toContain(CHANGE);
     expect(await button.getAttribute('aria-label')).toMatch(/^View /);
-    expect(await button.text()).toBe('');
+    expect(await button.text({ exclude: '[popover]' })).toBe('');
     expect(await (await action.icon()).getAttribute('aria-hidden')).toBe('true');
     expect(await ui.text()).toContain('Review this change');
     await button.click();

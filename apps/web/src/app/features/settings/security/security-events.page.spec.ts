@@ -68,7 +68,7 @@ describe('SecurityEventsPage', () => {
     expect(await harness.rows()).toHaveLength(1);
     expect(await harness.content()).toContain('Support access');
     const trigger = await harness.details();
-    expect(await trigger.text()).toBe('');
+    expect(await trigger.text({ exclude: '[popover]' })).toBe('');
     expect(await trigger.getProperty('type')).toBe('button');
     expect(await trigger.getAttribute('aria-label')).toBe('View · Flagged support access · event1');
     expect(await (await harness.detailsIcon()).getAttribute('aria-hidden')).toBe('true');

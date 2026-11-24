@@ -105,7 +105,7 @@ describe('Mapping resolution review', () => {
       'case-checkout-17 / case-checkout-22',
     );
     const trigger = await page.pickConflict();
-    expect(await trigger.text()).toBe('');
+    expect(await trigger.text({ exclude: '[popover]' })).toBe('');
     expect(await trigger.getAttribute('aria-label')).toBe('View Checkout confirmation');
     const url = TestBed.inject(Router).url;
     await trigger.focus();

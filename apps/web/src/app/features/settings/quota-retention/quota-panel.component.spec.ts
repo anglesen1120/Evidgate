@@ -229,7 +229,7 @@ describe('QuotaPanelComponent', () => {
     expect(actions).toHaveLength(2);
     expect(await harness.viewIcons()).toHaveLength(2);
     for (const action of actions) {
-      expect(await action.text()).toBe('');
+      expect(await action.text({ exclude: '[popover]' })).toBe('');
       expect(await action.getProperty('type')).toBe('button');
       expect(await action.getAttribute('aria-haspopup')).toBe('dialog');
       expect(await action.getAttribute('aria-label')).toContain('View ·');

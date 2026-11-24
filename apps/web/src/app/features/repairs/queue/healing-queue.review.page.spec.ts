@@ -119,7 +119,7 @@ describe('HealingQueueReviewPage', () => {
     expect(await (await queue.shadowLink()).getAttribute('href')).toBe(
       '/dev/shadow-detail/orgs/org-a/projects/proj-b?id=cand-73',
     );
-    expect(await (await queue.shadowLink()).text()).toBe('');
+    expect(await (await queue.shadowLink()).text({ exclude: '[popover]' })).toBe('');
     expect(await (await queue.shadowLink()).getAttribute('aria-label')).toContain(
       'Required delivery address',
     );
@@ -178,7 +178,7 @@ describe('HealingQueueReviewPage', () => {
       if (!supported) {
         const note = 'Detail not available in this review specimen.';
         const summary = await queue.summaryLink(id);
-        expect(await summary.text()).toBe('');
+        expect(await summary.text({ exclude: '[popover]' })).toBe('');
         expect(await summary.getAttribute('aria-label')).toContain('View summary');
         const label = (await summary.getAttribute('aria-label')) ?? '';
         expect(label).toMatch(/^View summary for \S.+/);

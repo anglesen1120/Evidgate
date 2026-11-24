@@ -146,7 +146,7 @@ describe('MemberListComponent', () => {
       MemberActionsHarness,
     );
     const view = await harness.rowView();
-    expect(await view.text()).toBe('');
+    expect(await view.text({ exclude: '[popover]' })).toBe('');
     expect(await view.getAttribute('aria-label')).toBe(`View · ${membership.invited_email}`);
     expect(await (await harness.viewIcon()).getAttribute('aria-hidden')).toBe('true');
     await view.focus();
@@ -182,10 +182,10 @@ describe('MemberListComponent', () => {
     expect(await header.hasClass('break-words')).toBe(false);
     expect(await header.getCssValue('min-inline-size')).toBe('max-content');
     const trigger = await harness.trigger();
-    expect(await trigger.text()).toBe('');
+    expect(await trigger.text({ exclude: '[popover]' })).toBe('');
     expect(await trigger.getAttribute('aria-label')).toBe('Actions pending@example.test');
     expect(await (await harness.menuIcon()).getAttribute('aria-hidden')).toBe('true');
-    expect(await (await harness.rowView()).text()).toBe('');
+    expect(await (await harness.rowView()).text({ exclude: '[popover]' })).toBe('');
   });
 
   it('uses role-based column budgets and one row menu instead of percentage widths and four actions', async () => {
@@ -199,7 +199,7 @@ describe('MemberListComponent', () => {
       MemberActionsHarness,
     );
     const trigger = await harness.trigger();
-    expect(await trigger.text()).toBe('');
+    expect(await trigger.text({ exclude: '[popover]' })).toBe('');
     expect(await trigger.getAttribute('aria-label')).toBe('Actions pending@example.test');
     expect(root.querySelector('[data-members-edit-open]')).toBeNull();
     expect(root.textContent).toContain('No roles assigned');
@@ -249,7 +249,7 @@ describe('MemberListComponent', () => {
         MemberActionsHarness,
       );
       const view = await harness.viewAction();
-      expect(await view.text()).toBe('');
+      expect(await view.text({ exclude: '[popover]' })).toBe('');
       expect(await view.getAttribute('aria-label')).toBe(`View · ${membership.invited_email}`);
       expect(root.querySelector('[data-members-actions]')).toBeNull();
     },

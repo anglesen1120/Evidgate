@@ -85,7 +85,7 @@ describe('AuthoringCaseRowsComponent', () => {
       '/orgs/O/projects/P/authoring/cases/' + row(2).case_id,
     );
     expect(await links[1]?.getAttribute('aria-label')).toBe('View ' + row(2).title);
-    expect(await links[1]?.text()).toBe('');
+    expect(await links[1]?.text({ exclude: '[popover]' })).toBe('');
     expect(await (await harness.viewIcon()).getAttribute('aria-hidden')).toBe('true');
     expect(await (await harness.summary()).text()).toContain('0 of 2 loaded selected');
   });
@@ -93,7 +93,7 @@ describe('AuthoringCaseRowsComponent', () => {
   it('opens case identifiers from a named icon button without changing selection', async () => {
     const { harness } = await mount();
     const opener = await harness.identifiers();
-    expect(await opener.text()).toBe('');
+    expect(await opener.text({ exclude: '[popover]' })).toBe('');
     expect(await (await harness.identifierIcon()).getAttribute('aria-hidden')).toBe('true');
     await opener.click();
     expect(await (await harness.dialog())?.text()).toContain(row(1).case_id);

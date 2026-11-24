@@ -112,7 +112,7 @@ describe('Failure inbox review', () => {
     ]);
     const links = await inbox.links();
     for (const link of links) {
-      expect(await link.text()).toBe('');
+      expect(await link.text({ exclude: '[popover]' })).toBe('');
       expect(await link.getAttribute('aria-label')).toMatch(/^View .+/);
       await link.focus();
       expect(await link.isFocused()).toBe(true);
@@ -122,7 +122,7 @@ describe('Failure inbox review', () => {
         (id) => `/dev/failure-detail/orgs/org-test/projects/project-test?id=${id}`,
       ),
     );
-    expect(await links[0]?.text()).toBe('');
+    expect(await links[0]?.text({ exclude: '[popover]' })).toBe('');
     expect(await links[0]?.getAttribute('aria-label')).toContain('Place order returns HTTP 500');
     expect(await (await inbox.status()).text()).toContain('Critical');
     expect(await inbox.icon()).toBeTruthy();

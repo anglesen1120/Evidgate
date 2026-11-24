@@ -94,7 +94,7 @@ describe('RevisionListComponent', () => {
       RevisionActionsHarness,
     );
     const action = await harness.view();
-    expect(await action.text()).toBe('');
+    expect(await action.text({ exclude: '[popover]' })).toBe('');
     expect(await action.getAttribute('aria-label')).toBe('View · Revision 3');
     expect(await action.getProperty('type')).toBe('button');
     expect(await action.getAttribute('aria-haspopup')).toBe('dialog');

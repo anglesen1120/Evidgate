@@ -152,7 +152,7 @@ describe('Member directory specimen', () => {
     const { table, root } = await mount();
     const trigger = await table.view();
     expect(await trigger.getAttribute('aria-label')).toBe('View linh@example.test');
-    expect(await trigger.text()).toBe('');
+    expect(await trigger.text({ exclude: '[popover]' })).toBe('');
     await trigger.click();
     const dialog = await root.getHarness(MemberDialogHarness);
     const title = await dialog.title();

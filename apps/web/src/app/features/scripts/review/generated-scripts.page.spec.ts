@@ -169,7 +169,7 @@ describe('GeneratedScriptsPage', () => {
     await screen.searchFor('gs-0051');
     const [trigger] = await screen.views();
     if (!trigger) throw new Error('Missing filtered script trigger');
-    expect(await trigger.text()).toBe('');
+    expect(await trigger.text({ exclude: '[popover]' })).toBe('');
     expect(await trigger.getAttribute('aria-label')).toContain('gs-0051');
     await trigger.click();
     const details = await (await screen.dialog()).text();

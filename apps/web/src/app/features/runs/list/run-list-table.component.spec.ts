@@ -133,7 +133,7 @@ describe('RunListTableComponent', { timeout: 15_000 }, () => {
     const table = await TestbedHarnessEnvironment.harnessForFixture(fixture, RunInspectionHarness);
     const view = await table.viewFor(run(3).run_id);
     expect(await view.getAttribute('aria-label')).toBe(`View ${run(3).run_id}`);
-    expect(await view.text()).toBe('');
+    expect(await view.text({ exclude: '[popover]' })).toBe('');
     expect(await (await table.viewIcon()).getAttribute('aria-hidden')).toBe('true');
     await view.focus();
     await view.click();

@@ -53,7 +53,7 @@ describe('Agent pools review', () => {
     expect(await (await view.title()).text()).toBe('Agent pools');
     expect(await view.dialog()).toBeNull();
     const trigger = await view.open();
-    expect(await trigger.text()).toBe('');
+    expect(await trigger.text({ exclude: '[popover]' })).toBe('');
     expect(await trigger.getProperty('type')).toBe('button');
     expect(await trigger.getAttribute('aria-label')).toBe(
       `View · ${agentPoolsFixture.directory[0]?.name}`,

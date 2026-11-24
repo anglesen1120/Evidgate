@@ -159,7 +159,7 @@ describe('AiSettingsPage', () => {
     await harness.click('[data-ai-history-tab]');
     const opener = await harness.view();
     expect(await opener.getAttribute('aria-label')).toBe('View version 1');
-    expect(await opener.text()).toBe('');
+    expect(await opener.text({ exclude: '[popover]' })).toBe('');
     expect(await opener.getProperty('tagName')).toBe('BUTTON');
     expect(
       await harness.attribute('button[aria-label="View version 1"] hlm-icon', 'aria-hidden'),

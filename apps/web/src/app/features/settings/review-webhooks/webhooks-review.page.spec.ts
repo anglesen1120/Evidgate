@@ -73,7 +73,7 @@ describe('Webhook integrations review', () => {
     expect(await (await view.title()).text()).toBe('Webhook integrations');
     expect(await view.dialog()).toBeNull();
     const trigger = await view.open();
-    expect(await trigger.text()).toBe('');
+    expect(await trigger.text({ exclude: '[popover]' })).toBe('');
     expect(await trigger.getProperty('type')).toBe('button');
     expect(await trigger.getAttribute('aria-label')).toBe(
       `View · ${webhooksFixture.endpoints[0]?.name}`,

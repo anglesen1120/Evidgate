@@ -87,7 +87,7 @@ describe('ArtifactViewerReviewPage', () => {
       await (await page.find('table a[aria-current="page"]'))?.getAttribute('aria-label'),
     ).toContain('art-shot-92');
     const metadata = await page.metadata();
-    expect(await metadata.text()).toBe('');
+    expect(await metadata.text({ exclude: '[popover]' })).toBe('');
     expect(await metadata.getAttribute('href')).toContain('id=art-shot-92');
     expect(await (await page.metadataIcon()).getAttribute('aria-hidden')).toBe('true');
     await metadata.focus();

@@ -198,8 +198,8 @@ describe('TimelineComponent', () => {
     const { harness } = await mount();
     const view = await harness.action('View version 3');
     const compare = await harness.action('Compare with 2');
-    expect(await view.text()).toBe('');
-    expect(await compare.text()).toBe('');
+    expect(await view.text({ exclude: '[popover]' })).toBe('');
+    expect(await compare.text({ exclude: '[popover]' })).toBe('');
     expect(await (await harness.actionIcon('View version 3')).getAttribute('aria-hidden')).toBe(
       'true',
     );

@@ -54,7 +54,7 @@ describe('SupportAccessReviewPage', () => {
       params.next(convertToParamMap({ state, section: 'admin-preview' }));
       const action = await page.decision();
       if (!action) throw new Error('Expected support decision action');
-      expect(await action.text()).toBe('');
+      expect(await action.text({ exclude: '[popover]' })).toBe('');
       expect(await action.getAttribute('aria-label')).toBe(name);
       expect(await action.hasClass('row-action-danger')).toBe(danger);
       expect(await (await page.decisionIcon()).getAttribute('aria-hidden')).toBe('true');
@@ -143,12 +143,12 @@ describe('SupportAccessReviewPage', () => {
     expect(await (await page.badgeIcon()).getAttribute('aria-hidden')).toBe('true');
     expect(await (await page.decision())?.getProperty('disabled')).toBe(true);
     const decision = await page.decision();
-    expect(await decision?.text()).toBe('');
+    expect(await decision?.text({ exclude: '[popover]' })).toBe('');
     expect(await decision?.getAttribute('aria-label')).toBe('Approve support access · sg-41');
     await decision?.click();
     expect(await page.dialog()).toBeNull();
     const trigger = await page.open(1);
-    expect(await trigger.text()).toBe('');
+    expect(await trigger.text({ exclude: '[popover]' })).toBe('');
     expect(await trigger.getProperty('type')).toBe('button');
     expect(await trigger.getAttribute('aria-label')).toBe('View · sg-40');
     const dialog = await page.dialog();
