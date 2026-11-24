@@ -289,7 +289,8 @@ test.describe('AC8: the support-access chip marks exactly the flagged rows', () 
         await page.keyboard.press('Escape');
         await expect(record.locator('[data-audit-view]')).toBeFocused();
       }
-      await expect(page.getByRole('tooltip')).toHaveCount(0);
+      // Restored row-action focus exposes its tooltip after every chip tooltip has closed.
+      await expect(page.getByRole('tooltip')).toHaveCount(1);
     });
 
     test(`the chip is reachable from the keyboard and its description is its label (${locale})`, async ({

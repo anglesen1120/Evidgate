@@ -18,6 +18,7 @@ import { HlmTableImports } from '@evidgate/ui/table';
 import { ShellIconComponent } from '../../../shell/layout/shell-icon.component';
 import { StatusPillComponent } from '../../../shared/ui/chips/status-pill.component';
 import { DataTableValueComponent } from '../../../shared/ui/data-table/data-table-value.component';
+import { RowActionComponent } from '../../../shared/ui/data-table/row-action.component';
 import { DesktopMutationDirective } from '../../../shared/ui/narrow/desktop-mutation.directive';
 import { NarrowMutationPolicy } from '../../../shared/ui/narrow/narrow-mutation-policy';
 import { EmptyPatternComponent } from '../../../shared/ui/states/empty-pattern.component';
@@ -33,6 +34,7 @@ import { SECRETS_COPY, secretStatusLabel } from './secrets.copy';
     StatusPillComponent,
     RotationReminderChipComponent,
     HlmButton,
+    RowActionComponent,
     HlmDialogImports,
     HlmCardImports,
     HlmTableImports,

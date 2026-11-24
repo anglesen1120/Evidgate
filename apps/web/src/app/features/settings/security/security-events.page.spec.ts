@@ -25,7 +25,8 @@ class SecurityPageHarness extends ComponentHarness {
   readonly content = async () => (await this.host()).text();
   readonly rows = this.locatorForAll('[data-row-id]');
   readonly summaryValues = this.locatorForAll('[data-security-summary] dd strong');
-  readonly details = this.locatorFor('[data-security-view]');
+  readonly details = this.locatorFor('button[data-security-view]');
+  readonly detailsIcon = this.locatorFor('button[data-security-view] hlm-icon');
   readonly project = this.locatorFor('#security-project');
   readonly apply = this.locatorFor('[data-security-apply]');
   readonly clear = this.locatorFor('[data-security-clear]');
@@ -84,6 +85,10 @@ describe('SecurityEventsPage', () => {
     expect(await harness.rows()).toHaveLength(1);
     expect(await harness.content()).toContain('Support access');
     const trigger = await harness.details();
+    expect(await trigger.text({ exclude: '[popover]' })).toBe('');
+    expect(await trigger.getProperty('type')).toBe('button');
+    expect(await trigger.getAttribute('aria-label')).toBe('View · Flagged support access · event1');
+    expect(await (await harness.detailsIcon()).getAttribute('aria-hidden')).toBe('true');
     await trigger.focus();
     await trigger.click();
     const dialog = document.querySelector<HTMLElement>('[role="dialog"]');

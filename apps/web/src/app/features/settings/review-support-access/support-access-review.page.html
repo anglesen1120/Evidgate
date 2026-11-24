@@ -149,32 +149,35 @@
                 <td hlmTd class="text-end max-sm:col-span-2 max-sm:h-auto max-sm:p-0">
                   <div class="flex flex-wrap justify-end gap-2">
                     <button
-                      hlmBtn
+                      appRowAction
                       type="button"
-                      [variant]="'outline'"
-                      [size]="'sm'"
+                      [label]="viewLabel + ' · ' + grant.ref"
                       [attr.data-view-record]="'grant'"
                       [attr.aria-haspopup]="'dialog'"
                       [attr.aria-expanded]="viewing() && selection() === grant.ref"
-                      class="pointer-coarse:min-h-11"
-                      [attr.aria-labelledby]="'view-grant-' + idx + ' grant-' + idx"
+                      [attr.aria-label]="viewLabel + ' · ' + grant.ref"
                       (click)="openView(grant.ref)"
-                    >
-                      <span [id]="'view-grant-' + idx" i18n="@@review.directory.view">View</span>
-                    </button>
+                    ></button>
                     @if (grant.status === 'requested' || grant.status === 'approved') {
                       <button
-                        hlmBtn
+                        appRowAction
                         data-grant-action
-                        [variant]="'outline'"
-                        [size]="'sm'"
+                        [icon]="grant.status === 'requested' ? 'lucideCheck' : 'lucideX'"
+                        [tone]="grant.status === 'approved' ? 'danger' : 'neutral'"
+                        [label]="
+                          (grant.status === 'requested' ? copy.approve : copy.revoke) +
+                          ' · ' +
+                          grant.ref
+                        "
+                        [attr.aria-label]="
+                          (grant.status === 'requested' ? copy.approve : copy.revoke) +
+                          ' · ' +
+                          grant.ref
+                        "
                         type="button"
-                        class="pointer-coarse:min-h-11"
                         [disabled]="!canEdit() || grant.ref !== viewModel().selectedRef"
                         (click)="openDecision(grant.ref)"
-                      >
-                        {{ grant.status === 'requested' ? copy.approve : copy.revoke }}
-                      </button>
+                      ></button>
                     }
                   </div>
                 </td>

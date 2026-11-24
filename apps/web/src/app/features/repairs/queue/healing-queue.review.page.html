@@ -338,15 +338,21 @@
   }
   @if (row.linkable && canReview(row)) {
     <a
-      hlmBtn
-      [variant]="'link'"
-      [size]="'sm'"
+      appRowAction
+      [icon]="'lucideCheck'"
+      [label]="c.approval + ' · ' + row.title"
+      [attr.aria-label]="c.approval + ' · ' + row.title"
       [routerLink]="approvalRoute()"
       [queryParams]="{ id: row.id }"
-      >{{ c.approval }}</a
-    >
+    ></a>
   } @else {
-    <button hlmBtn type="button" [variant]="'link'" [size]="'sm'" disabled>{{ c.approval }}</button>
+    <button
+      appRowAction
+      [icon]="'lucideCheck'"
+      [label]="c.approval + ' · ' + row.title"
+      [attr.aria-label]="c.approval + ' · ' + row.title"
+      disabled
+    ></button>
   }
 </ng-template>
 <ng-template #shadowCell let-row>
@@ -366,18 +372,17 @@
   <div class="queue-row-actions">
     @if (row.linkable) {
       <a
-        hlmBtn
-        [variant]="'outline'"
+        appRowAction
+        [label]="viewLabel(row.title)"
         data-shadow
         [routerLink]="shadowRoute()"
         [queryParams]="{ id: row.id }"
         [attr.aria-label]="viewLabel(row.title)"
-        >{{ c.view }}</a
-      >
+      ></a>
     } @else {
       <a
-        hlmBtn
-        [variant]="'outline'"
+        appRowAction
+        [label]="summaryLabel(row.title)"
         data-summary
         [routerLink]="[]"
         [queryParams]="{ id: row.id }"
@@ -385,8 +390,7 @@
         [attr.aria-current]="visibleDetail()?.id === row.id ? 'true' : null"
         [attr.aria-label]="summaryLabel(row.title)"
         [attr.aria-describedby]="'queue-detail-note-' + row.id"
-        >{{ c.viewSummary }}</a
-      >
+      ></a>
     }
   </div>
 </ng-template>

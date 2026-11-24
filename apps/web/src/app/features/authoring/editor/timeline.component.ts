@@ -27,6 +27,7 @@ import {
   type DataTableCellContext,
 } from '../../../shared/ui/data-table';
 import { DataTableValueComponent } from '../../../shared/ui/data-table/data-table-value.component';
+import { RowActionComponent } from '../../../shared/ui/data-table/row-action.component';
 import { NarrowMutationPolicy } from '../../../shared/ui/narrow';
 import { errorOf, REASON_UNAVAILABLE, WRITE_REASON } from './editor.model';
 import { EditorStore } from './editor.store';
@@ -48,6 +49,7 @@ import { VersionDiffComponent } from './version-diff.component';
     AbsoluteTimeComponent,
     DataTableComponent,
     DataTableValueComponent,
+    RowActionComponent,
     VersionDiffComponent,
   ],
   providers: [TimelineStore],

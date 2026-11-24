@@ -24,6 +24,7 @@ import {
 } from '../settings-page-counts.component';
 import { StatusPillComponent } from '../../../shared/ui/chips/status-pill.component';
 import { DataTableValueComponent } from '../../../shared/ui/data-table/data-table-value.component';
+import { RowActionComponent } from '../../../shared/ui/data-table/row-action.component';
 import { DesktopMutationDirective } from '../../../shared/ui/narrow/desktop-mutation.directive';
 import { NarrowMutationPolicy } from '../../../shared/ui/narrow/narrow-mutation-policy';
 import { EmptyPatternComponent } from '../../../shared/ui/states/empty-pattern.component';
@@ -45,6 +46,7 @@ import { API_TOKENS_COPY } from './api-tokens.copy';
     HlmLabel,
     StatusPillComponent,
     DataTableValueComponent,
+    RowActionComponent,
     ApiTokenFactsComponent,
     ApiTokenPermissionTagsComponent,
     DesktopMutationDirective,
@@ -172,17 +174,17 @@ import { API_TOKENS_COPY } from './api-tokens.copy';
                     @if (canWrite() && row.status !== 'revoked') {
                       <button
                         *appDesktopMutation
-                        hlmBtn
-                        [variant]="'ghost'"
+                        appRowAction
+                        [icon]="'lucideX'"
+                        [tone]="'danger'"
+                        [label]="writeCopy.revoke + ': ' + row.name"
                         type="button"
                         data-api-revoke
                         [attr.data-row-id]="row.id"
                         [attr.aria-label]="writeCopy.revoke + ': ' + row.name"
                         [disabled]="busy()"
                         (click)="requestRevoke(row)"
-                      >
-                        {{ writeCopy.revoke }}
-                      </button>
+                      ></button>
                     }
                   </td>
                   @if (!narrow) {

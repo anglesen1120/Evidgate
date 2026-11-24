@@ -15,7 +15,7 @@ class InboxHarness extends ComponentHarness {
   readonly preview = this.locatorFor('article[aria-labelledby="inbox-preview-title"]');
   readonly rows = this.locatorForAll('app-inbox-queue [data-row-id]');
   readonly range = this.locatorFor('app-inbox-queue footer span');
-  readonly links = this.locatorForAll('app-inbox-queue [data-row-id] a[data-view]');
+  readonly links = this.locatorForAll('app-inbox-queue [data-row-id] a[aria-label^="View "]');
   readonly status = this.locatorFor('app-inbox-queue [data-row-id] app-status-pill');
   readonly icon = this.locatorFor('app-inbox-queue [data-row-id] app-status-pill hlm-icon');
   readonly previewAddress = this.locatorFor('[data-row-id="inc-92"] button[aria-pressed]');
@@ -111,12 +111,18 @@ describe('Failure inbox review', () => {
       'View',
     ]);
     const links = await inbox.links();
+    for (const link of links) {
+      expect(await link.text({ exclude: '[popover]' })).toBe('');
+      expect(await link.getAttribute('aria-label')).toMatch(/^View .+/);
+      await link.focus();
+      expect(await link.isFocused()).toBe(true);
+    }
     expect(await Promise.all(links.map((link) => link.getAttribute('href')))).toEqual(
       ['inc-91', 'inc-92', 'inc-93'].map(
         (id) => `/dev/failure-detail/orgs/org-test/projects/project-test?id=${id}`,
       ),
     );
-    expect(await links[0]?.text()).toContain('View');
+    expect(await links[0]?.text({ exclude: '[popover]' })).toBe('');
     expect(await links[0]?.getAttribute('aria-label')).toContain('Place order returns HTTP 500');
     expect(await (await inbox.status()).text()).toContain('Critical');
     expect(await inbox.icon()).toBeTruthy();
