@@ -79,6 +79,7 @@ export class RowActionComponent {
   constructor() {
     // Consumer aria-label bindings win host bindings; normalize after that DOM write too.
     afterRenderEffect(() => {
+      this.label();
       this.renderer.setAttribute(this.nativeElement, 'aria-label', this.safeLabel());
     });
     this.destroyRef.onDestroy(() => this.hideTooltip());
