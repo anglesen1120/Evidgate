@@ -21,8 +21,7 @@
   white-space: nowrap;
 }
 .help,
-.error,
-.pagination p {
+.error {
   margin: 0;
   overflow-wrap: anywhere;
   font-size: var(--eg-text-sm);
@@ -127,15 +126,8 @@ button {
   border-block-start: var(--eg-border-width) solid var(--eg-border);
   padding-block-start: var(--eg-space-4);
 }
-.pagination .field {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--eg-space-2);
-}
-.pagination p {
+.pagination app-data-table-pager {
   flex: 1 1 auto;
-  font-variant-numeric: tabular-nums;
 }
 @container case-pane (min-width: 32em) {
   .filter-fields {

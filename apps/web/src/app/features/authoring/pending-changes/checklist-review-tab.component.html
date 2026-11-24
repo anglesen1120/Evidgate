@@ -28,7 +28,7 @@
       [error]="store.queueError()"
       [retryEligible]="store.retryReady()"
       [retryBusy]="status() === 'loading'"
-      (retry)="store.reload()"
+      (retry)="store.retryPage()"
     >
       @if (rows().length === 0) {
         <p class="full-text">{{ ui.itemEmpty }}</p>
@@ -36,15 +36,27 @@
       @if (rows().length) {
         <app-pending-change-table [rows]="rows()" [caption]="ui.reviewTab" />
       }
-      @if (store.nextCursor()) {
+      <app-data-table-pager
+        [page]="store.page()"
+        [pageSize]="store.pageSize()"
+        [total]="null"
+        [count]="rows().length"
+        [hasNext]="store.nextCursor() !== null"
+        [busy]="store.queueing() || store.queueLoading() || !store.retryReady()"
+        (previous)="store.previous()"
+        (next)="store.next()"
+        (pageSizeChange)="store.setPageSize($event)"
+      />
+      @if (store.queueStale()) {
+        <app-inline-feedback [tone]="'warning'" [title]="ui.staleQueue" />
         <button
           hlmBtn
           [variant]="'outline'"
           type="button"
-          [disabled]="store.queueing() || !store.retryReady()"
-          (click)="store.loadMore()"
+          [disabled]="store.queueLoading() || store.queueing() || !store.retryReady()"
+          (click)="store.retryPage()"
         >
-          {{ ui.loadMore }}
+          {{ copy.conflictReload }}
         </button>
       }
       @if (!store.canWrite() || deniedWrite()) {

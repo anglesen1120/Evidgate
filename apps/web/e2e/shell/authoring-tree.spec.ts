@@ -364,8 +364,8 @@ for (const locale of LOCALES) {
   }) => {
     await page.goto(base);
     await expect(page.locator(`${CASE_ROWS} [data-row-id]`)).toHaveCount(2);
-    await page.locator('[data-case-load-more]').click();
-    await expect(page.locator(`${CASE_ROWS} [data-row-id]`)).toHaveCount(3);
+    await page.locator(`${CASE_TABLE} app-data-table-pager [data-page="next"]`).click();
+    await expect(page.locator(`${CASE_ROWS} [data-row-id]`)).toHaveCount(1);
     await expect(page).toHaveURL(/cursor=authoring-cases-2/);
     expect((await lastCaseQuery(page))['cursor']).toBe('authoring-cases-2');
     await page.locator('#authoring-case-search').fill('Địa chỉ');
@@ -453,7 +453,7 @@ for (const locale of LOCALES) {
     }
 }
 
-test('case table virtualizes more than 200 loaded cases at a roomy desktop width', async ({
+test('case table keeps a bounded visible page while browsing more than 200 cases', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1920, height: 1080 });
@@ -461,10 +461,20 @@ test('case table virtualizes more than 200 loaded cases at a roomy desktop width
     'en',
     `/dev/authoring-tree/orgs/${ORG_ACME}/projects/${PROJECT_STOREFRONT}`,
   );
-  await page.goto(withVariants(base, ['?fixture.variant.listManualCases=bulk&limit=200']));
-  await expect(page.locator('[data-case-loaded]')).toContainText('200');
-  await page.locator('[data-case-load-more]').click();
-  await expect(page.locator('[data-case-loaded]')).toContainText('205');
-  await expect(page.locator(`${CASE_ROWS} cdk-virtual-scroll-viewport`)).toBeVisible();
-  expect(await page.locator(`${CASE_ROWS} [data-row-id]`).count()).toBeLessThan(205);
+  await page.goto(withVariants(base, ['?fixture.variant.listManualCases=bulk&limit=100']));
+  const pager = page.locator(`${CASE_TABLE} app-data-table-pager`);
+  const rows = page.locator(`${CASE_ROWS} [data-row-id]`);
+  await expect(rows).toHaveCount(100);
+  await expect(pager.locator('[role="status"]')).toHaveText('Page 1');
+  await pager.locator('[data-page="next"]').click();
+  await expect(pager.locator('[role="status"]')).toHaveText('Page 2');
+  await expect(rows).toHaveCount(100);
+  await pager.locator('[data-page="next"]').click();
+  await expect(pager.locator('[role="status"]')).toHaveText('Page 3');
+  await expect(rows).toHaveCount(5);
+  await expect(pager.locator('[data-page="next"]')).toHaveAttribute('aria-disabled', 'true');
+  await pager.locator('[data-page="previous"]').click();
+  await expect(pager.locator('[role="status"]')).toHaveText('Page 2');
+  await expect(rows).toHaveCount(100);
+  await expect(page.locator(`${CASE_ROWS} cdk-virtual-scroll-viewport`)).toHaveCount(0);
 });

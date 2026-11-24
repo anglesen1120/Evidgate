@@ -19,14 +19,14 @@ export const CASE_QUERY_KEYS = [
   'cursor',
   'limit',
 ] as const;
-export const CASE_PAGE_SIZES = [25, 50, 100, 200] as const;
+export const CASE_PAGE_SIZES: readonly number[] = [20, 50, 100];
 export const EMPTY_CASE_FILTERS: AuthoringCaseFilters = {
   itemId: '',
   state: '',
   priority: '',
   covered: '',
   q: '',
-  limit: 50,
+  limit: 20,
 };
 
 const CASE_UUID_SHAPE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -63,7 +63,7 @@ export function caseFiltersFromQuery(raw: CaseQueryParams): AuthoringCaseFilters
         : '',
     covered: covered === 'true' || covered === 'false' ? covered : '',
     q: raw['q'] ?? '',
-    limit: Number.isInteger(limit) && limit >= 1 && limit <= 200 ? limit : 50,
+    limit: CASE_PAGE_SIZES.includes(limit) ? limit : 20,
   };
 }
 

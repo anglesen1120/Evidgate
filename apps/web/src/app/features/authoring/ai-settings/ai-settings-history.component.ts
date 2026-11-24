@@ -6,7 +6,6 @@ import {
   inject,
   linkedSignal,
   output,
-  signal,
   viewChild,
   type TemplateRef,
 } from '@angular/core';
@@ -23,6 +22,7 @@ import {
   type DataTableCellContext,
 } from '../../../shared/ui/data-table';
 import { RowActionComponent } from '../../../shared/ui/data-table/row-action.component';
+import { DataTablePagerComponent } from '../../../shared/ui/data-table/data-table-pager.component';
 import { EmptyPatternComponent } from '../../../shared/ui/states/empty-pattern.component';
 import { RequestStateComponent } from '../../../shared/ui/states/request-state.component';
 import { AbsoluteTimeComponent } from '../../../shared/time/absolute-time.component';
@@ -49,6 +49,7 @@ import { AiSettingsSnapshotFieldsComponent } from './ai-settings-snapshot-fields
     HlmLabel,
     DataTableComponent,
     RowActionComponent,
+    DataTablePagerComponent,
     EmptyPatternComponent,
     RequestStateComponent,
     AbsoluteTimeComponent,
@@ -61,15 +62,17 @@ export class AiSettingsHistoryComponent {
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   readonly openSettings = output<void>();
   protected readonly escape = escapeFormatChars;
-  protected readonly filter = signal('');
+  protected readonly filter = linkedSignal(() => {
+    this.store.scope();
+    return '';
+  });
   protected readonly fields = FIELDS;
   protected readonly textOf = textOf;
   protected readonly authorLabel = $localize`:@@authoring.ai-settings.author:Author membership`;
   protected readonly settingsIdLabel = $localize`:@@authoring.ai-settings.settings-id:Settings identity`;
   protected readonly hashLabel = $localize`:@@authoring.ai-settings.hash:Content hash`;
   protected readonly tableCaption = $localize`:@@authoring.ai-settings.saved-versions:Saved settings versions`;
-  protected readonly pagesLabel = $localize`:@@authoring.ai-settings.pages:Version history pages`;
-  protected readonly noMatch = $localize`:@@authoring.ai-settings.no-match:No loaded versions match this filter`;
+  protected readonly noMatch = $localize`:@@authoring.ai-settings.page-no-match:No versions on this page match this filter`;
   protected readonly empty = $localize`:@@authoring.ai-settings.empty-history:No saved settings versions`;
   protected readonly emptyPage = $localize`:@@authoring.ai-settings.empty-page:No versions on this page`;
   protected readonly firstVersionAction = $localize`:@@authoring.ai-settings.open-settings:Open AI settings`;
@@ -171,6 +174,10 @@ export class AiSettingsHistoryComponent {
     cellTemplate: TemplateRef<DataTableCellContext<AiSettingsVersionSummary>> | undefined,
   ) {
     return cellTemplate ? { cellTemplate } : {};
+  }
+  protected filterHistory(value: string): void {
+    this.filter.set(value);
+    if (this.store.target().page > 1) this.store.firstPage();
   }
   protected viewName(version: number): string {
     return $localize`:@@authoring.ai-settings.view-version:View version ${version}:VERSION:`;

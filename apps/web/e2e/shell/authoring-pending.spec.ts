@@ -63,6 +63,11 @@ for (const locale of LOCALES) {
         await page.goto(localePath(locale, base));
         await expect(page.locator('main h1')).toHaveCount(1);
         await expect(page.locator('[data-pending-preview]')).toHaveCount(4);
+        const pager = page.locator('app-data-table-pager');
+        await expect(pager).toHaveCount(1);
+        await expect(pager.getByRole('combobox')).toContainText('20');
+        await expect(pager.getByRole('button').nth(0)).toBeDisabled();
+        await expect(pager.getByRole('button').nth(1)).toBeDisabled();
         const beforeIds = await queuedIds(page);
         expect(beforeIds).toEqual([COMMENT, DELETE, MERGE, SPLIT]);
         expect(await calls(page)).toEqual([]);

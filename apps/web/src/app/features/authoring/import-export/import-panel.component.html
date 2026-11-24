@@ -399,6 +399,17 @@
         }
         @if (history()?.error; as error) {
           <app-request-state [status]="'error'" [error]="error" />
+          @if (error.retryable) {
+            <button
+              hlmBtn
+              [variant]="'outline'"
+              type="button"
+              [disabled]="store.history.isLoading() || !store.historyRetryReady()"
+              (click)="store.retryHistory()"
+            >
+              {{ copy.retry }}
+            </button>
+          }
         } @else if (store.history.error()) {
           <app-inline-feedback [title]="copy.historyFailed" [tone]="'warning'" />
         }
@@ -406,11 +417,6 @@
           class="flex min-w-0 flex-wrap items-center gap-(--eg-space-3) border-t border-border pt-(--eg-space-3)"
         >
           @if (history()?.page; as page) {
-            @if (page.items.length) {
-              <span data-history-range class="me-auto text-sm text-muted-foreground tabular-nums">{{
-                historyRange()
-              }}</span>
-            }
             @if (!page.items.length) {
               <app-request-state
                 [status]="'ready'"
@@ -419,19 +425,17 @@
                 [emptyTitle]="copy.historyEmpty"
               />
             }
-            @if (page.next_cursor) {
-              <button
-                hlmBtn
-                [variant]="'outline'"
-                type="button"
-                class="min-h-(--eg-control-touch) w-fit whitespace-normal"
-                [disabled]="store.history.isLoading() || !store.historyRetryReady()"
-                (click)="store.olderHistory()"
-              >
-                {{ copy.historyOlder }}
-              </button>
-            }
           }
+          <app-data-table-pager
+            [page]="store.historyPage()"
+            [pageSize]="store.historyPageSize()"
+            [count]="history()?.page?.items?.length ?? 0"
+            [hasNext]="!!history()?.page?.next_cursor"
+            [busy]="store.history.isLoading() || !store.historyRetryReady()"
+            (previous)="store.previousHistory()"
+            (next)="store.nextHistory()"
+            (pageSizeChange)="store.setHistoryPageSize($event)"
+          />
           <button
             hlmBtn
             [variant]="'outline'"
@@ -441,7 +445,7 @@
             [disabled]="store.history.isLoading() || !store.historyRetryReady()"
             (click)="store.refreshHistory()"
           >
-            {{ store.historyCursor() ? copy.historyLatest : copy.historyRefresh }}
+            {{ copy.historyRefresh }}
           </button>
         </footer>
       </div>

@@ -90,7 +90,13 @@ describe('PendingChangesStore target scope', () => {
   it('treats an empty target id as no scope', async () => {
     await store().init(PROJECT, { targetId: '' });
     expect(store().targetId()).toBeNull();
-    expect(listPending).toHaveBeenLastCalledWith(PROJECT, expect.any(AbortSignal), undefined);
+    expect(listPending).toHaveBeenLastCalledWith(
+      PROJECT,
+      expect.any(AbortSignal),
+      undefined,
+      undefined,
+      20,
+    );
   });
 
   it.each(['success', 'conflict'] as const)(

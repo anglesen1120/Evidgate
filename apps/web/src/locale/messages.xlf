@@ -245,96 +245,82 @@
         <source> Version history </source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/ai-settings/ai-settings-history.component.html</context>
-          <context context-type="linenumber">11,15</context>
+          <context context-type="linenumber">11,13</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/ai-settings/ai-settings.page.html</context>
           <context context-type="linenumber">73,77</context>
         </context-group>
       </trans-unit>
-      <trans-unit id="authoring.ai-settings.filter" datatype="html">
-        <source>Filter loaded versions by reason</source>
+      <trans-unit id="authoring.ai-settings.history-order" datatype="html">
+        <source> Fixed server order: newest version first </source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/ai-settings/ai-settings-history.component.html</context>
-          <context context-type="linenumber">22,27</context>
+          <context context-type="linenumber">14,18</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.ai-settings.page-filter" datatype="html">
+        <source>Filter this page by reason</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/ai-settings/ai-settings-history.component.html</context>
+          <context context-type="linenumber">25,30</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.ai-settings.select-first" datatype="html">
         <source> Select a first version, then choose another version to compare. </source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/ai-settings/ai-settings-history.component.html</context>
-          <context context-type="linenumber">38,41</context>
+          <context context-type="linenumber">41,44</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.ai-settings.select-baseline" datatype="html">
         <source>Select version <x id="INTERPOLATION" equiv-text="{{ row.version_no }}"/></source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/ai-settings/ai-settings-history.component.html</context>
-          <context context-type="linenumber">62,63</context>
+          <context context-type="linenumber">65,66</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/ai-settings/ai-settings-history.component.html</context>
-          <context context-type="linenumber">64,65</context>
+          <context context-type="linenumber">67,68</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.ai-settings.compare" datatype="html">
         <source>Compare with <x id="INTERPOLATION" equiv-text="{{ row.version_no }}"/></source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/ai-settings/ai-settings-history.component.html</context>
-          <context context-type="linenumber">74,75</context>
+          <context context-type="linenumber">77,78</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/ai-settings/ai-settings-history.component.html</context>
-          <context context-type="linenumber">76,77</context>
-        </context-group>
-      </trans-unit>
-      <trans-unit id="authoring.ai-settings.visible-versions" datatype="html">
-        <source>Showing <x id="INTERPOLATION" equiv-text="{{ rows().length }}"/> of <x id="INTERPOLATION_1" equiv-text="{{ page.items.length }}"/> loaded versions</source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/authoring/ai-settings/ai-settings-history.component.html</context>
-          <context context-type="linenumber">119,121</context>
-        </context-group>
-      </trans-unit>
-      <trans-unit id="authoring.ai-settings.first" datatype="html">
-        <source> First page </source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/authoring/ai-settings/ai-settings-history.component.html</context>
-          <context context-type="linenumber">129,134</context>
-        </context-group>
-      </trans-unit>
-      <trans-unit id="authoring.ai-settings.next" datatype="html">
-        <source> Next page </source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/authoring/ai-settings/ai-settings-history.component.html</context>
-          <context context-type="linenumber">139,144</context>
+          <context context-type="linenumber">79,80</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.ai-settings.cursor-cycle" datatype="html">
         <source> The server repeated a page cursor. Return to the first page to retry. </source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/ai-settings/ai-settings-history.component.html</context>
-          <context context-type="linenumber">145,151</context>
+          <context context-type="linenumber">127,133</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.ai-settings.immutable" datatype="html">
         <source> Version <x id="INTERPOLATION" equiv-text="{{ version.version_no }}"/> — read-only </source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/ai-settings/ai-settings-history.component.html</context>
-          <context context-type="linenumber">161,162</context>
+          <context context-type="linenumber">143,144</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.ai-settings.diff-title" datatype="html">
         <source> Compare version <x id="INTERPOLATION" equiv-text="{{ before.version_no }}"/> with <x id="INTERPOLATION_1" equiv-text="{{ after.version_no }}"/> </source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/ai-settings/ai-settings-history.component.html</context>
-          <context context-type="linenumber">189,190</context>
+          <context context-type="linenumber">171,172</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.ai-settings.before" datatype="html">
         <source>Before</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/ai-settings/ai-settings-history.component.html</context>
-          <context context-type="linenumber">204,206</context>
+          <context context-type="linenumber">186,188</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/ai-settings/ai-settings.page.html</context>
@@ -349,7 +335,7 @@
         <source>After</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/ai-settings/ai-settings-history.component.html</context>
-          <context context-type="linenumber">212,214</context>
+          <context context-type="linenumber">194,196</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/ai-settings/ai-settings.page.html</context>
@@ -364,43 +350,43 @@
         <source> Output languages (before → after) </source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/ai-settings/ai-settings-history.component.html</context>
-          <context context-type="linenumber">223,226</context>
+          <context context-type="linenumber">205,208</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.ai-settings.snapshot-title" datatype="html">
         <source> Settings version details </source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/ai-settings/ai-settings-history.component.html</context>
-          <context context-type="linenumber">258,261</context>
+          <context context-type="linenumber">240,243</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.ai-settings.version-column" datatype="html">
         <source>Version</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/ai-settings/ai-settings-history.component.html</context>
-          <context context-type="linenumber">261,265</context>
+          <context context-type="linenumber">243,247</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/ai-settings/ai-settings-history.component.html</context>
-          <context context-type="linenumber">278,282</context>
+          <context context-type="linenumber">260,264</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/ai-settings/ai-settings-history.component.ts</context>
-          <context context-type="linenumber">127</context>
+          <context context-type="linenumber">130</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.ai-settings.restore-unavailable" datatype="html">
         <source> Restore is unavailable: this screen provides read-only history. </source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/ai-settings/ai-settings-history.component.html</context>
-          <context context-type="linenumber">266,270</context>
+          <context context-type="linenumber">248,252</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.history.summary" datatype="html">
         <source> Summary </source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/ai-settings/ai-settings-history.component.html</context>
-          <context context-type="linenumber">274,278</context>
+          <context context-type="linenumber">256,260</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/import-export/import-history-table.component.html</context>
@@ -411,11 +397,11 @@
         <source>Saved at (UTC)</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/ai-settings/ai-settings-history.component.html</context>
-          <context context-type="linenumber">282,285</context>
+          <context context-type="linenumber">264,267</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/ai-settings/ai-settings-history.component.ts</context>
-          <context context-type="linenumber">148</context>
+          <context context-type="linenumber">151</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/ai-settings/ai-settings-version-card.component.ts</context>
@@ -426,18 +412,18 @@
         <source>Reason</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/ai-settings/ai-settings-history.component.html</context>
-          <context context-type="linenumber">286,290</context>
+          <context context-type="linenumber">268,272</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/ai-settings/ai-settings-history.component.ts</context>
-          <context context-type="linenumber">134</context>
+          <context context-type="linenumber">137</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.history.provenance" datatype="html">
         <source> Version provenance </source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/ai-settings/ai-settings-history.component.html</context>
-          <context context-type="linenumber">293,297</context>
+          <context context-type="linenumber">275,279</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/import-export/import-history-table.component.html</context>
@@ -448,14 +434,14 @@
         <source>Source template</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/ai-settings/ai-settings-history.component.html</context>
-          <context context-type="linenumber">307,310</context>
+          <context context-type="linenumber">289,292</context>
         </context-group>
       </trans-unit>
       <trans-unit id="ui.close" datatype="html">
         <source> Close </source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/ai-settings/ai-settings-history.component.html</context>
-          <context context-type="linenumber">335,339</context>
+          <context context-type="linenumber">317,321</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-case-rows.component.html</context>
@@ -526,7 +512,7 @@
         <source>Author membership</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/ai-settings/ai-settings-history.component.ts</context>
-          <context context-type="linenumber">67</context>
+          <context context-type="linenumber">71</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/ai-settings/ai-settings-version-card.component.ts</context>
@@ -537,14 +523,14 @@
         <source>Settings identity</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/ai-settings/ai-settings-history.component.ts</context>
-          <context context-type="linenumber">68</context>
+          <context context-type="linenumber">72</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.ai-settings.hash" datatype="html">
         <source>Content hash</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/ai-settings/ai-settings-history.component.ts</context>
-          <context context-type="linenumber">69</context>
+          <context context-type="linenumber">73</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/import-export/import-history-table.component.ts</context>
@@ -555,60 +541,53 @@
         <source>Saved settings versions</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/ai-settings/ai-settings-history.component.ts</context>
-          <context context-type="linenumber">70</context>
+          <context context-type="linenumber">74</context>
         </context-group>
       </trans-unit>
-      <trans-unit id="authoring.ai-settings.pages" datatype="html">
-        <source>Version history pages</source>
+      <trans-unit id="authoring.ai-settings.page-no-match" datatype="html">
+        <source>No versions on this page match this filter</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/ai-settings/ai-settings-history.component.ts</context>
-          <context context-type="linenumber">71</context>
-        </context-group>
-      </trans-unit>
-      <trans-unit id="authoring.ai-settings.no-match" datatype="html">
-        <source>No loaded versions match this filter</source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/authoring/ai-settings/ai-settings-history.component.ts</context>
-          <context context-type="linenumber">72</context>
+          <context context-type="linenumber">75</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.ai-settings.empty-history" datatype="html">
         <source>No saved settings versions</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/ai-settings/ai-settings-history.component.ts</context>
-          <context context-type="linenumber">73</context>
+          <context context-type="linenumber">76</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.ai-settings.empty-page" datatype="html">
         <source>No versions on this page</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/ai-settings/ai-settings-history.component.ts</context>
-          <context context-type="linenumber">74</context>
+          <context context-type="linenumber">77</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.ai-settings.open-settings" datatype="html">
         <source>Open AI settings</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/ai-settings/ai-settings-history.component.ts</context>
-          <context context-type="linenumber">75</context>
+          <context context-type="linenumber">78</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.ai-settings.first-version-help" datatype="html">
         <source>Save your settings to create the first version.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/ai-settings/ai-settings-history.component.ts</context>
-          <context context-type="linenumber">76</context>
+          <context context-type="linenumber">79</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.ai-settings.not-set" datatype="html">
         <source>Not set</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/ai-settings/ai-settings-history.component.ts</context>
-          <context context-type="linenumber">77</context>
+          <context context-type="linenumber">80</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/ai-settings/ai-settings-history.component.ts</context>
-          <context context-type="linenumber">135</context>
+          <context context-type="linenumber">138</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/ai-settings/ai-settings-snapshot-fields.component.ts</context>
@@ -619,21 +598,21 @@
         <source>Comparison</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/ai-settings/ai-settings-history.component.ts</context>
-          <context context-type="linenumber">155</context>
+          <context context-type="linenumber">158</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.ai-settings.actions" datatype="html">
         <source>Inspection</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/ai-settings/ai-settings-history.component.ts</context>
-          <context context-type="linenumber">162</context>
+          <context context-type="linenumber">165</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.ai-settings.view-version" datatype="html">
         <source>View version <x id="VERSION" equiv-text="version"/></source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/ai-settings/ai-settings-history.component.ts</context>
-          <context context-type="linenumber">176</context>
+          <context context-type="linenumber">183</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.ai-settings.languages" datatype="html">
@@ -706,7 +685,7 @@
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/import-export/import-export.copy.ts</context>
-          <context context-type="linenumber">78</context>
+          <context context-type="linenumber">76</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.ai-settings.description" datatype="html">
@@ -1141,14 +1120,7 @@
         <source> Filter availability and help </source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-case-table.component.html</context>
-          <context context-type="linenumber">133,136</context>
-        </context-group>
-      </trans-unit>
-      <trans-unit id="authoring.case-table.loaded-count" datatype="html">
-        <source> <x id="INTERPOLATION" equiv-text="{{ store.rows().length | number }}"/> cases loaded </source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/authoring/authoring-case-table.component.html</context>
-          <context context-type="linenumber">245,247</context>
+          <context context-type="linenumber">134,137</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.case-table.scope-help" datatype="html">
@@ -1165,330 +1137,330 @@
           <context context-type="linenumber">5</context>
         </context-group>
       </trans-unit>
+      <trans-unit id="authoring.case-table.order" datatype="html">
+        <source>Case code ascending; case ID breaks ties</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/authoring-case-table.copy.ts</context>
+          <context context-type="linenumber">6</context>
+        </context-group>
+      </trans-unit>
       <trans-unit id="authoring.case-table.invalid-filters" datatype="html">
         <source>Check filter values</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-case-table.copy.ts</context>
-          <context context-type="linenumber">6</context>
+          <context context-type="linenumber">7</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.case-table.item" datatype="html">
         <source>Checklist item ID</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-case-table.copy.ts</context>
-          <context context-type="linenumber">7</context>
+          <context context-type="linenumber">8</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.case-table.item-help" datatype="html">
         <source>Optional exact checklist UUID. Leave blank for every checklist in this scope.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-case-table.copy.ts</context>
-          <context context-type="linenumber">8</context>
+          <context context-type="linenumber">9</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.case-table.item-error" datatype="html">
         <source>Enter a complete checklist UUID or leave this filter blank.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-case-table.copy.ts</context>
-          <context context-type="linenumber">9</context>
+          <context context-type="linenumber">10</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.case-table.priority" datatype="html">
         <source>Priority</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-case-table.copy.ts</context>
-          <context context-type="linenumber">10</context>
+          <context context-type="linenumber">11</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.case-table.state" datatype="html">
         <source>Lifecycle</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-case-table.copy.ts</context>
-          <context context-type="linenumber">11</context>
+          <context context-type="linenumber">12</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.case-table.coverage" datatype="html">
         <source>Coverage</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-case-table.copy.ts</context>
-          <context context-type="linenumber">12</context>
+          <context context-type="linenumber">13</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.case-table.source" datatype="html">
         <source>Source</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-case-table.copy.ts</context>
-          <context context-type="linenumber">13</context>
+          <context context-type="linenumber">14</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.case-table.owner" datatype="html">
         <source>Owner</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-case-table.copy.ts</context>
-          <context context-type="linenumber">14</context>
+          <context context-type="linenumber">15</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.case-table.source-help" datatype="html">
         <source>Source filtering is unavailable: the server does not support this filter.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-case-table.copy.ts</context>
-          <context context-type="linenumber">15</context>
+          <context context-type="linenumber">16</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.case-table.owner-help" datatype="html">
         <source>Owner filtering is unavailable: the server does not support this filter.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-case-table.copy.ts</context>
-          <context context-type="linenumber">16</context>
+          <context context-type="linenumber">17</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.case-table.unavailable" datatype="html">
         <source>Unavailable</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-case-table.copy.ts</context>
-          <context context-type="linenumber">17</context>
+          <context context-type="linenumber">18</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.case-table.search" datatype="html">
         <source>Case title</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-case-table.copy.ts</context>
-          <context context-type="linenumber">18</context>
+          <context context-type="linenumber">19</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.case-table.search-help" datatype="html">
         <source>Case-insensitive title search, up to 200 characters.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-case-table.copy.ts</context>
-          <context context-type="linenumber">19</context>
+          <context context-type="linenumber">20</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.case-table.search-error" datatype="html">
         <source>Enter at most 200 characters before applying filters.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-case-table.copy.ts</context>
-          <context context-type="linenumber">20</context>
+          <context context-type="linenumber">21</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.case-table.all" datatype="html">
         <source>All</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-case-table.copy.ts</context>
-          <context context-type="linenumber">21</context>
+          <context context-type="linenumber">22</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.case-table.critical" datatype="html">
         <source>Critical</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-case-table.copy.ts</context>
-          <context context-type="linenumber">22</context>
+          <context context-type="linenumber">23</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.case-table.high" datatype="html">
         <source>High</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-case-table.copy.ts</context>
-          <context context-type="linenumber">23</context>
+          <context context-type="linenumber">24</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.case-table.medium" datatype="html">
         <source>Medium</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-case-table.copy.ts</context>
-          <context context-type="linenumber">24</context>
+          <context context-type="linenumber">25</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.case-table.low" datatype="html">
         <source>Low</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-case-table.copy.ts</context>
-          <context context-type="linenumber">25</context>
+          <context context-type="linenumber">26</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.case-table.draft" datatype="html">
         <source>Draft</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-case-table.copy.ts</context>
-          <context context-type="linenumber">26</context>
+          <context context-type="linenumber">27</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.case-table.approved" datatype="html">
         <source>Approved</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-case-table.copy.ts</context>
-          <context context-type="linenumber">27</context>
+          <context context-type="linenumber">28</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.case-table.retired" datatype="html">
         <source>Retired</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-case-table.copy.ts</context>
-          <context context-type="linenumber">28</context>
+          <context context-type="linenumber">29</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.case-table.covered" datatype="html">
         <source>Linked</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-case-table.copy.ts</context>
-          <context context-type="linenumber">29</context>
+          <context context-type="linenumber">30</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.case-table.uncovered" datatype="html">
         <source>Not linked</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-case-table.copy.ts</context>
-          <context context-type="linenumber">30</context>
+          <context context-type="linenumber">31</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.case-table.apply" datatype="html">
         <source>Apply filters</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-case-table.copy.ts</context>
-          <context context-type="linenumber">31</context>
+          <context context-type="linenumber">32</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.case-table.clear" datatype="html">
         <source>Clear filters</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-case-table.copy.ts</context>
-          <context context-type="linenumber">32</context>
+          <context context-type="linenumber">33</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.case-table.reset" datatype="html">
         <source>Reset</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-case-table.copy.ts</context>
-          <context context-type="linenumber">33</context>
+          <context context-type="linenumber">34</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.case-table.refresh" datatype="html">
         <source>Refresh cases</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-case-table.copy.ts</context>
-          <context context-type="linenumber">34</context>
+          <context context-type="linenumber">35</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.case-table.refresh-help" datatype="html">
         <source>Refresh reloads this list from the first page and drops the cursor; pages loaded after the first are not kept.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-case-table.copy.ts</context>
-          <context context-type="linenumber">35</context>
+          <context context-type="linenumber">36</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.case-table.loading" datatype="html">
         <source>Loading manual cases; the hierarchy remains usable…</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-case-table.copy.ts</context>
-          <context context-type="linenumber">36</context>
+          <context context-type="linenumber">37</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.case-table.empty-project" datatype="html">
         <source>This project has no manual cases yet</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-case-table.copy.ts</context>
-          <context context-type="linenumber">37</context>
+          <context context-type="linenumber">38</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.case-table.empty-category" datatype="html">
         <source>This category has no test cases yet</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-case-table.copy.ts</context>
-          <context context-type="linenumber">38</context>
+          <context context-type="linenumber">39</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.case-table.empty-help" datatype="html">
         <source>A manual case needs an existing checklist item. Browsing never creates a case or its parent.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-case-table.copy.ts</context>
-          <context context-type="linenumber">39</context>
+          <context context-type="linenumber">40</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.case-table.empty-page" datatype="html">
+        <source>No manual cases on this page</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/authoring-case-table.copy.ts</context>
+          <context context-type="linenumber">41</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.case-table.empty-page-help" datatype="html">
+        <source>Use Previous records to return to an earlier page, or refresh to start again.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/authoring-case-table.copy.ts</context>
+          <context context-type="linenumber">42</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.case-table.no-match" datatype="html">
         <source>No test cases match these filters</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-case-table.copy.ts</context>
-          <context context-type="linenumber">40</context>
+          <context context-type="linenumber">43</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.case-table.no-match-help" datatype="html">
         <source>Clear the filters to inspect cases in the same hierarchy scope.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-case-table.copy.ts</context>
-          <context context-type="linenumber">41</context>
+          <context context-type="linenumber">44</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.case-table.stale" datatype="html">
         <source>Case list may be stale</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-case-table.copy.ts</context>
-          <context context-type="linenumber">42</context>
+          <context context-type="linenumber">45</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.case-table.stale-help" datatype="html">
-        <source>Refresh failed; previously loaded cases are still shown. Retry explicitly to refresh this region only.</source>
+        <source>The request failed; the previously loaded page is still shown. Retry explicitly to load the requested page.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-case-table.copy.ts</context>
-          <context context-type="linenumber">43</context>
+          <context context-type="linenumber">46</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.case-table.invalid-link" datatype="html">
         <source>Invalid checklist link</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-case-table.copy.ts</context>
-          <context context-type="linenumber">44</context>
+          <context context-type="linenumber">47</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.case-table.invalid-link-help" datatype="html">
         <source>This link&apos;s checklist ID is not a UUID, so the case list was not requested. Clear filters to browse this scope, or open the checklist from the feature tree.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-case-table.copy.ts</context>
-          <context context-type="linenumber">45</context>
+          <context context-type="linenumber">48</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.case-table.invalid-node" datatype="html">
         <source>Invalid category link</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-case-table.copy.ts</context>
-          <context context-type="linenumber">46</context>
+          <context context-type="linenumber">49</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.case-table.invalid-node-help" datatype="html">
         <source>This link&apos;s category ID is not a UUID, so the case list was not requested. Clear filters to browse the project, or choose a category in the feature tree.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-case-table.copy.ts</context>
-          <context context-type="linenumber">47</context>
+          <context context-type="linenumber">50</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.case-table.browse-capped" datatype="html">
         <source>Case list is at its load limit</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-case-table.copy.ts</context>
-          <context context-type="linenumber">48</context>
+          <context context-type="linenumber">51</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.case-table.pagination" datatype="html">
         <source>Manual case pagination</source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/authoring/authoring-case-table.copy.ts</context>
-          <context context-type="linenumber">49</context>
-        </context-group>
-      </trans-unit>
-      <trans-unit id="authoring.case-table.page-size" datatype="html">
-        <source>Page size</source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/authoring/authoring-case-table.copy.ts</context>
-          <context context-type="linenumber">50</context>
-        </context-group>
-      </trans-unit>
-      <trans-unit id="authoring.case-table.more" datatype="html">
-        <source>Load more cases</source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/authoring/authoring-case-table.copy.ts</context>
-          <context context-type="linenumber">51</context>
-        </context-group>
-      </trans-unit>
-      <trans-unit id="authoring.case-table.loading-more" datatype="html">
-        <source>Loading more cases…</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-case-table.copy.ts</context>
           <context context-type="linenumber">52</context>
@@ -1638,42 +1610,42 @@
         <source>The case list request did not complete. Retry explicitly.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-case-table.store.ts</context>
-          <context context-type="linenumber">57</context>
+          <context context-type="linenumber">63</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.case-table.cursor-repeated" datatype="html">
         <source>The server repeated the case cursor, so paging stopped. Refresh to reload this list, or narrow the filters.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-case-table.store.ts</context>
-          <context context-type="linenumber">66</context>
+          <context context-type="linenumber">72</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.case-table.page-repeated" datatype="html">
         <source>The next page carried no new cases, so paging stopped. Refresh to reload this list, or narrow the filters.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-case-table.store.ts</context>
-          <context context-type="linenumber">70</context>
+          <context context-type="linenumber">76</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.case-table.invalid-item-link" datatype="html">
         <source>This link&apos;s checklist ID is not a UUID, so no case list was requested. Clear the checklist filter or open the checklist from the feature tree.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-case-table.store.ts</context>
-          <context context-type="linenumber">83</context>
+          <context context-type="linenumber">89</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.case-table.invalid-node-link" datatype="html">
         <source>This link&apos;s category ID is not a UUID, so no case list was requested. Clear the category filter or choose a category in the feature tree.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-case-table.store.ts</context>
-          <context context-type="linenumber">89</context>
+          <context context-type="linenumber">95</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.case-table.query-too-long" datatype="html">
         <source>This search is longer than the server accepts, so no case list was requested. Shorten the search and apply filters again.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-case-table.store.ts</context>
-          <context context-type="linenumber">95</context>
+          <context context-type="linenumber">101</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.tree.collapse" datatype="html">
@@ -2267,7 +2239,7 @@
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/editor/timeline.component.ts</context>
-          <context context-type="linenumber">79</context>
+          <context context-type="linenumber">84</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.editor.content-hint" datatype="html">
@@ -2429,7 +2401,7 @@
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/editor/timeline.component.ts</context>
-          <context context-type="linenumber">141</context>
+          <context context-type="linenumber">146</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.editor.intro" datatype="html">
@@ -2482,7 +2454,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.editor.timeline-intro" datatype="html">
-        <source> Versions are newest first. Inspect stored snapshots or restore one as a new version. Restore never rewrites earlier versions. </source>
+        <source> Fixed server order: newest first. Inspect stored snapshots or restore one as a new version. Restore never rewrites earlier versions. </source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/editor/timeline.component.html</context>
           <context context-type="linenumber">19,23</context>
@@ -2495,8 +2467,8 @@
           <context context-type="linenumber">32,37</context>
         </context-group>
       </trans-unit>
-      <trans-unit id="authoring.editor.history-filter" datatype="html">
-        <source>Filter loaded versions by reason</source>
+      <trans-unit id="authoring.editor.history-page-filter" datatype="html">
+        <source>Filter this page by reason</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/editor/timeline.component.html</context>
           <context context-type="linenumber">38,44</context>
@@ -2545,243 +2517,222 @@
           <context context-type="linenumber">132,136</context>
         </context-group>
       </trans-unit>
-      <trans-unit id="authoring.editor.loaded-count" datatype="html">
-        <source> <x id="INTERPOLATION" equiv-text="{{ store.rows().length }}"/> versions loaded </source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/authoring/editor/timeline.component.html</context>
-          <context context-type="linenumber">164,166</context>
-        </context-group>
-      </trans-unit>
-      <trans-unit id="authoring.editor.load-more" datatype="html">
-        <source> Load more </source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/authoring/editor/timeline.component.html</context>
-          <context context-type="linenumber">176,179</context>
-        </context-group>
-      </trans-unit>
-      <trans-unit id="authoring.editor.loading-more" datatype="html">
-        <source>Loading older versions…</source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/authoring/editor/timeline.component.html</context>
-          <context context-type="linenumber">179,182</context>
-        </context-group>
-      </trans-unit>
       <trans-unit id="authoring.editor.cursor-cycle" datatype="html">
         <source> The server repeated a page cursor. Refresh the timeline before loading more. </source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/editor/timeline.component.html</context>
-          <context context-type="linenumber">183,188</context>
+          <context context-type="linenumber">173,178</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.editor.refresh-timeline" datatype="html">
         <source> Refresh timeline </source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/editor/timeline.component.html</context>
-          <context context-type="linenumber">192,198</context>
+          <context context-type="linenumber">182,188</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/editor/timeline.component.html</context>
-          <context context-type="linenumber">284,291</context>
+          <context context-type="linenumber">273,280</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.editor.detail-heading" datatype="html">
         <source> Version <x id="INTERPOLATION" equiv-text="{{ detail.view.version_no }}"/> · read-only snapshot </source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/editor/timeline.component.html</context>
-          <context context-type="linenumber">210,211</context>
+          <context context-type="linenumber">199,200</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.editor.restore-open" datatype="html">
         <source> Restore version <x id="INTERPOLATION" equiv-text="{{ detail.view.version_no }}"/> as a new version </source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/editor/timeline.component.html</context>
-          <context context-type="linenumber">236,237</context>
+          <context context-type="linenumber">225,226</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.editor.diff-loading" datatype="html">
         <source>Loading snapshot comparison…</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/editor/timeline.component.html</context>
-          <context context-type="linenumber">257,261</context>
+          <context context-type="linenumber">246,250</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.editor.restore-refresh" datatype="html">
         <source>Restore was confirmed, but the appended version is not yet visible. Refresh the timeline.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/editor/timeline.component.html</context>
-          <context context-type="linenumber">265,269</context>
+          <context context-type="linenumber">254,258</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.editor.restored" datatype="html">
         <source>Version <x id="INTERPOLATION" equiv-text="{{ store.appendedVersion() }}"/> was appended. Earlier versions are unchanged.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/editor/timeline.component.html</context>
-          <context context-type="linenumber">270,271</context>
+          <context context-type="linenumber">259,260</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.editor.restore-title" datatype="html">
         <source>Restore as a new version?</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/editor/timeline.component.html</context>
-          <context context-type="linenumber">303,305</context>
+          <context context-type="linenumber">292,294</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.editor.restore-description" datatype="html">
         <source> This replaces the live case content with the selected stored snapshot and appends a version. Earlier versions remain unchanged. </source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/editor/timeline.component.html</context>
-          <context context-type="linenumber">305,309</context>
+          <context context-type="linenumber">294,298</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.editor.restoring" datatype="html">
         <source>Restoring version…</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/editor/timeline.component.html</context>
-          <context context-type="linenumber">311,315</context>
+          <context context-type="linenumber">300,304</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.editor.restore-source" datatype="html">
         <source>Source version <x id="INTERPOLATION" equiv-text="{{ detail.view.version_no }}"/></source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/editor/timeline.component.html</context>
-          <context context-type="linenumber">315,316</context>
+          <context context-type="linenumber">304,305</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.editor.restore-reason" datatype="html">
         <source>Restore reason</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/editor/timeline.component.html</context>
-          <context context-type="linenumber">325,331</context>
+          <context context-type="linenumber">314,320</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.editor.cancel" datatype="html">
         <source> Cancel </source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/editor/timeline.component.html</context>
-          <context context-type="linenumber">354,359</context>
+          <context context-type="linenumber">343,348</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.editor.restore-confirm" datatype="html">
         <source> Restore as new version </source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/editor/timeline.component.html</context>
-          <context context-type="linenumber">364,369</context>
+          <context context-type="linenumber">353,358</context>
         </context-group>
       </trans-unit>
-      <trans-unit id="authoring.editor.history-no-match" datatype="html">
-        <source>No loaded versions match this filter</source>
+      <trans-unit id="authoring.editor.history-page-no-match" datatype="html">
+        <source>No versions on this page match this filter</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/editor/timeline.component.ts</context>
-          <context context-type="linenumber">80</context>
+          <context context-type="linenumber">85</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.editor.history-empty" datatype="html">
         <source>No versions recorded</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/editor/timeline.component.ts</context>
-          <context context-type="linenumber">81</context>
+          <context context-type="linenumber">86</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.editor.no-reason" datatype="html">
         <source>No reason recorded</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/editor/timeline.component.ts</context>
-          <context context-type="linenumber">82</context>
+          <context context-type="linenumber">87</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.editor.no-author" datatype="html">
         <source>Author membership unavailable</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/editor/timeline.component.ts</context>
-          <context context-type="linenumber">83</context>
+          <context context-type="linenumber">88</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.editor.version-id" datatype="html">
         <source>Version id</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/editor/timeline.component.ts</context>
-          <context context-type="linenumber">84</context>
+          <context context-type="linenumber">89</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.editor.author-membership" datatype="html">
         <source>Author membership</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/editor/timeline.component.ts</context>
-          <context context-type="linenumber">85</context>
+          <context context-type="linenumber">90</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.editor.version-etag" datatype="html">
         <source>Snapshot ETag</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/editor/timeline.component.ts</context>
-          <context context-type="linenumber">86</context>
+          <context context-type="linenumber">91</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.editor.snapshot-content" datatype="html">
         <source>Stored snapshot</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/editor/timeline.component.ts</context>
-          <context context-type="linenumber">87</context>
+          <context context-type="linenumber">92</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.editor.inspect-column" datatype="html">
         <source>Inspection</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/editor/timeline.component.ts</context>
-          <context context-type="linenumber">156</context>
+          <context context-type="linenumber">161</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.editor.source-manual" datatype="html">
         <source>Manual</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/editor/timeline.component.ts</context>
-          <context context-type="linenumber">210</context>
+          <context context-type="linenumber">219</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.editor.source-ai" datatype="html">
         <source>AI</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/editor/timeline.component.ts</context>
-          <context context-type="linenumber">212</context>
+          <context context-type="linenumber">221</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.editor.source-import" datatype="html">
         <source>Import</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/editor/timeline.component.ts</context>
-          <context context-type="linenumber">214</context>
+          <context context-type="linenumber">223</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/editor/timeline.component.ts</context>
-          <context context-type="linenumber">230</context>
+          <context context-type="linenumber">239</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.editor.change-create" datatype="html">
         <source>Created</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/editor/timeline.component.ts</context>
-          <context context-type="linenumber">222</context>
+          <context context-type="linenumber">231</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.editor.change-update" datatype="html">
         <source>Updated</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/editor/timeline.component.ts</context>
-          <context context-type="linenumber">224</context>
+          <context context-type="linenumber">233</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.editor.change-delete" datatype="html">
         <source>Deleted</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/editor/timeline.component.ts</context>
-          <context context-type="linenumber">226</context>
+          <context context-type="linenumber">235</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.editor.change-restore" datatype="html">
         <source>Restored</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/editor/timeline.component.ts</context>
-          <context context-type="linenumber">228</context>
+          <context context-type="linenumber">237</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.editor.diff-title" datatype="html">
@@ -3286,7 +3237,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.import-export.history-hint" datatype="html">
-        <source>Latest import versions in this project, up to 50 per page. Version numbers belong to each entity. Only this authorized history read confirms a version.</source>
+        <source>Import versions, newest first (server order). Version numbers belong to each entity. Only this authorized history read confirms a version.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/import-export/import-export.copy.ts</context>
           <context context-type="linenumber">66</context>
@@ -3320,473 +3271,459 @@
           <context context-type="linenumber">70</context>
         </context-group>
       </trans-unit>
-      <trans-unit id="authoring.import-export.history-older" datatype="html">
-        <source>Older import versions</source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/authoring/import-export/import-export.copy.ts</context>
-          <context context-type="linenumber">71</context>
-        </context-group>
-      </trans-unit>
-      <trans-unit id="authoring.import-export.history-latest" datatype="html">
-        <source>Latest import versions</source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/authoring/import-export/import-export.copy.ts</context>
-          <context context-type="linenumber">72</context>
-        </context-group>
-      </trans-unit>
       <trans-unit id="authoring.import-export.version" datatype="html">
         <source>Entity version</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/import-export/import-export.copy.ts</context>
-          <context context-type="linenumber">73</context>
+          <context context-type="linenumber">71</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.import-export.entity" datatype="html">
         <source>Entity</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/import-export/import-export.copy.ts</context>
-          <context context-type="linenumber">74</context>
+          <context context-type="linenumber">72</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.import-export.source" datatype="html">
         <source>Source</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/import-export/import-export.copy.ts</context>
-          <context context-type="linenumber">75</context>
+          <context context-type="linenumber">73</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.import-export.author" datatype="html">
         <source>Author</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/import-export/import-export.copy.ts</context>
-          <context context-type="linenumber">76</context>
+          <context context-type="linenumber">74</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.import-export.reason" datatype="html">
         <source>Reason</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/import-export/import-export.copy.ts</context>
-          <context context-type="linenumber">77</context>
+          <context context-type="linenumber">75</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.import-export.changed-at" datatype="html">
         <source>Created at</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/import-export/import-export.copy.ts</context>
-          <context context-type="linenumber">79</context>
+          <context context-type="linenumber">77</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.import-export.change" datatype="html">
         <source>Change</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/import-export/import-export.copy.ts</context>
-          <context context-type="linenumber">80</context>
+          <context context-type="linenumber">78</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.import-export.retry" datatype="html">
         <source>Retry the same intent</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/import-export/import-export.copy.ts</context>
-          <context context-type="linenumber">81</context>
+          <context context-type="linenumber">79</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.import-export.pending" datatype="html">
         <source>Import is awaiting a server response.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/import-export/import-export.copy.ts</context>
-          <context context-type="linenumber">82</context>
+          <context context-type="linenumber">80</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.import-export.export-scope" datatype="html">
         <source>Export scope</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/import-export/import-export.copy.ts</context>
-          <context context-type="linenumber">83</context>
+          <context context-type="linenumber">81</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.import-export.project-scope" datatype="html">
         <source>Whole project</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/import-export/import-export.copy.ts</context>
-          <context context-type="linenumber">84</context>
+          <context context-type="linenumber">82</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.import-export.node-scope" datatype="html">
         <source>Selected node subtree</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/import-export/import-export.copy.ts</context>
-          <context context-type="linenumber">85</context>
+          <context context-type="linenumber">83</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.import-export.selected" datatype="html">
         <source>Export selected — unavailable</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/import-export/import-export.copy.ts</context>
-          <context context-type="linenumber">86</context>
+          <context context-type="linenumber">84</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.import-export.filtered" datatype="html">
         <source>Current filtered set — unavailable</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/import-export/import-export.copy.ts</context>
-          <context context-type="linenumber">87</context>
+          <context context-type="linenumber">85</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.import-export.selection-unavailable" datatype="html">
         <source>Selection and filtered-set export are unavailable: this contract has no ids or filter parameter. Choose a node or the project explicitly; selection is never expanded automatically.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/import-export/import-export.copy.ts</context>
-          <context context-type="linenumber">88</context>
+          <context context-type="linenumber">86</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.import-export.node" datatype="html">
         <source>Selected node UUID</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/import-export/import-export.copy.ts</context>
-          <context context-type="linenumber">89</context>
+          <context context-type="linenumber">87</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.import-export.no-node" datatype="html">
         <source>No node is selected. An empty scope is never expanded to the whole project.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/import-export/import-export.copy.ts</context>
-          <context context-type="linenumber">90</context>
+          <context context-type="linenumber">88</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.import-export.node-invalid" datatype="html">
         <source>Enter the exact node UUID, or choose the whole project explicitly.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/import-export/import-export.copy.ts</context>
-          <context context-type="linenumber">91</context>
+          <context context-type="linenumber">89</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.import-export.include" datatype="html">
         <source>Included kinds</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/import-export/import-export.copy.ts</context>
-          <context context-type="linenumber">92</context>
+          <context context-type="linenumber">90</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.import-export.nodes" datatype="html">
         <source>Nodes</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/import-export/import-export.copy.ts</context>
-          <context context-type="linenumber">93</context>
+          <context context-type="linenumber">91</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.import-export.items" datatype="html">
         <source>Checklist items</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/import-export/import-export.copy.ts</context>
-          <context context-type="linenumber">94</context>
+          <context context-type="linenumber">92</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.import-export.cases" datatype="html">
         <source>Test cases</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/import-export/import-export.copy.ts</context>
-          <context context-type="linenumber">95</context>
+          <context context-type="linenumber">93</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.import-export.no-kinds" datatype="html">
         <source>Choose at least one kind. An empty list would mean all kinds to the server.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/import-export/import-export.copy.ts</context>
-          <context context-type="linenumber">96</context>
+          <context context-type="linenumber">94</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.import-export.count-unavailable" datatype="html">
         <source>Exact count unavailable: the export response supplies a file, not a count.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/import-export/import-export.copy.ts</context>
-          <context context-type="linenumber">97</context>
+          <context context-type="linenumber">95</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.import-export.fields" datatype="html">
         <source>Export field preview</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/import-export/import-export.copy.ts</context>
-          <context context-type="linenumber">98</context>
+          <context context-type="linenumber">96</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.import-export.fields-hint" datatype="html">
         <source>Contract columns for the round trip, not an example schema. No source version is claimed.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/import-export/import-export.copy.ts</context>
-          <context context-type="linenumber">99</context>
+          <context context-type="linenumber">97</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.import-export.download" datatype="html">
         <source>Download export</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/import-export/import-export.copy.ts</context>
-          <context context-type="linenumber">100</context>
+          <context context-type="linenumber">98</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.import-export.confirm-download" datatype="html">
         <source>Download this exact scope?</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/import-export/import-export.copy.ts</context>
-          <context context-type="linenumber">101</context>
+          <context context-type="linenumber">99</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.import-export.cancel" datatype="html">
         <source>Cancel</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/import-export/import-export.copy.ts</context>
-          <context context-type="linenumber">102</context>
+          <context context-type="linenumber">100</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.import-export.downloaded" datatype="html">
         <source>The server file was downloaded for the confirmed scope.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/import-export/import-export.copy.ts</context>
-          <context context-type="linenumber">103</context>
+          <context context-type="linenumber">101</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.import-export.read-only-export" datatype="html">
         <source>Read-only export remains available at this width. Changing scope requires a desktop view.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/import-export/import-export.copy.ts</context>
-          <context context-type="linenumber">104</context>
+          <context context-type="linenumber">102</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.import-export.export-cap" datatype="html">
         <source>This scope exceeds the export file cap. Choose a smaller node scope. No truncated file was created.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/import-export/import-export.copy.ts</context>
-          <context context-type="linenumber">105</context>
+          <context context-type="linenumber">103</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.import-export.export-denied" datatype="html">
         <source>You do not have permission to export from this project. No file was created.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/import-export/import-export.copy.ts</context>
-          <context context-type="linenumber">106</context>
+          <context context-type="linenumber">104</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.import-export.scope-mismatch" datatype="html">
         <source>This credential is scoped to another project. Use a credential permitted for this exact project; no rows were imported and no file was exported.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/import-export/import-export.copy.ts</context>
-          <context context-type="linenumber">107</context>
+          <context context-type="linenumber">105</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.import-export.empty-export" datatype="html">
         <source>This export scope is empty. No file was downloaded; choose another scope explicitly.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/import-export/import-export.copy.ts</context>
-          <context context-type="linenumber">108</context>
+          <context context-type="linenumber">106</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.import-export.reason.unknown-parent" datatype="html">
         <source>The parent must name an earlier node of the required kind.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/import-export/import-export.copy.ts</context>
-          <context context-type="linenumber">113</context>
+          <context context-type="linenumber">111</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.import-export.reason.orphan-row" datatype="html">
         <source>The row has no valid owning item or node.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/import-export/import-export.copy.ts</context>
-          <context context-type="linenumber">114</context>
+          <context context-type="linenumber">112</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.import-export.reason.duplicate-key" datatype="html">
         <source>This file-local key is duplicated. All rows are retained; nothing was imported.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/import-export/import-export.copy.ts</context>
-          <context context-type="linenumber">115</context>
+          <context context-type="linenumber">113</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.import-export.reason.code-conflict" datatype="html">
         <source>The case code conflicts with the project&apos;s prefix or allowed number. Nothing was written.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/import-export/import-export.copy.ts</context>
-          <context context-type="linenumber">116</context>
+          <context context-type="linenumber">114</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.import-export.reason.value-invalid" datatype="html">
         <source>This field does not meet the import contract.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/import-export/import-export.copy.ts</context>
-          <context context-type="linenumber">117</context>
+          <context context-type="linenumber">115</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.import-export.reason.steps-invalid" datatype="html">
         <source>The paired action and expected-result steps do not meet the steps contract.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/import-export/import-export.copy.ts</context>
-          <context context-type="linenumber">118</context>
+          <context context-type="linenumber">116</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.import-export.reason.invalid-text" datatype="html">
         <source>This text does not meet the server&apos;s text requirements.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/import-export/import-export.copy.ts</context>
-          <context context-type="linenumber">119</context>
+          <context context-type="linenumber">117</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.import-export.reason.unsupported-format" datatype="html">
         <source>The file structure, CSV header or chosen format is not supported.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/import-export/import-export.copy.ts</context>
-          <context context-type="linenumber">120</context>
+          <context context-type="linenumber">118</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.import-export.reason.unknown" datatype="html">
         <source>This file could not be processed.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/import-export/import-export.copy.ts</context>
-          <context context-type="linenumber">122</context>
+          <context context-type="linenumber">120</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.import-export.failure.size" datatype="html">
         <source>The file exceeds the allowed limit of 5 MiB or 5,000 data rows. Nothing was imported.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/import-export/import-export.copy.ts</context>
-          <context context-type="linenumber">136</context>
+          <context context-type="linenumber">134</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.import-export.failure.export-filters" datatype="html">
         <source>Export filters were refused. Check the format, node UUID and included kinds. No file was downloaded.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/import-export/import-export.copy.ts</context>
-          <context context-type="linenumber">139</context>
+          <context context-type="linenumber">137</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.import-export.failure.conflict" datatype="html">
         <source>This intent key belongs to a different request. Select the original file and format or start a new import intent. Nothing was retried automatically.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/import-export/import-export.copy.ts</context>
-          <context context-type="linenumber">148</context>
+          <context context-type="linenumber">146</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.import-export.failure.export-wait" datatype="html">
         <source>The server is busy. Wait as directed by Retry-After, then retry this exact scope explicitly. Nothing is downloaded automatically.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/import-export/import-export.copy.ts</context>
-          <context context-type="linenumber">152</context>
+          <context context-type="linenumber">150</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.import-export.failure.wait" datatype="html">
         <source>The server is busy. Wait as directed by Retry-After, then retry explicitly. Your file is retained.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/import-export/import-export.copy.ts</context>
-          <context context-type="linenumber">153</context>
+          <context context-type="linenumber">151</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.import-export.failure.sign-in" datatype="html">
         <source>Sign in again before retrying. No request is sent automatically after sign-in.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/import-export/import-export.copy.ts</context>
-          <context context-type="linenumber">155</context>
+          <context context-type="linenumber">153</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.import-export.failure.not-found" datatype="html">
         <source>This project or node was not found. No file is available.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/import-export/import-export.copy.ts</context>
-          <context context-type="linenumber">157</context>
+          <context context-type="linenumber">155</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.import-export.failure.export-unknown" datatype="html">
         <source>The export could not be completed or its server file was unavailable. No file was downloaded. Retry the exact scope explicitly.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/import-export/import-export.copy.ts</context>
-          <context context-type="linenumber">160</context>
+          <context context-type="linenumber">158</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.import-export.failure.unknown" datatype="html">
         <source>The request could not be completed. Its outcome is unconfirmed; retry only the same intent.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/import-export/import-export.copy.ts</context>
-          <context context-type="linenumber">161</context>
+          <context context-type="linenumber">159</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.import-export.field-key" datatype="html">
         <source>File-local key</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/import-export/import-export.copy.ts</context>
-          <context context-type="linenumber">194</context>
+          <context context-type="linenumber">192</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.import-export.field-parent-key" datatype="html">
         <source>Parent key</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/import-export/import-export.copy.ts</context>
-          <context context-type="linenumber">195</context>
+          <context context-type="linenumber">193</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.import-export.field-item-key" datatype="html">
         <source>Owning item key</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/import-export/import-export.copy.ts</context>
-          <context context-type="linenumber">196</context>
+          <context context-type="linenumber">194</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.import-export.field-node-kind" datatype="html">
         <source>Node kind</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/import-export/import-export.copy.ts</context>
-          <context context-type="linenumber">197</context>
+          <context context-type="linenumber">195</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.import-export.field-title" datatype="html">
         <source>Title</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/import-export/import-export.copy.ts</context>
-          <context context-type="linenumber">198</context>
+          <context context-type="linenumber">196</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.import-export.field-description" datatype="html">
         <source>Description</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/import-export/import-export.copy.ts</context>
-          <context context-type="linenumber">199</context>
+          <context context-type="linenumber">197</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.import-export.field-precondition" datatype="html">
         <source>Precondition</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/import-export/import-export.copy.ts</context>
-          <context context-type="linenumber">200</context>
+          <context context-type="linenumber">198</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.import-export.field-steps" datatype="html">
         <source>Action and expected-result steps</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/import-export/import-export.copy.ts</context>
-          <context context-type="linenumber">201</context>
+          <context context-type="linenumber">199</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.import-export.field-priority" datatype="html">
         <source>Priority</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/import-export/import-export.copy.ts</context>
-          <context context-type="linenumber">202</context>
+          <context context-type="linenumber">200</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.import-export.field-state" datatype="html">
         <source>State</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/import-export/import-export.copy.ts</context>
-          <context context-type="linenumber">203</context>
+          <context context-type="linenumber">201</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.import-export.field-code" datatype="html">
         <source>Case code</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/import-export/import-export.copy.ts</context>
-          <context context-type="linenumber">204</context>
+          <context context-type="linenumber">202</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.import-export.field-position" datatype="html">
         <source>Position</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/import-export/import-export.copy.ts</context>
-          <context context-type="linenumber">205</context>
+          <context context-type="linenumber">203</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.import-export.choose-file" datatype="html">
@@ -3845,18 +3782,11 @@
           <context context-type="linenumber">117</context>
         </context-group>
       </trans-unit>
-      <trans-unit id="authoring.import-export.showing-range" datatype="html">
-        <source>Showing 1–<x id="end" equiv-text="count"/> of <x id="loaded" equiv-text="count"/> loaded versions</source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/authoring/import-export/import-panel.component.ts</context>
-          <context context-type="linenumber">110</context>
-        </context-group>
-      </trans-unit>
       <trans-unit id="authoring.import-export.row-field-label" datatype="html">
         <source>Row <x id="INDEX" equiv-text="detail.index"/> — <x id="FIELD" equiv-text="importFieldLabel(detail.path)"/></source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/import-export/import-panel.component.ts</context>
-          <context context-type="linenumber">165</context>
+          <context context-type="linenumber">161</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.review-context.parent-item" datatype="html">
@@ -3906,28 +3836,28 @@
         <source><x id="START_TAG_APP_NUMBER_VALUE" ctype="x-app_number_value" equiv-text="&lt;app-number-value [value]=&quot;commentLength()&quot; /&gt;"/><x id="CLOSE_TAG_APP_NUMBER_VALUE" ctype="x-app_number_value" equiv-text="&lt;app-number-value [value]=&quot;commentLimit&quot; /&gt;"/> of <x id="START_TAG_APP_NUMBER_VALUE_1" ctype="x-app_number_value_1" equiv-text="&lt;app-number-value [value]=&quot;commentLimit&quot; /&gt;"/><x id="CLOSE_TAG_APP_NUMBER_VALUE" ctype="x-app_number_value" equiv-text="&lt;app-number-value [value]=&quot;commentLimit&quot; /&gt;"/> characters </source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/pending-changes/checklist-review-tab.component.html</context>
-          <context context-type="linenumber">107,110</context>
+          <context context-type="linenumber">119,122</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.pending-changes.reason-character-count" datatype="html">
         <source><x id="START_TAG_APP_NUMBER_VALUE" ctype="x-app_number_value" equiv-text="&lt;app-number-value [value]=&quot;reasonLength()&quot; /&gt;"/><x id="CLOSE_TAG_APP_NUMBER_VALUE" ctype="x-app_number_value" equiv-text="&lt;app-number-value [value]=&quot;reasonLimit&quot; /&gt;"/> of <x id="START_TAG_APP_NUMBER_VALUE_1" ctype="x-app_number_value_1" equiv-text="&lt;app-number-value [value]=&quot;reasonLimit&quot; /&gt;"/><x id="CLOSE_TAG_APP_NUMBER_VALUE" ctype="x-app_number_value" equiv-text="&lt;app-number-value [value]=&quot;reasonLimit&quot; /&gt;"/> characters </source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/pending-changes/checklist-review-tab.component.html</context>
-          <context context-type="linenumber">134,137</context>
+          <context context-type="linenumber">146,149</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.pending-changes.comment-too-long" datatype="html">
         <source>Use no more than 2,000 characters for the comment.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/pending-changes/checklist-review-tab.component.ts</context>
-          <context context-type="linenumber">85</context>
+          <context context-type="linenumber">87</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.pending-changes.reason-too-long" datatype="html">
         <source>Use no more than 500 characters for the reason.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/pending-changes/checklist-review-tab.component.ts</context>
-          <context context-type="linenumber">86</context>
+          <context context-type="linenumber">88</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.pending-changes.view-title" datatype="html">
@@ -4034,7 +3964,7 @@
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-change-table.component.ts</context>
-          <context context-type="linenumber">140</context>
+          <context context-type="linenumber">144</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.review-context.discarded" datatype="html">
@@ -4045,7 +3975,7 @@
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-change-table.component.ts</context>
-          <context context-type="linenumber">142</context>
+          <context context-type="linenumber">146</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.pending-changes.base-version" datatype="html">
@@ -4070,7 +4000,7 @@
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-change-table.component.ts</context>
-          <context context-type="linenumber">117</context>
+          <context context-type="linenumber">121</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.pending-changes.reason-unset" datatype="html">
@@ -4098,11 +4028,18 @@
           <context context-type="linenumber">218,222</context>
         </context-group>
       </trans-unit>
+      <trans-unit id="authoring.pending-changes.ordered-caption" datatype="html">
+        <source><x id="caption" equiv-text="caption"/> — Oldest first (server order)</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-change-table.component.ts</context>
+          <context context-type="linenumber">63</context>
+        </context-group>
+      </trans-unit>
       <trans-unit id="shared.data-table.loaded-range" datatype="html">
         <source>Loaded records <x id="start" equiv-text="first"/>–<x id="end" equiv-text="total"/> of <x id="loaded" equiv-text="total"/></source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-change-table.component.ts</context>
-          <context context-type="linenumber">80</context>
+          <context context-type="linenumber">84</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/data-table/data-table-pager.component.ts</context>
@@ -4113,7 +4050,7 @@
         <source>Select</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-change-table.component.ts</context>
-          <context context-type="linenumber">94</context>
+          <context context-type="linenumber">98</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.pending-changes.title" datatype="html">
@@ -4565,7 +4502,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.pending-changes.view-instructions" datatype="html">
-        <source>View a change to inspect its details. Use the checkboxes to select the changes to apply.</source>
+        <source>Server filter: pending changes. View a change to inspect its details. Use the checkboxes to select the changes to apply.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.page.html</context>
           <context context-type="linenumber">138,141</context>
@@ -4575,7 +4512,7 @@
         <source>More actions</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.page.ts</context>
-          <context context-type="linenumber">182</context>
+          <context context-type="linenumber">184</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.pending-changes.atomic-scope" datatype="html">
@@ -4669,151 +4606,144 @@
           <context context-type="linenumber">18</context>
         </context-group>
       </trans-unit>
-      <trans-unit id="authoring.pending-changes.load-more" datatype="html">
-        <source>Load more changes</source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.ui-copy.ts</context>
-          <context context-type="linenumber">20</context>
-        </context-group>
-      </trans-unit>
       <trans-unit id="authoring.pending-changes.batch-summary" datatype="html">
         <source>Batch summary</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.ui-copy.ts</context>
-          <context context-type="linenumber">21</context>
+          <context context-type="linenumber">20</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.pending-changes.exact-ids" datatype="html">
         <source>Exact reviewed change ids</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.ui-copy.ts</context>
-          <context context-type="linenumber">22</context>
+          <context context-type="linenumber">21</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.pending-changes.metadata" datatype="html">
         <source>Implementation metadata · read-only</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.ui-copy.ts</context>
-          <context context-type="linenumber">23</context>
+          <context context-type="linenumber">22</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.pending-changes.batch-etag" datatype="html">
         <source>Batch ETag</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.ui-copy.ts</context>
-          <context context-type="linenumber">24</context>
+          <context context-type="linenumber">23</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.pending-changes.etag-not-read" datatype="html">
         <source>The exact-selection ETag is read immediately before applying. No batch token has been read for this selection yet.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.ui-copy.ts</context>
-          <context context-type="linenumber">25</context>
+          <context context-type="linenumber">24</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.pending-changes.idempotency-note" datatype="html">
         <source>The same apply intent reuses one idempotency key. The batch ETag comes from the exact-selection read, never from an individual item version.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.ui-copy.ts</context>
-          <context context-type="linenumber">26</context>
+          <context context-type="linenumber">25</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.pending-changes.applied-ids" datatype="html">
         <source>Applied change ids</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.ui-copy.ts</context>
-          <context context-type="linenumber">27</context>
+          <context context-type="linenumber">26</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.pending-changes.entity" datatype="html">
         <source>Entity</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.ui-copy.ts</context>
-          <context context-type="linenumber">28</context>
+          <context context-type="linenumber">27</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.pending-changes.comment-hint" datatype="html">
         <source>Queue a plain-text comment for review. This does not apply it.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.ui-copy.ts</context>
-          <context context-type="linenumber">29</context>
+          <context context-type="linenumber">28</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.pending-changes.queue-reason" datatype="html">
         <source>Change reason (optional)</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.ui-copy.ts</context>
-          <context context-type="linenumber">30</context>
+          <context context-type="linenumber">29</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.pending-changes.comment-required" datatype="html">
         <source>Enter a comment before queueing it.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.ui-copy.ts</context>
-          <context context-type="linenumber">31</context>
+          <context context-type="linenumber">30</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.pending-changes.review-tab-title" datatype="html">
         <source>Pending changes for this item</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.ui-copy.ts</context>
-          <context context-type="linenumber">32</context>
+          <context context-type="linenumber">31</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.pending-changes.item-empty" datatype="html">
         <source>No loaded pending change targets this item.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.ui-copy.ts</context>
-          <context context-type="linenumber">33</context>
+          <context context-type="linenumber">32</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.pending-changes.item-scope" datatype="html">
-        <source>This list includes loaded changes for this item. Load more to inspect older pending changes.</source>
+        <source>Server filters: pending changes for this item. Use the table pagination to inspect other changes.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.ui-copy.ts</context>
-          <context context-type="linenumber">34</context>
+          <context context-type="linenumber">33</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.pending-changes.open-queue" datatype="html">
         <source>Review the project pending queue</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.ui-copy.ts</context>
-          <context context-type="linenumber">35</context>
+          <context context-type="linenumber">34</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.pending-changes.queue-delete-title" datatype="html">
         <source>Queue a delete for this item?</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.ui-copy.ts</context>
-          <context context-type="linenumber">36</context>
+          <context context-type="linenumber">35</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.pending-changes.queue-delete-body" datatype="html">
         <source>This only queues a delete for review. The item is not deleted until an authorized reviewer applies the batch.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.ui-copy.ts</context>
-          <context context-type="linenumber">37</context>
+          <context context-type="linenumber">36</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.pending-changes.queued-success" datatype="html">
         <source>The change was queued for review.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.ui-copy.ts</context>
-          <context context-type="linenumber">38</context>
+          <context context-type="linenumber">37</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.pending-changes.reason-rejected" datatype="html">
         <source>The server refused the change reason. Review it before trying again.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.ui-copy.ts</context>
-          <context context-type="linenumber">39</context>
+          <context context-type="linenumber">38</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.pending-changes.write-denied" datatype="html">
         <source>Write access was refused. The queue stays readable; reload after your permissions have been restored.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.ui-copy.ts</context>
-          <context context-type="linenumber">41</context>
+          <context context-type="linenumber">40</context>
         </context-group>
       </trans-unit>
       <trans-unit id="healingswitch.title" datatype="html">

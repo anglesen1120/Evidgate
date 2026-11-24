@@ -1,4 +1,4 @@
-import { computed, inject, resource } from '@angular/core';
+import { computed, inject, resource, signal } from '@angular/core';
 import {
   patchState,
   signalStore,
@@ -11,7 +11,7 @@ import {
 import type { AuthoringVersionListResponse, ImportResponse } from '@evidgate/sdk';
 import { SessionStore } from '../../../core/session/session.store';
 import { createIntent } from '../../../core/http/intent';
-import { isApiRequestError, type ApiError } from '../../../core/http/api-error';
+import { ApiRequestError, isApiRequestError, type ApiError } from '../../../core/http/api-error';
 import { createRetryAfterWait } from '../../../core/http/retry';
 import { NarrowMutationPolicy } from '../../../shared/ui/narrow/narrow-mutation-policy';
 import { ImportExportDataService } from './import-export-data.service';
@@ -50,7 +50,13 @@ const EMPTY: ImportWork = {
 };
 
 export const ImportStore = signalStore(
-  withState({ current: EMPTY, historyCursor: null as string | null }),
+  withState({
+    current: EMPTY,
+    historyCursor: null as string | null,
+    historyPageSize: 20,
+    historyTarget: 1,
+    historyCursors: [null] as readonly (string | null)[],
+  }),
   withProps(() => ({
     _session: inject(SessionStore),
     _policy: inject(NarrowMutationPolicy),
@@ -103,20 +109,32 @@ export const ImportStore = signalStore(
               project: work.project,
               batch: work.committed?.batch_id ?? null,
               cursor: store.historyCursor(),
+              limit: store.historyPageSize(),
+              target: store.historyTarget(),
             }
           : undefined;
       },
       {
         equal: (a, b) =>
-          a?.project === b?.project && a?.batch === b?.batch && a?.cursor === b?.cursor,
+          a?.project === b?.project &&
+          a?.batch === b?.batch &&
+          a?.cursor === b?.cursor &&
+          a?.limit === b?.limit &&
+          a?.target === b?.target,
       },
     ),
   })),
   withProps((store) => {
-    let snapshot: { project: string; page: AuthoringVersionListResponse } | null = null;
+    const snapshot = signal<{
+      project: string;
+      limit: number;
+      number: number;
+      page: AuthoringVersionListResponse;
+    } | null>(null);
     return {
+      _historySnapshot: snapshot.asReadonly(),
       _forgetHistory: () => {
-        snapshot = null;
+        snapshot.set(null);
       },
       history: resource({
         params: () => store._historySource(),
@@ -126,34 +144,88 @@ export const ImportStore = signalStore(
               params.project,
               abortSignal,
               params.cursor ?? undefined,
+              params.limit,
             );
             if (!abortSignal.aborted) {
-              snapshot = { project: params.project, page };
+              const cursors = [
+                ...store.historyCursors().slice(0, params.target - 1),
+                params.cursor,
+              ];
+              if (page.next_cursor !== null && cursors.includes(page.next_cursor)) {
+                throw new ApiRequestError({
+                  kind: 'unexpected',
+                  status: 0,
+                  code: 'repeated_cursor',
+                  message: IMPEX_COPY.historyFailed,
+                  requestId: null,
+                  retryable: true,
+                  retryAfterSeconds: null,
+                  details: [],
+                });
+              }
+              snapshot.set({
+                project: params.project,
+                limit: params.limit,
+                number: params.target,
+                page,
+              });
+              patchState(store, { historyCursors: cursors });
               store._historyWait.clear();
             }
-            return { page, error: null };
+            return {
+              page,
+              error: null,
+              number: params.target,
+              project: params.project,
+              limit: params.limit,
+            };
           } catch (cause) {
             if (!isApiRequestError(cause)) throw cause;
             const transient =
               cause.error.kind === 'rate_limited' ||
               cause.error.kind === 'unavailable' ||
-              cause.error.kind === 'network';
+              cause.error.kind === 'timeout' ||
+              cause.error.kind === 'network' ||
+              cause.error.code === 'repeated_cursor';
             if (!abortSignal.aborted) {
               store._historyWait.start(cause.error.retryAfterSeconds);
-              if (!transient) snapshot = null;
+              if (!transient) snapshot.set(null);
             }
-            const page = transient && snapshot?.project === params.project ? snapshot.page : null;
+            const cached = snapshot();
+            const retained =
+              transient && cached?.project === params.project && cached.limit === params.limit
+                ? cached
+                : null;
+            const page = retained?.page ?? null;
             const error = {
               ...cause.error,
               message: page ? IMPEX_COPY.historyStale : IMPEX_COPY.historyFailed,
             };
-            return { page, error };
+            return {
+              page,
+              error,
+              number: retained?.number ?? params.target,
+              project: params.project,
+              limit: params.limit,
+            };
           }
         },
       }),
     };
   }),
   withComputed((store) => ({
+    historyDisplay: computed(() => {
+      if (!store.canReadHistory() || !store.work().file) return null;
+      if (store.history.hasValue()) {
+        const value = store.history.value();
+        if (value.project === store.work().project && value.limit === store.historyPageSize())
+          return value;
+      }
+      const cached = store._historySnapshot();
+      return cached?.project === store.work().project && cached.limit === store.historyPageSize()
+        ? { page: cached.page, error: null, number: cached.number }
+        : null;
+    }),
     retryReady: computed(() => store._wait.ready()),
     historyRetryReady: computed(() => store._historyWait.ready()),
     canConfirm: computed(() => {
@@ -167,6 +239,9 @@ export const ImportStore = signalStore(
       );
     }),
   })),
+  withComputed((store) => ({
+    historyPage: computed(() => store.historyDisplay()?.number ?? 1),
+  })),
   withMethods((store) => {
     let controller: AbortController | null = null;
     let unregister: (() => void) | null = null;
@@ -175,8 +250,9 @@ export const ImportStore = signalStore(
     const refreshHistory = (): void => {
       if (!store.historyRetryReady() || store.history.isLoading() || !store._historySource())
         return;
-      if (store.historyCursor()) patchState(store, { historyCursor: null });
-      else store.history.reload();
+      if (store.historyCursor() || store.historyTarget() !== 1) {
+        patchState(store, { historyCursor: null, historyTarget: 1 });
+      } else store.history.reload();
     };
     const owns = (work: ImportWork): boolean =>
       work.key === store.work().key && work.project === store._session.currentProject()?.id;
@@ -190,7 +266,12 @@ export const ImportStore = signalStore(
       store._wait.clear();
       store._historyWait.clear();
       store._forgetHistory();
-      patchState(store, { current: EMPTY, historyCursor: null });
+      patchState(store, {
+        current: EMPTY,
+        historyCursor: null,
+        historyTarget: 1,
+        historyCursors: [null],
+      });
     };
 
     async function send(dryRun: boolean): Promise<void> {
@@ -233,7 +314,9 @@ export const ImportStore = signalStore(
         );
         if (owns(work) && !active.signal.aborted) {
           update(dryRun ? { report } : { committed: report });
-          if (!dryRun && report.batch_id !== null) patchState(store, { historyCursor: null });
+          if (!dryRun && report.batch_id !== null) {
+            patchState(store, { historyCursor: null, historyTarget: 1 });
+          }
         }
       } catch (cause) {
         if (active.signal.aborted || !owns(work)) return;
@@ -290,10 +373,39 @@ export const ImportStore = signalStore(
       retry: () => send(store.work().stage === 'preview'),
       cancel,
       refreshHistory,
-      olderHistory(): void {
-        const cursor = store.history.hasValue() ? store.history.value().page?.next_cursor : null;
-        if (cursor && store.historyRetryReady() && !store.history.isLoading())
-          patchState(store, { historyCursor: cursor });
+      nextHistory(): void {
+        const result = store.historyDisplay();
+        const cursor = result?.page?.next_cursor;
+        if (cursor && store.historyRetryReady() && !store.history.isLoading()) {
+          patchState(store, { historyCursor: cursor, historyTarget: store.historyPage() + 1 });
+        }
+      },
+      previousHistory(): void {
+        const target = store.historyPage() - 1;
+        if (target < 1 || !store.historyRetryReady() || store.history.isLoading()) return;
+        patchState(store, {
+          historyCursor: store.historyCursors()[target - 1] ?? null,
+          historyTarget: target,
+        });
+      },
+      retryHistory(): void {
+        if (store.historyRetryReady() && !store.history.isLoading()) store.history.reload();
+      },
+      setHistoryPageSize(size: number): void {
+        if (
+          ![20, 50, 100].includes(size) ||
+          size === store.historyPageSize() ||
+          !store.historyRetryReady() ||
+          store.history.isLoading()
+        )
+          return;
+        store._forgetHistory();
+        patchState(store, {
+          historyPageSize: size,
+          historyCursor: null,
+          historyTarget: 1,
+          historyCursors: [null],
+        });
       },
       _start(): void {
         unregister = store._session.onSessionEnd(reset);

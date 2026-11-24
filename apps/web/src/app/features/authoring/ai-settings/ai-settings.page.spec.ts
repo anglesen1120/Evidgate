@@ -1,22 +1,17 @@
 import { ComponentHarness, TestKey } from '@angular/cdk/testing';
 import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
-import { signal, provideZonelessChangeDetection, type WritableSignal } from '@angular/core';
+import type { WritableSignal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { ActivatedRoute } from '@angular/router';
 import type { Mock } from 'vitest';
 import type { AiSettingsView, AiSettingsVersion } from '@evidgate/sdk';
-import { AiSettingsDataService } from '../../../core/data/ai-settings-data.service';
-import { SessionStore } from '../../../core/session/session.store';
 import { provideLayoutTestStubs } from '../../../shared/testing/layout.testing';
-import { NarrowMutationPolicy } from '../../../shared/ui/narrow';
 import { ApiRequestError } from '../../../core/http/api-error';
-import { AiSettingsPage } from './ai-settings.page';
-import { FIELDS, AI_WRITE } from './ai-settings.model';
+import { FIELDS } from './ai-settings.model';
 import { AiSettingsStore } from './ai-settings.store';
 import headDocument from '../../../../../../../fixtures/web-api/ai-settings-head/input.json';
 import versionDocument from '../../../../../../../fixtures/web-api/ai-settings-version-1/input.json';
 import templatesDocument from '../../../../../../../fixtures/web-api/ai-settings-templates/input.json';
-import { SettingsHarness } from './ai-settings.testing';
+import { setupAiSettingsPage, type AiSettingsPageSetup } from './ai-settings.page.testing';
 
 provideLayoutTestStubs();
 
@@ -28,47 +23,13 @@ describe('AiSettingsPage', () => {
   let project: WritableSignal<{ id: string } | null>;
   let data: { read: Mock; save: Mock; versions: Mock; version: Mock; templates: Mock };
   beforeEach(() => {
-    writable = signal(true);
-    readable = signal(true);
-    project = signal<{ id: string } | null>({ id: 'p1' });
-    data = {
-      read: vi.fn().mockResolvedValue({ view: head, etag: '"2"' }),
-      save: vi.fn().mockResolvedValue({ view: head, etag: '"2"', appended: false }),
-      versions: vi.fn().mockResolvedValue({ items: [version], next_cursor: null }),
-      version: vi.fn().mockResolvedValue(version),
-      templates: vi.fn().mockResolvedValue({ items: [], next_cursor: null }),
-    };
-    TestBed.configureTestingModule({
-      imports: [AiSettingsPage],
-      providers: [
-        provideZonelessChangeDetection(),
-        { provide: ActivatedRoute, useValue: { snapshot: { data: { pageHeadingLevel: 1 } } } },
-        { provide: AiSettingsDataService, useValue: data },
-        {
-          provide: SessionStore,
-          useValue: {
-            currentOrg: signal({ id: 'o1' }),
-            currentProject: project,
-            has: (code: string) => (code === AI_WRITE ? writable() : readable()),
-          },
-        },
-        {
-          provide: NarrowMutationPolicy,
-          useValue: { canMutate: signal(true), narrow: signal(false), allowsMutation: () => true },
-        },
-      ],
-    });
+    ({ writable, readable, project, data, mount } = setupAiSettingsPage());
   });
   afterEach(() => {
     vi.useRealTimers();
     TestBed.resetTestingModule();
   });
-  async function mount() {
-    const fixture = TestBed.createComponent(AiSettingsPage);
-    await fixture.whenStable();
-    const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, SettingsHarness);
-    return { fixture, harness };
-  }
+  let mount: AiSettingsPageSetup['mount'];
   for (const field of FIELDS) {
     for (const delta of [-1, 0, 1]) {
       it(field.key + ' accepts its cap ' + delta + ' boundary without truncation', async () => {
@@ -299,7 +260,9 @@ describe('AiSettingsPage', () => {
     const { harness } = await mount();
     await harness.click('[data-ai-history-tab]');
     await harness.fill('history-filter', 'No matching fixture reason');
-    expect(await harness.text()).toContain('No loaded versions match this filter');
+    expect(await harness.text()).toContain('No versions on this page match this filter');
+    expect(await harness.text()).toContain('Filter this page by reason');
+    expect(await harness.text()).toContain('Fixed server order: newest version first');
     expect(await harness.count('app-ai-settings-history app-data-table')).toBe(0);
     expect(await harness.count('app-ai-settings-history app-empty-pattern button')).toBe(0);
   });
@@ -312,7 +275,7 @@ describe('AiSettingsPage', () => {
     const next = await harness.nextHistoryPage();
     expect(await next.getProperty<boolean>('disabled')).toBe(false);
     await next.click();
-    expect(data.versions).toHaveBeenCalledWith('p1', { limit: 50, cursor: 'x' }, expect.anything());
+    expect(data.versions).toHaveBeenCalledWith('p1', { limit: 20, cursor: 'x' }, expect.anything());
   });
   it('offers one empty state that returns focus to Settings without discarding the draft', async () => {
     data.versions.mockResolvedValue({ items: [], next_cursor: null });
@@ -470,18 +433,5 @@ describe('AiSettingsPage', () => {
     await vi.advanceTimersByTimeAsync(1);
     expect(await store.save()).toBe(true);
     expect(data.save).toHaveBeenCalledTimes(2);
-  });
-  it('resets history to the first page after saving from the second page', async () => {
-    data.versions.mockResolvedValue({ items: [version], next_cursor: 'page-two' });
-    const { fixture } = await mount();
-    const store = fixture.debugElement.injector.get(AiSettingsStore);
-    store.nextPage();
-    await fixture.whenStable();
-    expect(store.cursor()).toBe('page-two');
-    await store.save();
-    await fixture.whenStable();
-    expect(store.cursor()).toBeUndefined();
-    expect(store.cursorPath()).toEqual([]);
-    expect(data.versions).toHaveBeenLastCalledWith('p1', { limit: 50 }, expect.any(AbortSignal));
   });
 });
