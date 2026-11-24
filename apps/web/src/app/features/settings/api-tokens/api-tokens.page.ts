@@ -95,7 +95,7 @@ import { escapeFormatChars } from '../../../shared/ui/values/ref-name-display';
         class="my-4 flex min-w-0 flex-wrap items-center justify-between gap-3 border-b border-border py-3"
       >
         <div class="flex min-w-0 flex-wrap items-baseline gap-2">
-          <label hlmLabel for="api-tokens-project">{{ copy.project }}</label>
+          <label hlmLabel for="api-tokens-project">{{ copy.projectFilter }}</label>
           <p
             id="api-tokens-project-value"
             class="m-0 font-semibold wrap-anywhere"

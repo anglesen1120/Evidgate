@@ -1,7 +1,8 @@
 export const API_TOKENS_COPY = {
   title: $localize`:@@settings.api-tokens.title:API tokens`,
   description: $localize`:@@settings.api-tokens.intro:Review project credentials by purpose, permission subset and expiry.`,
-  project: $localize`:@@settings.api-tokens.project:Project (all pages)`,
+  project: $localize`:@@settings.api-tokens.project:Project`,
+  projectFilter: $localize`:@@settings.api-tokens.project-filter:Project (all pages)`,
   create: $localize`:@@settings.api-tokens.create:Create token`,
   directory: $localize`:@@settings.api-tokens.directory:Project API tokens`,
   order: $localize`:@@settings.api-tokens.order:Oldest created first`,

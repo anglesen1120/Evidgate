@@ -2955,7 +2955,8 @@
 <trans-unit id="retention.retry-save" datatype="html"><source>Retry saving retention</source><target>Thử lưu lại thời hạn</target></trans-unit>
 <trans-unit id="settings.tab.api-tokens" datatype="html"><source>API tokens</source><target>Mã truy cập API</target></trans-unit>
 <trans-unit id="settings.api-tokens.title" datatype="html"><source>API tokens</source><target>Mã truy cập API</target></trans-unit>
-<trans-unit id="settings.api-tokens.project" datatype="html"><source>Project (all pages)</source><target>Dự án (tất cả các trang)</target></trans-unit>
+<trans-unit id="settings.api-tokens.project" datatype="html"><source>Project</source><target>Dự án</target></trans-unit>
+<trans-unit id="settings.api-tokens.project-filter" datatype="html"><source>Project (all pages)</source><target>Dự án (tất cả các trang)</target></trans-unit>
 <trans-unit id="settings.api-tokens.create" datatype="html"><source>Create token</source><target>Tạo mã truy cập</target></trans-unit>
 <trans-unit id="settings.api-tokens.directory" datatype="html"><source>Project API tokens</source><target>Mã truy cập API của dự án</target></trans-unit>
 <trans-unit id="settings.api-tokens.name" datatype="html"><source>Name</source><target>Tên</target></trans-unit>
