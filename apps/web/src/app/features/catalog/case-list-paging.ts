@@ -64,6 +64,8 @@ export interface CasePagingPatch {
   readonly loadError?: ApiError | null;
   readonly rows?: readonly CaseDto[];
   readonly nextCursor?: string | null;
+  readonly page?: number;
+  readonly requestCursors?: readonly (string | null)[];
   readonly browseCapped?: boolean;
   readonly paging?: boolean;
   readonly pagingError?: ApiError | null;
@@ -75,15 +77,16 @@ export interface CasePagingHost {
   readonly phase: () => 'loading' | 'ready' | 'error';
   readonly nextCursor: () => string | null;
   readonly paging: () => boolean;
-  readonly rows: () => readonly CaseDto[];
+  readonly page: () => number;
+  readonly requestCursors: () => readonly (string | null)[];
   readonly patch: (patch: CasePagingPatch) => void;
 }
 
 export interface CasePaging {
-  /** Replaces the loaded pages with the first page of `query`; aborting any read in flight. */
   start(projectId: string, query: CaseListQuery): void;
-  /** Appends the next page; resolves `true` only when the rows in state came from it. */
   follow(): Promise<boolean>;
+  previous(): Promise<boolean>;
+  retry(): Promise<boolean>;
   /** Cancels both reads; a late answer never writes state. */
   abort(): void;
   /** The current generation: a read that captures an older one must not write state. */
@@ -100,6 +103,7 @@ interface PagingRun {
   nextPage: AbortController | null;
   /** Keys the loaded rows already show, so a shifted page cannot repeat one. */
   seen: Set<string>;
+  pending: { page: number; cursor: string | null } | null;
 }
 
 function clearReads(run: PagingRun): void {
@@ -122,6 +126,7 @@ function readFirstPage(
   const controller = new AbortController();
   run.firstPage = controller;
   run.seen = new Set<string>();
+  run.pending = null;
   host.patch({
     projectId,
     query,
@@ -129,6 +134,8 @@ function readFirstPage(
     loadError: null,
     rows: NO_ROWS,
     nextCursor: null,
+    page: 1,
+    requestCursors: [null],
     browseCapped: false,
     paging: false,
     pagingError: null,
@@ -158,18 +165,23 @@ function readFirstPage(
   );
 }
 
-/** Appends the keyset-checked rows of `page`; `false` when the step refused it. */
-function appendPage(
+function replacePage(
   run: PagingRun,
   host: CasePagingHost,
-  cursor: string,
+  target: { page: number; cursor: string | null },
   page: CaseListResponse,
 ): boolean {
+  const cursor = target.cursor;
+  const history = [...host.requestCursors().slice(0, target.page - 1), target.cursor];
+  if (page.next_cursor !== null && history.includes(page.next_cursor)) {
+    host.patch({ paging: false, pagingError: PAGING_REFUSALS.cursorRepeated });
+    return false;
+  }
   const step = takeKeysetPage({
     cursor,
     items: page.items,
     nextCursor: page.next_cursor,
-    seen: run.seen,
+    seen: target.page > host.page() ? run.seen : new Set<string>(),
     keyOf: (row) => row.id,
     refusals: PAGING_REFUSALS,
   });
@@ -177,27 +189,30 @@ function appendPage(
     host.patch({ paging: false, pagingError: step.error });
     return false;
   }
-  const retained = retainKeysetRows([...host.rows(), ...step.fresh], step.nextCursor, run.cap);
-  run.seen = retained.capped ? new Set(retained.rows.map((row) => row.id)) : step.seen;
+  const retained = retainKeysetRows(step.fresh, step.nextCursor, run.cap);
+  run.seen = new Set(retained.rows.map((row) => row.id));
+  run.pending = null;
   host.patch({
     paging: false,
     pagingError: null,
     rows: retained.rows,
+    page: target.page,
+    requestCursors: history,
     nextCursor: retained.nextCursor,
     browseCapped: retained.capped,
   });
   return true;
 }
 
-async function readNextPage(
+async function readPage(
   run: PagingRun,
   host: CasePagingHost,
   data: CaseListDataService,
+  target: { page: number; cursor: string | null },
 ): Promise<boolean> {
   const projectId = host.projectId();
-  const cursor = host.nextCursor();
-  if (projectId === null || cursor === null) return false;
-  if (host.paging() || host.phase() !== 'ready') return false;
+  if (projectId === null || host.paging() || host.phase() !== 'ready') return false;
+  run.pending = target;
   const sequence = run.generation;
   run.nextPage?.abort();
   const controller = new AbortController();
@@ -205,14 +220,18 @@ async function readNextPage(
   host.patch({ paging: true, pagingError: null });
   let page: CaseListResponse;
   try {
-    page = await data.list(projectId, { ...host.query(), cursor }, controller.signal);
+    page = await data.list(
+      projectId,
+      { ...host.query(), ...(target.cursor === null ? {} : { cursor: target.cursor }) },
+      controller.signal,
+    );
   } catch (error) {
     if (sequence !== run.generation) return false;
     host.patch({ paging: false, pagingError: typedFailure(error) });
     return false;
   }
   if (sequence !== run.generation) return false;
-  return appendPage(run, host, cursor, page);
+  return replacePage(run, host, target, page);
 }
 
 export function createCasePaging(
@@ -226,10 +245,25 @@ export function createCasePaging(
     firstPage: null,
     nextPage: null,
     seen: new Set<string>(),
+    pending: null,
   };
   return {
     start: (projectId, query) => readFirstPage(run, host, data, projectId, query),
-    follow: () => readNextPage(run, host, data),
+    follow: () => {
+      const cursor = host.nextCursor();
+      return cursor === null
+        ? Promise.resolve(false)
+        : readPage(run, host, data, { page: host.page() + 1, cursor });
+    },
+    previous: () =>
+      host.page() <= 1
+        ? Promise.resolve(false)
+        : readPage(run, host, data, {
+            page: host.page() - 1,
+            cursor: host.requestCursors()[host.page() - 2] ?? null,
+          }),
+    retry: () =>
+      run.pending === null ? Promise.resolve(false) : readPage(run, host, data, run.pending),
     abort: () => clearReads(run),
     epoch: () => run.generation,
   };

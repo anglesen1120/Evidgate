@@ -25,10 +25,9 @@ export interface CaseListFilters {
 }
 export const EMPTY_CASE_FILTERS: CaseListFilters = { status: '', framework: '', search: '' };
 export type CatalogQuery = Record<string, string | null | undefined>;
-/** The page sizes the contract's `limit` and the UI26 page-size control both offer. */
-export const CASE_PAGE_SIZES = [25, 50, 100, 200] as const;
+export const CASE_PAGE_SIZES = [20, 50, 100] as const;
 export type CasePageSize = (typeof CASE_PAGE_SIZES)[number];
-export const DEFAULT_CASE_PAGE_SIZE: CasePageSize = 50;
+export const DEFAULT_CASE_PAGE_SIZE: CasePageSize = 20;
 interface CaseListState {
   readonly projectId: string | null;
   /** The server state a page belongs to: filters and page size, never the cursor. */
@@ -38,6 +37,8 @@ interface CaseListState {
   readonly loadError: ApiError | null;
   readonly rows: readonly CaseDto[];
   readonly nextCursor: string | null;
+  readonly page: number;
+  readonly requestCursors: readonly (string | null)[];
   readonly browseCapped: boolean;
   readonly paging: boolean;
   readonly pagingError: ApiError | null;
@@ -78,6 +79,8 @@ export const CaseListStore = signalStore(
     loadError: null,
     rows: NO_CASES,
     nextCursor: null,
+    page: 1,
+    requestCursors: [null],
     browseCapped: false,
     paging: false,
     pagingError: null,
@@ -91,7 +94,8 @@ export const CaseListStore = signalStore(
         phase: () => store.phase(),
         nextCursor: () => store.nextCursor(),
         paging: () => store.paging(),
-        rows: () => store.rows(),
+        page: () => store.page(),
+        requestCursors: () => store.requestCursors(),
         patch: (patch) => patchState(store, patch),
       },
       data,
@@ -121,6 +125,8 @@ export const CaseListStore = signalStore(
         paging.start(projectId, query);
       },
       _followPage: () => paging.follow(),
+      _previousPage: () => paging.previous(),
+      _retryPage: () => paging.retry(),
       _reloadOwner: (caseId: string) => owner.reload(caseId),
       _abortReads: (): void => paging.abort(),
       _assignOwner: (caseId: string, membershipId: string | null) =>
@@ -163,10 +169,7 @@ export const CaseListStore = signalStore(
   })),
   withComputed((store) => ({ isEmpty: computed(() => store.visibleRows().length === 0) })),
   withMethods((store) => ({
-    /**
-     * Applies the route's server filters and page size (never a cursor: pages accumulate).
-     * A route that only changes the local search keeps the loaded rows and the cursor.
-     */
+    /** Route-only dialog changes preserve the current cursor page. */
     init(projectId: string, raw: CatalogQuery): void {
       const filters = caseFiltersFromQuery(raw);
       const query: CaseListQuery = {
@@ -177,8 +180,11 @@ export const CaseListStore = signalStore(
       const current = store.projectId();
       const unchanged =
         current === projectId && store.phase() !== 'error' && sameServerState(store.query(), query);
+      const searchChanged = store.search() !== filters.search;
       patchState(store, { search: filters.search });
-      if (!unchanged) store._startLoad(projectId, query);
+      if (!unchanged || (searchChanged && (store.page() > 1 || store.paging()))) {
+        store._startLoad(projectId, query);
+      }
     },
     /** Re-reads the first page of the current server state, keeping the local search text. */
     reload(): void {
@@ -186,13 +192,14 @@ export const CaseListStore = signalStore(
       if (projectId === null) return;
       store._startLoad(projectId, store.query());
     },
-    /**
-     * Follows the opaque cursor once and appends the page; rows stay visible meanwhile.
-     * Resolves `true` only when the appended rows are the ones in state: a reset, a filter
-     * change or a refusal in between reports `false` so the caller moves no focus.
-     */
-    loadMore(): Promise<boolean> {
+    nextPage(): Promise<boolean> {
       return store._followPage();
+    },
+    previousPage(): Promise<boolean> {
+      return store._previousPage();
+    },
+    retryPage(): Promise<boolean> {
+      return store._retryPage();
     },
     /** A supported page size resets the cursor and the loaded rows, as UI26 requires. */
     setPageSize(size: number): void {
