@@ -44,14 +44,14 @@ describe('Import preview error-index page boundaries', () => {
       fixture.componentInstance.reveal(index, '/title');
       fixture.detectChanges();
       await fixture.whenStable();
-      expect(await harness.summary()).toBe(range);
+      expect(await harness.summary()).toContain(range);
       expect(await harness.focused(index)).toBe(true);
     }
     expect(fixture.componentInstance.local()).toBe(local);
     expect(JSON.stringify(local)).toBe(before);
     fixture.componentRef.setInput('details', []);
     await fixture.whenStable();
-    expect(await harness.summary()).toBe('1–20 of 41');
+    expect(await harness.summary()).toContain('1–20 of 41');
     expect(local.rows).toHaveLength(41);
   });
 });

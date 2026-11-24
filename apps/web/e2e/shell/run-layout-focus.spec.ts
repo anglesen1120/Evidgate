@@ -242,7 +242,7 @@ for (const theme of THEMES) {
     await expect(first).toHaveAttribute('data-row-id', id ?? '');
     expect((await tableGeometry(page)).rowCount).toBe(20);
     await expect(first.getByRole('link').first()).toBeFocused();
-    const next = page.getByRole('button', { name: 'Next records', exact: true });
+    const next = page.getByRole('button', { name: 'Next page', exact: true });
     await next.focus();
     await page.keyboard.press('Enter');
     await expect(page.locator('app-data-table-pager [role="status"]')).toHaveText('Page 2');

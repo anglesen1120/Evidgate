@@ -247,11 +247,11 @@ for (const locale of LOCALES) {
     await page.getByRole('option', { name: '100', exact: true }).click();
     await expect(page.locator(ROWS)).toHaveCount(100);
     const previous = pager.getByRole('button', {
-      name: locale === 'vi' ? 'Bản ghi trước' : 'Previous records',
+      name: locale === 'vi' ? 'Trang trước' : 'Previous page',
       exact: true,
     });
     const next = pager.getByRole('button', {
-      name: locale === 'vi' ? 'Bản ghi tiếp' : 'Next records',
+      name: locale === 'vi' ? 'Trang sau' : 'Next page',
       exact: true,
     });
     await next.focus();
@@ -389,13 +389,13 @@ test('cursor pages preserve server ordering and replace rather than append rows'
   await expect(page.locator(ROWS)).toHaveCount(runListPage1.body.items.length);
   expect(await ids()).toEqual(runListPage1.body.items.map((row) => row.run_id));
   const pager = page.locator('app-data-table-pager');
-  await pager.getByRole('button', { name: 'Next records', exact: true }).click();
+  await pager.getByRole('button', { name: 'Next page', exact: true }).click();
   await expect.poll(ids).toEqual(runListPage2.body.items.map((row) => row.run_id));
-  await expect(pager.getByRole('button', { name: 'Next records', exact: true })).toHaveAttribute(
+  await expect(pager.getByRole('button', { name: 'Next page', exact: true })).toHaveAttribute(
     'aria-disabled',
     'true',
   );
-  await pager.getByRole('button', { name: 'Previous records', exact: true }).click();
+  await pager.getByRole('button', { name: 'Previous page', exact: true }).click();
   await expect.poll(ids).toEqual(runListPage1.body.items.map((row) => row.run_id));
   expect(new URL(page.url()).searchParams.has('offset')).toBe(false);
 });

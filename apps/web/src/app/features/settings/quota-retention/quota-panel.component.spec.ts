@@ -395,10 +395,8 @@ describe('QuotaPanelComponent', () => {
     expect(root.querySelector('[data-quota-projects-more]')?.textContent).toContain(
       'All counters returned',
     );
-    const next = Array.from(
-      root.querySelectorAll<HTMLButtonElement>('app-data-table nav button'),
-    ).find((button) => button.textContent?.includes('Next'));
-    expect(next).toBeDefined();
+    const next = root.querySelector<HTMLButtonElement>('app-data-table [data-page="next"]');
+    expect(next).not.toBeNull();
     next?.click();
     await fixture.whenStable();
     expect(root.querySelector('[data-row-id="project-200"]')).not.toBeNull();

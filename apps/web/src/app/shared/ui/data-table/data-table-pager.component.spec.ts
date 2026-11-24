@@ -45,6 +45,8 @@ class PagerHarness extends ComponentHarness {
   static hostSelector = 'app-data-table-pager';
   readonly nav = this.locatorFor('nav');
   readonly summary = this.locatorFor('[role="status"]');
+  readonly range = this.locatorFor('.page-range');
+  readonly current = this.locatorFor('[aria-current="page"]');
   readonly label = this.locatorFor('label');
   readonly trigger = this.locatorFor('hlm-select-trigger button');
   readonly previous = this.locatorFor('button[data-page="previous"]');
@@ -129,8 +131,9 @@ describe('DataTablePagerComponent', () => {
     { page: 3, total: 53, count: 13, more: false, text: '41–53 of 53', back: true },
     { page: 1, total: 0, count: 0, more: false, text: '0–0 of 0', back: false },
     { page: 1, total: 3, count: 3, more: false, text: '1–3 of 3', back: false },
-    { page: 4, total: null, count: 11, more: true, text: 'Page 4', back: true },
-    { page: 5, total: null, count: 20, more: false, text: 'Page 5', back: true },
+    { page: 4, total: null, count: 11, more: true, text: '1–11', back: true },
+    { page: 5, total: null, count: 20, more: false, text: '1–20', back: true },
+    { page: 2, total: null, count: 0, more: false, text: '0–0', back: true },
   ])('shows $text and allows only available moves', async (row) => {
     const { page, total, count, more, text, back } = row;
     const { fixture, pager, previous, next } = await render();
@@ -139,13 +142,37 @@ describe('DataTablePagerComponent', () => {
     fixture.componentRef.setInput('count', count);
     fixture.componentRef.setInput('hasNext', more);
     const summary = await pager.summary();
-    expect(await summary.text()).toBe(text);
+    expect(await (await pager.range()).text()).toBe(`Showing ${text}`);
+    expect(await (await pager.current()).text()).toBe(`Page ${page}`);
     expect(await summary.getAttribute('aria-live')).toBe('polite');
     expect(await (await pager.nav()).getAttribute('aria-label')).toBe('Table pagination');
     await (await pager.previous()).click();
     await (await pager.next()).click();
     expect(previous).toHaveBeenCalledTimes(back ? 1 : 0);
     expect(next).toHaveBeenCalledTimes(more ? 1 : 0);
+  });
+
+  it('qualifies a loaded-window total and keeps the last window focusable but inert', async () => {
+    const { fixture, pager, next } = await render();
+    fixture.componentRef.setInput('loadedCaption', 'Audit');
+    fixture.componentRef.setInput('pageSize', 200);
+    fixture.componentRef.setInput('total', 201);
+    fixture.componentRef.setInput('page', 2);
+    fixture.componentRef.setInput('count', 1);
+    fixture.componentRef.setInput('hasNext', true);
+    expect(await (await pager.range()).text()).toBe('Showing 201–201 of 201 loaded records');
+    const boundary = await pager.next();
+    expect(await boundary.getAttribute('aria-disabled')).toBe('true');
+    await boundary.focus();
+    await boundary.click();
+    expect(await boundary.isFocused()).toBe(true);
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it('names both icon buttons for assistive technology', async () => {
+    const { pager } = await render();
+    expect(await (await pager.previous()).getAttribute('aria-label')).toBe('Previous page');
+    expect(await (await pager.next()).getAttribute('aria-label')).toBe('Next page');
   });
 
   it.each([

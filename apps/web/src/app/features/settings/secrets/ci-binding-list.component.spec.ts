@@ -177,11 +177,9 @@ describe('CiBindingListComponent (09.7.1-F15)', () => {
     fixture.componentInstance.previous.subscribe(previous);
     fixture.componentRef.setInput('hasMore', true);
     expect(await (await pager.size()).text()).toBe('20');
-    expect(await (await pager.previous()).text()).toBe('Previous records');
     await (await pager.previous()).click();
     expect(previous).not.toHaveBeenCalled();
     const next = await pager.next();
-    expect(await next.text()).toBe('Next records');
     await next.focus();
     await next.click();
     expect(more).toHaveBeenCalledTimes(1);
@@ -247,7 +245,7 @@ describe('CiBindingListComponent (09.7.1-F15)', () => {
     expect(root.querySelectorAll('[data-ci-binding]')).toHaveLength(rows.length);
     expect(await pager.retry()).not.toBeNull();
     expect(await (await pager.summary()).text()).toBe('Page 1');
-    expect(await (await pager.next()).text()).toBe('Next records');
+    expect(await (await pager.next()).getProperty('tabIndex')).toBe(0);
   });
 
   it('retains focus on Next when the replacement last page disables it', async () => {

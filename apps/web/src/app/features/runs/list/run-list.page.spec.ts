@@ -407,9 +407,7 @@ describe('RunListPage', () => {
     store.hasNext.set(true);
     const { fixture, root } = await render();
     const pager = await TestbedHarnessEnvironment.loader(fixture).getHarness(RunPagerHarness);
-    const next = [...root.querySelectorAll<HTMLButtonElement>('app-data-table-pager button')].find(
-      (button) => button.textContent?.includes('Next'),
-    );
+    const next = root.querySelector<HTMLButtonElement>('app-data-table-pager [data-page="next"]');
     next?.focus();
     store.next.mockImplementation(async () => {
       store.busy.set(true);

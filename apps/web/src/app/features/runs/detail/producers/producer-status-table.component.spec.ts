@@ -330,8 +330,8 @@ describe('ProducerStatusTableComponent', () => {
     useLightweightTablePresentation();
     loadTranslations({
       'runs.detail.producers.run-after-cancel-one': '1 sự kiện sau khi hủy của lượt chạy này',
-      'shared.data-table.next': 'Bản ghi tiếp theo',
-      'shared.data-table.range': '{$start}–{$end} trên {$loaded}',
+      'shared.data-table.next': 'Trang sau',
+      'shared.data-table.range': 'Hiển thị {$start}–{$end} trên {$loaded}',
     });
     const slots = Array.from({ length: 201 }, (_, index) => ({
       ...FINALIZED,
@@ -341,10 +341,10 @@ describe('ProducerStatusTableComponent', () => {
     expect(
       root.querySelector('[data-run-after-cancel] .status-pill__detail')?.textContent?.trim(),
     ).toBe('1 sự kiện sau khi hủy của lượt chạy này');
-    expect(root.querySelector('button[data-page="next"]')?.textContent).toContain(
-      'Bản ghi tiếp theo',
+    expect(root.querySelector('button[data-page="next"]')?.getAttribute('aria-label')).toBe(
+      'Trang sau',
     );
-    expect(root.querySelector('nav [role="status"]')?.textContent).toBe('1–20 trên 201');
+    expect(root.querySelector('nav [role="status"]')?.textContent).toBe('Hiển thị 1–20 trên 201');
   });
 
   it('uses the evidence-link anchor helper even for reserved characters', async () => {

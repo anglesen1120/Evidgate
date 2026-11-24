@@ -101,22 +101,22 @@ describe('ProducerStatusTableComponent paging', () => {
 
   it('shows exact first, middle and last ranges with bounded navigation', async () => {
     const { table } = await render(slots(53));
-    expect(await (await table.summary()).text()).toBe('1–20 of 53');
+    expect(await (await table.summary()).text()).toContain('1–20 of 53');
     const previous = await table.previous();
     expect(await previous.getAttribute('aria-disabled')).toBe('true');
     expect(await previous.getProperty('disabled')).toBe(false);
     await previous.focus();
     await previous.click();
     expect(await previous.isFocused()).toBe(true);
-    expect(await (await table.summary()).text()).toBe('1–20 of 53');
+    expect(await (await table.summary()).text()).toContain('1–20 of 53');
     expect(await table.rowIds()).toEqual(slots(20).map((row) => row.producerId));
     await (await table.next()).click();
-    expect(await (await table.summary()).text()).toBe('21–40 of 53');
+    expect(await (await table.summary()).text()).toContain('21–40 of 53');
     expect(await (await table.previous()).getAttribute('aria-disabled')).toBe('false');
     expect(await (await table.next()).getAttribute('aria-disabled')).toBe('false');
     expect((await table.rowIds())[0]).toBe('shard-20');
     await (await table.next()).click();
-    expect(await (await table.summary()).text()).toBe('41–53 of 53');
+    expect(await (await table.summary()).text()).toContain('41–53 of 53');
     expect(await table.rowIds()).toHaveLength(13);
     const next = await table.next();
     expect(await next.getAttribute('aria-disabled')).toBe('true');
@@ -124,14 +124,14 @@ describe('ProducerStatusTableComponent paging', () => {
     await next.focus();
     await next.click();
     expect(await next.isFocused()).toBe(true);
-    expect(await (await table.summary()).text()).toBe('41–53 of 53');
+    expect(await (await table.summary()).text()).toContain('41–53 of 53');
     await (await table.previous()).click();
-    expect(await (await table.summary()).text()).toBe('21–40 of 53');
+    expect(await (await table.summary()).text()).toContain('21–40 of 53');
   });
 
   it.each([0, 1, 20])('shows the exact single-page range for %i producers', async (count) => {
     const { table } = await render(slots(count));
-    expect(await (await table.summary()).text()).toBe(
+    expect(await (await table.summary()).text()).toContain(
       `${count === 0 ? 0 : 1}–${count} of ${count}`,
     );
     for (const button of [await table.previous(), await table.next()]) {
@@ -140,7 +140,7 @@ describe('ProducerStatusTableComponent paging', () => {
       await button.focus();
       await button.click();
       expect(await button.isFocused()).toBe(true);
-      expect(await (await table.summary()).text()).toBe(
+      expect(await (await table.summary()).text()).toContain(
         `${count === 0 ? 0 : 1}–${count} of ${count}`,
       );
     }
@@ -151,7 +151,7 @@ describe('ProducerStatusTableComponent paging', () => {
     const { table } = await render(slots(123));
     await (await table.next()).click();
     await table.chooseSize(size);
-    expect(await (await table.summary()).text()).toBe(`1–${size} of 123`);
+    expect(await (await table.summary()).text()).toContain(`1–${size} of 123`);
     expect(await table.rowIds()).toHaveLength(size);
     expect((await table.rowIds())[0]).toBe('shard-0');
   });
@@ -165,7 +165,7 @@ describe('ProducerStatusTableComponent paging', () => {
       original.map((slot) => ({ ...slot, lastSequence: 987 })),
     ]) {
       fixture.componentRef.setInput('slots', refreshed);
-      expect(await (await table.summary()).text()).toBe(page === 1 ? '21–40 of 53' : '41–53 of 53');
+      expect(await (await table.summary()).text()).toContain(page === 1 ? '21–40 of 53' : '41–53 of 53');
       expect((await table.rowIds())[0]).toBe(page === 1 ? 'shard-20' : 'shard-40');
     }
     expect(await (await table.rows())[0]?.text()).toContain('987');
@@ -185,7 +185,7 @@ describe('ProducerStatusTableComponent paging', () => {
     fixture.componentRef.setInput('slots', changed);
     expect(await (await table.previous()).getAttribute('aria-disabled')).toBe('true');
     expect((await table.rowIds())[0]).toBe(changed[0]?.producerId);
-    expect(await (await table.summary()).text()).toBe(
+    expect(await (await table.summary()).text()).toContain(
       `${changed.length === 0 ? 0 : 1}–${Math.min(20, changed.length)} of ${changed.length}`,
     );
   });
@@ -193,17 +193,17 @@ describe('ProducerStatusTableComponent paging', () => {
   it('selects a linked producer page without reselecting it for unrelated facts', async () => {
     const { fixture, table } = await render(slots(53));
     fixture.componentRef.setInput('targetAnchor', 'producer-shard-52');
-    expect(await (await table.summary()).text()).toBe('41–53 of 53');
+    expect(await (await table.summary()).text()).toContain('41–53 of 53');
     await (await table.previous()).click();
     fixture.componentRef.setInput('runAfterCancelEvents', 3);
     fixture.componentRef.setInput('status', 'ready');
-    expect(await (await table.summary()).text()).toBe('21–40 of 53');
+    expect(await (await table.summary()).text()).toContain('21–40 of 53');
     fixture.componentRef.setInput('slots', slots(53));
-    expect(await (await table.summary()).text()).toBe('21–40 of 53');
+    expect(await (await table.summary()).text()).toContain('21–40 of 53');
     fixture.componentRef.setInput('targetAnchor', 'producer-shard-45');
-    expect(await (await table.summary()).text()).toBe('41–53 of 53');
+    expect(await (await table.summary()).text()).toContain('41–53 of 53');
     await table.chooseSize(50);
-    expect(await (await table.summary()).text()).toBe('1–50 of 53');
+    expect(await (await table.summary()).text()).toContain('1–50 of 53');
   });
 
   it('lands on an anchor set before producer data arrives', async () => {
@@ -212,7 +212,7 @@ describe('ProducerStatusTableComponent paging', () => {
     fixture.componentRef.setInput('targetAnchor', 'producer-shard-52');
     await fixture.whenStable();
     fixture.componentRef.setInput('slots', slots(53));
-    expect(await (await table.summary()).text()).toBe('41–53 of 53');
+    expect(await (await table.summary()).text()).toContain('41–53 of 53');
     expect(await table.rowIds()).toContain('shard-52');
   });
 
@@ -220,9 +220,9 @@ describe('ProducerStatusTableComponent paging', () => {
     const { fixture, table } = await render(slots(53));
     await (await table.next()).click();
     fixture.componentRef.setInput('targetAnchor', 'producer-missing');
-    expect(await (await table.summary()).text()).toBe('1–20 of 53');
+    expect(await (await table.summary()).text()).toContain('1–20 of 53');
     fixture.componentRef.setInput('slots', []);
-    expect(await (await table.summary()).text()).toBe('0–0 of 0');
+    expect(await (await table.summary()).text()).toContain('0–0 of 0');
     expect(await (await table.next()).getAttribute('aria-disabled')).toBe('true');
   });
 });

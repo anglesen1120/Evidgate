@@ -209,7 +209,7 @@ describe('RunDetailPage producer region', () => {
     ).toEqual(Array.from({ length: 16 }, (_, index) => `shard-${240 + index}`));
     expect(
       root.querySelector('#producers app-data-table-pager [role="status"]')?.textContent?.trim(),
-    ).toBe('241–256 of 256');
+    ).toContain('241–256 of 256');
   });
 
   it('keeps an attempt fragment waiting for the attempts response', async () => {

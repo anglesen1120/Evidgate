@@ -147,8 +147,8 @@ for (const surface of ['runs', 'audit'] as const) {
     await page.goto(address(surface));
     const rows = page.locator(ROWS[surface]);
     const pager = page.locator('app-data-table-pager');
-    const previous = pager.getByRole('button', { name: 'Previous records', exact: true });
-    const next = pager.getByRole('button', { name: 'Next records', exact: true });
+    const previous = pager.getByRole('button', { name: 'Previous page', exact: true });
+    const next = pager.getByRole('button', { name: 'Next page', exact: true });
     await expect(rows).toHaveCount(20);
     const first = await rowIds(page, surface);
     expect(await requests(page, surface)).toHaveLength(1);
@@ -191,7 +191,16 @@ for (const surface of ['runs', 'audit'] as const) {
     await page.goto(`${address(surface)}&fixture.latency=1000`);
     await expect(page.locator(ROWS[surface])).toHaveCount(20);
     const first = await rowIds(page, surface);
-    const next = page.getByRole('button', { name: 'Next records', exact: true });
+    const next = page.getByRole('button', { name: 'Next page', exact: true });
+    const controlPositions = () =>
+      page.locator('app-data-table-pager nav').evaluate((nav) => {
+        const origin = nav.getBoundingClientRect();
+        return [...nav.querySelectorAll('button')].map((button) => {
+          const { left, top } = button.getBoundingClientRect();
+          return [left - origin.left, top - origin.top];
+        });
+      });
+    const idlePositions = await controlPositions();
     await next.dblclick();
     const table = page.locator('app-data-table');
     await expect(table.getByRole('table')).toHaveAttribute('aria-busy', 'true');
@@ -201,6 +210,7 @@ for (const surface of ['runs', 'audit'] as const) {
       .getByRole('progressbar', { name: 'Loading…', exact: true });
     await expect(bar).toBeVisible();
     await expect(feedback).toBeInViewport();
+    expect(await controlPositions()).toEqual(idlePositions);
     await expect(page.getByRole('progressbar')).toHaveCount(1);
     await expect(bar).toHaveAttribute('aria-hidden', 'true');
     expect(
@@ -218,7 +228,7 @@ for (const surface of ['runs', 'audit'] as const) {
     expect(await requests(page, surface)).toHaveLength(2);
 
     const second = await rowIds(page, surface);
-    const previous = page.getByRole('button', { name: 'Previous records', exact: true });
+    const previous = page.getByRole('button', { name: 'Previous page', exact: true });
     await previous.click();
     await expect(table.getByRole('table')).toHaveAttribute('aria-busy', 'true');
     await expect(bar).toBeVisible();
@@ -246,7 +256,7 @@ for (const surface of ['runs', 'audit'] as const) {
     const rows = page.locator(ROWS[surface]);
     const pager = page.locator('app-data-table-pager');
     await expect(rows).toHaveCount(20);
-    await pager.getByRole('button', { name: 'Next records', exact: true }).click();
+    await pager.getByRole('button', { name: 'Next page', exact: true }).click();
     await expect(rows).toHaveCount(13);
     for (const size of [50, 100, 20]) {
       await pager.getByRole('combobox', { name: 'Rows per page' }).click();
@@ -256,7 +266,7 @@ for (const surface of ['runs', 'audit'] as const) {
       expect(request?.searchParams.has('cursor')).toBe(false);
       expect(request?.searchParams.get('limit')).toBe(String(size));
       await expect(
-        pager.getByRole('button', { name: 'Previous records', exact: true }),
+        pager.getByRole('button', { name: 'Previous page', exact: true }),
       ).toHaveAttribute('aria-disabled', 'true');
     }
   });
@@ -266,7 +276,7 @@ for (const surface of ['runs', 'audit'] as const) {
     const rows = page.locator(ROWS[surface]);
     const pager = page.locator('app-data-table-pager');
     await expect(rows).toHaveCount(20);
-    await pager.getByRole('button', { name: 'Next records', exact: true }).click();
+    await pager.getByRole('button', { name: 'Next page', exact: true }).click();
     await expect(rows).toHaveCount(13);
     if (surface === 'runs') {
       await openRunFilters(page);
@@ -284,7 +294,7 @@ for (const surface of ['runs', 'audit'] as const) {
     expect(filtered?.searchParams.has('cursor')).toBe(false);
     expect(filtered?.searchParams.get(surface === 'runs' ? 'ref_name' : 'action')).toBeTruthy();
     await expect(
-      pager.getByRole('button', { name: 'Previous records', exact: true }),
+      pager.getByRole('button', { name: 'Previous page', exact: true }),
     ).toHaveAttribute('aria-disabled', 'true');
     await page.locator(`[data-${surface === 'runs' ? 'run' : 'audit'}-clear]`).click();
     await expect(rows).toHaveCount(20);
@@ -302,7 +312,7 @@ for (const surface of ['runs', 'audit'] as const) {
     const pager = page.locator('app-data-table-pager');
     await expect(rows).toHaveCount(20);
     const first = await rowIds(page, surface);
-    await pager.getByRole('button', { name: 'Next records', exact: true }).click();
+    await pager.getByRole('button', { name: 'Next page', exact: true }).click();
     const alert = page.locator(`[data-${surface === 'runs' ? 'run' : 'audit'}-paging-error]`);
     await expect(alert).toBeVisible();
     await expect(pager.getByRole('progressbar')).toHaveCount(0);

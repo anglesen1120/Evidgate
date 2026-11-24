@@ -285,7 +285,7 @@ describe('RunDetailPage attempt anchor paging', () => {
     await (await table.producerNext()).click();
     pending.resolve(page(21, 'third'));
     await settle(harness);
-    expect(await (await table.producerSummary()).text()).toBe('41–60 of 60');
+    expect(await (await table.producerSummary()).text()).toContain('41–60 of 60');
     expect(listAttempts).toHaveBeenCalledTimes(2);
     expect(listEvidenceRevisions).toHaveBeenCalledTimes(1);
   });

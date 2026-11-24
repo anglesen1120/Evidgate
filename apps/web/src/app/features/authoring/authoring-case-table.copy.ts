@@ -39,7 +39,7 @@ export const CASE_TABLE_COPY = {
   emptyCategory: $localize`:@@authoring.case-table.empty-category:This category has no test cases yet`,
   emptyHelp: $localize`:@@authoring.case-table.empty-help:A manual case needs an existing checklist item. Browsing never creates a case or its parent.`,
   emptyPage: $localize`:@@authoring.case-table.empty-page:No manual cases on this page`,
-  emptyPageHelp: $localize`:@@authoring.case-table.empty-page-help:Use Previous records to return to an earlier page, or refresh to start again.`,
+  emptyPageHelp: $localize`:@@authoring.case-table.empty-page-help:Use Previous page to return to an earlier page, or refresh to start again.`,
   noMatch: $localize`:@@authoring.case-table.no-match:No test cases match these filters`,
   noMatchHelp: $localize`:@@authoring.case-table.no-match-help:Clear the filters to inspect cases in the same hierarchy scope.`,
   stale: $localize`:@@authoring.case-table.stale:Case list may be stale`,

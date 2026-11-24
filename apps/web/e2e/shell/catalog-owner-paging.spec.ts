@@ -70,8 +70,8 @@ for (const locale of LOCALES) {
   const labels =
     locale === 'vi'
       ? {
-          next: 'Bản ghi tiếp',
-          previous: 'Bản ghi trước',
+          next: 'Trang sau',
+          previous: 'Trang trước',
           page: 'Trang',
           count: 'định danh đã tải',
           loaded: 'Số định danh đã tải:',
@@ -79,8 +79,8 @@ for (const locale of LOCALES) {
           retry: 'Tải lại để thử lại',
         }
       : {
-          next: 'Next records',
-          previous: 'Previous records',
+          next: 'Next page',
+          previous: 'Previous page',
           page: 'Page',
           count: 'loaded',
           loaded: 'Loaded identities:',
@@ -89,6 +89,38 @@ for (const locale of LOCALES) {
         };
 
   for (const theme of THEMES) {
+    test(`shared pager uses equal-height controls without overflow (${locale}, ${theme})`, async ({
+      page,
+    }) => {
+      await seedStoredTheme(page, theme);
+      await page.goto(base);
+      const pager = page.locator('app-data-table-pager');
+      const controls = pager.locator('button');
+      await expect(controls).toHaveCount(3);
+      for (const width of [390, 768, 769, 1440]) {
+        await page.setViewportSize({ width, height: 900 });
+        const target = width <= 768 ? 44 : 36;
+        const boxes = await controls.evaluateAll((buttons) =>
+          buttons.map((button) => {
+            const { top, left, right, height, width } = button.getBoundingClientRect();
+            return { top, left, right, height, width };
+          }),
+        );
+        for (const box of boxes) {
+          expect(box.height).toBe(target);
+          expect(box.width).toBeGreaterThanOrEqual(target);
+          expect(box.left).toBeGreaterThanOrEqual(0);
+          expect(box.right).toBeLessThanOrEqual(width);
+        }
+        if (width === 1440) expect(new Set(boxes.map((box) => box.top)).size).toBe(1);
+        expect(await pager.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+      }
+      await pager.getByRole('button', { name: labels.next, exact: true }).hover();
+      await expect(page.getByRole('tooltip')).toHaveText(labels.next);
+      await page.keyboard.press('Escape');
+      await expect(page.getByRole('tooltip')).toHaveCount(0);
+    });
+
     for (const width of [360, 1280]) {
       test(`catalog owner and paging controls stay accessible (${locale}, ${theme}, ${width})`, async ({
         page,
@@ -113,8 +145,8 @@ for (const locale of LOCALES) {
         const next = page.locator('app-data-table-pager [data-page="next"]');
         const previous = page.locator('app-data-table-pager [data-page="previous"]');
         const pageNumber = page.locator('app-data-table-pager [role="status"]');
-        await expect(next).toHaveText(labels.next);
-        await expect(previous).toHaveText(labels.previous);
+        await expect(next).toHaveAccessibleName(labels.next);
+        await expect(previous).toHaveAccessibleName(labels.previous);
         await expect(pageNumber).toHaveText(`${labels.page} 1`);
         await tabTo(page, next);
         await page.keyboard.press('Enter');
