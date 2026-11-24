@@ -17,13 +17,15 @@ const methods = {
   },
 };
 
-for (const method of ['showPopover', 'hidePopover'] as const) {
-  if (typeof HTMLElement.prototype[method] === 'function') continue;
-  Object.defineProperty(HTMLElement.prototype, method, {
-    configurable: true,
-    writable: true,
-    value: vi.fn(function (this: HTMLElement) {
-      methods[method].call(this);
-    }),
-  });
+if (typeof HTMLElement !== 'undefined' && typeof window !== 'undefined') {
+  for (const method of ['showPopover', 'hidePopover'] as const) {
+    if (typeof HTMLElement.prototype[method] === 'function') continue;
+    Object.defineProperty(HTMLElement.prototype, method, {
+      configurable: true,
+      writable: true,
+      value: vi.fn(function (this: HTMLElement) {
+        methods[method].call(this);
+      }),
+    });
+  }
 }
