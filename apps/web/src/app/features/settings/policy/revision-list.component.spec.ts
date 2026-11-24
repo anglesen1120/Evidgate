@@ -26,6 +26,11 @@ class LoadMoreHarness extends ComponentHarness {
     await host.click();
   }
 }
+class RevisionActionsHarness extends ComponentHarness {
+  static hostSelector = 'app-policy-revision-list';
+  readonly view = this.locatorFor('button[data-policy-view]');
+  readonly viewIcon = this.locatorFor('button[data-policy-view] hlm-icon');
+}
 describe('RevisionListComponent', () => {
   afterEach(() => TestBed.resetTestingModule());
   it('renders localized state, UTC creation time, full recoverable hash and head marker', () => {
@@ -77,21 +82,33 @@ describe('RevisionListComponent', () => {
     expect(more).toHaveBeenCalledTimes(1);
     expect(document.activeElement?.textContent).toContain('Load more');
   });
-  it('makes selection keyboard-operable and exposes the selected detail relationship', () => {
+  it('makes icon-only selection keyboard-operable and exposes the selected detail relationship', async () => {
     const fixture = TestBed.createComponent(RevisionListComponent);
     const selected = vi.fn();
     fixture.componentInstance.selected.subscribe(selected);
     fixture.componentRef.setInput('rows', [row]);
     fixture.componentRef.setInput('selectedId', row.id);
     fixture.detectChanges();
-    const action = rootElement(fixture).querySelector<HTMLButtonElement>('[data-policy-view]');
-    expect(action?.tagName).toBe('BUTTON');
-    expect(action?.getAttribute('aria-haspopup')).toBe('dialog');
-    action?.click();
-    expect(selected).toHaveBeenCalledExactlyOnceWith({ id: row.id, trigger: action });
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(
+      fixture,
+      RevisionActionsHarness,
+    );
+    const action = await harness.view();
+    expect(await action.text({ exclude: '[popover]' })).toBe('');
+    expect(await action.getAttribute('aria-label')).toBe('View · Revision 3');
+    expect(await action.getProperty('type')).toBe('button');
+    expect(await action.getAttribute('aria-haspopup')).toBe('dialog');
+    expect(await (await harness.viewIcon()).getAttribute('aria-hidden')).toBe('true');
+    await action.focus();
+    await action.click();
+    expect(selected).toHaveBeenCalledExactlyOnceWith({
+      id: row.id,
+      trigger: rootElement(fixture).querySelector('[data-policy-view]'),
+    });
     fixture.componentRef.setInput('busy', true);
-    fixture.detectChanges();
-    action?.click();
+    await fixture.whenStable();
+    expect(await action.getProperty('disabled')).toBe(true);
+    await action.click();
     expect(selected).toHaveBeenCalledTimes(1);
   });
 });

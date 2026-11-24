@@ -22,6 +22,7 @@ import {
   type DataTableCellContext,
   type DataTableColumn,
 } from '../../../shared/ui/data-table';
+import { RowActionComponent } from '../../../shared/ui/data-table/row-action.component';
 import { DesktopMutationDirective } from '../../../shared/ui/narrow';
 import { CopyableIdentifierComponent } from '../../../shared/ui/values/copyable-identifier.component';
 import { ShellIconComponent } from '../../../shell/layout/shell-icon.component';
@@ -50,6 +51,7 @@ type Cell = TemplateRef<DataTableCellContext<ExceptionRecord>>;
   imports: [
     DatePipe,
     DataTableComponent,
+    RowActionComponent,
     CopyableIdentifierComponent,
     ShellIconComponent,
     HlmDialogImports,
@@ -122,7 +124,7 @@ export class DecisionExceptions {
     this.view().records.find((r) => r.id === (this.selection.id() ?? this.view().initialRecord)),
   );
 
-  protected openRecord(record: ExceptionRecord, opener: HTMLButtonElement): void {
+  protected openRecord(record: ExceptionRecord, opener: HTMLElement): void {
     this.selection.select(record.id);
     // Pointer activation does not focus a button in every browser. Give CDK the exact opener.
     opener.focus({ preventScroll: true });

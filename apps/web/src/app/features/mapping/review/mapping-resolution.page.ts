@@ -222,7 +222,7 @@ export class MappingResolutionPage {
   protected readonly selected = linkedSignal(() => this.records().at(0));
   private viewFocusReturn: { id: string; index: number } | null = null;
   // Revoke the read-only overlay when its loaded records, route scope or access state change.
-  protected readonly viewOpener = linkedSignal((): HTMLButtonElement | null => {
+  protected readonly viewOpener = linkedSignal((): HTMLElement | null => {
     this.records();
     this.ancestors();
     this.query();
@@ -332,7 +332,7 @@ export class MappingResolutionPage {
     });
   }
 
-  protected openView(row: MappingRowViewModel, opener: HTMLButtonElement): void {
+  protected openView(row: MappingRowViewModel, opener: HTMLElement): void {
     this.viewFocusReturn = {
       id: row.id,
       index: this.records().findIndex((record) => record.id === row.id),
@@ -341,7 +341,7 @@ export class MappingResolutionPage {
     this.viewOpener.set(opener);
   }
 
-  protected closeView(id: string, opener: HTMLButtonElement): void {
+  protected closeView(id: string, opener: HTMLElement): void {
     this.viewOpener.set(null);
     if (!opener.isConnected) {
       afterNextRender(

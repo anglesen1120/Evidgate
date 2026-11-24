@@ -18,6 +18,7 @@ import { HlmInput } from '@evidgate/ui/input';
 import { HlmLabel } from '@evidgate/ui/label';
 import { StatusPillComponent } from '../../../shared/ui/chips';
 import { DataTableComponent } from '../../../shared/ui/data-table/data-table.component';
+import { RowActionComponent } from '../../../shared/ui/data-table/row-action.component';
 import type {
   DataTableCellContext,
   DataTableColumn,
@@ -35,6 +36,7 @@ type IncidentCell = TemplateRef<DataTableCellContext<IncidentViewModel>>;
   selector: 'app-inbox-queue',
   imports: [
     DataTableComponent,
+    RowActionComponent,
     DesktopMutationDirective,
     EmptyPatternComponent,
     HlmBadge,

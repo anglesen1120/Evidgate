@@ -42,6 +42,9 @@ function version(no: number): AuthoringVersionDetailDto {
 }
 class TimelineHarness extends ComponentHarness {
   static hostSelector = 'app-editor-timeline';
+  readonly action = (name: string) => this.locatorFor(`button[aria-label="${name}"]`)();
+  readonly actionIcon = (name: string) =>
+    this.locatorFor(`button[aria-label="${name}"] hlm-icon`)();
   async click(selector: string) {
     await (await this.locatorFor(selector)()).click();
   }
@@ -193,8 +196,22 @@ describe('TimelineComponent', () => {
   });
   it('fetches immutable detail with its ETag and compares two stored snapshots', async () => {
     const { harness } = await mount();
-    await harness.click('[data-inspect-version="version-3"]');
-    await harness.click('[data-compare-version="version-2"]');
+    const view = await harness.action('View version 3');
+    const compare = await harness.action('Compare with 2');
+    expect(await view.text({ exclude: '[popover]' })).toBe('');
+    expect(await compare.text({ exclude: '[popover]' })).toBe('');
+    expect(await (await harness.actionIcon('View version 3')).getAttribute('aria-hidden')).toBe(
+      'true',
+    );
+    expect(await compare.getProperty('disabled')).toBe(true);
+    expect(await compare.getAttribute('aria-describedby')).toBe('case-comparison-reason');
+    await view.click();
+    expect(await (await harness.action('Compare with 3')).getProperty('disabled')).toBe(true);
+    expect(await compare.getProperty('disabled')).toBe(false);
+    expect(await (await harness.actionIcon('Compare with 2')).getAttribute('aria-hidden')).toBe(
+      'true',
+    );
+    await compare.click();
     expect(await harness.text()).toContain('sha256:' + '3'.repeat(64));
     expect(await harness.text()).toContain('Title 2');
     expect(await harness.text()).toContain('Title 3');

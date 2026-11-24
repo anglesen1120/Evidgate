@@ -98,14 +98,13 @@
       </div>
       @if (reloadOwner(); as reload) {
         <button
-          hlmBtn
-          type="button"
-          [variant]="'outline'"
+          appRowAction
+          [icon]="'lucideRotateCw'"
+          [label]="copy.reload + ' ' + display(row.name || row.id)"
+          [attr.aria-label]="copy.reload + ' ' + display(row.name || row.id)"
           (click)="reload(row.id)"
           data-catalog-owner-reload
-        >
-          {{ copy.reload }}
-        </button>
+        ></button>
       }
     }
   </div>
@@ -124,33 +123,24 @@
   >
     <button
       #view
-      hlmBtn
-      [variant]="'outline'"
-      [size]="'sm'"
-      type="button"
+      appRowAction
+      [label]="viewName(row)"
       [attr.aria-haspopup]="'dialog'"
       data-catalog-view
       [attr.aria-label]="viewName(row)"
-      class="pointer-coarse:min-h-(--eg-control-touch)"
-      (click)="open(row, 'view', view)"
-    >
-      {{ recordCopy.view }}
-    </button>
+      (click)="open(row, 'view', view.nativeElement)"
+    ></button>
     @if (eligible() && !ownerPending()(row.id)) {
       <button
         #edit
-        hlmBtn
-        [variant]="'ghost'"
-        [size]="'sm'"
-        type="button"
+        appRowAction
+        [icon]="'lucidePencil'"
+        [label]="editName(row)"
         [attr.aria-haspopup]="'dialog'"
         data-catalog-edit
         [attr.aria-label]="editName(row)"
-        class="pointer-coarse:min-h-(--eg-control-touch)"
-        (click)="open(row, 'edit', edit)"
-      >
-        {{ recordCopy.edit }}
-      </button>
+        (click)="open(row, 'edit', edit.nativeElement)"
+      ></button>
     }
   </div>
 </ng-template>

@@ -26,6 +26,7 @@ import { HlmLabel } from '@evidgate/ui/label';
 import { HlmTableImports } from '@evidgate/ui/table';
 import { AbsoluteTimeComponent } from '../../../shared/time/absolute-time.component';
 import { StatusPillComponent } from '../../../shared/ui/chips/status-pill.component';
+import { RowActionComponent } from '../../../shared/ui/data-table/row-action.component';
 import { DesktopRequiredNoticeComponent } from '../../../shared/ui/narrow/desktop-required-notice.component';
 import { NarrowMutationPolicy } from '../../../shared/ui/narrow/narrow-mutation-policy';
 import { HeaderActionsDirective } from '../../../shared/ui/page-header/header-actions.directive';
@@ -56,6 +57,7 @@ type RecordMode = 'view' | 'edit' | 'discard';
   selector: 'app-deploy-targets-review',
   imports: [
     HlmButton,
+    RowActionComponent,
     HlmCard,
     HlmCardTitle,
     HlmDialogImports,
@@ -90,9 +92,12 @@ export class DeployTargetsReviewPage {
   private readonly query = toSignal(this.route.queryParamMap);
   protected readonly copy = copy;
   protected readonly displayText = escapeFormatChars;
-  private readonly viewButtons = viewChildren<ElementRef<HTMLButtonElement>>('viewButton');
+  private readonly viewButtons = viewChildren<RowActionComponent, ElementRef<HTMLButtonElement>>(
+    'viewButton',
+    { read: ElementRef },
+  );
   private readonly pageHeader = viewChild(PageHeaderComponent);
-  private opener: HTMLButtonElement | null = null;
+  private opener: HTMLElement | null = null;
   private openerIndex = 0;
   private previousField = 'target-order';
   protected readonly validationHint = notices.validation.title;
@@ -230,7 +235,7 @@ export class DeployTargetsReviewPage {
     });
   }
 
-  protected openRecord(key: string, mode: 'view' | 'edit', opener: HTMLButtonElement): void {
+  protected openRecord(key: string, mode: 'view' | 'edit', opener: HTMLElement): void {
     if (this.mode()) {
       this.requestClose();
       return;

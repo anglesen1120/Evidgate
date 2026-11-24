@@ -16,18 +16,15 @@
 <ng-template #time let-row><app-absolute-time [value]="row.created_at" /></ng-template>
 <ng-template #action let-row>
   <button
-    hlmBtn
-    [variant]="'outline'"
+    appRowAction
+    [label]="name(row)"
     #opener
     type="button"
     [hlmDialogTriggerFor]="dialog"
     [attr.aria-label]="name(row)"
-    (click)="inspect(row, opener)"
+    (click)="inspect(row, opener.nativeElement)"
     [attr.data-import-version-view]="row.version_id"
-    i18n="@@authoring.history.view"
-  >
-    View
-  </button>
+  ></button>
 </ng-template>
 <app-data-table
   class="[--eg-row-default:var(--eg-space-11)]"

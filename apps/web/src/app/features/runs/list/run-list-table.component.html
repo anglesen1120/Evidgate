@@ -116,17 +116,12 @@
 <ng-template #viewCell let-row>
   <button
     [id]="'run-view-' + row.run_id"
-    type="button"
-    hlmBtn
-    [variant]="'outline'"
-    [size]="'sm'"
-    class="min-h-(--eg-control-sm) min-w-(--eg-control-touch) whitespace-nowrap pointer-coarse:min-h-(--eg-control-touch)"
+    appRowAction
+    [label]="viewLabel(row.run_id)"
     [attr.aria-haspopup]="'dialog'"
     (click)="inspected.set(row.run_id)"
     [attr.aria-label]="viewLabel(row.run_id)"
-  >
-    {{ copy.view }}
-  </button>
+  ></button>
 </ng-template>
 
 @if (inspectedRow(); as row) {

@@ -22,6 +22,7 @@ import {
   type DataTableColumn,
   type DataTableCellContext,
 } from '../../../shared/ui/data-table';
+import { RowActionComponent } from '../../../shared/ui/data-table/row-action.component';
 import { CopyableIdentifierComponent } from '../../../shared/ui/values/copyable-identifier.component';
 import { NumberValueComponent } from '../../../shared/ui/values/number-value.component';
 import { PENDING_COPY, isStale, isStructural, rowBlockedReason } from './pending-changes.copy';
@@ -37,6 +38,7 @@ type ChangeCell = TemplateRef<DataTableCellContext<AuthoringChangeListItem>>;
     HlmDialogImports,
     NgTemplateOutlet,
     DataTableComponent,
+    RowActionComponent,
     StatusPillComponent,
     CopyableIdentifierComponent,
     NumberValueComponent,
@@ -77,7 +79,7 @@ export class PendingChangeTableComponent {
     const first = formatNumber(1, this.locale);
     return $localize`:@@shared.data-table.loaded-range:Loaded records ${first}:start:–${total}:end: of ${total}:loaded:`;
   });
-  private opener: { button: HTMLButtonElement; id: string; index: number } | null = null;
+  private opener: { button: HTMLElement; id: string; index: number } | null = null;
   protected readonly columns = computed<readonly DataTableColumn<AuthoringChangeListItem>[]>(() => {
     const selection = this.selection();
     const identity = this.identity(),
@@ -142,7 +144,7 @@ export class PendingChangeTableComponent {
         return row.state;
     }
   }
-  protected inspect(row: AuthoringChangeListItem, button: HTMLButtonElement): void {
+  protected inspect(row: AuthoringChangeListItem, button: HTMLElement): void {
     this.opener = { button, id: row.change_id, index: this.rows().indexOf(row) };
     this.store.setPreview(row.change_id);
   }

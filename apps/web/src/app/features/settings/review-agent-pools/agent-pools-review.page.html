@@ -108,19 +108,15 @@
               </td>
               <td hlmTd class="text-end max-sm:h-auto max-sm:p-0">
                 <button
-                  hlmBtn
+                  appRowAction
                   type="button"
-                  [variant]="'outline'"
-                  [size]="'sm'"
+                  [label]="viewLabel + ' · ' + pool.name"
                   [attr.data-view-record]="'pool'"
                   [attr.aria-haspopup]="'dialog'"
                   [attr.aria-expanded]="choice() === pool.name"
-                  class="pointer-coarse:min-h-11"
-                  [attr.aria-labelledby]="'view-pool-' + idx + ' pool-' + idx"
+                  [attr.aria-label]="viewLabel + ' · ' + pool.name"
                   (click)="choice.set(pool.name)"
-                >
-                  <span [id]="'view-pool-' + idx" i18n="@@review.directory.view">View</span>
-                </button>
+                ></button>
               </td>
             </tr>
           }

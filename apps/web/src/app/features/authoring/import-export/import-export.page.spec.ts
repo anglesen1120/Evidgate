@@ -1,5 +1,5 @@
 import { computed, signal } from '@angular/core';
-import { TestKey } from '@angular/cdk/testing';
+import { ComponentHarness, TestKey } from '@angular/cdk/testing';
 import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
@@ -17,6 +17,10 @@ import { ImportStore } from './import.store';
 import { ExportStore } from './export.store';
 import { AUTHORING_READ, IMPEX_COPY } from './import-export.copy';
 import { IMPORT_COLUMNS } from './local-file-preview';
+
+class ImportHistoryActionHarness extends ComponentHarness {
+  static hostSelector = '[data-import-history] button[appRowAction]';
+}
 
 provideLayoutTestStubs();
 const parsed = IMPORT_COLUMNS.join(',') + '\nnode,n1,,,module,Safe title,,,,,,,0\n';
@@ -178,13 +182,18 @@ describe('ImportExportPage presentation and route heading contract', () => {
   });
 
   it('views a loaded version in one labelled dialog and returns focus without a request', async () => {
-    const { harness } = await setup(file());
-    const opener = '[data-import-version-view]';
+    const { fixture, harness } = await setup(file());
+    const opener = `button[aria-label="View version 3 of ${history.items[0]?.entity_id}"]`;
     expect(await harness.textAt('[data-import-history] .caption')).toBe(IMPEX_COPY.history);
     expect(await harness.textAt('[data-history-range]')).toBe('Showing 1–1 of 1 loaded versions');
     expect(await harness.attr(opener, 'aria-label')).toContain(
       'View version 3 of ' + history.items[0]?.entity_id,
     );
+    const action = await TestbedHarnessEnvironment.loader(fixture).getHarness(
+      ImportHistoryActionHarness,
+    );
+    expect(await (await action.host()).text({ exclude: '[popover]' })).toBe('');
+    expect(await harness.attr(opener + ' hlm-icon', 'aria-hidden')).toBe('true');
     await harness.focus(opener);
     await harness.click(opener);
     const title = await harness.dialogTitle();

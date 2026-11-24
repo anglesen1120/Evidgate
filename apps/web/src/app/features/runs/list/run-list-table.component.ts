@@ -24,6 +24,7 @@ import type {
   DataTableColumn,
 } from '../../../shared/ui/data-table/data-table-column';
 import { DataTableValueComponent } from '../../../shared/ui/data-table/data-table-value.component';
+import { RowActionComponent } from '../../../shared/ui/data-table/row-action.component';
 import { CopyValueButtonComponent } from '../../../shared/ui/values/copy-value-button.component';
 import { middleTruncate } from '../../../shared/ui/values/middle-truncate';
 import { DecisionChipComponent } from '../../../shared/ui/verdict/decision-chip.component';
@@ -44,6 +45,7 @@ type RunCell = TemplateRef<DataTableCellContext<RunSummary>>;
     StatusPillComponent,
     DataTableComponent,
     DataTableValueComponent,
+    RowActionComponent,
     CopyValueButtonComponent,
     DecisionChipComponent,
   ],

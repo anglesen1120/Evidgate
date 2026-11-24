@@ -25,6 +25,7 @@ import { HlmSelectImports } from '@evidgate/ui/select';
 import { HlmTableImports } from '@evidgate/ui/table';
 import { AbsoluteTimeComponent } from '../../../shared/time/absolute-time.component';
 import { StatusPillComponent } from '../../../shared/ui/chips/status-pill.component';
+import { RowActionComponent } from '../../../shared/ui/data-table/row-action.component';
 import { PageHeaderComponent, HeaderActionsDirective } from '../../../shared/ui/page-header';
 import { EmptyPatternComponent } from '../../../shared/ui/states/empty-pattern.component';
 import { LoadingPatternComponent } from '../../../shared/ui/states/loading-pattern.component';
@@ -55,6 +56,7 @@ type SelectionScope = {
     RouterLink,
     HlmBadge,
     HlmButton,
+    RowActionComponent,
     HlmCardImports,
     HlmDialogImports,
     HlmIcon,
@@ -79,7 +81,10 @@ export class GeneratedScriptsPage {
   protected readonly returnUrl = injectReviewReturnUrl();
   readonly viewModel = input<GeneratedScriptsViewModel>(generatedScriptsFixture);
   private readonly params = toSignal(this.route.queryParamMap);
-  private readonly rowButtons = viewChildren<ElementRef<HTMLButtonElement>>('opener');
+  private readonly rowButtons = viewChildren<RowActionComponent, ElementRef<HTMLButtonElement>>(
+    'opener',
+    { read: ElementRef },
+  );
   private readonly inventoryHeading = viewChild<ElementRef<HTMLElement>>('inventoryHeading');
   private readonly pageHeading = viewChild.required(PageHeaderComponent);
   private readonly requested = computed(() => {
@@ -157,7 +162,7 @@ export class GeneratedScriptsPage {
     const selection = this.selection();
     return selection.viewing ? this.inventory().find((row) => row.id === selection.id) : undefined;
   });
-  protected viewScript(id: string, opener: HTMLButtonElement): void {
+  protected viewScript(id: string, opener: HTMLElement): void {
     // A pointer press does not focus a button in every browser. Give the CDK a return target.
     opener.focus();
     this.selection.set({ id, viewing: true });
