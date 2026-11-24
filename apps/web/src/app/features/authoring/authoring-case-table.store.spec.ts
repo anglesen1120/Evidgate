@@ -81,28 +81,28 @@ describe('AuthoringCaseTableStore', () => {
     expect(store.rows().map((item) => item.case_id)).toEqual(['2']);
   });
 
-  it('appends keyset rows and consumes its own URL cursor without re-reading', async () => {
+  it('replaces the visible keyset page and consumes its own URL cursor without re-reading', async () => {
     await store.init('project', {});
     list.mockResolvedValueOnce(page(['2']));
     expect(await store.loadMore()).toBe('next');
     await store.init('project', { cursor: 'next' });
     expect(list).toHaveBeenCalledTimes(2);
-    expect(store.rows().map((item) => item.case_id)).toEqual(['1', '2']);
+    expect(store.rows().map((item) => item.case_id)).toEqual(['2']);
     await store.init('project', {});
     expect(list).toHaveBeenCalledTimes(3);
   });
 
-  it('retries the failed continuation without replacing either accepted prefix page', async () => {
+  it('retries the failed continuation while retaining the accepted page', async () => {
     await store.init('project', {});
     list.mockResolvedValueOnce(page(['2'], 'third-page'));
     await store.loadMore();
     list.mockRejectedValueOnce(apiError('network', 0));
     await store.loadMore();
-    expect(store.rows().map((item) => item.case_id)).toEqual(['1', '2']);
+    expect(store.rows().map((item) => item.case_id)).toEqual(['2']);
     list.mockResolvedValueOnce(page(['3']));
     expect(await store.retry()).toBe('third-page');
     expect(list.mock.lastCall?.[1].cursor).toBe('third-page');
-    expect(store.rows().map((item) => item.case_id)).toEqual(['1', '2', '3']);
+    expect(store.rows().map((item) => item.case_id)).toEqual(['3']);
     expect(store.error()).toBeNull();
   });
 
@@ -164,34 +164,24 @@ describe('AuthoringCaseTableStore', () => {
     expect(list).toHaveBeenCalledTimes(2);
   });
 
-  it('caps retained cases at 10000 including a partial final page and blocks further reads', async () => {
-    list.mockResolvedValueOnce(
-      page(
-        Array.from({ length: 199 }, (_, i) => String(i)),
-        '199',
-      ),
-    );
-    await store.init('project', { limit: '200' });
-    for (let start = 199; start < 10_000; start += 200) {
+  it('retains one page rather than accumulating earlier pages', async () => {
+    await store.init('project', { limit: '100' });
+    for (let index = 0; index < 105; index += 1) {
       list.mockResolvedValueOnce(
         page(
-          Array.from({ length: 200 }, (_, i) => String(start + i)),
-          String(start + 200),
+          Array.from({ length: 100 }, (_, row) => `${index}-${row}`),
+          `cursor-${index}`,
         ),
       );
       await store.loadMore();
+      expect(store.rows()).toHaveLength(100);
     }
-    expect(store.rows()).toHaveLength(10_000);
-    expect(store.rows().at(-1)?.case_id).toBe('9999');
-    expect(store.browseCapped()).toBe(true);
-    expect(store.nextCursor()).toBeNull();
-    const reads = list.mock.calls.length;
-    await store.loadMore();
-    await store.retry();
-    expect(list).toHaveBeenCalledTimes(reads);
+    expect(store.browseCapped()).toBe(false);
+    expect(store.page()).toBe(106);
+    expect(store.rows()[0]?.case_id).toBe('104-0');
     list.mockResolvedValueOnce(page(['new']));
     await store.init('project', { q: 'narrower' });
-    expect(store.browseCapped()).toBe(false);
+    expect(store.page()).toBe(1);
     expect(store.rows()).toHaveLength(1);
   });
 
@@ -214,26 +204,17 @@ describe('AuthoringCaseTableStore', () => {
     expect(capped.nextCursor()).toBeNull();
   });
 
-  it('accepts the exact-cap continuation cursor and retains the cap notice after failed Refresh', async () => {
+  it('retains the response safety-cap notice after a failed Refresh', async () => {
     list.mockResolvedValueOnce(
       page(
-        Array.from({ length: 9_800 }, (_, i) => String(i)),
-        'last-retained',
-      ),
-    );
-    await store.init('project', {});
-    list.mockResolvedValueOnce(
-      page(
-        Array.from({ length: 200 }, (_, i) => String(9_800 + i)),
+        Array.from({ length: 10_000 }, (_, i) => String(i)),
         'beyond-cap',
       ),
     );
-    expect(await store.loadMore()).toBe('last-retained');
+    await store.init('project', {});
     expect(store.rows()).toHaveLength(10_000);
     expect(store.browseCapped()).toBe(true);
     expect(store.nextCursor()).toBeNull();
-    await store.init('project', { cursor: 'last-retained' });
-    expect(list).toHaveBeenCalledTimes(2);
     list.mockRejectedValueOnce(apiError('network', 0));
     await store.reload();
     expect(store.rows()).toHaveLength(10_000);
@@ -267,14 +248,9 @@ describe('AuthoringCaseTableStore', () => {
     expect(store.error()).toMatchObject({ code: `invalid_${key}`, retryable: false });
   });
 
-  it('does not claim a cap when the last complete page ends exactly at 10000 cases', async () => {
-    const ids = (start: number) => Array.from({ length: 200 }, (_, i) => String(start + i));
-    list.mockResolvedValueOnce(page(ids(0), 'p1'));
-    await store.init('project', { limit: '200' });
-    for (let index = 1; index < 50; index += 1) {
-      list.mockResolvedValueOnce(page(ids(index * 200), index < 49 ? `p${index + 1}` : null));
-      await store.loadMore();
-    }
+  it('does not claim a cap when a response ends exactly at the safety bound', async () => {
+    list.mockResolvedValueOnce(page(Array.from({ length: 10_000 }, (_, i) => String(i))));
+    await store.init('project', {});
     expect(store.rows()).toHaveLength(10_000);
     expect(store.browseCapped()).toBe(false);
     expect(store.nextCursor()).toBeNull();

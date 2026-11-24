@@ -1,11 +1,11 @@
-import { ComponentHarness } from '@angular/cdk/testing';
+import { manualChangeDetection } from '@angular/cdk/testing';
 import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { provideZonelessChangeDetection, signal } from '@angular/core';
 import { DeferBlockBehavior, TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap } from '@angular/router';
-import type { AuthoringVersionDetailDto, ManualCaseDetailDto } from '@evidgate/sdk';
+import type { AuthoringVersionListResponse, ManualCaseDetailDto } from '@evidgate/sdk';
 import type { Mock } from 'vitest';
-import { of } from 'rxjs';
+import { firstValueFrom, of, Subject } from 'rxjs';
 import {
   AuthoringEditorDataService,
   type AuthoringVersionsQuery,
@@ -17,78 +17,11 @@ import { NarrowMutationPolicy } from '../../../shared/ui/narrow';
 import { EditorStore } from './editor.store';
 import { EDITOR_WRITE } from './editor.model';
 import { TimelineComponent } from './timeline.component';
+import { TimelineStore } from './timeline.store';
+import { apiError } from '../../../shared/testing/http-data.testing';
+import { CASE_ID, version, TimelineHarness, RestoreHarness } from './timeline.testing';
 
 provideLayoutTestStubs();
-const CASE_ID = 'a4430000-0000-4000-8000-000000000001';
-function version(no: number): AuthoringVersionDetailDto {
-  return {
-    version_id: 'version-' + no,
-    entity_kind: 'manual_test_case',
-    entity_id: CASE_ID,
-    version_no: no,
-    batch_id: 'batch-' + no,
-    change_kind: no === 1 ? 'create' : 'update',
-    source: 'manual',
-    content_hash: 'sha256:' + String(no).repeat(64),
-    author: null,
-    reason: 'Reason ' + no,
-    ai_run_id: null,
-    created_at: '2026-11-' + (10 + no) + 'T00:00:00Z',
-    content: {
-      title: 'Title ' + no,
-      steps: [{ no: 1, action: 'Action ' + no, expected: 'Expected ' + no }],
-    },
-  };
-}
-class TimelineHarness extends ComponentHarness {
-  static hostSelector = 'app-editor-timeline';
-  readonly action = (name: string) => this.locatorFor(`button[aria-label="${name}"]`)();
-  readonly actionIcon = (name: string) =>
-    this.locatorFor(`button[aria-label="${name}"] hlm-icon`)();
-  async click(selector: string) {
-    await (await this.locatorFor(selector)()).click();
-  }
-  async ids() {
-    return Promise.all(
-      (await this.locatorForAll('[data-row-id]')()).map((row) => row.getAttribute('data-row-id')),
-    );
-  }
-  async text() {
-    return (await this.host()).text();
-  }
-  async disabled(selector: string) {
-    return (await this.locatorFor(selector)()).getProperty<boolean>('disabled');
-  }
-  async rowText() {
-    return Promise.all((await this.locatorForAll('[data-row-id]')()).map((row) => row.text()));
-  }
-  async filter(value: string) {
-    const input = await this.locatorFor('#case-history-filter')();
-    await input.setInputValue(value);
-    await input.dispatchEvent('input');
-  }
-  async count(selector: string) {
-    return (await this.locatorForAll(selector)()).length;
-  }
-}
-class RestoreHarness extends ComponentHarness {
-  static hostSelector = '[role="dialog"], [role="alertdialog"]';
-  async confirm() {
-    await (await this.locatorFor('[data-restore-confirm]')()).click();
-  }
-  async cancel() {
-    await (await this.locatorFor('[data-restore-cancel]')()).click();
-  }
-  async reasonDisabled() {
-    return (await this.locatorFor('#case-restore-reason')()).getProperty<boolean>('disabled');
-  }
-  async busy() {
-    return (await this.locatorFor('[aria-busy]')()).getAttribute('aria-busy');
-  }
-  async text() {
-    return (await this.host()).text();
-  }
-}
 
 describe('TimelineComponent', () => {
   const writable = signal(true);
@@ -182,18 +115,68 @@ describe('TimelineComponent', () => {
       harness: await TestbedHarnessEnvironment.harnessForFixture(fixture, TimelineHarness),
     };
   }
-  it('loads newest first and appends keyset pages using only the returned cursor', async () => {
+  it('loads newest first and replaces keyset pages using only the returned cursor', async () => {
     const { harness } = await mount();
     expect(await harness.ids()).toEqual(['version-3', 'version-2']);
-    await harness.click('[data-versions-more]');
-    expect(await harness.ids()).toEqual(['version-3', 'version-2', 'version-1']);
+    await harness.click('app-data-table-pager button[data-page="next"]');
+    expect(await harness.ids()).toEqual(['version-1']);
     expect(data.versions).toHaveBeenLastCalledWith(
       'p1',
       CASE_ID,
-      { limit: 50, cursor: 'opaque-older' },
+      { limit: 20, cursor: 'opaque-older' },
+      expect.any(AbortSignal),
+    );
+    await harness.click('app-data-table-pager button[data-page="previous"]');
+    expect(await harness.ids()).toEqual(['version-3', 'version-2']);
+    expect(data.versions).toHaveBeenLastCalledWith(
+      'p1',
+      CASE_ID,
+      { limit: 20 },
       expect.any(AbortSignal),
     );
   });
+  it.each(['success', 'retry'] as const)(
+    'retains one first-page filter request and its selected snapshot on %s',
+    async (outcome) => {
+      const { fixture, harness } = await mount();
+      const store = fixture.debugElement.injector.get(TimelineStore);
+      await harness.click('[data-inspect-version="version-3"]');
+      await harness.click('app-data-table-pager button[data-page="next"]');
+      const pending = new Subject<AuthoringVersionListResponse>();
+      data.versions.mockReturnValueOnce(firstValueFrom(pending));
+      await manualChangeDetection(async () => {
+        for (const value of ['R', 'Re', 'Reason 3']) {
+          await harness.filter(value);
+          fixture.detectChanges();
+          await vi.waitFor(() => expect(data.versions).toHaveBeenCalledTimes(3));
+        }
+        expect(store.page()).toBe(2);
+        expect(store.rows()[0]?.version_no).toBe(1);
+        expect(store.selected()).toBe('version-3');
+        expect(data.versions.mock.lastCall?.[2]).toEqual({ limit: 20 });
+        if (outcome === 'retry') pending.error(apiError('unavailable', 503));
+        else pending.next({ items: versions.slice(0, 2), next_cursor: 'opaque-older' });
+      });
+      await fixture.whenStable();
+      if (outcome === 'retry') {
+        expect(store.page()).toBe(2);
+        data.versions.mockResolvedValueOnce({
+          items: versions.slice(0, 2),
+          next_cursor: 'opaque-older',
+        });
+        store.history.reload();
+        await fixture.whenStable();
+      }
+      expect(store.page()).toBe(1);
+      expect(await harness.ids()).toEqual(['version-3']);
+      expect(store.selected()).toBe('version-3');
+      expect(store.versionDetail()?.view.version_no).toBe(3);
+      store.refresh();
+      await fixture.whenStable();
+      expect(data.versions).toHaveBeenCalledTimes(outcome === 'retry' ? 5 : 4);
+      expect(store.selected()).toBe('version-3');
+    },
+  );
   it('fetches immutable detail with its ETag and compares two stored snapshots', async () => {
     const { harness } = await mount();
     const view = await harness.action('View version 3');
@@ -233,18 +216,21 @@ describe('TimelineComponent', () => {
     );
     expect(data.restoreVersion.mock.calls[0]).toHaveLength(3);
   });
-  it('restore appends a new id and leaves all previously loaded rows identical', async () => {
+  it('restore appends a new head without rewriting the selected evidence snapshot', async () => {
     const { fixture, harness } = await mount();
-    await harness.click('[data-versions-more]');
+    await harness.click('app-data-table-pager button[data-page="next"]');
     const oldRows = await harness.rowText();
     await harness.click('[data-inspect-version="version-1"]');
     await harness.click('[data-restore-open]');
     await (
       await TestbedHarnessEnvironment.documentRootLoader(fixture).getHarness(RestoreHarness)
     ).confirm();
-    expect(await harness.ids()).toEqual(['version-4', 'version-3', 'version-2', 'version-1']);
-    expect((await harness.rowText()).slice(1)).toEqual(oldRows);
+    expect(await harness.ids()).toEqual(['version-4', 'version-3', 'version-2']);
+    expect(await harness.text()).toContain('Title 1');
     expect(await harness.text()).toContain('Version 4');
+    await harness.click('app-data-table-pager button[data-page="next"]');
+    expect(await harness.rowText()).toEqual(oldRows);
+    expect(await harness.text()).toContain('Title 1');
   });
   it('moves focus to the appended version heading after a successful restore', async () => {
     const { fixture, harness } = await mount();
@@ -370,8 +356,8 @@ describe('TimelineComponent', () => {
   it('a repeated cursor stops paging without duplicating rows', async () => {
     data.versions.mockResolvedValue({ items: versions.slice(0, 2), next_cursor: 'same' });
     const { harness } = await mount();
-    await harness.click('[data-versions-more]');
-    expect(await harness.disabled('[data-versions-more]')).toBe(true);
+    await harness.click('app-data-table-pager button[data-page="next"]');
+    expect(await harness.disabled('app-data-table-pager button[data-page="next"]')).toBe(true);
     expect(await harness.ids()).toEqual(['version-3', 'version-2']);
     expect(await harness.text()).toContain('repeated');
   });
@@ -397,7 +383,7 @@ describe('TimelineComponent', () => {
         }),
       );
     const { harness } = await mount();
-    await harness.click('[data-versions-more]');
+    await harness.click('app-data-table-pager button[data-page="next"]');
     expect(await harness.ids()).toEqual(['version-3', 'version-2']);
     expect(await harness.text()).toContain('Previously loaded versions are retained');
     expect(data.restoreVersion).not.toHaveBeenCalled();
@@ -426,11 +412,25 @@ describe('TimelineComponent', () => {
     expect(data.restoreVersion).toHaveBeenCalledTimes(1);
     expect(appended).toBe(false);
   });
-  it('no-match differs from empty history and does not alter server pagination', async () => {
+  it('a local no-match keeps page one, and changing the filter on a later page resets cursors', async () => {
     const { harness } = await mount();
     await harness.filter('no such reason');
-    expect(await harness.text()).toContain('No loaded versions match');
+    expect(await harness.text()).toContain('No versions on this page match this filter');
+    expect(await harness.text()).toContain('Filter this page by reason');
+    expect(await harness.text()).toContain('Fixed server order: newest first');
     expect(data.versions).toHaveBeenCalledTimes(1);
+    await harness.click('app-data-table-pager button[data-page="next"]');
+    expect(await harness.ids()).toEqual(['version-1']);
+    await harness.filter('Reason 2');
+    expect(await harness.ids()).toEqual(['version-2']);
+    expect(data.versions).toHaveBeenLastCalledWith(
+      'p1',
+      CASE_ID,
+      { limit: 20 },
+      expect.any(AbortSignal),
+    );
+    await harness.click('app-data-table-pager button[data-page="next"]');
+    expect(await harness.ids()).toEqual(['version-1']);
   });
   it('403 hides history content without turning it into an empty success', async () => {
     data.versions.mockRejectedValue(
@@ -449,7 +449,7 @@ describe('TimelineComponent', () => {
     expect(await harness.ids()).toEqual([]);
     expect(await harness.text()).not.toContain('No versions recorded');
   });
-  it('virtualizes the shared table at 201 loaded versions and keeps rich rows at 200', async () => {
+  it('replaces a full server page rather than accumulating enough rows to virtualize', async () => {
     const row = (no: number) => ({ ...version(no), version_id: 'version-' + no });
     const first = Array.from({ length: 200 }, (_, index) => row(201 - index));
     data.versions.mockImplementation(
@@ -460,16 +460,13 @@ describe('TimelineComponent', () => {
             : { items: first, next_cursor: 'older' },
         ),
     );
-    const { fixture, harness } = await mount();
+    const { harness } = await mount();
     expect(await harness.count('[data-row-id]')).toBe(200);
     expect(await harness.count('cdk-virtual-scroll-viewport')).toBe(0);
-    await harness.click('[data-versions-more]');
-    await fixture.whenStable();
-    expect(await harness.count('cdk-virtual-scroll-viewport')).toBe(1);
-    const rendered = await harness.count('[data-row-id]');
-    expect(rendered).toBeGreaterThan(0);
-    expect(rendered).toBeLessThan(201);
-    expect(await harness.text()).toContain('201 versions loaded');
+    await harness.click('app-data-table-pager button[data-page="next"]');
+    expect(await harness.ids()).toEqual(['version-1']);
+    expect(await harness.count('cdk-virtual-scroll-viewport')).toBe(0);
+    expect(await harness.disabled('app-data-table-pager button[data-page="next"]')).toBe(true);
   });
   it('announces restore progress inside the busy dialog and keeps focus off the body', async () => {
     // The deferred resolver by hand: `Promise.withResolvers` is ES2024 and this project's lib is ES2022.

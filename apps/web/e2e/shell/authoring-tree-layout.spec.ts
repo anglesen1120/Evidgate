@@ -98,7 +98,7 @@ for (const locale of LOCALES) {
                 .locator('app-authoring-case-rows [data-row-id], app-authoring-case-rows dl')
                 .first(),
             ).toBeVisible();
-            await expect(page.locator('[data-case-loaded]')).toBeVisible();
+            await expect(page.locator('.pagination > app-data-table-pager')).toBeVisible();
             await expectCasesToFit(authoring.locator('app-authoring-case-rows'));
             if (width >= 1280)
               await expectReadableDesktopRows(authoring.locator('app-authoring-case-rows'));
@@ -132,9 +132,9 @@ for (const locale of LOCALES) {
                 expect.soft(label.height, label.text ?? '').toBeLessThanOrEqual(label.line + 1);
               const pager = await page.locator('.pagination').evaluate((row) => {
                 const elements = [
-                  row.querySelector('[data-case-loaded]'),
-                  row.querySelector('label'),
-                  row.querySelector('#authoring-case-page-size'),
+                  row.querySelector('app-data-table-pager [role="status"]'),
+                  row.querySelector('app-data-table-pager label'),
+                  row.querySelector('app-data-table-pager hlm-select-trigger button'),
                 ];
                 return elements.map((element) => {
                   if (!element) throw new Error('Missing pager control');
@@ -164,9 +164,12 @@ for (const locale of LOCALES) {
 
   test(`bulk cases keep identifiers and actions inside the pane (${locale})`, async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 1000 });
-    await page.goto(withVariants(base, ['?fixture.variant.listManualCases=bulk&limit=200']));
-    await page.locator('[data-case-load-more]').click();
-    await expect(page.locator('[data-case-loaded]')).toContainText('205');
+    await page.goto(withVariants(base, ['?fixture.variant.listManualCases=bulk&limit=100']));
+    await page.locator('app-authoring-case-table app-data-table-pager [data-page="next"]').click();
+    await expect(
+      page.locator('app-authoring-case-table app-data-table-pager [role="status"]'),
+    ).toContainText('2');
+    await expect(page.locator('app-authoring-case-rows [data-row-id]')).toHaveCount(100);
     const rows = page.locator('app-authoring-case-rows');
     await expectCasesToFit(rows);
     await page.setViewportSize({ width: 1280, height: 1000 });
