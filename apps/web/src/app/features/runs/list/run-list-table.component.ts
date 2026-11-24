@@ -117,7 +117,7 @@ export class RunListTableComponent {
     reprocess: $localize`:@@runs.list.reprocess:Reprocessed`,
     child: $localize`:@@runs.list.child:Derived run`,
   };
-  // Rich evidence/scope cells grow with text size; the shared table bounds loaded pages at 200.
+  // Rich evidence and scope cells grow with text size inside the current server page.
   protected readonly columns = computed<readonly DataTableColumn<RunSummary>[]>(() => [
     {
       id: 'id',

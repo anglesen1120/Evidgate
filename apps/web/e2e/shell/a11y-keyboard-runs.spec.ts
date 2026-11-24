@@ -8,7 +8,7 @@
 // DOM order, verifies their exact navigation/copy budget, and never permits anonymous stops.
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import runList from '../../../../fixtures/web-api/run-list/input.json';
-import runListPage2 from '../../../../fixtures/web-api/run-list-page-2/input.json';
+import runList250 from '../../../../fixtures/web-api/run-list-250/input.json';
 import { expectNoA11yViolations } from '../a11y/axe-scan';
 import { activeElement, localePath, ORG_ACME, PROJECT_STOREFRONT, withVariants } from './support';
 import { RUN_FILTER_SUMMARY, RUN_RECORDS } from './run-list.support';
@@ -33,14 +33,28 @@ const FILTER_STOPS = [
   '[data-run-clear]',
 ] as const;
 
-/** The corpus's first page at the wire's own page size (`run-list-page-1-full`): 50 rows + a cursor. */
-const FULL_PAGE_ROWS = 50;
+/** The server cursor pager starts with twenty records. */
+const FULL_PAGE_ROWS = 20;
+const LARGE_PAGE_FIRST = runList250.body.items[0]?.run_id;
+const LARGE_PAGE_SECOND = runList250.body.items[20]?.run_id;
+if (LARGE_PAGE_FIRST === undefined || LARGE_PAGE_SECOND === undefined) {
+  throw new Error('The paging specimen needs at least twenty-one records');
+}
 
 /** `/dev/run-list/orgs/:orgId/projects/:projectId` plus the grant and one case variant. */
 function listAddress(variant: string): string {
   return withVariants(
     localePath('en', `/dev/run-list/orgs/${ORG_ACME}/projects/${PROJECT_STOREFRONT}`),
     [RUN_READ_GRANT, variant],
+  );
+}
+
+async function runRequestCount(page: Page): Promise<number> {
+  return page.evaluate(
+    () =>
+      (window.__evidgateFixtureRequests ?? []).filter((entry) =>
+        new URL(entry.url, location.origin).pathname.endsWith('/runs'),
+      ).length,
   );
 }
 
@@ -309,14 +323,14 @@ test('a filter change keeps the focus that asked for it, and Clear restores the 
   await expect(page.getByRole('dialog')).toHaveCount(0);
 });
 
-test('the 250-row narrow records keep every fact reachable and preserve focus on a page turn', async ({
+test('the narrow server pages keep every fact reachable and preserve focus on a page turn', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 800, height: 800 });
   await page.goto(listAddress('?fixture.variant.listRuns=250-rows'));
   await listIsReady(page);
   const records = page.locator(RUN_RECORDS);
-  await expect(records).toHaveCount(200);
+  await expect(records).toHaveCount(20);
   await expect(records.first().locator('dt')).toHaveCount(7);
   await expect(records.first().locator('dd')).toHaveCount(7);
   await expect(page.locator('app-run-list-table .scroll[tabindex="0"]')).toHaveCount(0);
@@ -328,20 +342,24 @@ test('the 250-row narrow records keep every fact reachable and preserve focus on
     await page.keyboard.press('Tab');
     await expect(page.locator(selector)).toBeFocused();
   }
-  await tabThroughNarrowRunRecords(page, page.locator('app-run-list-table .eg-table-records'), 200);
-  const pager = page.locator('app-run-list-table nav');
-  const previous = pager.getByRole('button').first();
-  const next = pager.getByRole('button').last();
-  await expect(previous).toBeDisabled();
-  await page.keyboard.press('Tab');
-  await expect(next).toBeFocused();
-  await expect(next).toHaveAccessibleName(/\S/);
+  await tabThroughNarrowRunRecords(page, page.locator('app-run-list-table .eg-table-records'), 20);
+  const pager = page.locator('app-data-table-pager');
+  const previous = pager.getByRole('button', { name: 'Previous records', exact: true });
+  const next = pager.getByRole('button', { name: 'Next records', exact: true });
+  await expect(previous).toHaveAttribute('aria-disabled', 'true');
+  for (const control of [pager.getByRole('combobox'), previous, next]) {
+    await page.keyboard.press('Tab');
+    await expect(control).toBeFocused();
+  }
   await page.keyboard.press('Enter');
-  await expect(records).toHaveCount(50);
-  await expect(next).toBeDisabled();
-  await auditRunTabStops(page.locator('app-run-list-page'), '250-records/last-page');
-  await expect(previous).toBeFocused();
-  expect((await activeElement(page)).tag).not.toBe('body');
+  await expect(records.first()).toHaveAttribute('data-row-id', LARGE_PAGE_SECOND);
+  await expect(records).toHaveCount(20);
+  await expect(next).toBeFocused();
+  await auditRunTabStops(page.locator('app-run-list-page'), '250-records/second-page');
+  for (const control of [previous, pager.getByRole('combobox')]) {
+    await page.keyboard.press('Shift+Tab');
+    await expect(control).toBeFocused();
+  }
   await page.keyboard.press('Shift+Tab');
   const lastId = await records.last().getAttribute('data-row-id');
   const lastView = records.last().getByRole('button', { name: `View ${lastId}`, exact: true });
@@ -389,95 +407,78 @@ test('a retried 503 hands focus to the page heading instead of dropping it to bo
   await expect(page.getByRole('dialog')).toHaveCount(0);
 });
 
-test('Load more appends the next page and leaves focus on the row it appended', async ({
+test('Next replaces the page and retains its keyboard focus while busy and at the boundary', async ({
   page,
 }) => {
-  // `page-1-full` is the corpus's first page at the wire's own page size: 50 rows and a cursor, so
-  // the list's own top-up stops short of the page limit and the `Load more` control stays on screen
-  // for a real press. The latency keeps the follow observable while it is in flight.
-  await page.goto(listAddress('?fixture.variant.listRuns=page-1-full&fixture.latency=1000'));
+  await page.goto(listAddress('?fixture.variant.listRuns=paging-33&fixture.latency=1000'));
   await listIsReady(page);
   const rows = page.locator(RUN_RECORDS);
   await expect(rows).toHaveCount(FULL_PAGE_ROWS);
-  // Below 200 rows the table renders every row, so each one is a real Tab stop of this walk.
   await expect(page.locator('app-run-list-table cdk-virtual-scroll-viewport')).toHaveCount(0);
-
   await enterMain(page);
   await enterFilterDisclosure(page);
-  await auditRunTabStops(page.locator('app-run-list-page'), 'load-more/first-page');
+  await auditRunTabStops(page.locator('app-run-list-page'), 'cursor/first-page');
   for (const selector of FILTER_STOPS) {
     await page.keyboard.press('Tab');
     await expect(page.locator(selector)).toBeFocused();
   }
   await tabThroughTableScroller(page, page.locator('app-run-list-table'));
-
-  // The ID link, copy action, measured disclosures and View button all precede paging.
   for (let row = 0; row < FULL_PAGE_ROWS; row++) {
     await tabThroughRunControls(page, rows.nth(row), 1, true);
   }
-  const loadMore = page.locator('[data-run-load-more]');
-  await page.keyboard.press('Tab');
-  await expect(loadMore).toBeFocused();
-  await expectFocusRing(loadMore, '2px');
-
-  // F-RUN-03: the control is never disabled for its own request, because a disabled element cannot
-  // hold focus — the place has to survive the follow, and the paging section says it is busy.
-  await page.keyboard.press('Enter');
-  const paging = page.locator('section.pagination');
-  await expect(paging).toHaveAttribute('aria-busy', 'true');
-  await expect(loadMore).toBeEnabled();
-  await expect(loadMore).toBeFocused();
-
-  // The follow is answered by `run-list-page-2` and ends the cursor, so the control unmounts under
-  // the visitor's focus: the place moves to the first row the follow appended, never to `body`, and
-  // the visit continues from there instead of restarting at the skip link.
-  await expect(rows).toHaveCount(FULL_PAGE_ROWS + runListPage2.body.items.length);
-  await expect(loadMore).toHaveCount(0);
-  const appended = rows.nth(FULL_PAGE_ROWS);
-  await expect(appended).toHaveAttribute('data-row-id', runListPage2.body.items[0]!.run_id);
-  const appendedLink = appended.locator('[data-run-row] a');
-  await expect(appendedLink, JSON.stringify(await activeElement(page))).toBeFocused();
-  await auditRunTabStops(page.locator('app-run-list-page'), 'load-more/appended');
-  expect((await activeElement(page)).tag).toBe('a');
-  for (const control of await appended.locator('button, [tabindex="0"]').all()) {
+  const pager = page.locator('app-data-table-pager');
+  const previous = pager.getByRole('button', { name: 'Previous records', exact: true });
+  const next = pager.getByRole('button', { name: 'Next records', exact: true });
+  for (const control of [pager.getByRole('combobox'), previous, next]) {
     await page.keyboard.press('Tab');
     await expect(control).toBeFocused();
-    if (
-      (await control.getAttribute('role')) === 'button' ||
-      (await control.evaluate((element) => element.matches('[hlmBadge].spartan-badge--clipped')))
-    ) {
-      await page.keyboard.press('Escape');
-      await expect(control).toBeFocused();
-    }
+    await expectFocusRing(control, '2px');
   }
-
-  const appendedView = appended.getByRole('button', {
-    name: `View ${runListPage2.body.items[0]!.run_id}`,
-    exact: true,
-  });
-  await expect(appendedView).toBeFocused();
-  await page.keyboard.press('Tab');
-  await expect(rows.nth(FULL_PAGE_ROWS + 1).locator('[data-run-row] a')).toBeFocused();
+  const firstPageRequests = await runRequestCount(page);
+  await page.keyboard.press('Enter');
+  await expect(pager.getByRole('navigation')).toHaveAttribute('aria-busy', 'true');
+  await expect(next).not.toHaveAttribute('disabled');
+  await expect(next).toHaveAttribute('aria-disabled', 'true');
+  await expect(next).toBeFocused();
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('Space');
+  await expect(rows).toHaveCount(13);
+  await expect(rows.first()).toHaveAttribute('data-row-id', LARGE_PAGE_SECOND);
+  await expect(next).toBeFocused();
+  await expect(next).toHaveAttribute('aria-disabled', 'true');
+  expect(await runRequestCount(page)).toBe(firstPageRequests + 1);
+  await expect(next).not.toHaveAttribute('disabled');
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('Space');
+  await expect(next).toBeFocused();
+  await expect(rows).toHaveCount(13);
+  await expect(rows.first()).toHaveAttribute('data-row-id', LARGE_PAGE_SECOND);
+  expect(await runRequestCount(page)).toBe(firstPageRequests + 1);
+  await auditRunTabStops(page.locator('app-run-list-page'), 'cursor/last-page');
+  await page.keyboard.press('Shift+Tab');
+  await expect(previous).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(rows).toHaveCount(20);
+  await expect(rows.first()).toHaveAttribute('data-row-id', LARGE_PAGE_FIRST);
+  await expect(previous).toBeFocused();
+  await expect(previous).toHaveAttribute('aria-disabled', 'true');
   await expect(page.getByRole('dialog')).toHaveCount(0);
 });
 
-test('Load more preserves appended-row focus in fitted tablet records', async ({ page }) => {
+test('Next preserves pager focus in fitted tablet records', async ({ page }) => {
   await page.setViewportSize({ width: 900, height: 900 });
-  await page.goto(listAddress('?fixture.variant.listRuns=page-1-full&fixture.latency=1000'));
+  await page.goto(listAddress('?fixture.variant.listRuns=paging-33&fixture.latency=1000'));
   await listIsReady(page);
   const rows = page.locator(RUN_RECORDS);
-  await expect(rows).toHaveCount(FULL_PAGE_ROWS);
+  await expect(rows).toHaveCount(20);
   await expect(page.locator('app-run-list-table .eg-table-narrow')).toHaveCount(1);
-  const loadMore = page.locator('[data-run-load-more]');
-  await loadMore.focus();
+  const next = page.getByRole('button', { name: 'Next records', exact: true });
+  await next.focus();
   await page.keyboard.press('Enter');
-  await expect(loadMore).toBeFocused();
-  await expect(rows).toHaveCount(FULL_PAGE_ROWS + runListPage2.body.items.length);
-  await expect(loadMore).toHaveCount(0);
-  const appended = rows.nth(FULL_PAGE_ROWS);
-  await expect(appended).toHaveJSProperty('tagName', 'LI');
-  await expect(appended).toHaveAttribute('data-row-id', runListPage2.body.items[0]!.run_id);
-  const appendedId = appended.locator('[data-run-row] a');
-  await expect(appendedId, JSON.stringify(await activeElement(page))).toBeFocused();
+  await expect(next).toBeFocused();
+  await expect(rows).toHaveCount(13);
+  await expect(rows.first()).toHaveJSProperty('tagName', 'LI');
+  await expect(rows.first()).toHaveAttribute('data-row-id', LARGE_PAGE_SECOND);
+  await expect(next, JSON.stringify(await activeElement(page))).toBeFocused();
   await expect(page.locator('app-run-list-table .eg-table-narrow')).toHaveCount(1);
 });

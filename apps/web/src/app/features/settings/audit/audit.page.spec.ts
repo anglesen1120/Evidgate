@@ -1,4 +1,4 @@
-import { ComponentHarness } from '@angular/cdk/testing';
+import { ComponentHarness, TestKey } from '@angular/cdk/testing';
 import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { provideZonelessChangeDetection, signal } from '@angular/core';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
@@ -9,13 +9,16 @@ import { ApiRequestError, type ApiError } from '../../../core/http/api-error';
 import { SessionStore } from '../../../core/session/session.store';
 import { provideLayoutTestStubs } from '../../../shared/testing/layout.testing';
 import { AuditPage } from './audit.page';
-import { AUDIT_MAX_PAGES, AuditStore, EMPTY_AUDIT_FILTERS } from './audit.store';
+import { AuditStore, EMPTY_AUDIT_FILTERS } from './audit.store';
 
 provideLayoutTestStubs();
 
 class AuditSummaryHarness extends ComponentHarness {
   static hostSelector = 'app-audit-page';
   readonly values = this.locatorForAll('[data-audit-summary] [data-audit-value]');
+  readonly next = this.locatorFor('[data-page="next"]');
+  readonly previous = this.locatorFor('[data-page="previous"]');
+  readonly retry = this.locatorFor('[data-audit-paging-error] button');
 }
 
 function entry(id: string, changes: Partial<AuditEntryDto> = {}): AuditEntryDto {
@@ -140,7 +143,7 @@ describe('AuditPage', () => {
   }
   it('loads the current organization into a real scoped store and flags support activity', async () => {
     const { root } = await render();
-    expect(data.list).toHaveBeenCalledWith('org1', { limit: 50 });
+    expect(data.list).toHaveBeenCalledWith('org1', { limit: 20 });
     expect(root.getAttribute('data-audit-phase')).toBe('ready');
     expect(root.querySelectorAll('[data-audit-row]')).toHaveLength(2);
     expect(root.querySelector('[data-audit-support="true"]')?.textContent).toContain(
@@ -166,7 +169,7 @@ describe('AuditPage', () => {
     });
     expect(root.querySelector('[name="action"]')?.getAttribute('maxlength')).toBe('128');
     expect(root.querySelector('[name="objectType"]')?.getAttribute('maxlength')).toBe('64');
-    expect(root.querySelectorAll('label')).toHaveLength(5);
+    expect(root.querySelectorAll('form label')).toHaveLength(5);
     expect(root.querySelector('button[type="submit"]')).not.toBeNull();
     expect(root.querySelector('#audit-actor')?.textContent).toContain('CI producer');
     expect(root.querySelector('label[for="audit-actor"]')).not.toBeNull();
@@ -315,7 +318,7 @@ describe('AuditPage', () => {
     root.querySelector<HTMLButtonElement>('app-error-pattern button')!.click();
     await fixture.whenStable();
     expect(data.list).toHaveBeenCalledTimes(2);
-    expect(data.list.mock.calls.every(([, query]) => query.limit === 50)).toBe(true);
+    expect(data.list.mock.calls.every(([, query]) => query.limit === 20)).toBe(true);
     expect(root.querySelector('app-error-pattern')).toBeNull();
   });
   it('uses the shared 429 pattern and waits for Retry-After without automatic retry', async () => {
@@ -363,92 +366,67 @@ describe('AuditPage', () => {
       [...entryPage.root.querySelectorAll('h2')].map((heading) => heading.textContent?.trim()),
     ).toEqual(['Administrative activity']);
   });
-  it('bounds rows to 25 and exposes one range and pager below the results', async () => {
-    const entries = Array.from({ length: 51 }, (_, index) => entry(`row-${index}`));
+  it('reuses one shared server pager below the results without a retained-row cap', async () => {
+    const entries = Array.from({ length: 45 }, (_, index) => entry(`row-${index}`));
     data.list.mockImplementation((_org, query, cursor) => {
       const start = Number(cursor ?? 0);
-      const end = Math.min(start + (query.limit ?? 50), entries.length);
-      return Promise.resolve({
-        items: entries.slice(start, end),
-        next_cursor: end < entries.length ? String(end) : null,
-      });
-    });
-    const { fixture, root } = await render();
-    expect(data.list).toHaveBeenCalledTimes(1);
-    expect(root.querySelectorAll('[data-audit-row]')).toHaveLength(25);
-    const summaries = () =>
-      [...root.querySelectorAll('[data-audit-row-range]')].map((el) => el.textContent);
-    expect(summaries()).toEqual(['Rows 1–25 of 50 loaded.']);
-    expect(root.querySelectorAll('[data-audit-next]')).toHaveLength(1);
-    expect(root.querySelectorAll('[data-audit-previous]')).toHaveLength(1);
-    const table = root.querySelector('app-audit-table');
-    const navs = root.querySelectorAll('nav');
-    expect(navs).toHaveLength(1);
-    const nav = navs[0];
-    if (!table || !nav) throw new Error('Expected the pager below the table');
-    expect(Boolean(nav.compareDocumentPosition(table) & Node.DOCUMENT_POSITION_PRECEDING)).toBe(
-      true,
-    );
-    expect(nav.closest('[hlmTableContainer]')).toBeNull();
-    root.querySelector<HTMLButtonElement>('[data-audit-next]')?.click();
-    await fixture.whenStable();
-    expect(summaries()).toEqual(['Rows 26–50 of 50 loaded.']);
-    root.querySelector<HTMLButtonElement>('[data-audit-load-more]')?.click();
-    await fixture.whenStable();
-    root.querySelector<HTMLButtonElement>('[data-audit-next]')?.click();
-    await fixture.whenStable();
-    expect(root.querySelectorAll('[data-audit-row]')).toHaveLength(1);
-    expect(summaries()).toEqual(['Rows 51–51 of 51 loaded.']);
-    expect(document.activeElement).toBe(root.querySelector('h2'));
-    root.querySelector<HTMLButtonElement>('[data-audit-previous]')?.click();
-    await fixture.whenStable();
-    expect(root.querySelectorAll('[data-audit-row]')).toHaveLength(25);
-  });
-  it('stops offering more rows at the list bound and points at the filter', async () => {
-    // 20-row pages: the bound is a number of PAGES, so it is reached with 4,000 rows, not 10,000,
-    // and the hint must print the rows on screen rather than a fixed product of the two limits.
-    const entries = Array.from({ length: 4_500 }, (_, index) => entry(`row-${index}`));
-    data.list.mockImplementation((_org, _query, cursor) => {
-      const start = Number(cursor ?? 0);
-      const end = Math.min(start + 20, entries.length);
+      const end = start + (query.limit ?? 20);
       return Promise.resolve({
         items: entries.slice(start, end),
         next_cursor: end < entries.length ? String(end) : null,
       });
     });
     const { fixture, root, store } = await render();
-    await store.load('org1');
-    for (let page = 1; page < AUDIT_MAX_PAGES; page++) {
-      await store.loadMore('org1');
-    }
-    await fixture.whenStable();
-    fixture.detectChanges();
-
-    expect(data.list.mock.calls.every(([, query]) => query.limit === 50)).toBe(true);
-    expect(store.rows()).toHaveLength(AUDIT_MAX_PAGES * 20);
-    // At the bound the control is gone and the hint says what to do next.
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, AuditSummaryHarness);
+    expect(store.rows()).toHaveLength(20);
+    expect(root.querySelectorAll('app-data-table-pager')).toHaveLength(1);
     expect(root.querySelector('[data-audit-load-more]')).toBeNull();
-    expect(root.querySelector('[data-audit-browse-capped]')?.textContent).toContain(
-      'Showing the newest 4,000 rows. Narrow the filters to review older activity.',
+    const pager = root.querySelector('app-data-table-pager');
+    const table = root.querySelector('app-audit-table');
+    if (!pager || !table) throw new Error('Expected the shared pager and table');
+    expect(Boolean(pager.compareDocumentPosition(table) & Node.DOCUMENT_POSITION_PRECEDING)).toBe(
+      true,
     );
-    expect(root.querySelector('[data-audit-paging-error]')).toBeNull();
+    expect(pager.closest('[hlmTableContainer]')).toBeNull();
+    await (await harness.next()).click();
+    await fixture.whenStable();
+    expect(store.page()).toBe(2);
+    expect(store.rows()).toHaveLength(20);
+    await (await harness.next()).click();
+    await fixture.whenStable();
+    expect(store.page()).toBe(3);
+    expect(store.rows()).toHaveLength(5);
+    await (await harness.previous()).click();
+    await fixture.whenStable();
+    expect(store.page()).toBe(2);
+    expect(store.rows()).toHaveLength(20);
   });
   it('loads the next cursor only explicitly and preserves rows on partial failure with retry', async () => {
     data.list.mockResolvedValueOnce({ items: [entry('first')], next_cursor: 'page2' });
-    const { fixture, root } = await render();
+    const { fixture, root, store } = await render();
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, AuditSummaryHarness);
+    const next = await harness.next();
     data.list.mockRejectedValueOnce(new ApiRequestError(refused));
-    root.querySelector<HTMLButtonElement>('[data-audit-load-more]')!.click();
+    await next.click();
     await fixture.whenStable();
-    expect(data.list).toHaveBeenLastCalledWith('org1', { limit: 50 }, 'page2');
+    expect(data.list).toHaveBeenLastCalledWith('org1', { limit: 20 }, 'page2');
     expect(root.querySelectorAll('[data-audit-row]')).toHaveLength(1);
     expect(root.querySelector('[data-audit-paging-error]')?.textContent).toContain(refused.message);
     expect(root.querySelector('[data-audit-paging-error]')?.textContent).toContain(refused.code);
     data.list.mockResolvedValueOnce({ items: [entry('second')], next_cursor: null });
-    root.querySelector<HTMLButtonElement>('[data-audit-paging-error] button')!.click();
+    await (await harness.retry()).click();
     await fixture.whenStable();
-    expect(root.querySelectorAll('[data-audit-row]')).toHaveLength(2);
+    expect(root.querySelectorAll('[data-audit-row]')).toHaveLength(1);
     expect(root.querySelector('[data-audit-paging-error]')).toBeNull();
-    expect(root.querySelector('[data-audit-load-more]')).toBeNull();
+    expect(await next.getAttribute('aria-disabled')).toBe('true');
+    expect(await next.getProperty('disabled')).toBe(false);
+    await next.focus();
+    await next.click();
+    await next.sendKeys(TestKey.ENTER);
+    expect(await next.isFocused()).toBe(true);
+    expect(data.list).toHaveBeenCalledTimes(3);
+    expect(store.page()).toBe(2);
+    expect(store.rows()).toEqual([entry('second')]);
   });
   it('keeps old activity out of the DOM while organization context is unavailable', async () => {
     const { fixture, root } = await render();
@@ -461,14 +439,23 @@ describe('AuditPage', () => {
   it('disables paging during a pending cursor and announces incremental loading', async () => {
     data.list.mockResolvedValueOnce({ items: [entry('first')], next_cursor: 'page2' });
     const { fixture, root, store } = await render();
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, AuditSummaryHarness);
+    const button = await harness.next();
+    await button.focus();
     const pending = deferred<AuditListResponse>();
     data.list.mockReturnValueOnce(pending.promise);
-    const button = root.querySelector<HTMLButtonElement>('[data-audit-load-more]')!;
-    button.click();
+    await button.click();
     fixture.detectChanges();
-    expect(button.disabled).toBe(true);
+    expect(await button.getAttribute('aria-disabled')).toBe('true');
+    expect(await button.getProperty('disabled')).toBe(false);
+    await button.click();
+    await button.sendKeys(TestKey.ENTER);
+    expect(await button.isFocused()).toBe(true);
+    expect(data.list).toHaveBeenCalledTimes(2);
+    expect(store.page()).toBe(1);
+    expect(store.rows()).toEqual([entry('first')]);
     expect(root.querySelector('section[aria-busy]')?.getAttribute('aria-busy')).toBe('true');
-    expect(root.textContent).toContain('Loading more activity…');
+    expect(root.textContent).toContain('Loading activity page…');
     pending.resolve({ items: [entry('second')], next_cursor: null });
     await fixture.whenStable();
     // Zoneless: a fake promise settling is not a pending task, so `whenStable()` can resolve with
@@ -481,11 +468,11 @@ describe('AuditPage', () => {
     data.list.mockResolvedValueOnce({ items: [entry('first')], next_cursor: 'page2' });
     const { fixture, root } = await render();
     data.list.mockRejectedValueOnce(new Error('internal diagnostic'));
-    root.querySelector<HTMLButtonElement>('[data-audit-load-more]')!.click();
+    root.querySelector<HTMLButtonElement>('[data-page="next"]')!.click();
     await fixture.whenStable();
     expect(root.querySelectorAll('[data-audit-row]')).toHaveLength(1);
     expect(root.querySelector('[data-audit-paging-error]')?.textContent).toContain(
-      'The next audit page could not be loaded. The rows already shown are unchanged.',
+      'The request did not complete, so nothing was confirmed. Try again.',
     );
     expect(root.textContent).not.toContain('internal diagnostic');
   });

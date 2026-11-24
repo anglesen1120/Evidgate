@@ -1,31 +1,6 @@
-// 09.7.1-T6.3 (plan 09.7.1 §2 AC7/AC8, §4 audit row, §5 audit row, §7 "CSV export is
-// client-side", §10 T6.1/T6.2; §8 S2; COORDINATOR-DECISION S76): the Audit tab in real Chromium,
-// against the FIXTURES build.
-//
-// Three claims, and each one is only worth asserting against a corpus document that could break it:
-//
-// 1. **AC7 — the read and the export.** A caller holding `audit:read` and nothing else opens
-//    `/orgs/<id>/settings/audit`, sees the filter form, the first page of the org's log (the exact
-//    rows of `fixtures/web-api/audit-list`, in the server's order) and the Export CSV control; and
-//    the export downloads a file whose name and header row are the CSV contract's. The fixture
-//    backend ignores `cursor` and answers every page with the one document it holds
-//    (`next_cursor: null`), so only the single-page path is observable here — the bounded
-//    repeated-cursor walk and the 10,000-row cap are the `AuditStore` spec's (`audit.store.spec.ts`).
-// 2. **AC8 — support access is marked on the row that carries the grant, and nowhere else.** The
-//    `support` variant (`?fixture.variant.listAudit=support`) puts two flagged rows on top of the
-//    plain page, so one render holds both cases: the chip exists on exactly those rows, it is
-//    keyboard-focusable, and its description names the grant id the row records.
-// 3. **The empty state and the refusal.** `audit-list-empty` renders the shared empty pattern, and a
-//    caller without `audit:read` gets the not-found page rather than a 403 — the Settings shell's
-//    AC1 (09.7.1-T1) applied to this tab, so a direct URL confirms nothing about what exists.
-//
-// Every assertion keys on the tab's DOM contract (plan §10 T6) — `app-audit-page[data-audit-phase]`,
-// `[data-audit-apply]` / `[data-audit-clear]`, `[data-audit-row][data-audit-support]`,
-// native `.support-access` buttons and their portalled `[role="tooltip"]` descriptions,
-// `app-audit-export[data-audit-export-phase]` / `[data-audit-export]` — never on a localized label,
-// so both bundles answer the same. What IS read from the corpus is the row data itself (ids, seqs,
-// timestamps, grant ids): the fixture is the record of what the tab renders, so a row added to the
-// corpus must not silently turn a claim into a tautology.
+// Corpus rows pin the audit read, support marker, export and refusal contracts.
+// Server cursor transitions and retained-row retries live in run-audit-cursor-paging.spec.ts;
+// the default audit corpus fits within one twenty-row page.
 import { expect, test, type Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 
@@ -202,6 +177,14 @@ test.describe('AC7: an audit:read session reads the log and exports it', () => {
       // The export control is part of the page, idle until it is used.
       await expect(page.locator('app-audit-export[data-audit-export-phase="idle"]')).toHaveCount(1);
       await expect(page.locator('[data-audit-export]')).toBeEnabled();
+      const pager = page.locator('app-data-table-pager');
+      await expect(pager.getByRole('combobox')).toContainText('20');
+      for (const direction of ['previous', 'next']) {
+        await expect(pager.locator(`[data-page="${direction}"]`)).toHaveAttribute(
+          'aria-disabled',
+          'true',
+        );
+      }
     });
   }
 
@@ -225,9 +208,7 @@ test.describe('AC7: an audit:read session reads the log and exports it', () => {
     );
     expect(download.suggestedFilename()).toBe(`evidgate-audit-${ORG_ACME}-${today}.csv`);
 
-    // The document itself: RFC 4180 lines, the fixed header first, then one line per row of the
-    // page the tab holds. The fixture ignores `cursor` and names no next page, so exactly one page
-    // is walked — the cap and the repeated-cursor refusals are the store spec's.
+    // RFC 4180 lines contain the fixed header and every row of this terminal corpus page.
     const file = await download.path();
     expect(file, 'the download has a file on disk').not.toBeNull();
     const text = await readFile(file ?? '', 'utf8');

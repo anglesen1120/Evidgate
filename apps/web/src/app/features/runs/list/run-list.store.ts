@@ -1,6 +1,4 @@
-// The list is a bounded cursor walk; refName and decision are server-side filters.
-// A null decision means the run has no live evaluation yet.
-// Project-scoped instances discard superseded reads so scope changes cannot retain stale rows.
+// State and scope narrow only the current server page; ref and decision travel on every request.
 
 import { computed, inject } from '@angular/core';
 import { patchState, signalStore, withComputed, withMethods, withState } from '@ngrx/signals';
@@ -9,14 +7,8 @@ import type { RunPage, RunSummary } from '@evidgate/sdk';
 import { isApiRequestError, type ApiError } from '../../../core/http/api-error';
 import { RunDataService, type RunListQuery } from '../data/run-data.service';
 
-/** Rows per request (the wire's default page size, 00 §9.1). */
-export const RUN_LIST_PAGE_LIMIT = 50;
-
-/** Bound automatic top-ups so an unmatched filter cannot walk the entire project. */
-export const RUN_LIST_AUTO_PAGES = 5;
-
-/** Stop at the row bound even when the server returns larger pages. */
-export const RUN_LIST_AUTO_ROWS = 1_000;
+export const RUN_LIST_PAGE_LIMIT = 20;
+const PAGE_SIZES = [20, 50, 100];
 
 /** One run state filter value: one of the wire's seven, or `''` for "every state". */
 export type RunStateFilter = RunSummary['state'] | '';
@@ -72,37 +64,17 @@ const REF_NAME_MAX_CODE_POINTS = 255;
 /** Control characters are the one class the server refuses in a `ref_name` (00 §7, 05.2.2). */
 const CONTROL_CHARACTER = /\p{Cc}/u;
 
-/** The store's state. Mutable by design: `patchState` replaces members, never mutates them. */
 export interface RunListState {
-  /** The applied filters; `setFilters` replaces the object, never mutates it. */
   filters: RunListFilters;
-  /** Every row loaded so far, in the server's order; `visibleRows` is the filtered view. */
   rows: readonly RunSummary[];
-  /** The cursor the next page needs, or `null` when the server stopped naming one. */
   nextCursor: string | null;
-  /** The list's read state. */
+  requestCursors: readonly (string | null)[];
+  page: number;
+  pageSize: number;
   status: RunListStatus;
-  /** The server's typed failure for the first page; `null` when it never failed. */
   loadError: ApiError | null;
-  /** The server's typed failure for the last followed page, if any. */
   pagingError: ApiError | null;
-  /**
-   * True while a followed page is on its way; the page's paging controls stay enabled meanwhile
-   * (a disabled control cannot hold focus) and this flag is what refuses a second follow.
-   */
-  loadingMore: boolean;
-  /**
-   * True when a trigger stopped at its page/row bound with a cursor still named and the filtered
-   * view still short (header 3). `hasMore` stays true, so the page offers its control and its
-   * "filtered from N loaded runs" note instead of presenting a short list as the whole project.
-   */
-  autoLoadCapped: boolean;
-  /**
-   * True when the last submitted ref name was refused (over 255 code points, or carrying a control
-   * character). The value narrowed nothing — `filters.refName` is `''` and `toQuery` writes no
-   * `ref` — so the page can explain the refusal instead of showing an unfiltered list as if the
-   * field had been ignored.
-   */
+  busy: boolean;
   refRejected: boolean;
 }
 
@@ -183,9 +155,9 @@ function normalizeRefName(value: string | null | undefined): {
 }
 
 /** Server filters travel with every page, including short or empty cursor pages. */
-function pageQuery(filters: RunListFilters): RunListQuery {
+function pageQuery(filters: RunListFilters, limit: number): RunListQuery {
   return {
-    limit: RUN_LIST_PAGE_LIMIT,
+    limit,
     ...(filters.refName === '' ? {} : { refName: filters.refName }),
     ...(filters.decision === '' ? {} : { decision: filters.decision }),
   };
@@ -224,234 +196,160 @@ export const RunListStore = signalStore(
     filters: EMPTY_RUN_LIST_FILTERS,
     rows: NO_ROWS,
     nextCursor: null,
+    requestCursors: [null],
+    page: 1,
+    pageSize: RUN_LIST_PAGE_LIMIT,
     status: 'idle',
     loadError: null,
     pagingError: null,
-    loadingMore: false,
-    autoLoadCapped: false,
+    busy: false,
     refRejected: false,
   }),
-  withComputed(({ rows, nextCursor, status, filters, autoLoadCapped, loadingMore }) => {
-    const visibleRows = computed(() => visibleOf(filters(), rows()));
-    return {
-      /** The rows the table renders: every loaded row that passes the client-side filters. */
-      visibleRows,
-      /** How many rows are loaded — the "filtered from N loaded runs" number. */
-      loadedCount: computed(() => rows().length),
-      /**
-       * True when the server named another page. A capped trigger keeps this true on purpose
-       * (header 3): the next page exists, the store just stopped walking on its own.
-       */
-      hasMore: computed(() => nextCursor() !== null),
-      /**
-       * True when a ready list has nothing to show, filtered or not — and no page is in flight.
-       *
-       * The `loadingMore` term matters: after the first page of a filtered read lands, the rows are
-       * published as `ready` and the top-up walk starts, so a filtered view of a first page can be
-       * empty while the walk is still fetching the rows that match. Without the term the empty
-       * pattern would flash for that window and then be replaced by the table.
-       */
-      isEmpty: computed(() => status() === 'ready' && !loadingMore() && visibleRows().length === 0),
-      /**
-       * True when the filters narrow the loaded rows — the page must not present a short filtered
-       * view as "this project has no runs".
-       */
-      isFiltered: computed(() => {
-        const applied = filters();
-        return (
-          applied.state !== '' ||
-          applied.decision !== '' ||
-          applied.scope !== '' ||
-          applied.refName !== ''
-        );
-      }),
-      /** The shared name for the bounded trigger (header 3); the same signal as `autoLoadCapped`. */
-      browseCapped: autoLoadCapped,
-    };
-  }),
+  withComputed(({ rows, nextCursor, status, filters }) => ({
+    visibleRows: computed(() => visibleOf(filters(), rows())),
+    loadedCount: computed(() => rows().length),
+    hasNext: computed(() => nextCursor() !== null),
+    isEmpty: computed(() => status() === 'ready' && visibleOf(filters(), rows()).length === 0),
+    isFiltered: computed(() => Object.values(filters()).some(Boolean)),
+  })),
   withMethods((store) => {
     const data = inject(RunDataService);
-
-    /** Bumped by every restart; an answer of an older generation publishes nothing (header 4). */
     let newestRead = 0;
-    /** The project the rows belong to; `setFilters`/`loadMore` read it from here. */
     let ownerProject: string | null = null;
-    /** The cursors this list already followed since the last restart (header 2). */
-    const followedCursors = new Set<string>();
+    let pendingTarget: { page: number; cursor: string | null } | null = null;
 
-    // Automatic top-ups stop at one page of matches; an explicit click always follows once.
-    // Superseded walks stop publishing, and repeated cursors remain contract errors.
-    async function fill(projectId: string, sequence: number, forceFirst = false): Promise<void> {
-      let pages = 0;
-      let scanned = 0;
-      let capped = false;
-      for (;;) {
-        const cursor = store.nextCursor();
-        if (cursor === null) {
-          break;
-        }
-        if (!(forceFirst && pages === 0 && scanned === 0)) {
-          if (visibleOf(store.filters(), store.rows()).length >= RUN_LIST_PAGE_LIMIT) {
-            break;
-          }
-          if (pages >= RUN_LIST_AUTO_PAGES || scanned >= RUN_LIST_AUTO_ROWS) {
-            capped = true;
-            break;
-          }
-        }
-        if (followedCursors.has(cursor)) {
-          patchState(store, { loadingMore: false });
-          throw new Error(`the run list repeated cursor "${cursor}"`);
-        }
-        pages += 1;
-        patchState(store, { loadingMore: true, pagingError: null });
-
-        let page: RunPage;
-        try {
-          page = await data.listRuns(projectId, { ...pageQuery(store.filters()), cursor });
-        } catch (error) {
-          if (sequence !== newestRead) {
-            return;
-          }
-          if (!isApiRequestError(error)) {
-            patchState(store, { loadingMore: false });
-            throw error;
-          }
-          // The cursor stays unrecorded, so the control that shows `pagingError` can retry the
-          // SAME page instead of tripping the repeated-cursor refusal below.
-          patchState(store, { loadingMore: false, pagingError: error.error });
-          return;
-        }
-        if (sequence !== newestRead) {
-          return;
-        }
-        scanned += page.items.length;
-        // Recorded only once the page is in hand: a refused cursor is not a followed one.
-        followedCursors.add(cursor);
-        patchState(store, {
-          loadingMore: false,
-          pagingError: null,
-          rows: [...store.rows(), ...page.items],
-          nextCursor: page.next_cursor,
-        });
-      }
-      if (sequence !== newestRead) {
-        return;
-      }
-      patchState(store, { autoLoadCapped: capped });
-    }
-
-    // Clear prior-filter rows before reading so old results never appear under new filters.
-    async function restart(): Promise<void> {
-      newestRead += 1;
-      const sequence = newestRead;
-      followedCursors.clear();
-      patchState(store, {
-        status: 'loading',
-        loadError: null,
-        rows: NO_ROWS,
-        nextCursor: null,
-        pagingError: null,
-        loadingMore: false,
-        autoLoadCapped: false,
-      });
-
+    async function read(target: { page: number; cursor: string | null }): Promise<void> {
       const projectId = ownerProject;
-      if (projectId === null) {
-        patchState(store, { status: 'ready' });
-        return;
-      }
-
+      if (projectId === null || store.busy()) return;
+      const sequence = ++newestRead;
+      pendingTarget = target;
+      const first = store.status() !== 'ready';
+      patchState(store, { busy: true, pagingError: null, loadError: null });
+      const history = [...store.requestCursors().slice(0, target.page - 1), target.cursor];
       let page: RunPage;
       try {
-        page = await data.listRuns(projectId, pageQuery(store.filters()));
-      } catch (error) {
-        if (sequence !== newestRead) {
-          return;
-        }
-        patchState(store, {
-          status: 'error',
-          loadError: isApiRequestError(error) ? error.error : UNRESOLVED_FAILURE,
-          rows: NO_ROWS,
-          nextCursor: null,
+        page = await data.listRuns(projectId, {
+          ...pageQuery(store.filters(), store.pageSize()),
+          ...(target.cursor === null ? {} : { cursor: target.cursor }),
         });
+        if (sequence !== newestRead) return;
+        if (page.next_cursor !== null && history.includes(page.next_cursor)) {
+          throw new Error('The run list repeated a forward cursor.');
+        }
+      } catch (error) {
+        if (sequence !== newestRead) return;
+        const failure = isApiRequestError(error) ? error.error : UNRESOLVED_FAILURE;
+        patchState(
+          store,
+          first
+            ? { status: 'error', loadError: failure, busy: false }
+            : { pagingError: failure, busy: false },
+        );
         return;
       }
-      if (sequence !== newestRead) {
-        return;
-      }
+      if (sequence !== newestRead) return;
+      pendingTarget = null;
       patchState(store, {
         status: 'ready',
         rows: page.items,
         nextCursor: page.next_cursor,
+        requestCursors: history,
+        page: target.page,
+        busy: false,
+        pagingError: null,
       });
-      await fill(projectId, sequence);
+    }
+
+    async function restart(cursor: string | null = null): Promise<void> {
+      newestRead += 1;
+      pendingTarget = null;
+      patchState(store, {
+        status: 'loading',
+        loadError: null,
+        pagingError: null,
+        busy: false,
+        rows: NO_ROWS,
+        nextCursor: null,
+        requestCursors: [cursor],
+        page: 1,
+      });
+      await read({ page: 1, cursor });
     }
 
     return {
-      // A URL change replaces paging state and clears any previous form validation failure.
       async init(
         projectId: string,
         query: Record<string, string | null | undefined> = {},
       ): Promise<void> {
+        const filters = filtersFromQuery(query);
+        const size = Number(query['pageSize']);
+        const pageSize = PAGE_SIZES.includes(size) ? size : RUN_LIST_PAGE_LIMIT;
+        const cursor = query['cursor'] || null;
+        if (
+          store.busy() &&
+          ownerProject === projectId &&
+          pageSize === store.pageSize() &&
+          cursor === store.requestCursors()[store.page() - 1] &&
+          Object.entries(filters).every(
+            ([key, value]) => store.filters()[key as keyof RunListFilters] === value,
+          )
+        )
+          return;
         ownerProject = projectId;
-        patchState(store, { filters: filtersFromQuery(query), refRejected: false });
-        await restart();
+        patchState(store, { filters, pageSize, refRejected: false });
+        await restart(cursor);
       },
 
-      // Server-filter changes restart paging; local filters reuse rows and top up within bounds.
       async setFilters(patch: Partial<RunListFilters>): Promise<void> {
         const next = { ...store.filters(), ...patch };
-        // The form path takes the value as typed: it is trimmed, and dropped (with `refRejected`
-        // set) when the contract refuses it, so a pasted string cannot turn the read into a `422`
-        // and the field is not silently ignored either. `toQuery` writes no `ref` afterwards.
         const ref = normalizeRefName(next.refName);
-        const applied: RunListFilters = { ...next, refName: ref.refName };
-        if (
+        const applied = { ...next, refName: ref.refName };
+        const changed = Object.entries(applied).some(
+          ([key, value]) => store.filters()[key as keyof RunListFilters] !== value,
+        );
+        const serverChanged =
           applied.refName !== store.filters().refName ||
-          applied.decision !== store.filters().decision
-        ) {
-          patchState(store, { filters: applied, refRejected: ref.rejected });
-          await restart();
-          return;
-        }
-        if (ref.rejected) {
-          // The refused value narrowed nothing, so the applied filter did not change and there is
-          // nothing to re-read: only the form's report changes.
-          patchState(store, { refRejected: true });
-          return;
-        }
-        // Reaching here means the value equals the stored, already-accepted ref filter and was not
-        // refused, so a report left by an earlier submission is cleared — emptying the field or
-        // "Clear filters" must not leave an error beside an empty input.
-        patchState(store, { filters: applied, refRejected: false, autoLoadCapped: false });
-        const projectId = ownerProject;
-        // A page already in flight keeps the walk: it re-reads these filters on its next iteration,
-        // so starting a second one would request the same cursor twice and append the page twice.
-        if (projectId === null || store.status() !== 'ready' || store.loadingMore()) {
-          return;
-        }
-        await fill(projectId, newestRead);
-      },
-
-      // Each explicit click receives a fresh bound, allowing deliberate browsing after a cap.
-      async loadMore(): Promise<void> {
-        const projectId = ownerProject;
+          applied.decision !== store.filters().decision;
+        const recoverCursor = store.status() === 'error' && store.requestCursors()[0] !== null;
+        patchState(store, { filters: applied, refRejected: ref.rejected });
         if (
-          projectId === null ||
-          store.status() !== 'ready' ||
-          store.loadingMore() ||
-          store.nextCursor() === null
+          recoverCursor ||
+          (changed &&
+            (serverChanged || store.page() > 1 || store.busy() || store.status() !== 'ready'))
         ) {
-          return;
+          await restart();
         }
-        patchState(store, { autoLoadCapped: false });
-        await fill(projectId, newestRead, true);
       },
 
-      /** Re-reads the first page of the current filters — the screen's Retry. */
-      async reload(): Promise<void> {
+      async setPageSize(size: number): Promise<void> {
+        if (!PAGE_SIZES.includes(size)) return;
+        if (size === store.pageSize() && store.page() === 1) return;
+        patchState(store, { pageSize: size });
         await restart();
+      },
+
+      async next(): Promise<void> {
+        const cursor = store.nextCursor();
+        if (store.status() !== 'ready' || cursor === null) return;
+        await read({ page: store.page() + 1, cursor });
+      },
+
+      async previous(): Promise<void> {
+        if (store.status() !== 'ready' || store.page() === 1) return;
+        await read({
+          page: store.page() - 1,
+          cursor: store.requestCursors()[store.page() - 2] ?? null,
+        });
+      },
+
+      async retryPage(): Promise<void> {
+        if (pendingTarget !== null) await read(pendingTarget);
+      },
+
+      async reload(): Promise<void> {
+        if (store.busy()) return;
+        const cursor = store.requestCursors()[store.page() - 1] ?? null;
+        await restart(store.status() === 'error' ? null : cursor);
       },
 
       /**
@@ -474,6 +372,9 @@ export const RunListStore = signalStore(
         if (filters.refName !== '') {
           query['ref'] = filters.refName;
         }
+        const cursor = store.requestCursors()[store.page() - 1];
+        if (cursor) query['cursor'] = cursor;
+        if (store.pageSize() !== RUN_LIST_PAGE_LIMIT) query['pageSize'] = String(store.pageSize());
         return query;
       },
     };

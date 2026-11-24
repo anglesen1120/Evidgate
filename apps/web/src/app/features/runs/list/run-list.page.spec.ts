@@ -1,4 +1,5 @@
 import { BreakpointObserver } from '@angular/cdk/layout';
+import { ComponentHarness } from '@angular/cdk/testing';
 import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
@@ -9,7 +10,6 @@ import {
   provideRouter,
   type ParamMap,
 } from '@angular/router';
-import type { RunSummary } from '@evidgate/sdk';
 import { BehaviorSubject } from 'rxjs';
 import type { ApiError } from '../../../core/http/api-error';
 import { provideLayoutTestStubs } from '../../../shared/testing/layout.testing';
@@ -33,6 +33,27 @@ const failure: ApiError = {
   retryAfterSeconds: null,
   details: [],
 };
+
+class RunPagerHarness extends ComponentHarness {
+  static hostSelector = 'app-data-table-pager';
+  private readonly buttons = this.locatorForAll('button');
+  async press(label: string): Promise<void> {
+    for (const button of await this.buttons()) {
+      if ((await button.text()).includes(label)) {
+        await button.click();
+        return;
+      }
+    }
+    throw new Error(`Missing pager action ${label}`);
+  }
+}
+
+class RunListPageHarness extends ComponentHarness {
+  static hostSelector = 'app-run-list-page';
+  readonly view = this.locatorFor('button[aria-haspopup="dialog"]');
+  readonly dialog = this.documentRootLocatorFactory().locatorForOptional('[role="dialog"]');
+  readonly close = this.documentRootLocatorFactory().locatorFor('[role="dialog"] [hlmDialogClose]');
+}
 
 describe('RunListPage', () => {
   provideLayoutTestStubs();
@@ -133,12 +154,14 @@ describe('RunListPage', () => {
       decision: 'PASS',
       scope: 'rerun',
       ref: 'release/việt',
+      cursor: undefined,
+      pageSize: undefined,
     });
     expect(root.querySelectorAll('h1')).toHaveLength(1);
     expect((root.querySelector('#run-ref') as HTMLInputElement).value).toBe('release/việt');
     // The URL narrows the list, so the count says so and the element reports the filtered mode.
     const loaded = root.querySelector('[data-run-loaded-count]')!;
-    expect(loaded.textContent).toContain('Filtered from 1 loaded runs');
+    expect(loaded.textContent).toContain('Filtered from 1 runs on this page');
     expect(loaded.getAttribute('data-run-loaded-filtered')).toBe('true');
     expect(root.querySelector('[name="completeness"]')).toBeNull();
   });
@@ -150,7 +173,7 @@ describe('RunListPage', () => {
     ]);
     const { fixture, root } = await render();
     const header = await TestbedHarnessEnvironment.loader(fixture).getHarness(HeaderHarness);
-    expect(await header.getDescription()).toBe('Loaded runs: 3 · Active filters: 0');
+    expect(await header.getDescription()).toBe('Runs on this page: 3 · Active filters: 0');
     const metrics = root.querySelector('[data-run-metrics]')!;
     const values = [...metrics.querySelectorAll('dd > app-number-value')];
     expect(values.map((cell) => cell.textContent?.trim())).toEqual(['3', '1', '1', '1']);
@@ -167,7 +190,7 @@ describe('RunListPage', () => {
     store.loadError.set(failure);
     await fixture.whenStable();
     expect(root.querySelector('[data-run-metrics]')).toBeNull();
-    expect(await header.getDescription()).not.toContain('Loaded runs:');
+    expect(await header.getDescription()).not.toContain('Runs on this page:');
   });
   it('offers not evaluated separately from verdicts and explains server filtering', async () => {
     const { fixture, root } = await render();
@@ -193,7 +216,7 @@ describe('RunListPage', () => {
     expect(title).not.toBeNull();
     if (title) {
       expect(title.getAttribute('data-title-size')).toBe('page');
-      expect(title.textContent).toBe('Runs');
+      expect(title.textContent?.replace(/\s+/g, ' ').trim()).toBe('Runs');
     }
   });
   it('restores a pending filter from the URL without rewriting its context', async () => {
@@ -215,7 +238,7 @@ describe('RunListPage', () => {
     const { root } = await render();
 
     const loaded = root.querySelector('[data-run-loaded-count]')!;
-    expect(loaded.textContent).toContain('Loaded 1 runs.');
+    expect(loaded.textContent).toContain('Fetched 1 runs on this page.');
     expect(loaded.textContent).not.toContain('Filtered');
     expect(loaded.getAttribute('data-run-loaded-filtered')).toBe('false');
   });
@@ -280,7 +303,14 @@ describe('RunListPage', () => {
       [],
       expect.objectContaining({
         queryParamsHandling: 'merge',
-        queryParams: { state: 'running', decision: 'PASS', scope: 'original', ref: 'main' },
+        queryParams: {
+          state: 'running',
+          decision: 'PASS',
+          scope: 'original',
+          ref: 'main',
+          cursor: null,
+          pageSize: null,
+        },
       }),
     );
     const calls = store.init.mock.calls.length;
@@ -294,10 +324,33 @@ describe('RunListPage', () => {
     expect(navigate).toHaveBeenLastCalledWith(
       [],
       expect.objectContaining({
-        queryParams: { state: null, decision: null, scope: null, ref: null },
+        queryParams: {
+          state: null,
+          decision: null,
+          scope: null,
+          ref: null,
+          cursor: null,
+          pageSize: null,
+        },
       }),
     );
     expect(root.querySelector('summary')?.textContent).toContain('Active filters: 0');
+  });
+  it('restores cursor and page size from the URL without walking earlier pages', async () => {
+    query.next(convertToParamMap({ cursor: 'opaque+/=', pageSize: '100', decision: 'FAIL' }));
+    const { root } = await render();
+    expect(store.init).toHaveBeenCalledTimes(1);
+    expect(store.init).toHaveBeenLastCalledWith(
+      'project-1',
+      expect.objectContaining({
+        cursor: 'opaque+/=',
+        pageSize: '100',
+        decision: 'FAIL',
+      }),
+    );
+    expect(store.next).not.toHaveBeenCalled();
+    expect(root.querySelector('app-data-table-pager')?.textContent).toContain('100');
+    expect(navigate).not.toHaveBeenCalled();
   });
   it('restores back/forward query changes and reloads when the project changes', async () => {
     const { fixture, root } = await render();
@@ -314,108 +367,68 @@ describe('RunListPage', () => {
       decision: undefined,
       scope: undefined,
       ref: undefined,
+      cursor: undefined,
+      pageSize: undefined,
     });
   });
-  it('distinguishes truly empty from filtered loaded rows and keeps the capped pager reachable', async () => {
+  it('keeps Next reachable when no rows on this page match local filters', async () => {
     store.rows.set([]);
     const { fixture, root } = await render();
     expect(root.textContent).toContain('No runs recorded');
     store.filters.set({ ...emptyFilters, state: 'queued' });
-    store.hasMore.set(true);
-    store.autoLoadCapped.set(true);
+    store.hasNext.set(true);
     await fixture.whenStable();
-    expect(root.textContent).toContain('No matching runs in the loaded rows');
-    expect(root.textContent).toContain('No loaded runs match these filters.');
-    expect(root.querySelector('[data-run-browse-capped]')).not.toBeNull();
-    root.querySelector<HTMLButtonElement>('[data-run-load-more]')!.click();
-    expect(store.loadMore).toHaveBeenCalledTimes(1);
-    store.loadingMore.set(true);
-    await fixture.whenStable();
-    // The follow it started does not disable the control that holds focus: `disabled` would drop
-    // the visitor's place to `body` while the rows were still loading.
-    expect(root.querySelector<HTMLButtonElement>('[data-run-load-more]')!.disabled).toBe(false);
-  });
-  it('moves focus to the first appended row when the follow removes Load more', async () => {
-    const appended: RunSummary = {
-      ...run,
-      run_id: '018f0000-0000-7000-8000-000000000022',
-    };
-    store.hasMore.set(true);
-    const { fixture, root } = await render();
-    const more = root.querySelector<HTMLButtonElement>('[data-run-load-more]')!;
-    more.focus();
-    expect(document.activeElement).toBe(more);
-    // The follow appends a page and the cursor ends with it, so the control that carried focus is
-    // removed by the render that follows. Its place belongs to the row it brought in.
-    store.loadMore.mockImplementation(() => {
-      store.loadingMore.set(true);
-      store.rows.set([run, appended]);
-      store.loadingMore.set(false);
-      store.hasMore.set(false);
-      return Promise.resolve();
-    });
-    more.click();
-    await fixture.whenStable();
-    const rows = root.querySelectorAll('[data-run-row]');
-    expect(rows).toHaveLength(2);
-    expect(document.activeElement).toBe(rows[1]!.querySelector('a'));
+    expect(root.textContent).toContain('No matching runs on this page');
+    expect(root.textContent).toContain('Next searches further');
+    const pager = await TestbedHarnessEnvironment.loader(fixture).getHarness(RunPagerHarness);
+    await pager.press('Next');
+    expect(store.next).toHaveBeenCalledTimes(1);
   });
 
-  it('moves focus to the paging retry when the follow replaces Load more with a failure', async () => {
-    store.hasMore.set(true);
+  it('keeps pager focus through pending and terminal-page results', async () => {
+    store.hasNext.set(true);
     const { fixture, root } = await render();
-    const more = root.querySelector<HTMLButtonElement>('[data-run-load-more]')!;
-    more.focus();
-    store.loadMore.mockImplementation(() => {
-      store.loadingMore.set(true);
-      store.loadingMore.set(false);
-      store.pagingError.set(failure);
-      return Promise.resolve();
+    const pager = await TestbedHarnessEnvironment.loader(fixture).getHarness(RunPagerHarness);
+    const next = [...root.querySelectorAll<HTMLButtonElement>('app-data-table-pager button')].find(
+      (button) => button.textContent?.includes('Next'),
+    );
+    next?.focus();
+    store.next.mockImplementation(async () => {
+      store.busy.set(true);
+      await Promise.resolve();
+      store.page.set(2);
+      store.hasNext.set(false);
+      store.busy.set(false);
     });
-    more.click();
+    await pager.press('Next');
     await fixture.whenStable();
-    expect(root.querySelector('[data-run-load-more]')).toBeNull();
-    expect(document.activeElement).toBe(root.querySelector('[data-run-paging-error] button'));
+    expect(document.activeElement).toBe(next);
+    expect(next?.getAttribute('aria-disabled')).toBe('true');
   });
 
-  it('keeps the place in the paging region when the retry is still waiting its Retry-After', async () => {
-    store.hasMore.set(true);
+  it('does not steal focus from another control after navigation', async () => {
+    store.hasNext.set(true);
     const { fixture, root } = await render();
-    const more = root.querySelector<HTMLButtonElement>('[data-run-load-more]')!;
-    more.focus();
-    store.loadMore.mockImplementation(() => {
-      store.loadingMore.set(true);
-      store.loadingMore.set(false);
-      store.pagingError.set({ ...failure, retryAfterSeconds: 30 });
-      return Promise.resolve();
-    });
-    more.click();
-    await fixture.whenStable();
-    fixture.detectChanges();
-
-    // The retry replaced the button that held focus and is disabled for the wait, so the place
-    // moves to the paging region - never to `body`.
-    const waiting = root.querySelector<HTMLButtonElement>('[data-run-paging-error] button');
-    expect(waiting?.disabled).toBe(true);
-    const paging = root.querySelector<HTMLElement>('.pagination');
-    expect(document.activeElement).toBe(paging);
-    expect(paging?.getAttribute('tabindex')).toBe('-1');
-  });
-
-  it('leaves focus alone when a follow it did not own removes Load more', async () => {
-    store.hasMore.set(true);
-    const { fixture, root } = await render();
-    const clear = root.querySelector<HTMLButtonElement>('[data-run-clear]')!;
-    clear.focus();
-    store.loadMore.mockImplementation(() => {
-      store.rows.set([run, { ...run, run_id: '018f0000-0000-7000-8000-000000000023' }]);
-      store.hasMore.set(false);
-      return Promise.resolve();
-    });
-    root.querySelector<HTMLButtonElement>('[data-run-load-more]')!.click();
-    await fixture.whenStable();
-    expect(root.querySelector('[data-run-load-more]')).toBeNull();
+    const clear = root.querySelector<HTMLButtonElement>('[data-run-clear]');
+    clear?.focus();
+    const pager = await TestbedHarnessEnvironment.loader(fixture).getHarness(RunPagerHarness);
+    await pager.press('Next');
     expect(document.activeElement).toBe(clear);
+  });
+
+  it('preserves page and page size while a row View dialog opens and closes', async () => {
+    store.page.set(3);
+    store.pageSize.set(50);
+    const { fixture } = await render();
+    const page = await TestbedHarnessEnvironment.harnessForFixture(fixture, RunListPageHarness);
+    await (await page.view()).click();
+    expect(await page.dialog()).not.toBeNull();
+    await (await page.close()).click();
+    expect(await page.dialog()).toBeNull();
+    expect(store.page()).toBe(3);
+    expect(store.pageSize()).toBe(50);
+    expect(store.init).toHaveBeenCalledTimes(1);
+    expect(store.next).not.toHaveBeenCalled();
   });
 
   it('renders exactly one error surface per failure kind, with no duplicate page banner', async () => {
@@ -455,13 +468,13 @@ describe('RunListPage', () => {
     }
   });
   it('retains loaded rows on paging failure and allows only an eligible retry', async () => {
-    store.hasMore.set(true);
+    store.hasNext.set(true);
     store.pagingError.set(failure);
     const { fixture, root } = await render();
     expect(root.querySelectorAll('[data-run-row]')).toHaveLength(1);
     expect(root.querySelector('[data-run-paging-error]')?.textContent).toContain(failure.code);
     root.querySelector<HTMLButtonElement>('[data-run-paging-error] button')!.click();
-    expect(store.loadMore).toHaveBeenCalledTimes(1);
+    expect(store.retryPage).toHaveBeenCalledTimes(1);
     store.pagingError.set({ ...failure, kind: 'forbidden', status: 403, retryable: false });
     await fixture.whenStable();
     expect(root.querySelector('[data-run-paging-error] button')).toBeNull();
