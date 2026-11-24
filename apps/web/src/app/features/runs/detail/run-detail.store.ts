@@ -154,7 +154,7 @@ export const RunDetailStore = signalStore(
     let decisionGeneration = 0;
     let revisionsGeneration = 0;
     let attemptCursors: (string | null)[] = [null];
-    let pendingAttempt: { page: number; cursor: string | null } | null = null;
+    let pendingAttempt: { page: number; cursor: string | null; size: number } | null = null;
     /** `revision_no`s already shown; only an accepted page updates it, `load()` clears it. */
     let loadedRevisionNumbers = new Set<number>();
     /**
@@ -207,11 +207,12 @@ export const RunDetailStore = signalStore(
     /** Commit the page only on success; a failed navigation keeps the previous rows and intent. */
     async function readAttempts(
       runId: string,
-      target: { page: number; cursor: string | null },
+      target: { page: number; cursor: string | null; size?: number },
     ): Promise<void> {
       if (store.attemptsLoadingMore()) return;
       const read = ++attemptsGeneration;
-      pendingAttempt = target;
+      const size = target.size ?? store.attemptsPageSize();
+      pendingAttempt = { ...target, size };
       const first = store.attempts() === null;
       const history = [...attemptCursors.slice(0, target.page - 1), target.cursor];
       patchState(store, {
@@ -221,7 +222,7 @@ export const RunDetailStore = signalStore(
       });
       try {
         const page = await data.listAttempts(runId, {
-          limit: store.attemptsPageSize(),
+          limit: size,
           ...(target.cursor === null ? {} : { cursor: target.cursor }),
         });
         if (read !== attemptsGeneration) return;
@@ -234,6 +235,7 @@ export const RunDetailStore = signalStore(
           attempts: page.items.map(toAttemptRow),
           attemptsStatus: 'ready',
           attemptsPage: target.page,
+          attemptsPageSize: size,
           attemptsCursor: page.next_cursor,
           attemptsLoadingMore: false,
         });
@@ -433,14 +435,9 @@ export const RunDetailStore = signalStore(
         if (run === null || ![20, 50, 100].includes(size) || size === store.attemptsPageSize())
           return;
         ++attemptsGeneration;
-        attemptCursors = [null];
-        // A size change stays in the same run, so keep its committed rows while the first page reads.
-        patchState(store, {
-          attemptsPageSize: size,
-          attemptsCursor: null,
-          attemptsLoadingMore: false,
-        });
-        await readAttempts(run.run_id, { page: 1, cursor: null });
+        // The shared pager shows only the size belonging to the last accepted rows and cursor.
+        patchState(store, { attemptsLoadingMore: false });
+        await readAttempts(run.run_id, { page: 1, cursor: null, size });
       },
       /**
        * Apply the URL's pin. An explicit positive revision always wins; its removal re-derives the

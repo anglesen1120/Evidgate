@@ -32,7 +32,7 @@
           type="button"
           class="h-auto min-h-(--eg-control-touch) shrink-0 flex-col items-start rounded-none border-e border-border px-(--eg-space-4) aria-pressed:bg-(--eg-accent-soft)"
           [attr.aria-pressed]="store.filters().status === option.value"
-          [disabled]="store.status() === 'loading' || store.loadingMore()"
+          [attr.aria-disabled]="quickStatusBusy() ? 'true' : null"
           (click)="quickStatus(option.value)"
         >
           <span class="text-xs text-muted-foreground">{{ option.label }}</span>

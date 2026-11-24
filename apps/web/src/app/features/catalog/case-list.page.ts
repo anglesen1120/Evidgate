@@ -212,7 +212,12 @@ export class CaseListPage {
         $localize`:@@catalog.case-view.loaded-count:Loaded identities: ${formatNumber(this.store.rows().length, this.locale)}:count:`
       : this.copy.description,
   );
+  /** Guarded, not disabled: a disabled strip drops out of the tab order and axe flags the scroll region. */
+  protected quickStatusBusy(): boolean {
+    return this.store.status() === 'loading' || this.store.loadingMore();
+  }
   protected quickStatus(status: CaseListFilters['status']): void {
+    if (this.quickStatusBusy()) return;
     const applied = this.store.filters();
     this.apply({ ...applied, status: applied.status === status ? '' : status });
   }

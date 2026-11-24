@@ -3,7 +3,7 @@
   inset-block-start: 0;
   inset-inline: 0;
   z-index: 1;
-  block-size: var(--eg-space-1);
+  block-size: var(--eg-space-2);
   overflow: hidden;
   pointer-events: none;
   background: var(--eg-accent-soft);
@@ -11,15 +11,16 @@
 
 [data-table-progress]::after {
   display: block;
-  width: 40%;
   height: 100%;
-  background: var(--eg-accent-fg);
+  /* Accent on the soft track is 5.70:1 in light and 7.07:1 in dark. */
+  background: var(--eg-accent);
   content: '';
 }
 
 @media (prefers-reduced-motion: no-preference) {
   [data-table-progress]::after {
-    animation: table-read 1.2s ease-in-out infinite alternate;
+    width: 40%;
+    animation: table-read calc(var(--eg-duration-standard) * 4) ease-in-out infinite alternate;
   }
 
   @keyframes table-read {
