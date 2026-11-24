@@ -27,7 +27,9 @@ for (const locale of LOCALES) {
           locale === 'vi' ? 'Tổng quan tổ chức' : 'Organization overview',
         );
         await expect(main.locator('app-dashboard-activity')).toBeVisible();
-        await expect(main.locator('app-loading-pattern')).toHaveCount(0);
+        // An idle table still hosts its loading pattern, so check the in-flight signal instead.
+        await expect(main.locator('[aria-busy="true"]')).toHaveCount(0);
+        await expect(main.locator('[data-table-progress]')).toHaveCount(0);
         await expect(main.locator('app-data-table')).toHaveCount(2);
         const metrics = await page.evaluate(() => ({
           width: document.documentElement.clientWidth,
