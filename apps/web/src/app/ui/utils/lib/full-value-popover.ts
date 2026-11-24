@@ -2,8 +2,8 @@ function overlaps(a: DOMRect, b: DOMRect): boolean {
   return a.bottom > b.top && a.top < b.bottom && a.right > b.left && a.left < b.right;
 }
 
-/** Keep content below this anchor unobscured, even when the panel cannot fit above it. */
-interface AbovePlacement {
+/** Place above the anchor or beside it, clamped horizontally inside `within`. */
+export interface AbovePlacement {
   readonly above: Element;
   readonly within: Element;
 }
@@ -53,6 +53,7 @@ function positionPanel(
   return true;
 }
 
+/** If neither side fits, scroll the readout above rather than obscuring content below. */
 function positionAbove(
   panel: HTMLElement,
   placement: AbovePlacement,
@@ -64,7 +65,14 @@ function positionAbove(
   const left = Math.max(0, boundary.left);
   const right = Math.min(width, boundary.right);
   const bottom = Math.min(height, anchor.bottom);
-  if (right <= left || anchor.right <= left || anchor.left >= right || bottom <= 0) return false;
+  if (
+    right <= left ||
+    anchor.right <= left ||
+    anchor.left >= right ||
+    bottom <= 0 ||
+    anchor.top >= height
+  )
+    return false;
 
   panel.classList.add('eg-measured-position');
   panel.style.maxWidth = `${right - left}px`;
@@ -78,12 +86,21 @@ function positionAbove(
     const roomRight = Math.max(0, right - anchor.right);
     const onRight = roomRight >= roomLeft;
     const room = onRight ? roomRight : roomLeft;
-    if (room > 0 && room < box.width) {
-      panel.style.maxWidth = `${room}px`;
+    if (room === 0) {
+      if (anchor.top <= 0) return false;
+      panel.style.maxHeight = `${anchor.top}px`;
       box = panel.getBoundingClientRect();
+      if (box.height > anchor.top) return false;
+    } else {
+      if (room < box.width) {
+        panel.style.maxWidth = `${room}px`;
+        box = panel.getBoundingClientRect();
+        if (box.width > room) return false;
+      }
+      x = onRight ? anchor.right : anchor.left - box.width;
     }
-    if (room > 0) x = onRight ? anchor.right : anchor.left - box.width;
-    y = Math.max(0, Math.min(anchor.top, bottom - box.height));
+    y =
+      room === 0 ? anchor.top - box.height : Math.max(0, Math.min(anchor.top, bottom - box.height));
   }
   panel.style.left = `${Math.max(left, Math.min(x, right - box.width))}px`;
   panel.style.top = `${y}px`;
@@ -97,7 +114,7 @@ export function openFullValuePopover(
   placement?: AbovePlacement,
 ): () => void {
   panel.showPopover({ source: trigger });
-  positionPanel(trigger, panel, placement);
+  if (!positionPanel(trigger, panel, placement) && placement) panel.style.visibility = 'hidden';
 
   const events = new AbortController();
   const { signal } = events;
@@ -110,6 +127,8 @@ export function openFullValuePopover(
         return;
       const bounds = target instanceof Element ? target.getBoundingClientRect() : undefined;
       if (!positionPanel(trigger, panel, placement, bounds)) dismiss();
+      else if (placement && panel.style.visibility === 'hidden')
+        panel.style.removeProperty('visibility');
     },
     { capture: true, signal },
   );
@@ -135,6 +154,7 @@ export function openFullValuePopover(
     if (placement) {
       panel.style.removeProperty('max-width');
       panel.style.removeProperty('max-height');
+      panel.style.removeProperty('visibility');
     }
   };
 }

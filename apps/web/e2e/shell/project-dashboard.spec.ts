@@ -102,7 +102,7 @@ test('a focused readout moves beside the bar when scrolling leaves no room above
   await page.setViewportSize({ width: 390, height: 900 });
   await page.goto(overviewPath('vi') + FIXTURE);
   const chart = page.locator('app-decision-trend');
-  const day = chart.getByRole('button').nth(1);
+  const day = chart.getByRole('toolbar').getByRole('button').nth(1);
   const tip = chart.getByRole('tooltip');
   await day.focus();
   await expect(tip).toBeVisible();
