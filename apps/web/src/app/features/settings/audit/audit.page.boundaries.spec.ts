@@ -44,6 +44,16 @@ class AuditPagingHarness extends ComponentHarness {
 class AuditDialogHarness extends ComponentHarness {
   static hostSelector = '[data-audit-dialog]';
   readonly close = this.locatorFor('button[hlmDialogClose]');
+  readonly action = this.locatorFor('[hlmDialogDescription] bdi');
+  readonly time = this.locatorFor('app-absolute-time');
+}
+
+class AuditTableBoundaryHarness extends ComponentHarness {
+  static hostSelector = 'app-audit-table';
+  readonly action = this.locatorFor('app-data-table-value[title]');
+  readonly time = this.locatorFor('app-absolute-time');
+  readonly dates = this.locatorForAll('time');
+  readonly view = this.locatorFor('[data-audit-view]');
 }
 
 class AuditPageSizeOptionHarness extends ComponentHarness {
@@ -335,7 +345,20 @@ describe('AuditTableComponent invalid timestamp boundary', () => {
       const fixture = TestBed.createComponent(AuditTableComponent);
       fixture.componentRef.setInput('rows', [row(1, timestamp)]);
       await fixture.whenStable();
-      expect((fixture.nativeElement as HTMLElement).textContent).toContain('auth.login');
+      const harness = await TestbedHarnessEnvironment.harnessForFixture(
+        fixture,
+        AuditTableBoundaryHarness,
+      );
+      expect(await (await harness.action()).text()).toBe('Signed in');
+      expect(await (await harness.action()).getAttribute('title')).toBe('auth.login');
+      expect(await (await harness.time()).text()).toBe('Time unavailable');
+      expect(await harness.dates()).toHaveLength(0);
+      await (await harness.view()).click();
+      const dialog =
+        await TestbedHarnessEnvironment.documentRootLoader(fixture).getHarness(AuditDialogHarness);
+      expect(await (await dialog.action()).text()).toBe('auth.login');
+      expect(await (await dialog.time()).text()).toBe('Time unavailable');
+      await (await dialog.close()).click();
     },
   );
 });
