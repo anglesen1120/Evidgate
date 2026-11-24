@@ -1,9 +1,11 @@
 import { NgTemplateOutlet } from '@angular/common';
-import { ChangeDetectionStrategy, Component, input } from '@angular/core';
+import { ChangeDetectionStrategy, Component, effect, input, signal } from '@angular/core';
 import { HlmCard, HlmCardTitle } from '@evidgate/ui/card';
 import { HlmSkeleton } from '@evidgate/ui/skeleton';
 
-export type LoadingPatternLayout = 'summary' | 'form' | 'cards';
+import { LiveStatusComponent } from './live-status.component';
+
+export type LoadingPatternLayout = 'summary' | 'form' | 'cards' | 'table';
 
 const formFields = [0, 1, 2] as const;
 const summaryCards = [0, 1, 2, 3] as const;
@@ -11,10 +13,29 @@ const summaryCards = [0, 1, 2, 3] as const;
 @Component({
   selector: 'app-loading-pattern',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [NgTemplateOutlet, HlmCard, HlmCardTitle, HlmSkeleton],
-  host: { class: 'block min-w-0' },
+  imports: [NgTemplateOutlet, HlmCard, HlmCardTitle, HlmSkeleton, LiveStatusComponent],
+  host: { class: 'relative block min-w-0', '[class.table-pending]': 'visible()' },
+  styleUrl: './loading-pattern.component.css',
   template: `
-    @if (bare()) {
+    @if (layout() === 'table') {
+      <app-live-status [text]="visible() ? (label() ?? loadingLabel) : ''" />
+      <div [attr.aria-busy]="busy()">
+        @if (visible()) {
+          <span data-table-progress aria-hidden="true"></span>
+          @if (!hasRows()) {
+            <div class="grid gap-(--eg-space-2) p-(--eg-space-3)" aria-hidden="true">
+              @for (field of fields; track field) {
+                <span
+                  hlmSkeleton
+                  class="h-(--eg-row-default) motion-reduce:animate-none"
+                  aria-hidden="true"
+                ></span>
+              }
+            </div>
+          }
+        }
+      </div>
+    } @else if (bare()) {
       <section
         class="state-panel state-panel--loading state-panel--bare grid min-w-0 gap-(--eg-space-5) wrap-anywhere"
         role="status"
@@ -77,6 +98,23 @@ const summaryCards = [0, 1, 2, 3] as const;
   `,
 })
 export class LoadingPatternComponent {
+  readonly busy = input(false);
+  readonly hasRows = input(false);
+  readonly visible = signal(false);
+  protected readonly loadingLabel = $localize`:@@shared.states.loading.label:Loading…`;
+
+  constructor() {
+    effect((onCleanup) => {
+      if (this.layout() !== 'table' || !this.busy()) {
+        this.visible.set(false);
+        return;
+      }
+      // A fast read still locks its trigger immediately, but never flashes progress.
+      const timer = setTimeout(() => this.visible.set(true), 180);
+      onCleanup(() => clearTimeout(timer));
+    });
+  }
+
   readonly label = input<string | undefined>();
   /** Use form/cards to reserve the region's structure, not as a count of loaded records. */
   readonly layout = input<LoadingPatternLayout>('summary');

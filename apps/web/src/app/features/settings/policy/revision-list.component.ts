@@ -1,3 +1,4 @@
+import { LoadingPatternComponent } from '../../../shared/ui/states/loading-pattern.component';
 import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
 import type { PolicyRevisionSummaryDto } from '@evidgate/sdk';
 import { AbsoluteTimeComponent } from '../../../shared/time/absolute-time.component';
@@ -13,6 +14,7 @@ import { HlmTableImports } from '@evidgate/ui/table';
   selector: 'app-policy-revision-list',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
+    LoadingPatternComponent,
     RowActionComponent,
     HlmTableImports,
     DataTablePagerComponent,
@@ -24,18 +26,24 @@ import { HlmTableImports } from '@evidgate/ui/table';
   ],
   host: { class: 'block min-w-0' },
   template: `
-    <section
-      hlmCard
-      class="min-w-0 gap-0 rounded-lg py-0"
-      aria-labelledby="policy-revisions-title"
-      [attr.aria-busy]="busy()"
-    >
-      <header hlmCardHeader class="border-0 border-b border-solid border-border p-(--eg-space-5)">
+    <section hlmCard class="min-w-0 gap-0 rounded-lg py-0" aria-labelledby="policy-revisions-title">
+      <header
+        [attr.aria-busy]="busy()"
+        hlmCardHeader
+        class="border-0 border-b border-solid border-border p-(--eg-space-5)"
+      >
         <h3 hlmCardTitle [size]="subsectionSize" id="policy-revisions-title">{{ copy.title }}</h3>
         <p hlmCardDescription>{{ copy.order }}</p>
       </header>
+      <app-loading-pattern
+        #tableFetch
+        [layout]="'table'"
+        [busy]="fetching()"
+        [hasRows]="rows().length > 0"
+      />
       <div hlmTableContainer>
         <table
+          [attr.aria-busy]="fetching()"
           hlmTable
           class="w-full table-fixed border-collapse max-md:block [&_td]:whitespace-normal [&_th]:whitespace-normal"
           aria-labelledby="policy-revisions-title"
@@ -57,7 +65,12 @@ import { HlmTableImports } from '@evidgate/ui/table';
               </th>
             </tr>
           </thead>
-          <tbody hlmTBody [attr.role]="'rowgroup'" class="max-md:block">
+          <tbody
+            [class.opacity-80]="tableFetch.visible()"
+            hlmTBody
+            [attr.role]="'rowgroup'"
+            class="max-md:block"
+          >
             @for (row of rows(); track row.id) {
               <tr
                 hlmTr
@@ -141,6 +154,7 @@ import { HlmTableImports } from '@evidgate/ui/table';
   `,
 })
 export class RevisionListComponent {
+  readonly fetching = input(false);
   readonly rows = input<readonly PolicyRevisionSummaryDto[]>([]);
   readonly headId = input<string | null>(null);
   readonly selectedId = input<string | null>(null);

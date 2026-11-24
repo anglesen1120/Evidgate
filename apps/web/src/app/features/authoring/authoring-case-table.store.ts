@@ -274,6 +274,11 @@ export const AuthoringCaseTableStore = signalStore(
           invalidLink ? [namedItem, namedNode] : null,
         ]);
         if (scopeKey === store.scopeKey() && (cursor ?? null) === store.routeCursor()) return;
+        const keepRows =
+          !invalidLink &&
+          store.projectId() === projectId &&
+          store.query().node_id === scope.node_id &&
+          store.query().item_id === scope.item_id;
         abort();
         store._wait.clear();
         patchState(store, {
@@ -281,7 +286,7 @@ export const AuthoringCaseTableStore = signalStore(
           query: scope,
           routeCursor: cursor ?? null,
           scopeKey,
-          rows: [],
+          rows: keepRows ? store.rows() : [],
           nextCursor: null,
           page: 1,
           requestCursors: [cursor ?? null],

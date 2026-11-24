@@ -196,6 +196,7 @@ import { SECURITY_SEVERITY_LABELS, securityTypeLabel } from './security-events.c
       </hlm-dialog>
     }
     <app-data-table
+      [busy]="fetching()"
       class="[&>.caption]:sr-only [&>.scroll]:rounded-none [&>.scroll]:border-0"
       [rowHeight]="'compact'"
       [columns]="columns()"
@@ -207,6 +208,7 @@ import { SECURITY_SEVERITY_LABELS, securityTypeLabel } from './security-events.c
   `,
 })
 export class SecurityEventsTableComponent {
+  readonly fetching = input(false);
   readonly rows = input.required<readonly SecurityEventRow[]>();
   protected readonly inspected = linkedSignal<
     readonly SecurityEventRow[],

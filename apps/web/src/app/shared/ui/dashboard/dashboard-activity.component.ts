@@ -33,6 +33,7 @@ import { DashboardWidgetComponent } from './dashboard-widget.component';
   host: { class: 'block min-w-0' },
   template: `
     <app-dashboard-widget
+      [tableContent]="true"
       [title]="title"
       [description]="description"
       [loading]="loading()"
@@ -55,6 +56,7 @@ import { DashboardWidgetComponent } from './dashboard-widget.component';
       </ng-template>
       <!-- The widget header already shows the title; the caption only names the table for assistive tech. -->
       <app-data-table
+        [busy]="loading()"
         class="[&>.caption]:sr-only"
         [rows]="rows()"
         [columns]="columns()"

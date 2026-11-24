@@ -32,6 +32,7 @@ class SecurityPageHarness extends ComponentHarness {
   readonly clear = this.locatorFor('[data-security-clear]');
   readonly emptyReset = this.locatorFor('app-empty-pattern button');
   readonly results = this.locatorFor('#security-results');
+  readonly table = this.locatorFor('#security-results [role="table"]');
   readonly from = this.locatorFor('#security-from');
   readonly to = this.locatorFor('#security-to');
   readonly correctionSummary = this.locatorForOptional('#security-filter-errors');
@@ -376,7 +377,7 @@ describe('SecurityEventsPage', () => {
       expect(await (await harness.pager()).text()).toContain('Page 1');
       expect(await (await harness.next()).getAttribute('aria-disabled')).toBe('true');
       expect(await (await harness.previous()).getAttribute('aria-disabled')).toBe('true');
-      expect(await (await harness.results()).getAttribute('aria-busy')).toBe('true');
+      expect(await (await harness.table()).getAttribute('aria-busy')).toBe('true');
       finish({ items: [{ ...event, id: 'second' }], next_cursor: null });
     });
     await fixture.whenStable();

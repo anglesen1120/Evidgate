@@ -55,6 +55,7 @@ type CaseCell = TemplateRef<DataTableCellContext<CaseDto>>;
 export class CaseListTableComponent {
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly injector = inject(Injector);
+  readonly fetching = input(false);
   readonly rows = input.required<readonly CaseDto[]>();
   readonly members = input.required<ReadonlyMap<string, MembershipView>>();
   readonly canAssign = input(false);

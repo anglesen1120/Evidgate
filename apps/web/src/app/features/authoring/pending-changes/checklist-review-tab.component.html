@@ -24,17 +24,22 @@
       </div>
     </dl>
     <app-request-state
-      [status]="status()"
+      [tableLoading]="true"
+      [status]="store.queueLoading() && displayRows().length ? 'ready' : status()"
       [error]="store.queueError()"
       [retryEligible]="store.retryReady()"
       [retryBusy]="status() === 'loading'"
       (retry)="store.retryPage()"
     >
-      @if (rows().length === 0) {
+      @if (!store.queueLoading() && rows().length === 0) {
         <p class="full-text">{{ ui.itemEmpty }}</p>
       }
-      @if (rows().length) {
-        <app-pending-change-table [rows]="rows()" [caption]="ui.reviewTab" />
+      @if (displayRows().length) {
+        <app-pending-change-table
+          [fetching]="store.queueLoading()"
+          [rows]="displayRows()"
+          [caption]="ui.reviewTab"
+        />
       }
       <app-data-table-pager
         [page]="store.page()"

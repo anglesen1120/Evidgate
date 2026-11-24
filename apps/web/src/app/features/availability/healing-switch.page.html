@@ -34,7 +34,7 @@
 } @else if (store.notFound()) {
   <app-not-found-pattern data-healing-not-found />
 } @else if (store.loading()) {
-  <app-loading-pattern [label]="copy.loading" [layout]="'cards'" />
+  <app-loading-pattern [layout]="'table'" [busy]="true" [label]="copy.loading" />
 } @else if (store.readFailed()) {
   <div hlmCard class="min-w-0 items-start gap-3 rounded-lg p-5" data-healing-read-error>
     <hlm-icon [name]="'lucideTriangleAlert'" class="size-6 text-destructive" />
@@ -194,7 +194,10 @@
       </h2>
     </header>
     <div hlmCardContent class="min-w-0 px-(--eg-space-6) py-(--eg-space-5)">
-      <app-switch-scope-hierarchy [resolution]="resolution" />
+      <app-switch-scope-hierarchy
+        [fetching]="store.switchResource.isLoading()"
+        [resolution]="resolution"
+      />
     </div>
   </section>
 
@@ -302,5 +305,5 @@
     </p>
   </section>
 } @else {
-  <app-loading-pattern [label]="copy.loading" [layout]="'cards'" />
+  <app-loading-pattern [layout]="'table'" [busy]="true" [label]="copy.loading" />
 }

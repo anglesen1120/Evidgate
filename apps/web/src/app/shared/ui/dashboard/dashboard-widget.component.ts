@@ -17,7 +17,7 @@ import { LoadingPatternComponent } from '../states/loading-pattern.component';
       hlmCard
       class="h-full min-w-0 gap-0 overflow-hidden py-0"
       [attr.aria-label]="title()"
-      [attr.aria-busy]="loading()"
+      [attr.aria-busy]="tableContent() ? null : loading()"
     >
       <header
         hlmCardHeader
@@ -30,7 +30,7 @@ import { LoadingPatternComponent } from '../states/loading-pattern.component';
         <div hlmCardAction><ng-content select="[dashboardActions]" /></div>
       </header>
       <div hlmCardContent class="min-w-0 p-(--eg-space-5)">
-        @if (loading()) {
+        @if (loading() && !tableContent()) {
           <app-loading-pattern [bare]="true" />
         } @else if (error(); as failure) {
           <app-error-pattern
@@ -39,7 +39,7 @@ import { LoadingPatternComponent } from '../states/loading-pattern.component';
             [error]="failure"
             (retry)="retryWithFocus(retryHeading, retry)"
           />
-        } @else if (empty()) {
+        } @else if (empty() && !loading()) {
           <app-empty-pattern [bare]="true" [icon]="emptyIcon()" [title]="emptyTitle()" />
         } @else {
           <ng-content />
@@ -51,6 +51,7 @@ import { LoadingPatternComponent } from '../states/loading-pattern.component';
 export class DashboardWidgetComponent {
   readonly title = input.required<string>();
   readonly description = input('');
+  readonly tableContent = input(false);
   readonly loading = input(false);
   readonly error = input<ApiError | null>(null);
   readonly empty = input(false);

@@ -55,6 +55,7 @@ type RunCell = TemplateRef<DataTableCellContext<RunSummary>>;
 })
 export class RunListTableComponent {
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  readonly fetching = input(false);
   readonly rows = input.required<readonly RunSummary[]>();
   readonly projectId = input.required<string | null>();
   protected readonly inspected = linkedSignal<

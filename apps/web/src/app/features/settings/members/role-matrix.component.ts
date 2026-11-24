@@ -1,3 +1,4 @@
+import { LoadingPatternComponent } from '../../../shared/ui/states/loading-pattern.component';
 import { ChangeDetectionStrategy, Component, computed, input, signal } from '@angular/core';
 import type { MembershipView, RoleView } from '@evidgate/sdk';
 import { HlmButton } from '@evidgate/ui/button';
@@ -18,7 +19,14 @@ const ROLE_VALUE_WIDTH: DataTableColumnWidth = { min: '0px', max: 'none' };
 
 @Component({
   selector: 'app-role-matrix',
-  imports: [HlmButton, HlmTableImports, HlmCardImports, HlmAlert, DataTableValueComponent],
+  imports: [
+    LoadingPatternComponent,
+    HlmButton,
+    HlmTableImports,
+    HlmCardImports,
+    HlmAlert,
+    DataTableValueComponent,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'block min-w-0' },
   template: `
@@ -61,6 +69,12 @@ const ROLE_VALUE_WIDTH: DataTableColumnWidth = { min: '0px', max: 'none' };
             {{ fullMatrix() ? grantedOnly : showFullMatrix }}
           </button>
         </div>
+        <app-loading-pattern
+          #tableFetch
+          [layout]="'table'"
+          [busy]="fetching()"
+          [hasRows]="matrix().rows.length > 0"
+        />
         <div
           hlmTableContainer
           class="table-scroll min-w-0 max-w-full rounded-b-xl max-md:overflow-visible md:overflow-x-auto md:overscroll-x-contain md:[contain:inline-size] focus-visible:outline-[length:var(--eg-focus-width)] focus-visible:outline-solid focus-visible:outline-ring focus-visible:outline-offset-[var(--eg-focus-offset)]"
@@ -71,6 +85,7 @@ const ROLE_VALUE_WIDTH: DataTableColumnWidth = { min: '0px', max: 'none' };
           [attr.aria-label]="copy.matrix"
         >
           <table
+            [attr.aria-busy]="fetching()"
             hlmTable
             role="table"
             class="eg-table-layout caption-top border-collapse max-md:block max-md:min-w-0 max-md:max-w-full [&_tbody]:max-md:block [&_tr]:max-md:block [&_thead]:max-md:sr-only [&_th]:break-normal [&_td]:break-normal [&_tbody_th]:max-md:grid [&_tbody_td]:max-md:grid [&_tbody_th]:max-md:gap-1 [&_tbody_td]:max-md:gap-1 [&_tbody_th]:max-md:whitespace-normal [&_tbody_td]:max-md:whitespace-normal [&_tbody_th]:max-md:wrap-anywhere [&_tbody_td]:max-md:wrap-anywhere [&_tbody_th]:max-md:min-h-[var(--eg-control-touch)] [&_tbody_td]:max-md:min-h-[var(--eg-control-touch)] [&_tbody_tr]:max-md:border-t"
@@ -107,7 +122,7 @@ const ROLE_VALUE_WIDTH: DataTableColumnWidth = { min: '0px', max: 'none' };
                 }
               </tr>
             </thead>
-            <tbody hlmTBody role="rowgroup">
+            <tbody [class.opacity-80]="tableFetch.visible()" hlmTBody role="rowgroup">
               @for (row of matrix().rows; track row.membership.id) {
                 <tr hlmTr role="row">
                   <th
@@ -164,6 +179,7 @@ const ROLE_VALUE_WIDTH: DataTableColumnWidth = { min: '0px', max: 'none' };
   `,
 })
 export class RoleMatrixComponent {
+  readonly fetching = input(false);
   readonly matrix = input.required<{
     columns: readonly RoleView[];
     rows: readonly { membership: MembershipView; granted: ReadonlySet<string> }[];

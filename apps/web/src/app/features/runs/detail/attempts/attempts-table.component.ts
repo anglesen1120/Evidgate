@@ -141,8 +141,6 @@ export class AttemptsTableComponent {
   /** A live region kept out of the busy region: AT defers changes inside `aria-busy`. */
   protected readonly followUpStatus = computed(() => {
     switch (this.followUpPhase()) {
-      case 'loading':
-        return this.copy.loadingMore;
       case 'done':
         return this.copy.moreLoaded;
       default:

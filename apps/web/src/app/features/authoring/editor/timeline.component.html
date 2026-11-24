@@ -139,6 +139,7 @@
       />
     }
     <app-request-state
+      [tableLoading]="true"
       [status]="historyStatus()"
       [error]="errorOf(store.history.error())"
       [emptyIcon]="'lucideClock'"
@@ -148,6 +149,7 @@
       (retry)="store.history.reload()"
     >
       <app-data-table
+        [busy]="store.history.isLoading()"
         [rows]="rows()"
         [columns]="columns()"
         [rowId]="rowId"

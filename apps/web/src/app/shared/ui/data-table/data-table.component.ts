@@ -44,6 +44,7 @@ import {
 } from '@evidgate/ui/table';
 import { hlm } from '@evidgate/ui/utils';
 
+import { LoadingPatternComponent } from '../states/loading-pattern.component';
 import { DataTableCellComponent } from './data-table-cell.component';
 import { resolveTableColumns } from './data-table-column';
 import type { DataTableColumn } from './data-table-column';
@@ -92,6 +93,7 @@ let nextTableId = 0;
     CdkFixedSizeVirtualScroll,
     DataTableCellComponent,
     DataTableRecordsComponent,
+    LoadingPatternComponent,
     DataTablePagerComponent,
     HlmTableColumn,
     HlmTable,
@@ -101,6 +103,12 @@ let nextTableId = 0;
     HlmTr,
   ],
   templateUrl: './data-table.component.html',
+  styles: `
+    app-loading-pattern.table-pending ~ .scroll [data-row-id],
+    app-loading-pattern.table-pending ~ .scroll app-data-table-records {
+      opacity: 0.8;
+    }
+  `,
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: {
     class:
@@ -121,6 +129,7 @@ export class DataTableComponent<T> {
   readonly rows = input.required<readonly T[]>();
   readonly rowId = input.required<DataTableRowId<T>>();
   readonly caption = input.required<string>();
+  readonly busy = input<boolean>();
   readonly rowHeight = input<DataTableDensity>('default');
   readonly virtualThreshold = input(200);
   /** Opt ordinary tables into record reflow when readable columns cannot fit their container. */

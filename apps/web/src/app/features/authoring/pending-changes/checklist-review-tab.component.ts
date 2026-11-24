@@ -1,3 +1,4 @@
+import { rowsDuringFetch } from '../../../shared/ui/data-table/rows-during-fetch';
 import { DOCUMENT } from '@angular/common';
 import {
   afterRenderEffect,
@@ -103,6 +104,11 @@ export class ChecklistReviewTabComponent {
     const item = this.itemId();
     return item ? this.store.rows().filter((row) => row.target_id === item) : [];
   });
+  protected readonly displayRows = rowsDuringFetch(
+    () => (this.store.canRead() && !this.store.forbidden() ? this.scope() : null),
+    this.store.queueLoading,
+    this.rows,
+  );
   protected readonly queueLink = computed(() => [
     '/orgs',
     this.session.currentProject()?.org_id ?? '',

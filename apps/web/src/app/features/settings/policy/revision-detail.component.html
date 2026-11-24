@@ -3,7 +3,7 @@
     <p class="m-0 text-muted-foreground">{{ copy.empty }}</p>
   }
   @case ('loading') {
-    <app-loading-pattern [label]="copy.loading" [layout]="loadingLayout" [bare]="true" />
+    <app-loading-pattern [label]="copy.loading" [layout]="'table'" [busy]="true" [bare]="true" />
   }
   @case ('error') {
     <app-inline-feedback

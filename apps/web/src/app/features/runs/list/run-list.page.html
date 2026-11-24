@@ -36,7 +36,7 @@
     </div>
   </app-page-header>
 </div>
-@if (status() === 'ready') {
+@if (status() === 'ready' || (store.busy() && store.rows().length)) {
   <dl
     hlmCard
     [attr.aria-label]="copy.loadedRuns"
@@ -94,7 +94,7 @@
     </summary>
     <form
       class="grid min-w-0 gap-(--eg-space-3) pb-(--eg-space-3)"
-      (ngSubmit)="apply()"
+      (ngSubmit)="!store.busy() && apply()"
       aria-labelledby="run-filters-title"
       [attr.aria-describedby]="'run-filter-hint'"
     >
@@ -181,6 +181,8 @@
             [variant]="'outline'"
             type="submit"
             class="h-auto min-h-(--eg-control-touch) whitespace-normal"
+            [disabled]="store.busy()"
+            [attr.aria-busy]="store.busy()"
             data-run-apply
           >
             {{ copy.apply }}
@@ -190,8 +192,10 @@
             [variant]="'ghost'"
             type="button"
             class="h-auto min-h-(--eg-control-touch) whitespace-normal"
+            [disabled]="store.busy()"
+            [attr.aria-busy]="store.busy()"
             data-run-clear
-            (click)="clear()"
+            (click)="!store.busy() && clear()"
           >
             {{ copy.clear }}
           </button>
@@ -213,8 +217,9 @@
   </details>
   <app-request-state
     class="block min-w-0"
-    [class.p-(--eg-space-5)]="status() !== 'ready' || store.isEmpty()"
-    [status]="status()"
+    [class.p-(--eg-space-5)]="!store.rows().length || store.isEmpty()"
+    [tableLoading]="true"
+    [status]="store.busy() && store.rows().length ? 'ready' : status()"
     [error]="store.loadError()"
     [emptyIcon]="'navRun'"
     [empty]="store.isEmpty()"
@@ -225,10 +230,14 @@
     [retryEligible]="retryReady() && (store.loadError()?.retryable ?? false)"
     (retry)="reload()"
   >
-    <app-run-list-table [rows]="store.visibleRows()" [projectId]="projectId" />
+    <app-run-list-table
+      [fetching]="store.busy()"
+      [rows]="store.visibleRows()"
+      [projectId]="projectId"
+    />
   </app-request-state>
   <!-- An empty page can still have a next cursor. -->
-  @if (status() === 'ready') {
+  @if (status() === 'ready' || (store.busy() && store.rows().length)) {
     <section
       #paging
       class="pagination flex min-w-0 flex-wrap items-center gap-(--eg-space-3) rounded-b-(--eg-radius-lg) border-t border-border px-(--eg-space-5) py-(--eg-space-4) focus-visible:outline-solid focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-ring focus-visible:outline-offset-(--eg-focus-offset)"

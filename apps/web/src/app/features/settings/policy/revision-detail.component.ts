@@ -43,7 +43,7 @@ interface ReferenceRow {
   ],
   templateUrl: './revision-detail.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  host: { class: 'grid min-w-0 gap-(--eg-space-7)', '[attr.aria-busy]': 'phase() === "loading"' },
+  host: { class: 'grid min-w-0 gap-(--eg-space-7)' },
 })
 export class RevisionDetailComponent {
   private readonly store = inject(PolicyStore);
@@ -53,7 +53,6 @@ export class RevisionDetailComponent {
   protected readonly phase = signal<'empty' | 'loading' | 'ready' | 'error'>('empty');
   protected readonly error = signal<ApiError | null>(null);
   protected readonly subsectionSize = 'subsection' as const;
-  protected readonly loadingLayout = 'form' as const;
   protected readonly destructive = 'destructive' as const;
   protected readonly referenceId = (row: ReferenceRow): number => row.index;
   private generation = 0;

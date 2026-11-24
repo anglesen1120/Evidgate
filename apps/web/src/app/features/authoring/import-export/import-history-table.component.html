@@ -27,6 +27,7 @@
   ></button>
 </ng-template>
 <app-data-table
+  [busy]="fetching()"
   class="[--eg-row-default:var(--eg-space-11)]"
   [caption]="copy.history"
   [rows]="rows()"

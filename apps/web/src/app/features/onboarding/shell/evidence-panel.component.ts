@@ -1,3 +1,4 @@
+import { LoadingPatternComponent } from '../../../shared/ui/states/loading-pattern.component';
 import { DatePipe, DecimalPipe } from '@angular/common';
 import {
   ChangeDetectionStrategy,
@@ -33,6 +34,7 @@ interface LedgerRow {
 @Component({
   selector: 'app-onboarding-evidence-panel',
   imports: [
+    LoadingPatternComponent,
     DatePipe,
     DecimalPipe,
     HlmCardImports,
@@ -62,8 +64,18 @@ interface LedgerRow {
       >
         @if (progress(); as resources) {
           @if (resources.project; as createdProject) {
+            <app-loading-pattern
+              #tableFetch
+              [layout]="'table'"
+              [busy]="fetching()"
+              [hasRows]="ledgerRows().length > 0"
+            />
             <div hlmTableContainer class="min-w-0 max-w-full">
-              <table hlmTable class="[&_th]:whitespace-normal [&_td]:whitespace-normal">
+              <table
+                [attr.aria-busy]="fetching()"
+                hlmTable
+                class="[&_th]:whitespace-normal [&_td]:whitespace-normal"
+              >
                 <caption hlmCaption class="caption-top text-start">
                   {{
                     title
@@ -76,7 +88,7 @@ interface LedgerRow {
                     <th hlmTh scope="col">{{ copy.actions }}</th>
                   </tr>
                 </thead>
-                <tbody hlmTBody>
+                <tbody [class.opacity-80]="tableFetch.visible()" hlmTBody>
                   @for (row of ledgerRows(); track row.key) {
                     <tr hlmTr class="h-(--eg-space-11)">
                       <th hlmTh scope="row" class="font-semibold text-foreground">
@@ -202,6 +214,7 @@ interface LedgerRow {
 export class EvidencePanelComponent {
   protected readonly dateTimeFormat = shortDateFormat(inject(LOCALE_ID), true, 'medium');
 
+  readonly fetching = input(false);
   readonly progress = input<OnboardingProgress | null>(null);
   readonly refreshFailed = input(false);
   readonly viewRecord = output<OnboardingRecordView>();

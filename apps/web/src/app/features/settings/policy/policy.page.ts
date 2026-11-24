@@ -1,3 +1,4 @@
+import { LoadingPatternComponent } from '../../../shared/ui/states/loading-pattern.component';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -20,7 +21,6 @@ import { ShellIconComponent } from '../../../shell/layout/shell-icon.component';
 import { HlmDialogImports } from '@evidgate/ui/dialog';
 import { HlmInput } from '@evidgate/ui/input';
 import { HlmLabel } from '@evidgate/ui/label';
-import { HlmSkeleton } from '@evidgate/ui/skeleton';
 import { HlmTabsImports } from '@evidgate/ui/tabs';
 import {
   DesktopMutationDirective,
@@ -43,6 +43,7 @@ import { RevisionDetailComponent } from './revision-detail.component';
 @Component({
   selector: 'app-policy-page',
   imports: [
+    LoadingPatternComponent,
     HlmAlertImports,
     HlmButton,
     HlmCardImports,
@@ -53,7 +54,6 @@ import { RevisionDetailComponent } from './revision-detail.component';
     HlmInput,
     HlmDialogImports,
     HlmLabel,
-    HlmSkeleton,
     HlmTabsImports,
     DesktopMutationDirective,
     DesktopRequiredNoticeComponent,

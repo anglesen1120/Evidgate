@@ -1,0 +1,30 @@
+[data-table-progress] {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline: 0;
+  z-index: 1;
+  block-size: var(--eg-space-1);
+  overflow: hidden;
+  pointer-events: none;
+  background: var(--eg-accent-soft);
+}
+
+[data-table-progress]::after {
+  display: block;
+  width: 40%;
+  height: 100%;
+  background: var(--eg-accent-fg);
+  content: '';
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  [data-table-progress]::after {
+    animation: table-read 1.2s ease-in-out infinite alternate;
+  }
+
+  @keyframes table-read {
+    to {
+      transform: translateX(150%);
+    }
+  }
+}

@@ -1,3 +1,4 @@
+import { LoadingPatternComponent } from '../../../shared/ui/states/loading-pattern.component';
 import { formatNumber } from '@angular/common';
 import {
   ChangeDetectionStrategy,
@@ -36,6 +37,7 @@ import { API_TOKENS_COPY } from './api-tokens.copy';
 @Component({
   selector: 'app-api-token-list',
   imports: [
+    LoadingPatternComponent,
     HlmTableImports,
     ShellIconComponent,
     SettingsPageCountsComponent,
@@ -86,8 +88,15 @@ import { API_TOKENS_COPY } from './api-tokens.copy';
       </header>
       @if (filtered().length) {
         @let narrow = viewport.narrow();
+        <app-loading-pattern
+          #tableFetch
+          [layout]="'table'"
+          [busy]="fetching()"
+          [hasRows]="rows().length > 0"
+        />
         <div hlmTableContainer>
           <table
+            [attr.aria-busy]="fetching()"
             hlmTable
             class="w-full table-fixed border-collapse"
             aria-labelledby="api-directory-title"
@@ -103,7 +112,7 @@ import { API_TOKENS_COPY } from './api-tokens.copy';
                 }
               </tr>
             </thead>
-            <tbody hlmTBody class="md:[&_td]:py-1">
+            <tbody [class.opacity-80]="tableFetch.visible()" hlmTBody class="md:[&_td]:py-1">
               @for (row of filtered(); track row.id) {
                 <tr hlmTr data-api-token-row [attr.data-state]="row.status">
                   <td hlmTd class="whitespace-normal max-md:p-4">
@@ -234,6 +243,7 @@ export class ApiTokenListComponent {
   protected readonly viewport = inject(NarrowMutationPolicy);
   private readonly locale = inject(LOCALE_ID);
 
+  readonly fetching = input(false);
   readonly rows = input<readonly ApiTokenView[]>([]);
   readonly canWrite = input(false);
   readonly busy = input(false);

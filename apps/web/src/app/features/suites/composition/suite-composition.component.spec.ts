@@ -363,9 +363,9 @@ describe('SuiteCompositionComponent', () => {
     const root = fixture.nativeElement as HTMLElement;
 
     expect(root.getAttribute('data-suite-composition-status')).toBe('not-found');
-    expect(root.querySelector('[data-testid="suite-composition"]')?.getAttribute('aria-busy')).toBe(
-      'false',
-    );
+    expect(
+      root.querySelector('[data-testid="suite-composition"] > header')?.getAttribute('aria-busy'),
+    ).toBe('false');
     const heading = root.querySelector('[data-testid="suite-composition-state"]');
     expect(heading?.textContent).toBe('Suite revision not found');
     expect(document.activeElement).toBe(heading);
@@ -425,9 +425,9 @@ describe('SuiteCompositionComponent', () => {
     const { harness, root } = await open();
     const heading = root.querySelector('[data-testid="suite-composition-state"]');
     expect(root.getAttribute('data-suite-composition-status')).toBe('loading');
-    expect(root.querySelector('[data-testid="suite-composition"]')?.getAttribute('aria-busy')).toBe(
-      'true',
-    );
+    expect(
+      root.querySelector('[data-testid="suite-composition"] > header')?.getAttribute('aria-busy'),
+    ).toBe('true');
     expect(heading?.textContent).toBe('Loading suite composition');
     expect(document.activeElement).toBe(heading);
     root.tabIndex = -1;
@@ -440,9 +440,9 @@ describe('SuiteCompositionComponent', () => {
     // committed status, which is what the heading and its focus move belong to.
     harness.fixture.detectChanges();
     expect(root.getAttribute('data-suite-composition-status')).toBe('ready');
-    expect(root.querySelector('[data-testid="suite-composition"]')?.getAttribute('aria-busy')).toBe(
-      'false',
-    );
+    expect(
+      root.querySelector('[data-testid="suite-composition"] > header')?.getAttribute('aria-busy'),
+    ).toBe('false');
     expect(heading?.textContent).toBe('Suite composition');
     expect(document.activeElement).toBe(heading);
   });

@@ -15,7 +15,7 @@
   </h2>
   <p class="text-xs text-muted-foreground" data-attempts-order>{{ copy.serverOrder }}</p>
   @if (status() === 'loading') {
-    <app-loading-pattern />
+    <app-loading-pattern [layout]="'table'" [busy]="true" />
   } @else if (status() === 'error') {
     <app-error-pattern [error]="error()" [headingLevel]="3" (retry)="requestFirstPageRetry()" />
   } @else if (attempts() === null) {
@@ -35,6 +35,13 @@
     <!-- Tailwind's strict max-width variant on the 767 px boundary compiles to `width < 767px`,
          which left a 767 px viewport with the column layout while the per-cell field labels
          stayed visible. The explicit media queries below keep one layout per width. -->
+    <app-loading-pattern
+      #tableFetch
+      [label]="copy.loadingMore"
+      [layout]="'table'"
+      [busy]="loadingMore()"
+      [hasRows]="(attempts()?.length ?? 0) > 0"
+    />
     <div
       hlmTableContainer
       #tableRegion
@@ -45,6 +52,7 @@
       [attr.aria-busy]="loadingMore() ? 'true' : null"
     >
       <table
+        [attr.aria-busy]="loadingMore()"
         hlmTable
         role="table"
         class="eg-table-layout min-w-0 [min-inline-size:0] w-full border-collapse [@media(max-width:767px)]:block [&_th]:whitespace-normal [&_th]:wrap-normal [&_td]:whitespace-normal [&_td]:wrap-anywhere [&_bdi]:block"
@@ -94,6 +102,7 @@
         </thead>
         @for (group of visibleGroups(); track group.executionKey) {
           <tbody
+            [class.opacity-80]="tableFetch.visible()"
             hlmTBody
             role="rowgroup"
             class="[@media(max-width:767px)]:block [&+tbody]:border-t [&+tbody]:border-border"

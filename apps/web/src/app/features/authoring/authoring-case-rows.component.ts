@@ -59,6 +59,7 @@ export class AuthoringCaseRowsComponent {
   private readonly viewport = inject(NarrowMutationPolicy);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   readonly rows = input.required<readonly ManualCaseListItemDto[]>();
+  readonly fetching = input(false);
   readonly editorScope = input<readonly string[] | null>(null);
   protected readonly copy = CASE_TABLE_COPY;
   protected readonly identifiers = $localize`:@@authoring.case-table.identifiers:Identifiers`;

@@ -71,6 +71,7 @@
         <app-dashboard-widget
           class="wide"
           data-dashboard-trend
+          [tableContent]="rows().length > 0"
           [title]="copy.trend"
           [description]="sampleLabel()"
           [loading]="store.runs.loading()"
@@ -81,7 +82,11 @@
           (retry)="store.runs.reload()"
         >
           <p class="mt-0 text-sm text-muted-foreground">{{ copy.trendContext }}</p>
-          <app-decision-trend [label]="sampleLabel()" [points]="trend()" />
+          <app-decision-trend
+            [fetching]="store.runs.loading()"
+            [label]="sampleLabel()"
+            [points]="trend()"
+          />
         </app-dashboard-widget>
       }
       @if (attentionVisible()) {
@@ -131,6 +136,7 @@
         <app-dashboard-widget
           class="wide"
           data-dashboard-recent
+          [tableContent]="true"
           [title]="recentTitle()"
           [description]="sampleLabel()"
           [loading]="store.runs.loading()"
@@ -140,7 +146,11 @@
           [emptyIcon]="'navRun'"
           (retry)="store.runs.reload()"
         >
-          <app-dashboard-runs [rows]="latest()" [decisionsVisible]="store.decisionsVisible()" />
+          <app-dashboard-runs
+            [fetching]="store.runs.loading()"
+            [rows]="latest()"
+            [decisionsVisible]="store.decisionsVisible()"
+          />
         </app-dashboard-widget>
       }
       @if (authoringVisible()) {

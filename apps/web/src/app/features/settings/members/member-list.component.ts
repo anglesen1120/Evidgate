@@ -296,6 +296,7 @@ export const MEMBERS_COPY = {
       }
     </ng-template>
     <app-data-table
+      [busy]="fetching()"
       class="[&_tbody_td]:align-middle [&_[data-column-role=actions]]:whitespace-nowrap [&_[data-column-role=actions]]:wrap-normal"
       [columns]="columns()"
       [rows]="members()"
@@ -366,6 +367,7 @@ export class MemberListComponent {
   protected readonly roleLabel = memberRoleLabel;
   protected readonly view = $localize`:@@settings.row.view:View`;
 
+  readonly fetching = input(false);
   readonly members = input.required<readonly MembershipView[]>();
   readonly canWrite = input(false);
   protected readonly inspection = signal<{ id: string; trigger: HTMLElement } | null>(null);

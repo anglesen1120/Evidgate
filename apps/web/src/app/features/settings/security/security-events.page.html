@@ -53,7 +53,7 @@
   </header>
   <form
     class="grid min-w-0 gap-3 border-b border-border px-5 py-4"
-    (ngSubmit)="apply()"
+    (ngSubmit)="!(store.phase() === 'loading') && apply()"
     aria-labelledby="security-filters-heading"
   >
     <span id="security-filters-heading" class="sr-only">{{ copy.filters }}</span>
@@ -160,6 +160,8 @@
           [variant]="'default'"
           type="submit"
           class="whitespace-normal pointer-coarse:min-h-(--eg-control-touch)"
+          [disabled]="store.phase() === 'loading'"
+          [attr.aria-busy]="store.phase() === 'loading'"
           data-security-apply
         >
           {{ copy.apply }}
@@ -169,8 +171,10 @@
           [variant]="'outline'"
           type="button"
           class="whitespace-normal pointer-coarse:min-h-(--eg-control-touch)"
+          [disabled]="store.phase() === 'loading'"
+          [attr.aria-busy]="store.phase() === 'loading'"
           data-security-clear
-          (click)="clear()"
+          (click)="!(store.phase() === 'loading') && clear()"
         >
           {{ copy.clear }}
         </button>
@@ -183,10 +187,10 @@
     tabindex="-1"
     class="grid min-w-0 focus-visible:outline-[var(--eg-focus-width)] focus-visible:outline-ring"
     [attr.aria-label]="copy.title"
-    [attr.aria-busy]="store.phase() === 'loading'"
   >
     <app-request-state
       [status]="tableStatus()"
+      [tableLoading]="true"
       [loadingLabel]="copy.loading"
       [error]="store.loadError()"
       [emptyIcon]="'navShieldAlert'"
@@ -198,7 +202,7 @@
       [retryEligible]="(store.loadError()?.retryable ?? false) && (retryReady.value() ?? false)"
       (retry)="store.reload()"
     >
-      <app-security-events-table [rows]="store.rows()" />
+      <app-security-events-table [fetching]="store.phase() === 'loading'" [rows]="store.rows()" />
     </app-request-state>
     @if (store.hasPage()) {
       <app-request-state

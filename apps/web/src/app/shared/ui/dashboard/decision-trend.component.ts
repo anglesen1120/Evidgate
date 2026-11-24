@@ -1,3 +1,4 @@
+import { LoadingPatternComponent } from '../states/loading-pattern.component';
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
 import { HlmTableImports } from '@evidgate/ui/table';
@@ -17,7 +18,7 @@ export interface DashboardTrendPoint {
 
 @Component({
   selector: 'app-decision-trend',
-  imports: [DecimalPipe, HlmTableImports],
+  imports: [LoadingPatternComponent, DecimalPipe, HlmTableImports],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'block min-w-0' },
   template: `
@@ -72,8 +73,14 @@ export interface DashboardTrendPoint {
           >
             View as table
           </summary>
+          <app-loading-pattern
+            #tableFetch
+            [layout]="'table'"
+            [busy]="fetching()"
+            [hasRows]="points().length > 0"
+          />
           <div hlmTableContainer>
-            <table hlmTable>
+            <table [attr.aria-busy]="fetching()" hlmTable>
               <caption class="sr-only">
                 {{
                   label()
@@ -87,7 +94,7 @@ export interface DashboardTrendPoint {
                   }
                 </tr>
               </thead>
-              <tbody hlmTBody>
+              <tbody [class.opacity-80]="tableFetch.visible()" hlmTBody>
                 @for (point of points(); track point.id) {
                   <tr hlmTr>
                     <th hlmTh [attr.scope]="'row'">{{ point.label }}</th>
@@ -187,6 +194,7 @@ export interface DashboardTrendPoint {
   `,
 })
 export class DecisionTrendComponent {
+  readonly fetching = input(false);
   readonly label = input.required<string>();
   readonly points = input<readonly DashboardTrendPoint[]>([]);
   protected readonly legend = computed(() =>

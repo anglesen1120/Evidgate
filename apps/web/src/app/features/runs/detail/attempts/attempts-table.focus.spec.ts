@@ -130,7 +130,10 @@ describe('AttemptsTableComponent server pagination', () => {
     const table = await TestbedHarnessEnvironment.harnessForFixture(fixture, AttemptsHarness);
     fixture.componentRef.setInput('loadingMore', true);
     expect(await (await table.region())?.getAttribute('aria-busy')).toBe('true');
-    expect(await (await table.announcement()).text()).toBe('Loading attempts page');
+    await vi.waitFor(() => {
+      fixture.detectChanges();
+      expect(root.querySelector('app-live-status')?.textContent).toContain('Loading attempts page');
+    });
     expect(root.querySelector('.table-scroll [data-attempts-status]')).toBeNull();
     fixture.componentRef.setInput('error', networkFailure);
     fixture.componentRef.setInput('loadingMore', false);

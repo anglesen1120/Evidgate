@@ -1,3 +1,4 @@
+import { LoadingPatternComponent } from '../../../shared/ui/states/loading-pattern.component';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -29,6 +30,7 @@ import { PolicyStore } from './policy.store';
   selector: 'app-revision-diff',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
+    LoadingPatternComponent,
     HlmAlertImports,
     StatusPillComponent,
     HlmButton,
@@ -96,12 +98,11 @@ import { PolicyStore } from './policy.store';
       <div
         class="min-w-0 border-0 border-t border-solid border-border"
         data-policy-diff
-        [attr.aria-busy]="phase() === 'loading'"
-        [attr.aria-live]="'polite'"
+        [attr.aria-live]="phase() === 'loading' ? null : 'polite'"
       >
         @switch (phase()) {
           @case ('loading') {
-            <p hlmAlert class="m-0 text-muted-foreground" role="status">{{ copy.loading }}</p>
+            <app-loading-pattern [layout]="'table'" [busy]="true" [label]="copy.loading" />
           }
           @case ('error') {
             <div hlmAlert [variant]="'destructive'" class="mb-3 wrap-anywhere" role="alert">

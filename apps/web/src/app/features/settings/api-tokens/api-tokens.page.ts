@@ -1,3 +1,4 @@
+import { rowsDuringFetch } from '../../../shared/ui/data-table/rows-during-fetch';
 import { formatNumber } from '@angular/common';
 import {
   ChangeDetectionStrategy,
@@ -143,7 +144,8 @@ import { escapeFormatChars } from '../../../shared/ui/values/ref-name-display';
       <app-not-found-pattern />
     } @else {
       <app-request-state
-        [status]="status()"
+        [tableLoading]="true"
+        [status]="status() === 'loading' && displayRows().length ? 'ready' : status()"
         [error]="store.loadError()"
         [emptyIcon]="'navKey'"
         [empty]="store.phase() === 'empty'"
@@ -153,9 +155,10 @@ import { escapeFormatChars } from '../../../shared/ui/values/ref-name-display';
         (retry)="reload()"
       >
         <app-api-token-list
-          [rows]="store.rows()"
+          [fetching]="store.pageResource.isLoading()"
+          [rows]="displayRows()"
           [canWrite]="store.canWrite()"
-          [busy]="store.creating() || store.revoking()"
+          [busy]="store.creating() || store.revoking() || store.pageResource.isLoading()"
           (revoke)="revokeSelection.set($event)"
         />
       </app-request-state>
@@ -268,6 +271,11 @@ export class ApiTokensPage {
       .filter(Boolean)
       .join(' · ');
   });
+  protected readonly displayRows = rowsDuringFetch(
+    this.store.scope,
+    this.store.pageResource.isLoading,
+    this.store.rows,
+  );
   protected readonly status = computed<'loading' | 'ready' | 'error'>(() => {
     const phase = this.store.phase();
     return phase === 'loading' ? 'loading' : phase === 'error' ? 'error' : 'ready';

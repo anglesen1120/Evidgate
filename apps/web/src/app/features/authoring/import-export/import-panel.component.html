@@ -259,6 +259,7 @@
           }
         </div>
         <app-import-preview
+          [fetching]="store.work().pending"
           [local]="local()"
           [report]="report()"
           [applied]="store.work().committed !== null"
@@ -381,7 +382,6 @@
       hlmCard
       class="col-span-full min-w-0"
       aria-labelledby="import-history-title"
-      [attr.aria-busy]="store.history.isLoading()"
       data-import-history
     >
       <app-section-header
@@ -393,10 +393,7 @@
         [description]="copy.historyHint"
       />
       <div hlmCardContent class="grid min-w-0 gap-(--eg-space-4)">
-        <app-import-history-table [rows]="history()?.page?.items ?? []" />
-        @if (store.history.isLoading()) {
-          <app-request-state [status]="'loading'" />
-        }
+        <app-import-history-table [fetching]="store.history.isLoading()" [rows]="historyRows()" />
         @if (history()?.error; as error) {
           <app-request-state [status]="'error'" [error]="error" />
           @if (error.retryable) {

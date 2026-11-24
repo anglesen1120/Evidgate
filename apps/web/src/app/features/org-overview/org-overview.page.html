@@ -41,6 +41,7 @@
   @if (projectsVisible()) {
     <app-dashboard-widget
       class="projects"
+      [tableContent]="true"
       [title]="copy.projects"
       [description]="copy.projectsDescription"
       [loading]="store.projects.isLoading()"
@@ -52,6 +53,7 @@
     >
       <section #runSummary data-run-summary [attr.tabindex]="-1">
         <app-data-table
+          [busy]="store.projects.isLoading() || (store.canRuns() && store.runs.isLoading())"
           class="[&>.caption]:sr-only"
           [rows]="store.projectRows()"
           [columns]="columns()"
@@ -63,6 +65,8 @@
       @if (runErrors()) {
         <button
           hlmBtn
+          [disabled]="store.runs.isLoading()"
+          [attr.aria-busy]="store.runs.isLoading()"
           data-run-summary-retry
           [variant]="'ghost'"
           (click)="retryRuns(runSummary)"

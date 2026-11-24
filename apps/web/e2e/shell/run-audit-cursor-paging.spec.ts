@@ -88,6 +88,30 @@ for (const surface of ['runs', 'audit'] as const) {
     await expect(previous).toHaveAttribute('aria-disabled', 'true');
   });
 
+  test(`${surface}: pending page retains records and uses a static progress bar with reduced motion`, async ({
+    page,
+  }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(`${address(surface)}&fixture.latency=1000`);
+    await expect(page.locator(ROWS[surface])).toHaveCount(20);
+    const first = await rowIds(page, surface);
+    const next = page.getByRole('button', { name: 'Next records', exact: true });
+    await next.dblclick();
+    const table = page.locator('app-data-table');
+    await expect(table.getByRole('table')).toHaveAttribute('aria-busy', 'true');
+    const bar = table.locator('[data-table-progress]');
+    await expect(bar).toBeVisible();
+    expect(
+      await bar.evaluate((element) => getComputedStyle(element, '::after').animationName),
+    ).toBe('none');
+    expect(await rowIds(page, surface)).toEqual(first);
+    await expect(table.getByRole('status')).toHaveText('Loading…');
+    await expect(page.locator(ROWS[surface])).toHaveCount(13);
+    await expect(bar).toHaveCount(0);
+    expect(await requests(page, surface)).toHaveLength(2);
+  });
+
   test(`${surface}: changing page size resets the cursor and supports fifty and one hundred`, async ({
     page,
   }) => {
