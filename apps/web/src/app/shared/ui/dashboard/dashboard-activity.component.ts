@@ -9,9 +9,10 @@ import {
   viewChild,
 } from '@angular/core';
 import type { AuditEntryDto } from '@evidgate/sdk';
-import { HlmButton } from '@evidgate/ui/button';
 import { HlmDialogImports } from '@evidgate/ui/dialog';
 import type { ApiError } from '../../../core/http/api-error';
+import { auditActionLabel } from '../../audit/action-label';
+import { RowActionComponent } from '../data-table/row-action.component';
 import { AbsoluteTimeComponent } from '../../../shared/time/absolute-time.component';
 import { DataTableComponent, type DataTableColumn } from '../data-table/data-table.component';
 import type { DataTableCellContext } from '../data-table/data-table-column';
@@ -21,7 +22,7 @@ import { DashboardWidgetComponent } from './dashboard-widget.component';
 @Component({
   selector: 'app-dashboard-activity',
   imports: [
-    HlmButton,
+    RowActionComponent,
     HlmDialogImports,
     AbsoluteTimeComponent,
     DataTableComponent,
@@ -44,16 +45,13 @@ import { DashboardWidgetComponent } from './dashboard-widget.component';
       <ng-template #timeCell let-row><app-absolute-time [value]="row.created_at" /></ng-template>
       <ng-template #actionCell let-row>
         <button
-          hlmBtn
+          appRowAction
           #trigger
-          [variant]="'ghost'"
           [attr.aria-haspopup]="'dialog'"
+          [label]="viewLabel(row.action)"
           [attr.aria-label]="viewLabel(row.action)"
-          (click)="inspected.set({ row, trigger })"
-          i18n="@@shared.dashboard.activity-view"
-        >
-          View
-        </button>
+          (click)="inspected.set({ row, trigger: trigger.nativeElement })"
+        ></button>
       </ng-template>
       <!-- The widget header already shows the title; the caption only names the table for assistive tech. -->
       <app-data-table
@@ -138,7 +136,7 @@ export class DashboardActivityComponent {
         id: 'action',
         header: $localize`:@@shared.dashboard.activity-action:Action`,
         role: 'identity',
-        cell: (row) => row.action,
+        cell: (row) => auditActionLabel(row.action),
       },
       ...(time
         ? [
@@ -170,6 +168,6 @@ export class DashboardActivityComponent {
     ];
   });
   protected viewLabel(action: string): string {
-    return $localize`:@@shared.dashboard.activity-view-label:View event ${action}:action:`;
+    return $localize`:@@shared.dashboard.activity-view-label:View event ${auditActionLabel(action)}:action:`;
   }
 }

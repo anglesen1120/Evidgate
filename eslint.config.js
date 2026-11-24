@@ -206,6 +206,16 @@ module.exports = tseslint.config(
     },
   },
   {
+    // Like the Helm facade above, keep native hosts so router/dialog directives retain their element.
+    files: ['apps/web/src/app/shared/ui/data-table/row-action.component.ts'],
+    rules: {
+      '@angular-eslint/component-selector': [
+        'error',
+        { type: 'attribute', prefix: 'app', style: 'camelCase' },
+      ],
+    },
+  },
+  {
     // 09.1.1-T1: the component templates and the application shell's index.html. Inline
     // templates arrive here as the processor's virtual `<file>.ts/<n>_*.html` blocks, which
     // this glob also matches. Every rule of both sets reports error, so --max-warnings 0

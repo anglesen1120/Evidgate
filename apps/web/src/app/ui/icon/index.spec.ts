@@ -28,6 +28,18 @@ describe('HlmIcon fixed status geometry', () => {
     ['lucideActivity', ACTIVITY, false],
     ['lucideCircle', null, true],
     ['lucideCopy', 'M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2', false],
+    [
+      'lucideEye',
+      'M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0',
+      true,
+    ],
+    ['lucideEllipsis', null, true],
+    [
+      'lucidePencil',
+      'M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z',
+      false,
+    ],
+    ['lucideRotateCw', 'M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8', false],
     ['lucideInbox', 'M22 12h-6l-2 3h-4l-2-3H2', false],
     ['lucideMaximize2', 'M15 3h6v6', false],
   ] as const)(
