@@ -3,6 +3,7 @@ import { TestBed } from '@angular/core/testing';
 import runList250 from '../../../../../../fixtures/web-api/run-list-250/input.json';
 import fullPage from '../../../../../../fixtures/web-api/run-list-page-1-full/input.json';
 import lastPage from '../../../../../../fixtures/web-api/run-list-page-2/input.json';
+import runList from '../../../../../../fixtures/web-api/run-list/input.json';
 import { AuditDataService } from '../data/audit-data.service';
 import { RunsDataService } from '../data/runs-data.service';
 import { provideApi } from '../http/api-client';
@@ -85,6 +86,64 @@ describe('Fixture cursor paging through the generated SDK', () => {
     await expect(service.list('p-1', { limit: 20, decision: 'pending' })).rejects.toMatchObject({
       error: { kind: 'forbidden' },
     });
+  });
+
+  it.each(['250-rows', 'paging-33', 'runs'])(
+    'filters exact SDK State before pagination for the %s variant',
+    async (variant) => {
+      TestBed.inject(FixtureToggles).setVariant('listRuns', variant);
+      const service = TestBed.inject(RunsDataService);
+      const source =
+        variant === 'runs'
+          ? runList.body.items
+          : variant === 'paging-33'
+            ? runList250.body.items.slice(0, 33)
+            : runList250.body.items;
+      for (const state of [
+        'created',
+        'queued',
+        'running',
+        'collecting',
+        'complete',
+        'incomplete',
+        'canceled',
+      ] as const) {
+        const expected = source.filter((row) => row.state === state);
+        const first = await service.list('p-1', { limit: 20, state });
+        expect(first.items).toEqual(expected.slice(0, 20));
+        if (expected.length <= 20) {
+          expect(first.next_cursor).toBeNull();
+          continue;
+        }
+        if (!first.next_cursor) throw new Error('Filtered rows require continuation');
+        const next = await service.list('p-1', { limit: 20, state, cursor: first.next_cursor });
+        expect(next.items).toEqual(expected.slice(20, 40));
+        expect(await service.list('p-1', { limit: 20, state })).toEqual(first);
+      }
+    },
+  );
+
+  it('AND-combines State and decision in the default run fixture without changing refusals', async () => {
+    const toggles = TestBed.inject(FixtureToggles);
+    const service = TestBed.inject(RunsDataService);
+    toggles.setVariant('listRuns', 'runs');
+    const matching = await service.list('p-1', {
+      limit: 20,
+      state: 'complete',
+      decision: 'fail',
+    });
+    expect(matching.items).toEqual(
+      runList.body.items.filter((row) => row.state === 'complete' && row.decision === 'FAIL'),
+    );
+    expect(matching.items).toHaveLength(1);
+    expect(matching.next_cursor).toBeNull();
+    expect(
+      (await service.list('p-1', { limit: 20, state: 'running', decision: 'fail' })).items,
+    ).toEqual([]);
+    toggles.setVariant('listRuns', 'forbidden');
+    await expect(
+      service.list('p-1', { limit: 20, state: 'complete', decision: 'fail' }),
+    ).rejects.toMatchObject({ error: { kind: 'forbidden' } });
   });
 
   it('filters the SDK ref_name by exact equality before paging', async () => {

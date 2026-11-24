@@ -117,12 +117,12 @@ export class RunListPage {
     reruns: $localize`:@@runs.list.labeled-reruns:Labeled reruns`,
     register: $localize`:@@runs.list.table-caption:Project runs`,
     filters: $localize`:@@runs.list.filters:Filter runs`,
-    filterHint: $localize`:@@runs.list.page-filter-hint:Decision and ref name filter the server list. State and run scope filter this page only. Next searches further.`,
-    state: $localize`:@@runs.list.page-state-filter:State on this page`,
+    filterHint: $localize`:@@runs.list.page-filter-hint:Run scope filters this page only. State, decision and ref name filter all project runs.`,
+    state: $localize`:@@runs.list.column-state:State`,
     decision: $localize`:@@runs.list.decision-filter:Decision`,
     decisionHint: $localize`:@@runs.list.decision-hint:The latest live evaluation determines the decision. Not evaluated means no live evaluation yet.`,
     pending: $localize`:@@shared.decision-chip.pending:Not evaluated`,
-    scope: $localize`:@@runs.list.page-scope-filter:Scope on this page`,
+    scope: $localize`:@@runs.list.page-scope-filter:Run scope (this page only)`,
     ref: $localize`:@@runs.list.ref-filter:Ref name (exact match)`,
     any: $localize`:@@runs.list.any:All`,
     created: $localize`:@@shared.run-state.created:Created`,
@@ -137,35 +137,47 @@ export class RunListPage {
     reprocess: $localize`:@@runs.list.reprocess:Reprocessed`,
     apply: $localize`:@@runs.list.apply:Apply filters`,
     clear: $localize`:@@runs.list.clear:Clear filters`,
-    emptyTitle: $localize`:@@runs.list.empty-title:No runs recorded`,
-    emptyDescription: $localize`:@@runs.list.empty-description:Runs will appear here when a producer creates them.`,
-    filteredTitle: $localize`:@@runs.list.page-filtered-title:No matching runs on this page`,
-    filteredDescription: $localize`:@@runs.list.page-filtered-description:No runs on this page match these filters. Next searches further when available, or clear filters.`,
-    emptyPageTitle: $localize`:@@runs.list.empty-page-title:No runs on this page`,
-    emptyPageDescription: $localize`:@@runs.list.empty-page-description:Use Previous to revisit a page, or Next to search further when available.`,
+    emptyProject: {
+      title: $localize`:@@runs.list.empty-title:No runs recorded`,
+      description: $localize`:@@runs.list.empty-description:Runs will appear here when a producer creates them.`,
+    },
+    emptyScope: {
+      title: $localize`:@@runs.list.page-filtered-title:No matching runs on this page`,
+      description: $localize`:@@runs.list.page-filtered-description:Check another page if available, or change the selected run scope.`,
+    },
+    emptyPage: {
+      title: $localize`:@@runs.list.empty-page-title:No runs on this page`,
+      description: $localize`:@@runs.list.empty-page-description:Use Previous to revisit a page, or Next to search further when available.`,
+    },
+    serverEmptyDescription: $localize`:@@runs.list.server-empty-description:Change or clear the filters to see other runs.`,
     pagination: $localize`:@@runs.list.page-pagination:Run pages`,
     retryMore: $localize`:@@runs.list.page-retry:Retry page`,
     refRejected: $localize`:@@runs.list.ref-invalid:Ref name not applied: use 1 to 255 characters with no control characters.`,
   };
-  protected readonly loadedSummary = computed(() => {
+  protected readonly emptyMessage = computed(() => {
+    if (this.store.filters().scope && this.store.loadedCount() > 0) return this.copy.emptyScope;
+    if (this.store.page() > 1 || this.store.hasNext()) return this.copy.emptyPage;
+    if (this.store.isFiltered()) {
+      return { title: this.copy.emptyPage.title, description: this.copy.serverEmptyDescription };
+    }
+    return this.copy.emptyProject;
+  });
+  protected readonly loadedMetrics = computed(() => {
     const rows = this.store.rows();
-    const byState = new Map<string, number>();
+    let collecting = 0;
     let failed = 0;
     let reruns = 0;
     for (const row of rows) {
-      byState.set(row.state, (byState.get(row.state) ?? 0) + 1);
+      if (row.state === 'collecting') collecting++;
       if (row.decision === 'FAIL') failed++;
       if (row.rerun_label) reruns++;
     }
-    return {
-      byState,
-      metrics: [
-        { label: this.copy.loadedRuns, value: rows.length, icon: 'run' },
-        { label: this.copy.collecting, value: byState.get('collecting') ?? 0, icon: 'queue' },
-        { label: this.copy.failedDecisions, value: failed, icon: 'shield' },
-        { label: this.copy.reruns, value: reruns, icon: 'layers' },
-      ] as const,
-    };
+    return [
+      { label: this.copy.loadedRuns, value: rows.length, icon: 'run' },
+      { label: this.copy.collecting, value: collecting, icon: 'queue' },
+      { label: this.copy.failedDecisions, value: failed, icon: 'shield' },
+      { label: this.copy.reruns, value: reruns, icon: 'layers' },
+    ] as const;
   });
   protected readonly showing = computed(() => {
     const shown = formatNumber(this.store.visibleRows().length, this.locale);
@@ -333,8 +345,8 @@ export class RunListPage {
 
   protected loadedText(): string {
     const count = formatNumber(this.store.loadedCount(), this.locale);
-    return this.store.isFiltered()
-      ? $localize`:@@runs.list.page-filtered-count:Filtered from ${count}:count: runs on this page.`
-      : $localize`:@@runs.list.page-count:Fetched ${count}:count: runs on this page.`;
+    return this.store.filters().scope
+      ? $localize`:@@runs.list.page-filtered-count:On this page before filtering by scope: ${count}:count:`
+      : $localize`:@@runs.list.page-count:Returned on this page: ${count}:count:`;
   }
 }

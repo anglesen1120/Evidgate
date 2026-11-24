@@ -43,7 +43,7 @@
     data-run-metrics
     class="mb-(--eg-space-4) grid min-w-0 grid-cols-2 gap-px overflow-hidden rounded-(--eg-radius-lg) bg-border p-0 sm:grid-cols-4"
   >
-    @for (metric of loadedSummary().metrics; track metric.icon) {
+    @for (metric of loadedMetrics(); track metric.icon) {
       <div class="grid min-w-0 content-between gap-(--eg-space-4) bg-card p-(--eg-space-5)">
         <dt class="flex min-w-0 items-center gap-(--eg-space-3) font-semibold">
           <span
@@ -114,28 +114,9 @@
               @for (option of stateOptions; track option.value) {
                 <hlm-select-item
                   [value]="option.value"
-                  [attr.aria-label]="option.label"
-                  [attr.aria-describedby]="
-                    status() === 'ready' ? 'run-state-count-' + option.value : null
-                  "
-                  class="min-h-[var(--eg-control-touch)] gap-(--eg-space-3) whitespace-normal"
+                  class="min-h-[var(--eg-control-touch)] whitespace-normal"
+                  >{{ option.label }}</hlm-select-item
                 >
-                  {{ option.label }}
-                  @if (status() === 'ready') {
-                    <span
-                      [id]="'run-state-count-' + option.value"
-                      class="ms-auto text-xs text-muted-foreground tabular-nums"
-                    >
-                      <app-number-value
-                        [value]="
-                          option.value
-                            ? (loadedSummary().byState.get(option.value) ?? 0)
-                            : store.loadedCount()
-                        "
-                      />
-                    </span>
-                  }
-                </hlm-select-item>
               }
             </hlm-select-content>
           </hlm-select>
@@ -237,20 +218,8 @@
     [error]="store.loadError()"
     [emptyIcon]="'navRun'"
     [empty]="store.isEmpty()"
-    [emptyTitle]="
-      store.isFiltered()
-        ? copy.filteredTitle
-        : store.page() > 1 || store.hasNext()
-          ? copy.emptyPageTitle
-          : copy.emptyTitle
-    "
-    [emptyDescription]="
-      store.isFiltered()
-        ? copy.filteredDescription
-        : store.page() > 1 || store.hasNext()
-          ? copy.emptyPageDescription
-          : copy.emptyDescription
-    "
+    [emptyTitle]="emptyMessage().title"
+    [emptyDescription]="emptyMessage().description"
     [emptyActionLabel]="store.isFiltered() ? copy.clear : undefined"
     (emptyAction)="clear()"
     [retryEligible]="retryReady() && (store.loadError()?.retryable ?? false)"
@@ -258,7 +227,7 @@
   >
     <app-run-list-table [rows]="store.visibleRows()" [projectId]="projectId" />
   </app-request-state>
-  <!-- Filtered pages can have no matches while still offering an older cursor page. -->
+  <!-- An empty page can still have a next cursor. -->
   @if (status() === 'ready') {
     <section
       #paging
@@ -271,7 +240,7 @@
         class="eg-type-caption me-auto min-w-0 text-muted-foreground tabular-nums wrap-anywhere"
         role="status"
         data-run-loaded-count
-        [attr.data-run-loaded-filtered]="store.isFiltered()"
+        [attr.data-run-loaded-filtered]="!!store.filters().scope"
       >
         {{ showing() }} · {{ loadedText() }}
       </p>

@@ -33,7 +33,9 @@ export class CursorPagingFixtureScenario {
     if (!Number.isSafeInteger(limit) || limit <= 0 || limit > 200) return undefined;
     const body = source.document.body as ListBody;
     const items = this.filteredItems(body.items, request, operation, scenario);
-    if (!scenario && !cursor && items.length <= limit) return undefined;
+    const stateFiltered =
+      operation === 'listRuns' && queryParameter(request.urlWithParams, 'state') !== null;
+    if (!scenario && !cursor && !stateFiltered && items.length <= limit) return undefined;
     if (offset > items.length) return this.error(operation, 400);
     const failureKey = `${operation}:${offset}`;
     if (variant === 'paging-33-retry' && offset > 0 && !this.failed.has(failureKey)) {
@@ -90,6 +92,8 @@ export class CursorPagingFixtureScenario {
       const fields = row as Record<string, unknown>;
       const decision = query.get('decision');
       if (operation === 'listRuns') {
+        const state = query.get('state');
+        if (state !== null && fields['state'] !== state) return false;
         const value = fields['decision'];
         if (
           decision !== null &&

@@ -84,7 +84,10 @@ class FakeRunDataService {
 
     const start = request.cursor === undefined ? 0 : (this.startByCursor.get(request.cursor) ?? 0);
     const size = this.pageSizeOverride ?? request.limit ?? this.all.length;
-    const page = this.all.slice(start, start + size);
+    const filtered = this.all.filter(
+      (row) => request.state === undefined || row.state === request.state,
+    );
+    const page = filtered.slice(start, start + size);
     const items = page.filter(
       (row) =>
         request.decision === undefined ||
@@ -94,7 +97,7 @@ class FakeRunDataService {
     );
     const end = start + page.length;
     let next: string | null = null;
-    if (end < this.all.length) {
+    if (end < filtered.length) {
       next = `opaque-page/${end}+=`;
       this.startByCursor.set(next, end);
     }

@@ -32,7 +32,7 @@ describe('RunListStore (09.3.1-T1)', () => {
       expect(data.calls).toEqual([{ projectId: 'p-1', request: { limit: RUN_LIST_PAGE_LIMIT } }]);
     });
 
-    it('reads URL filters and sends decision and ref filters to the server', async () => {
+    it('reads URL filters and sends State, decision and ref filters to the server', async () => {
       data.all = rows(3);
 
       await store.init('p-1', {
@@ -48,11 +48,12 @@ describe('RunListStore (09.3.1-T1)', () => {
         scope: 'rerun',
         refName: 'refs/heads/main',
       });
-      // State and scope remain local; the server owns decision and ref filtering.
+      // Scope alone remains local; the other filters travel with every request.
       expect(data.calls[0]?.request).toEqual({
         limit: RUN_LIST_PAGE_LIMIT,
         refName: 'refs/heads/main',
         decision: 'PASS',
+        state: 'complete',
       });
     });
 
@@ -107,6 +108,7 @@ describe('RunListStore (09.3.1-T1)', () => {
       expect(data.calls.at(-1)?.request).toEqual({
         limit: RUN_LIST_PAGE_LIMIT,
         refName: 'refs/tags/v1',
+        state: 'running',
       });
     });
 
@@ -139,19 +141,31 @@ describe('RunListStore (09.3.1-T1)', () => {
     });
   });
 
-  describe('client-side filters', () => {
-    it('filters only the current page and never automatically fetches matches', async () => {
+  describe('server and current-page Scope filters', () => {
+    it('filters State before pagination without walking nonmatching pages', async () => {
       data.all = rows(1000, (index) => ({ state: index < 20 ? 'queued' : 'running' }));
       await store.init('p-1', { state: 'running' });
       expect(data.calls).toHaveLength(1);
+      expect(data.calls[0]?.request).toEqual({ limit: 20, state: 'running' });
       expect(store.rows()).toHaveLength(20);
-      expect(store.visibleRows()).toEqual([]);
-      expect(store.isEmpty()).toBe(true);
+      expect(store.visibleRows()).toEqual(store.rows());
+      expect(store.rows()[0]?.run_id).toBe('run-20');
+      expect(store.isEmpty()).toBe(false);
       expect(store.hasNext()).toBe(true);
       await store.next();
       expect(data.calls).toHaveLength(2);
-      expect(store.visibleRows()).toHaveLength(20);
+      expect(data.calls[1]?.request.state).toBe('running');
+      expect(store.rows()[0]?.run_id).toBe('run-40');
       expect(store.page()).toBe(2);
+    });
+
+    it('does not re-filter server State results on the client', async () => {
+      data.manual = true;
+      const request = store.init('p-1', { state: 'running' });
+      data.pending[0]?.resolve({ items: [run(1)], next_cursor: null });
+      await request;
+      expect(store.visibleRows()).toEqual([run(1)]);
+      expect(store.isEmpty()).toBe(false);
     });
 
     it.each(['pending', 'PASS', 'FAIL', 'INCONCLUSIVE'] as const)(
@@ -237,32 +251,36 @@ describe('RunListStore (09.3.1-T1)', () => {
       expect(store.visibleRows()).toHaveLength(5);
     });
 
-    it('retains page one when a local filter changes', async () => {
+    it('requests State changes on page one and clears them back to the full list', async () => {
       data.all = rows(10, (index) => ({ state: index === 0 ? 'canceled' : 'complete' }));
       await store.init('p-1');
-      expect(data.calls).toHaveLength(1);
-
       await store.setFilters({ state: 'canceled' });
-
-      expect(data.calls).toHaveLength(1);
-      expect(store.loadedCount()).toBe(10);
+      expect(data.calls).toHaveLength(2);
+      expect(data.calls.at(-1)?.request).toEqual({ limit: 20, state: 'canceled' });
+      expect(store.loadedCount()).toBe(1);
       expect(store.visibleRows().map((row) => row.run_id)).toEqual(['run-0']);
+      expect(store.toQuery()).toEqual({ state: 'canceled' });
       expect(store.isFiltered()).toBe(true);
       expect(store.isEmpty()).toBe(false);
+      await store.setFilters({ state: '' });
+      expect(data.calls.at(-1)?.request).toEqual({ limit: 20 });
+      expect(store.rows()).toEqual(data.all);
+      expect(store.toQuery()).toEqual({});
     });
 
     it('restarts page one when the ref filter changes', async () => {
       data.all = rows(4);
       await store.init('p-1');
       await store.setFilters({ state: 'complete' });
-      expect(data.calls).toHaveLength(1);
+      expect(data.calls).toHaveLength(2);
 
       await store.setFilters({ refName: 'refs/heads/main' });
 
-      expect(data.calls).toHaveLength(2);
-      expect(data.calls[1]?.request).toEqual({
+      expect(data.calls).toHaveLength(3);
+      expect(data.calls[2]?.request).toEqual({
         limit: RUN_LIST_PAGE_LIMIT,
         refName: 'refs/heads/main',
+        state: 'complete',
       });
       expect(store.rows()).toHaveLength(4);
       expect(store.filters()).toEqual({
@@ -282,6 +300,7 @@ describe('RunListStore (09.3.1-T1)', () => {
       expect(data.calls[1]?.request).toEqual({
         limit: RUN_LIST_PAGE_LIMIT,
         refName: 'refs/heads/main',
+        state: 'complete',
       });
       expect(store.filters()).toEqual({
         state: 'complete',

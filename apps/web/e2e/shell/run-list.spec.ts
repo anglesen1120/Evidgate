@@ -182,9 +182,10 @@ for (const locale of LOCALES) {
       .filter((request) => new URL(request.url, 'http://127.0.0.1').pathname.endsWith('/runs'))
       .at(-1);
     expect(listRequest).toBeDefined();
-    expect(new URL(listRequest?.url ?? '', 'http://127.0.0.1').searchParams.get('decision')).toBe(
-      'fail',
-    );
+    const wireFilters = new URL(listRequest?.url ?? '', 'http://127.0.0.1').searchParams;
+    expect(wireFilters.get('decision')).toBe('fail');
+    expect(wireFilters.get('state')).toBe('complete');
+    expect(wireFilters.has('rerun_scope')).toBe(false);
     await page.goBack();
     await ready(page);
     await expect(page.locator('#run-state')).toContainText(FILTER_LABEL.running[locale]);
@@ -208,18 +209,18 @@ for (const locale of LOCALES) {
     await expect(page.locator('#run-ref')).toHaveValue('feature/việt');
   });
 
-  test(`empty and loaded-only filtered-empty are distinct (${locale})`, async ({ page }) => {
+  test(`empty and page-local Scope filtered-empty are distinct (${locale})`, async ({ page }) => {
     expect(runListEmpty.body.items).toHaveLength(0);
     await page.goto(withVariants(path(locale), [VARIANTS.empty]));
     await ready(page);
     await expect(page.locator('app-empty-pattern')).toBeVisible();
     const trulyEmpty = await page.locator('app-empty-pattern').textContent();
-    await page.goto(withVariants(path(locale), [VARIANTS.noMatch, '?state=complete']));
+    await page.goto(withVariants(path(locale), [VARIANTS.noMatch, '?scope=rerun']));
     await ready(page);
     await expect(page.locator('app-empty-pattern')).toBeVisible();
     expect(await page.locator('app-empty-pattern').textContent()).not.toBe(trulyEmpty);
     await expect(page.locator('[data-run-loaded-count]')).toContainText('2');
-    // A filtered view says "filtered from" — the neutral count is for an unfiltered list only.
+    // Scope narrows these loaded rows, not the server dataset.
     await expect(page.locator('[data-run-loaded-count]')).toHaveAttribute(
       'data-run-loaded-filtered',
       'true',

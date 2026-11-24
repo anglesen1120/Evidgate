@@ -2,7 +2,7 @@
 // UI refName maps to ref_name, and verdict filters map to lowercase wire values.
 
 import { inject, Injectable } from '@angular/core';
-import type { RunPage } from '@evidgate/sdk';
+import type { ListRunsData, RunPage } from '@evidgate/sdk';
 
 import { RunsDataService } from '../../../core/data/runs-data.service';
 import { newUuid } from '../../../core/http/random-id';
@@ -13,8 +13,10 @@ import type { CreatedRun, CreateRunInput } from './run-actions.types';
 export interface RunListQuery {
   /** The opaque `next_cursor` of the previous page; absent on the first read. */
   readonly cursor?: string;
-  /** Rows per page; the store always passes its own {@link RUN_LIST_PAGE_LIMIT} (50). */
+  /** Rows per page; the store preserves the selected page size across filter changes. */
   readonly limit?: number;
+  /** Exact server State; absent when every State is selected. */
+  readonly state?: NonNullable<ListRunsData['query']>['state'];
   /** Exact `ref_name` of the run's recorded identity; absent when the screen has none. */
   readonly refName?: string;
   /** Newest live verdict, or runs without a live evaluation. */
@@ -109,6 +111,7 @@ function wireQuery(request: RunListQuery) {
     cursor?: string;
     limit?: number;
     ref_name?: string;
+    state?: NonNullable<RunListQuery['state']>;
     decision?: Lowercase<NonNullable<RunListQuery['decision']>>;
   } = {};
   if (request.cursor !== undefined && request.cursor !== '') {
@@ -116,6 +119,9 @@ function wireQuery(request: RunListQuery) {
   }
   if (request.limit !== undefined) {
     query.limit = request.limit;
+  }
+  if (request.state !== undefined) {
+    query.state = request.state;
   }
   if (request.refName !== undefined && request.refName !== '') {
     query.ref_name = request.refName;

@@ -196,7 +196,16 @@ describe('RunListTableComponent', { timeout: 15_000 }, () => {
     ]);
     expect(
       [...root.querySelectorAll('[role="columnheader"]')].map((cell) => cell.textContent?.trim()),
-    ).toEqual(['Run id', 'State', 'Evidence', 'Decision', 'Ref', 'Run scope', 'Actions']);
+    ).toEqual([
+      'Run (oldest first)',
+      'State',
+      'Evidence',
+      'Decision',
+      'Ref',
+      'Run scope',
+      'Actions',
+    ]);
+    expect(root.querySelector('th.cdk-column-id button')).toBeNull();
     expect(root.querySelectorAll('[data-run-evidence] .status-pill--neutral')).toHaveLength(5);
     expect(root.querySelector('[data-run-evidence] .status-pill--success')).toBeNull();
     expect(root.querySelectorAll('[data-run-evidence-hint]')).toHaveLength(1);
