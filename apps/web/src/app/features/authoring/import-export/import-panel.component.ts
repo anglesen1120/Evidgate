@@ -21,6 +21,7 @@ import { DesktopMutationDirective } from '../../../shared/ui/narrow/desktop-muta
 import { DesktopRequiredNoticeComponent } from '../../../shared/ui/narrow/desktop-required-notice.component';
 import { NarrowMutationPolicy } from '../../../shared/ui/narrow/narrow-mutation-policy';
 import { ImportHistoryTableComponent } from './import-history-table.component';
+import { DataTablePagerComponent } from '../../../shared/ui/data-table/data-table-pager.component';
 import { SessionStore } from '../../../core/session/session.store';
 import { SectionHeaderComponent } from '../../../shared/ui/page-header/section-header.component';
 import { InlineFeedbackComponent } from '../../../shared/ui/states/inline-feedback.component';
@@ -46,6 +47,7 @@ import { ImportStore } from './import.store';
     HlmCardContent,
     HlmCardHeader,
     ImportHistoryTableComponent,
+    DataTablePagerComponent,
     HlmInput,
     HlmLabel,
     HlmSelectImports,
@@ -102,13 +104,7 @@ export class ImportPanelComponent {
   protected readonly headerRefused = computed(
     () => this.store.work().error?.details.some((detail) => detail.path === '/header') ?? false,
   );
-  protected readonly history = computed(() =>
-    this.store.history.hasValue() ? this.store.history.value() : null,
-  );
-  protected readonly historyRange = computed(() => {
-    const count = this.history()?.page?.items.length ?? 0;
-    return $localize`:@@authoring.import-export.showing-range:Showing 1–${count}:end: of ${count}:loaded: loaded versions`;
-  });
+  protected readonly history = computed(() => this.store.historyDisplay());
   protected readonly report = computed(
     () => this.store.work().committed ?? this.store.work().report,
   );

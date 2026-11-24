@@ -1,17 +1,13 @@
-import { DecimalPipe, DOCUMENT } from '@angular/common';
+import { DecimalPipe } from '@angular/common';
 import {
-  afterNextRender,
   ChangeDetectionStrategy,
   Component,
   computed,
-  ElementRef,
   input,
   inject,
-  Injector,
   linkedSignal,
   LOCALE_ID,
   resource,
-  viewChild,
 } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
@@ -22,6 +18,7 @@ import { HlmLabel } from '@evidgate/ui/label';
 import { HlmSelectImports } from '@evidgate/ui/select';
 import { combineLatest, distinctUntilChanged, map } from 'rxjs';
 import { RETAINED_ROWS_CAP } from '../../shared/keyset-retention';
+import { DataTablePagerComponent } from '../../shared/ui/data-table/data-table-pager.component';
 import { InlineFeedbackComponent } from '../../shared/ui/states/inline-feedback.component';
 import { LiveStatusComponent } from '../../shared/ui/states/live-status.component';
 import { RequestStateComponent } from '../../shared/ui/states/request-state.component';
@@ -43,6 +40,7 @@ import { AuthoringCaseTableStore } from './authoring-case-table.store';
   selector: 'app-authoring-case-table',
   imports: [
     DecimalPipe,
+    DataTablePagerComponent,
     FormsModule,
     HlmButton,
     HlmInput,
@@ -63,8 +61,6 @@ export class AuthoringCaseTableComponent {
   protected readonly store = inject(AuthoringCaseTableStore);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
-  private readonly document = inject(DOCUMENT);
-  private readonly injector = inject(Injector);
   private readonly locale = inject(LOCALE_ID);
   private readonly cap = inject(RETAINED_ROWS_CAP);
   protected readonly copy = {
@@ -155,18 +151,14 @@ export class AuthoringCaseTableComponent {
     });
   }
   protected readonly emptyTitle = computed(() =>
-    this.store.filtered()
-      ? this.copy.noMatch
-      : this.routeState()?.raw['node_id']
-        ? this.copy.emptyCategory
-        : this.copy.emptyProject,
+    this.store.page() > 1
+      ? this.copy.emptyPage
+      : this.store.filtered()
+        ? this.copy.noMatch
+        : this.routeState()?.raw['node_id']
+          ? this.copy.emptyCategory
+          : this.copy.emptyProject,
   );
-  protected readonly pageSizes = computed(() =>
-    [...new Set<number>([...CASE_PAGE_SIZES, this.draft().limit])].sort(
-      (left, right) => left - right,
-    ),
-  );
-  protected readonly pageLabel = (value: unknown) => String(value);
   /** The cap notice is inserted with its message, so it announces through this mounted region. */
   protected readonly capAnnouncement = computed(() =>
     this.store.browseCapped() ? `${this.copy.browseCapped}. ${this.copy.browseCappedHelp}` : '',
@@ -205,8 +197,6 @@ export class AuthoringCaseTableComponent {
   protected readonly choiceLabel = (value: unknown) =>
     this.filterFields.flatMap((field) => field.options).find((option) => option.value === value)
       ?.label ?? this.copy.all;
-  private readonly rows = viewChild(AuthoringCaseRowsComponent);
-  private readonly loadedCount = viewChild<ElementRef<HTMLElement>>('loadedCount');
 
   protected update(patch: Partial<AuthoringCaseFilters>): void {
     this.draft.update((draft) => ({ ...draft, ...patch }));
@@ -246,62 +236,35 @@ export class AuthoringCaseTableComponent {
   }
   protected setPageSize(value: unknown): void {
     const limit = Number(value);
-    if (!Number.isInteger(limit) || limit < 1 || limit > 200) return;
+    if (!CASE_PAGE_SIZES.includes(limit)) return;
     this.navigate({ limit, cursor: null });
   }
-  protected async loadMore(event: Event): Promise<void> {
-    const source = event.currentTarget;
-    const owned = source instanceof HTMLElement && this.document.activeElement === source;
-    const before = new Set(this.store.rows().map((row) => row.case_id));
+  protected async movePage(forward: boolean | null): Promise<void> {
     const scope = this.routeState();
-    const scopeKey = this.store.scopeKey();
-    const cursor = await this.store.loadMore();
-    if (scope !== this.routeState()) return;
-    // A pager that could not continue removes the control the visitor was on. When that
-    // interaction still owns focus, hand it to the surviving loaded count rather than leaving it
-    // on a detached node; a pager that still has a cursor stays where the visitor put it.
-    if (!cursor) {
-      if (this.store.nextCursor() === null && owned) this.focusLoadedCount(source, scopeKey);
+    const page = this.store.page();
+    const cursor = this.store.routeCursor();
+    if (forward === null) await this.store.retry();
+    else if (forward) await this.store.loadMore();
+    else await this.store.previous();
+    if (
+      scope !== this.routeState() ||
+      (page === this.store.page() && cursor === this.store.routeCursor())
+    )
       return;
-    }
-    // A page step is a position in the same result, not a new history entry: Back must return to
-    // the filters that produced the walk instead of stepping through every page.
-    this.navigate({ cursor }, true);
-    const first = this.store.rows().find((row) => !before.has(row.case_id));
-    if (!owned) return;
-    // An accepted page can also be the last one while adding nothing (an empty or duplicate-only
-    // tail): the pager is gone, so the same surviving target takes the focus.
-    if (!first) {
-      if (this.store.nextCursor() === null) this.focusLoadedCount(source, scopeKey);
+    this.navigate({ cursor: this.store.routeCursor() }, true);
+  }
+  protected async refresh(): Promise<void> {
+    const scope = this.routeState();
+    await this.store.reload();
+    if (
+      scope !== this.routeState() ||
+      this.store.error() ||
+      this.store.page() !== 1 ||
+      this.store.routeCursor() !== null
+    )
       return;
-    }
-    afterNextRender(
-      () => {
-        if (
-          scopeKey === this.store.scopeKey() &&
-          (this.document.activeElement === source ||
-            this.document.activeElement === this.document.body)
-        )
-          this.rows()?.focusRow(first.case_id);
-      },
-      { injector: this.injector },
-    );
-  }
-  private focusLoadedCount(source: EventTarget | null, scopeKey: string): void {
-    afterNextRender(
-      () => {
-        if (scopeKey !== this.store.scopeKey()) return;
-        const active = this.document.activeElement;
-        if (active !== source && active !== this.document.body) return;
-        this.loadedCount()?.nativeElement.focus();
-      },
-      { injector: this.injector },
-    );
-  }
-  protected refresh(): void {
-    // The store restarts at the first page, so the URL cursor must not outlive the refresh.
-    if (this.routeState()?.raw['cursor']) this.navigate({ cursor: null }, true);
-    void this.store.reload();
+    // Route-driven init sees the accepted cursor, so it preserves the refreshed rows and history.
+    if (scope?.raw['cursor']) this.navigate({ cursor: null }, true);
   }
   private navigate(queryParams: Record<string, string | number | null>, replaceUrl = false): void {
     void this.router.navigate([], {

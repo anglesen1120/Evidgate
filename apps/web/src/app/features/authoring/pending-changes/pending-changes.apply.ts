@@ -40,7 +40,8 @@ export function createPendingApply(
   async function apply(): Promise<boolean> {
     const project = store.projectId();
     const ids = store.selectedIds();
-    if (project === null || store.applying() || store.queueLoading()) return false;
+    if (project === null || store.applying() || store.queueLoading() || store.queueStale())
+      return false;
     let request = store.applyRequest();
     if (request !== null && !sameSelection(request.ids, ids))
       return blockApply(PENDING_COPY.replaySelectionChanged);

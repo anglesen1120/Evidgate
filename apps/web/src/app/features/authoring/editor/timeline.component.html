@@ -16,8 +16,8 @@
       class="m-0 max-w-[75ch] text-sm text-muted-foreground"
       i18n="@@authoring.editor.timeline-intro"
     >
-      Versions are newest first. Inspect stored snapshots or restore one as a new version. Restore
-      never rewrites earlier versions.
+      Fixed server order: newest first. Inspect stored snapshots or restore one as a new version.
+      Restore never rewrites earlier versions.
     </p>
   </header>
   <div class="grid min-w-0 gap-(--eg-space-5) p-(--eg-space-5) @container/history">
@@ -34,14 +34,14 @@
       </p>
     }
     <div class="grid min-w-0 max-w-[75ch] gap-2">
-      <label hlmLabel for="case-history-filter" i18n="@@authoring.editor.history-filter"
-        >Filter loaded versions by reason</label
+      <label hlmLabel for="case-history-filter" i18n="@@authoring.editor.history-page-filter"
+        >Filter this page by reason</label
       >
       <input
         hlmInput
         id="case-history-filter"
         [value]="filter()"
-        (input)="filter.set($event.target.value)"
+        (input)="filterHistory($event.target.value)"
       />
     </div>
     @if (!store.selected()) {
@@ -156,43 +156,32 @@
         [fitToContainer]="true"
       />
     </app-request-state>
-    @if (historyStatus() === 'ready') {
-      <div
-        class="flex min-w-0 flex-wrap items-center justify-between gap-(--eg-space-4) border-t border-border pt-(--eg-space-4)"
-      >
-        <p class="m-0 text-sm tabular-nums" i18n="@@authoring.editor.loaded-count">
-          {{ store.rows().length }} versions loaded
+    @if (historyStatus() !== 'error') {
+      <app-data-table-pager
+        [page]="store.page()"
+        [pageSize]="store.pageSize()"
+        [total]="null"
+        [count]="store.rows().length"
+        [hasNext]="!!store.nextCursor() && !store.cursorCycle()"
+        [busy]="store.history.isLoading()"
+        (previous)="store.previousPage(); filter.set('')"
+        (next)="store.nextPage(); filter.set('')"
+        (pageSizeChange)="store.setPageSize($event); filter.set('')"
+      />
+      @if (store.cursorCycle()) {
+        <p role="alert" i18n="@@authoring.editor.cursor-cycle">
+          The server repeated a page cursor. Refresh the timeline before loading more.
         </p>
         <button
           hlmBtn
           [variant]="'outline'"
           type="button"
-          class="min-h-(--eg-control-touch) justify-self-start whitespace-normal"
-          data-versions-more
-          [disabled]="!store.nextCursor() || store.history.isLoading() || store.cursorCycle()"
-          (click)="store.loadMore()"
-          i18n="@@authoring.editor.load-more"
+          (click)="store.refresh()"
+          i18n="@@authoring.editor.refresh-timeline"
         >
-          Load more
+          Refresh timeline
         </button>
-        @if (store.history.isLoading()) {
-          <p role="status" i18n="@@authoring.editor.loading-more">Loading older versions…</p>
-        }
-        @if (store.cursorCycle()) {
-          <p role="alert" i18n="@@authoring.editor.cursor-cycle">
-            The server repeated a page cursor. Refresh the timeline before loading more.
-          </p>
-          <button
-            hlmBtn
-            [variant]="'outline'"
-            type="button"
-            (click)="store.refresh()"
-            i18n="@@authoring.editor.refresh-timeline"
-          >
-            Refresh timeline
-          </button>
-        }
-      </div>
+      }
     }
     @if (store.selected()) {
       <app-request-state

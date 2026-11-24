@@ -41,6 +41,7 @@
         <span class="ms-(--eg-space-2) text-(--eg-danger-fg)">{{ copy.invalidFilters }}</span>
       }
     </summary>
+    <p id="authoring-case-scope-help" class="help">{{ copy.scopeHelp }}</p>
     <form
       class="filters"
       (ngSubmit)="apply()"
@@ -133,7 +134,6 @@
             Filter availability and help
           </summary>
           <div class="filter-details">
-            <p id="authoring-case-scope-help" class="help">{{ copy.scopeHelp }}</p>
             @for (field of unavailableFilters; track field.id) {
               <div class="field">
                 <label hlmLabel [for]="'authoring-case-' + field.id">{{ field.label }}</label>
@@ -197,7 +197,7 @@
         [error]="store.error()"
         [retryEligible]="(store.error()?.retryable ?? false) && store.retryReady()"
         [retryBusy]="busy() || store.loadingMore()"
-        (retry)="store.retry()"
+        (retry)="movePage(null)"
       />
     }
     <app-request-state
@@ -207,13 +207,16 @@
       [emptyIcon]="'navList'"
       [empty]="!hasRows()"
       [emptyTitle]="emptyTitle()"
-      [emptyDescription]="store.filtered() ? copy.noMatchHelp : copy.emptyHelp"
+      [emptyDescription]="
+        store.page() > 1 ? copy.emptyPageHelp : store.filtered() ? copy.noMatchHelp : copy.emptyHelp
+      "
       [emptyActionLabel]="store.filtered() ? copy.clear : undefined"
       [retryEligible]="(store.error()?.retryable ?? false) && store.retryReady()"
       [retryBusy]="busy() || store.loadingMore()"
-      (retry)="store.retry()"
+      (retry)="movePage(null)"
       (emptyAction)="clear()"
     >
+      <p class="help">{{ copy.order }}</p>
       <app-authoring-case-rows [rows]="store.rows()" [editorScope]="editorScope()" />
     </app-request-state>
     @if (store.browseCapped()) {
@@ -234,34 +237,16 @@
     [attr.aria-label]="copy.pagination"
     [attr.aria-busy]="store.loadingMore()"
   >
-    @if (hasRows() || store.nextCursor()) {
-      <p
-        #loadedCount
-        tabindex="-1"
-        role="status"
-        data-case-loaded
-        i18n="@@authoring.case-table.loaded-count"
-      >
-        {{ store.rows().length | number }} cases loaded
-      </p>
-      <div class="field">
-        <label hlmLabel for="authoring-case-page-size">{{ copy.pageSize }}</label>
-        <hlm-select
-          [ngModel]="draft().limit"
-          (ngModelChange)="setPageSize($event)"
-          [itemToString]="pageLabel"
-        >
-          <hlm-select-trigger [buttonId]="'authoring-case-page-size'"
-            ><hlm-select-value
-          /></hlm-select-trigger>
-          <hlm-select-content *hlmSelectPortal [aria-label]="copy.pageSize">
-            @for (size of pageSizes(); track size) {
-              <hlm-select-item [value]="size">{{ size }}</hlm-select-item>
-            }
-          </hlm-select-content>
-        </hlm-select>
-      </div>
-    }
+    <app-data-table-pager
+      [page]="store.page()"
+      [pageSize]="store.query().limit ?? 20"
+      [count]="store.rows().length"
+      [hasNext]="store.nextCursor() !== null"
+      [busy]="busy() || store.loadingMore() || !store.retryReady()"
+      (previous)="movePage(false)"
+      (next)="movePage(true)"
+      (pageSizeChange)="setPageSize($event)"
+    />
     <button
       hlmBtn
       [variant]="'ghost'"
@@ -273,17 +258,5 @@
     >
       {{ copy.refresh }}
     </button>
-    @if (store.nextCursor()) {
-      <button
-        hlmBtn
-        [variant]="'outline'"
-        type="button"
-        [disabled]="store.loadingMore() || busy() || !store.retryReady()"
-        (click)="loadMore($event)"
-        data-case-load-more
-      >
-        {{ store.loadingMore() ? copy.loadingMore : copy.more }}
-      </button>
-    }
   </div>
 }

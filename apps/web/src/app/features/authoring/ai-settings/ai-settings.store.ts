@@ -8,7 +8,11 @@ import {
   withProps,
   withState,
 } from '@ngrx/signals';
-import type { AiSettingsDocument, AiSettingsTemplateRef } from '@evidgate/sdk';
+import type {
+  AiSettingsDocument,
+  AiSettingsTemplateRef,
+  AiSettingsVersionListResponse,
+} from '@evidgate/sdk';
 import {
   AiSettingsDataService,
   type AiSettingsHead,
@@ -28,6 +32,16 @@ interface HeadSource {
   readonly scope: SettingsScope | undefined;
   readonly value: AiSettingsHead | undefined;
 }
+interface HistoryPage extends AiSettingsVersionListResponse {
+  readonly page: number;
+  readonly cursors: readonly string[];
+}
+interface HistorySource {
+  readonly scope: SettingsScope | undefined;
+  readonly size: number;
+  readonly value: HistoryPage | undefined;
+  readonly blocked: boolean;
+}
 
 export const AiSettingsStore = signalStore(
   withState({
@@ -35,9 +49,6 @@ export const AiSettingsStore = signalStore(
     failure: null as ApiError | null,
     conflictOpen: false,
     saved: '',
-    cursor: undefined as string | undefined,
-    cursorPath: [] as string[],
-    cursorCycle: false,
     selectedVersion: 0,
     compareVersion: 0,
   }),
@@ -56,6 +67,15 @@ export const AiSettingsStore = signalStore(
       },
       { equal: (left, right) => left?.org === right?.org && left?.project === right?.project },
     );
+    const pageSize = linkedSignal(() => {
+      scope();
+      return 20;
+    });
+    const target = linkedSignal(() => {
+      scope();
+      pageSize();
+      return { page: 1, cursors: [] as string[], cursor: undefined as string | undefined };
+    });
     const head = resource({
       params: scope,
       loader: ({ params, abortSignal }) => store.data.read(params.project, abortSignal),
@@ -63,14 +83,37 @@ export const AiSettingsStore = signalStore(
     const history = resource({
       params: () => {
         const current = scope();
-        return current ? { ...current, cursor: store.cursor() } : undefined;
+        return current ? { ...current, target: target(), size: pageSize() } : undefined;
       },
-      loader: ({ params, abortSignal }) =>
-        store.data.versions(
+      loader: async ({ params, abortSignal }) => ({
+        ...(await store.data.versions(
           params.project,
-          { limit: 50, ...(params.cursor ? { cursor: params.cursor } : {}) },
+          { limit: params.size, ...(params.target.cursor ? { cursor: params.target.cursor } : {}) },
           abortSignal,
-        ),
+        )),
+        page: params.target.page,
+        cursors: params.target.cursors,
+      }),
+    });
+    const historyPage = linkedSignal<HistorySource, HistoryPage | undefined>({
+      source: () => {
+        const error = history.error();
+        return {
+          scope: scope(),
+          size: pageSize(),
+          value: history.hasValue() ? history.value() : undefined,
+          blocked:
+            isApiRequestError(error) &&
+            ['forbidden', 'not_found', 'unauthenticated'].includes(error.error.kind),
+        };
+      },
+      computation: (source, previous) =>
+        source.blocked
+          ? undefined
+          : (source.value ??
+            (source.scope === previous?.source.scope && source.size === previous?.source.size
+              ? previous?.value
+              : undefined)),
     });
     const templates = resource({
       params: scope,
@@ -121,6 +164,16 @@ export const AiSettingsStore = signalStore(
       scope,
       head,
       history,
+      target,
+      pageSize,
+      historyPage,
+      cursor: computed(() => target().cursor),
+      cursorPath: computed(() => historyPage()?.cursors ?? []),
+      page: computed(() => historyPage()?.page ?? 1),
+      cursorCycle: computed(() => {
+        const page = historyPage();
+        return !!page?.next_cursor && page.cursors.includes(page.next_cursor);
+      }),
       templates,
       conflict,
       detail,
@@ -129,7 +182,6 @@ export const AiSettingsStore = signalStore(
       draft,
       reason,
       template,
-      historyPage: computed(() => (history.hasValue() ? history.value() : undefined)),
       templatePage: computed(() => (templates.hasValue() ? templates.value() : undefined)),
       currentConflict: computed(() => (conflict.hasValue() ? conflict.value() : undefined)),
       versionDetail: computed(() => (detail.hasValue() ? detail.value() : undefined)),
@@ -172,16 +224,22 @@ export const AiSettingsStore = signalStore(
       patchState(store, { compareVersion: version });
     },
     nextPage(): void {
-      const next = store.historyPage()?.next_cursor;
-      if (!next) return;
-      if (store.cursorPath().includes(next)) {
-        patchState(store, { cursorCycle: true });
-        return;
-      }
-      patchState(store, { cursor: next, cursorPath: [...store.cursorPath(), next] });
+      const page = store.historyPage();
+      const next = page?.next_cursor;
+      if (!page || !next || store.history.isLoading() || store.cursorCycle()) return;
+      store.target.set({ page: page.page + 1, cursor: next, cursors: [...page.cursors, next] });
+    },
+    previousPage(): void {
+      const page = store.historyPage();
+      if (!page || page.page <= 1 || store.history.isLoading()) return;
+      const cursors = page.cursors.slice(0, -1);
+      store.target.set({ page: page.page - 1, cursor: cursors.at(-1), cursors });
+    },
+    setPageSize(size: number): void {
+      if ([20, 50, 100].includes(size) && size !== store.pageSize()) store.pageSize.set(size);
     },
     firstPage(): void {
-      patchState(store, { cursor: undefined, cursorPath: [], cursorCycle: false });
+      store.target.set({ page: 1, cursor: undefined, cursors: [] });
     },
     closeConflict(): void {
       patchState(store, { conflictOpen: false });
@@ -232,7 +290,7 @@ export const AiSettingsStore = signalStore(
         const result = await store.data.save(scope.project, body, base.etag, store.intent.key);
         if (store.scope() !== scope) return false;
         store.head.set(result);
-        patchState(store, { cursor: undefined, cursorPath: [], cursorCycle: false });
+        store.target.set({ page: 1, cursor: undefined, cursors: [] });
         store.history.reload();
         store.intent.body = '';
         patchState(store, { saved: result.appended ? 'saved' : 'unchanged' });
@@ -266,9 +324,6 @@ export const AiSettingsStore = signalStore(
           failure: null,
           conflictOpen: false,
           saved: '',
-          cursor: undefined,
-          cursorPath: [],
-          cursorCycle: false,
           selectedVersion: 0,
           compareVersion: 0,
         });

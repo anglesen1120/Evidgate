@@ -28,6 +28,7 @@ import {
 } from '../../../shared/ui/data-table';
 import { DataTableValueComponent } from '../../../shared/ui/data-table/data-table-value.component';
 import { RowActionComponent } from '../../../shared/ui/data-table/row-action.component';
+import { DataTablePagerComponent } from '../../../shared/ui/data-table/data-table-pager.component';
 import { NarrowMutationPolicy } from '../../../shared/ui/narrow';
 import { errorOf, REASON_UNAVAILABLE, WRITE_REASON } from './editor.model';
 import { EditorStore } from './editor.store';
@@ -50,6 +51,7 @@ import { VersionDiffComponent } from './version-diff.component';
     DataTableComponent,
     DataTableValueComponent,
     RowActionComponent,
+    DataTablePagerComponent,
     VersionDiffComponent,
   ],
   providers: [TimelineStore],
@@ -62,7 +64,10 @@ export class TimelineComponent {
   protected readonly viewport = inject(NarrowMutationPolicy);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly injector = inject(Injector);
-  protected readonly filter = signal('');
+  protected readonly filter = linkedSignal(() => {
+    this.store.scope();
+    return '';
+  });
   protected readonly confirmation = linkedSignal<
     { narrow: boolean; selected: string | undefined },
     string | null
@@ -77,7 +82,7 @@ export class TimelineComponent {
   protected readonly reasonUnavailable = REASON_UNAVAILABLE;
   protected readonly writeReason = WRITE_REASON;
   protected readonly historyTitle = $localize`:@@authoring.editor.timeline-tab:Timeline`;
-  protected readonly noMatch = $localize`:@@authoring.editor.history-no-match:No loaded versions match this filter`;
+  protected readonly noMatch = $localize`:@@authoring.editor.history-page-no-match:No versions on this page match this filter`;
   protected readonly empty = $localize`:@@authoring.editor.history-empty:No versions recorded`;
   protected readonly noReason = $localize`:@@authoring.editor.no-reason:No reason recorded`;
   protected readonly noAuthor = $localize`:@@authoring.editor.no-author:Author membership unavailable`;
@@ -203,6 +208,10 @@ export class TimelineComponent {
     }
     target.focus();
     this.restoredFocus.set(null);
+  }
+  protected filterHistory(value: string): void {
+    this.filter.set(value);
+    if (this.store.target().page > 1) this.store.refresh();
   }
   protected source(source: string): string {
     switch (source) {

@@ -58,6 +58,10 @@ export class PendingChangeTableComponent {
   readonly caption = input.required<string>();
   readonly selection = input<ChangeCell>();
   readonly more = input<ChangeCell>();
+  protected readonly orderedCaption = computed(() => {
+    const caption = this.caption();
+    return $localize`:@@authoring.pending-changes.ordered-caption:${caption}:caption: — Oldest first (server order)`;
+  });
   protected readonly ui = PENDING_UI;
   protected readonly copy = PENDING_COPY;
   protected readonly rowId = (row: AuthoringChangeListItem) => row.change_id;

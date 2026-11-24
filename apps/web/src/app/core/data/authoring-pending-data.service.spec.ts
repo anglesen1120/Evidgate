@@ -39,7 +39,7 @@ describe('AuthoringPendingDataService', () => {
     expect(get).toHaveBeenCalledWith(expect.objectContaining({ signal: controller.signal }));
     expect(request.request.method).toBe('GET');
     expect(request.request.urlWithParams).toContain('state=pending');
-    expect(request.request.urlWithParams).toContain('limit=200');
+    expect(request.request.urlWithParams).toContain('limit=20');
     expect(request.request.urlWithParams).toContain('cursor=cursor-1');
     request.flush(JSON.stringify(PAGE), { headers: JSON_HEADERS });
     await expect(pending).resolves.toEqual(PAGE);
@@ -54,11 +54,27 @@ describe('AuthoringPendingDataService', () => {
     await expect(pending).resolves.toEqual(PAGE);
   });
 
+  it.each([20, 50, 100])(
+    'sends selected pending page size %i without changing selection reads',
+    async (limit) => {
+      const pending = service.listPending('project-1', undefined, 'c2', CHANGE_ID, limit);
+      const request = await takeRequest(http, `${BASE}/changes`);
+      const params = new URL(request.request.urlWithParams).searchParams;
+      expect(params.get('limit')).toBe(String(limit));
+      expect(params.get('cursor')).toBe('c2');
+      expect(params.get('target_id')).toBe(CHANGE_ID);
+      request.flush(JSON.stringify(PAGE), { headers: JSON_HEADERS });
+      await expect(pending).resolves.toEqual(PAGE);
+    },
+  );
+
   it('sends the selection as one comma-separated ids value and answers its exact batch ETag', async () => {
     const pending = service.selection('project-1', [CHANGE_ID, 'change-2']);
     const request = await takeRequest(http, `${BASE}/changes`);
     expect(request.request.urlWithParams).toContain('ids=');
     expect(request.request.urlWithParams).not.toContain('state=');
+    expect(request.request.urlWithParams).not.toContain('limit=');
+    expect(request.request.urlWithParams).not.toContain('cursor=');
     const ids = new URL(request.request.urlWithParams).searchParams.get('ids');
     expect(ids?.split(',')).toEqual([CHANGE_ID, 'change-2']);
     request.flush(JSON.stringify({ items: [], next_cursor: null }), {

@@ -90,7 +90,7 @@ describe('ChecklistReviewTabComponent', () => {
   }
   it('reads only this item’s queued changes and links the project queue', async () => {
     const { ui } = await setup();
-    expect(listPending).toHaveBeenCalledWith(PROJECT, expect.any(AbortSignal), undefined, ITEM);
+    expect(listPending).toHaveBeenCalledWith(PROJECT, expect.any(AbortSignal), undefined, ITEM, 20);
     expect(await ui.count('[data-review-change]')).toBe(1);
     expect(await ui.text()).toContain(PENDING_UI.openQueue);
   });

@@ -33,6 +33,7 @@ import { InlineFeedbackComponent } from '../../../shared/ui/states/inline-feedba
 import { ConflictDialogComponent } from '../../../shared/ui/conflict/conflict-dialog.component';
 import { RetryAfterComponent } from '../../../shared/ui/conflict/retry-after.component';
 import { CopyableIdentifierComponent } from '../../../shared/ui/values/copyable-identifier.component';
+import { DataTablePagerComponent } from '../../../shared/ui/data-table';
 import { NumberValueComponent } from '../../../shared/ui/values/number-value.component';
 import { DesktopMutationDirective } from '../../../shared/ui/narrow/desktop-mutation.directive';
 import { DesktopRequiredNoticeComponent } from '../../../shared/ui/narrow/desktop-required-notice.component';
@@ -69,6 +70,7 @@ interface Consent {
     PageHeaderComponent,
     SectionHeaderComponent,
     PendingChangeTableComponent,
+    DataTablePagerComponent,
     HlmDropdownMenuImports,
     RevisionChipComponent,
     RequestStateComponent,
@@ -283,6 +285,7 @@ export class PendingChangesPage {
   protected async retry(): Promise<void> {
     if (!this.store.retryReady() || this.busy()) return;
     if (this.store.applyError()) this.openApply();
+    else if (this.store.queueError()) await this.store.retryPage();
     else await this.store.reload();
   }
 }

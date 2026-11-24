@@ -8,7 +8,7 @@ import {
   withProps,
   withState,
 } from '@ngrx/signals';
-import type { AuthoringVersionListItemDto, AuthoringVersionListResponse } from '@evidgate/sdk';
+import type { AuthoringVersionListResponse } from '@evidgate/sdk';
 import {
   AuthoringEditorDataService,
   type AuthoringVersionHead,
@@ -19,19 +19,14 @@ import { createRetryAfterWait } from '../../../core/http/retry';
 import { NarrowMutationPolicy } from '../../../shared/ui/narrow';
 import { EditorStore, type EditorScope } from './editor.store';
 
+interface TimelinePage extends AuthoringVersionListResponse {
+  readonly page: number;
+  readonly cursors: readonly string[];
+}
 interface TimelineSource {
   readonly scope: EditorScope | undefined;
-  readonly page: AuthoringVersionListResponse | undefined;
-  readonly cursor: string | undefined;
-}
-function mergeRows(
-  previous: readonly AuthoringVersionListItemDto[],
-  incoming: readonly AuthoringVersionListItemDto[],
-  first: boolean,
-) {
-  const known = new Map(previous.map((row) => [row.version_id, row]));
-  const additions = incoming.filter((row) => !known.has(row.version_id));
-  return first ? [...additions, ...previous] : [...previous, ...additions];
+  readonly size: number;
+  readonly page: TimelinePage | undefined;
 }
 async function readVersion(
   data: AuthoringEditorDataService,
@@ -68,13 +63,14 @@ export const TimelineStore = signalStore(
   })),
   withProps((store) => {
     const scope = computed(() => store.editor.scope());
-    const cursor = linkedSignal<string | undefined>(() => {
+    const pageSize = linkedSignal(() => {
       scope();
-      return undefined;
+      return 20;
     });
-    const cursorPath = linkedSignal<readonly string[]>(() => {
+    const target = linkedSignal(() => {
       scope();
-      return [];
+      pageSize();
+      return { page: 1, cursors: [] as readonly string[], cursor: undefined as string | undefined };
     });
     const selected = linkedSignal(() => {
       scope();
@@ -87,26 +83,30 @@ export const TimelineStore = signalStore(
     const history = resource({
       params: () => {
         const current = scope();
-        return current ? { scope: current, cursor: cursor() } : undefined;
+        return current ? { scope: current, target: target(), size: pageSize() } : undefined;
       },
-      loader: ({ params, abortSignal }) =>
-        store.data.versions(
+      loader: async ({ params, abortSignal }) => ({
+        ...(await store.data.versions(
           params.scope.project,
           params.scope.caseId,
-          { limit: 50, ...(params.cursor ? { cursor: params.cursor } : {}) },
+          { limit: params.size, ...(params.target.cursor ? { cursor: params.target.cursor } : {}) },
           abortSignal,
-        ),
+        )),
+        page: params.target.page,
+        cursors: params.target.cursors,
+      }),
     });
-    const rows = linkedSignal<TimelineSource, readonly AuthoringVersionListItemDto[]>({
+    const historyPage = linkedSignal<TimelineSource, TimelinePage | undefined>({
       source: () => ({
         scope: scope(),
+        size: pageSize(),
         page: history.hasValue() ? history.value() : undefined,
-        cursor: cursor(),
       }),
-      computation: (source, previous) => {
-        const existing = source.scope === previous?.source.scope ? (previous?.value ?? []) : [];
-        return source.page ? mergeRows(existing, source.page.items, !source.cursor) : existing;
-      },
+      computation: (source, previous) =>
+        source.page ??
+        (source.scope === previous?.source.scope && source.size === previous?.source.size
+          ? previous?.value
+          : undefined),
     });
     const detail = resource({
       params: () => {
@@ -126,17 +126,20 @@ export const TimelineStore = signalStore(
     });
     return {
       scope,
-      cursor,
-      cursorPath,
+      target,
+      pageSize,
+      page: computed(() => historyPage()?.page ?? 1),
+      cursor: computed(() => target().cursor),
+      cursorPath: computed(() => historyPage()?.cursors ?? []),
       selected,
       compared,
       history,
-      rows,
+      rows: computed(() => historyPage()?.items ?? []),
       detail,
       comparison,
       versionDetail: computed(() => (detail.hasValue() ? detail.value() : undefined)),
       comparedDetail: computed(() => (comparison.hasValue() ? comparison.value() : undefined)),
-      nextCursor: computed(() => (history.hasValue() ? history.value().next_cursor : null)),
+      nextCursor: computed(() => historyPage()?.next_cursor ?? null),
       intent: { target: '', key: '' },
     };
   }),
@@ -164,16 +167,25 @@ export const TimelineStore = signalStore(
       if (store.selected() && store.rows().some((row) => row.version_id === id))
         store.compared.set(id);
     },
-    loadMore(): void {
+    nextPage(): void {
       const next = store.nextCursor();
       if (!next || store.history.isLoading() || store.cursorCycle()) return;
-      store.cursorPath.update((path) => [...path, next]);
-      store.cursor.set(next);
+      store.target.set({
+        page: store.page() + 1,
+        cursor: next,
+        cursors: [...store.cursorPath(), next],
+      });
+    },
+    previousPage(): void {
+      if (store.page() <= 1 || store.history.isLoading()) return;
+      const cursors = store.cursorPath().slice(0, -1);
+      store.target.set({ page: store.page() - 1, cursor: cursors.at(-1), cursors });
+    },
+    setPageSize(size: number): void {
+      if ([20, 50, 100].includes(size) && size !== store.pageSize()) store.pageSize.set(size);
     },
     refresh(): void {
-      store.cursorPath.set([]);
-      if (store.cursor()) store.cursor.set(undefined);
-      else store.history.reload();
+      store.target.set({ page: 1, cursor: undefined, cursors: [] });
     },
     async restore(id: string): Promise<boolean> {
       const scope = store.scope();
@@ -205,9 +217,7 @@ export const TimelineStore = signalStore(
         if (store.scope() !== scope) return false;
         patchState(store, { restored: result.version });
         store.intent.target = '';
-        store.cursorPath.set([]);
-        if (store.cursor()) store.cursor.set(undefined);
-        else store.history.reload();
+        store.target.set({ page: 1, cursor: undefined, cursors: [] });
         store.editor.endRestore();
         store.editor.refreshAfterRestore();
         return true;

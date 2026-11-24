@@ -54,8 +54,8 @@ export class ImportExportDataService {
   private readonly authoring = inject(AuthoringImportExportGateway);
   private readonly versions = inject(AuthoringVersionsDataService);
 
-  listVersions(project: string, signal?: AbortSignal, cursor?: string) {
-    return this.versions.list(project, signal, cursor);
+  listVersions(project: string, signal?: AbortSignal, cursor?: string, limit = 20) {
+    return this.versions.list(project, signal, cursor, limit);
   }
 
   async importFile(

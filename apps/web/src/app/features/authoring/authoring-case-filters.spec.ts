@@ -42,10 +42,10 @@ describe('authoring case filters', () => {
   });
 
   it('distinguishes true, false and unfiltered coverage and ignores unsupported parameters', () => {
-    expect(manualCaseQuery({ covered: 'true' })).toEqual({ covered: true, limit: 50 });
-    expect(manualCaseQuery({ covered: 'false' })).toEqual({ covered: false, limit: 50 });
+    expect(manualCaseQuery({ covered: 'true' })).toEqual({ covered: true, limit: 20 });
+    expect(manualCaseQuery({ covered: 'false' })).toEqual({ covered: false, limit: 20 });
     expect(manualCaseQuery({ source: 'ai', owner: 'someone', covered: 'invalid' })).toEqual({
-      limit: 50,
+      limit: 20,
     });
   });
 
@@ -66,21 +66,21 @@ describe('authoring case filters', () => {
   it('sends UUID filters only when their complete shape is valid', () => {
     expect(manualCaseQuery({ node_id: 'node', item_id: ITEM })).toEqual({
       item_id: ITEM,
-      limit: 50,
+      limit: 20,
     });
     expect(manualCaseQuery({ node_id: NODE, item_id: 'item' })).toEqual({
       node_id: NODE,
-      limit: 50,
+      limit: 20,
     });
   });
 
-  it.each([1, 37, 200])('preserves the contract page-size boundary %i', (limit) => {
+  it.each([20, 50, 100])('preserves the supported page size %i', (limit) => {
     expect(manualCaseQuery({ limit: String(limit) }).limit).toBe(limit);
   });
 
   it('does not send unknown lifecycle, priority, page-size or blank filters', () => {
     expect(
       manualCaseQuery({ state: 'in-review', priority: 'urgent', limit: '201', q: '' }),
-    ).toEqual({ limit: 50 });
+    ).toEqual({ limit: 20 });
   });
 });
