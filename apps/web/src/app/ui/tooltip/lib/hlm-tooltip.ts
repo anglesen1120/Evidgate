@@ -23,7 +23,7 @@ export const tooltipPositionVariants = cva('absolute', {
   },
 });
 
-export const HLM_TOOLTIP_PROVIDERS = [
+const HLM_TOOLTIP_PROVIDERS = [
   provideBrnTooltipDefaultOptions({
     svgClasses: DEFAULT_TOOLTIP_SVG_CLASS,
     tooltipContentClasses: DEFAULT_TOOLTIP_CONTENT_CLASSES,
