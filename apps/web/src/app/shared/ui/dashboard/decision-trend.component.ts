@@ -43,6 +43,7 @@ export interface DashboardTrendPoint {
   template: `
     <figure class="m-0 grid min-w-0 gap-(--eg-space-4)" [attr.aria-label]="label()">
       <div
+        #plot
         class="trend-bars focus-visible:outline-solid focus-visible:outline-ring"
         role="region"
         tabindex="0"
@@ -268,6 +269,7 @@ export class DecisionTrendComponent {
   protected readonly dateLabel = $localize`:@@shared.dashboard.trend-date:Date (UTC)`;
   private readonly totalLabel = $localize`:@@shared.dashboard.trend-total:Total`;
   private readonly panel = viewChild.required<ElementRef<HTMLElement>>('panel');
+  private readonly plot = viewChild.required<ElementRef<HTMLElement>>('plot');
   private readonly buttons = viewChildren<ElementRef<HTMLButtonElement>>('bar');
   private readonly navigation = new FocusKeyManager<FocusableOption>(
     computed(() =>
@@ -334,7 +336,10 @@ export class DecisionTrendComponent {
       const dismiss = () => {
         if (this.inspection() === current) this.inspection.set(null);
       };
-      const close = openFullValuePopover(current.trigger, panel, dismiss);
+      const close = openFullValuePopover(current.trigger, panel, dismiss, {
+        above: current.trigger.querySelector('.trend-segments') ?? current.trigger,
+        within: this.plot().nativeElement,
+      });
       const unlisten = this.renderer.listen(
         'document',
         'pointerdown',
