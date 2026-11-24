@@ -1,3 +1,4 @@
+import { FieldHintComponent } from '../../../shared/ui/forms/field-hint.component';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -50,6 +51,7 @@ import {
 @Component({
   selector: 'app-onboarding-create-project',
   imports: [
+    FieldHintComponent,
     FormsModule,
     RequestStateComponent,
     HlmAlertImports,
@@ -114,7 +116,13 @@ import {
       <!-- Keep requiredness native, like pattern: the feedback model owns when an untouched
            field becomes visibly/semantically invalid, not NgModel's eager required validator. -->
       <div class="grid min-w-0 gap-(--eg-space-3)">
-        <label hlmLabel for="onboarding-project-name">{{ nameLabel }}</label>
+        <app-field-hint
+          [descriptionId]="nameField.hintId"
+          [label]="nameField.label"
+          [text]="nameField.hint"
+        >
+          <label hlmLabel for="onboarding-project-name">{{ nameLabel }}</label>
+        </app-field-hint>
         <input
           hlmInput
           class="min-h-(--eg-control-touch) w-full min-w-0"
@@ -136,7 +144,13 @@ import {
         <app-field-feedback [field]="nameField" />
       </div>
       <div class="grid min-w-0 gap-(--eg-space-3)">
-        <label hlmLabel for="onboarding-project-slug">{{ slugLabel }}</label>
+        <app-field-hint
+          [descriptionId]="slugField.hintId"
+          [label]="slugField.label"
+          [text]="slugField.hint"
+        >
+          <label hlmLabel for="onboarding-project-slug">{{ slugLabel }}</label>
+        </app-field-hint>
         <input
           hlmInput
           class="min-h-(--eg-control-touch) w-full min-w-0 font-mono"

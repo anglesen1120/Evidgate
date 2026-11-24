@@ -1,3 +1,4 @@
+import { FieldHintComponent } from '../../shared/ui/forms/field-hint.component';
 import { DecimalPipe, formatNumber, Location } from '@angular/common';
 import {
   afterNextRender,
@@ -47,6 +48,7 @@ import {
 @Component({
   selector: 'app-case-list-page',
   imports: [
+    FieldHintComponent,
     DecimalPipe,
     FormsModule,
     HlmButton,
@@ -225,14 +227,14 @@ export class CaseListPage {
   protected readonly canAssign = computed(
     () => this.store.canAssign() && this.canReadMembers() && this.viewport.canMutate(),
   );
-  protected readonly ownerHelp = computed(() => {
+  protected readonly ownerUnavailable = computed(() => {
     if (!this.canReadMembers()) return this.copy.ownersEmpty;
     if (!this.store.canAssign()) return this.copy.permissionReason;
     if (!this.viewport.canMutate()) return this.copy.narrowReason;
     if (this.members.status() === 'loading') return this.copy.ownersLoading;
     if (this.members.status() === 'error') return this.copy.ownersFailed;
     for (const member of this.members.members().values()) {
-      if (member.status === 'active') return this.copy.ownersHint;
+      if (member.status === 'active') return null;
     }
     return this.copy.ownersEmpty;
   });

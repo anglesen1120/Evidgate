@@ -58,13 +58,13 @@ for (const locale of LOCALES) {
           path: `/tmp/s674-shots/project-${width}-${theme}-${locale}.png`,
           fullPage: true,
         });
-        await expectDayReadout(page, locale, width);
+        await expectDayReadout(page, locale);
       });
     }
   }
 }
 
-async function expectDayReadout(page: Page, locale: string, width: number): Promise<void> {
+async function expectDayReadout(page: Page, locale: string): Promise<void> {
   const chart = page.locator('app-decision-trend');
   const day = chart.getByRole('toolbar').getByRole('button').first();
   const values = chart.getByRole('tooltip');
@@ -72,20 +72,61 @@ async function expectDayReadout(page: Page, locale: string, width: number): Prom
   await expect(values).toContainText(locale === 'vi' ? 'Chưa đánh giá:' : 'Not evaluated:');
   await expect(values).toContainText(locale === 'vi' ? 'Tổng:' : 'Total:');
   await expect(day).toHaveAccessibleName(/PASS: \d+.*FAIL: \d+.*INCONCLUSIVE: \d+/);
-  const [bar, tip] = await Promise.all([day.boundingBox(), values.boundingBox()]);
-  if (!bar || !tip) throw new Error('Expected visible bounds for the day and its values.');
-  expect(tip.x).toBeGreaterThanOrEqual(0);
-  expect(tip.x + tip.width).toBeLessThanOrEqual(width + 1);
+  const [bar, tip, card, legend, dates] = await Promise.all([
+    day.locator('.trend-segments').boundingBox(),
+    values.boundingBox(),
+    page.locator('[data-dashboard-trend]').boundingBox(),
+    chart.getByRole('list').boundingBox(),
+    chart
+      .locator('.trend-column > span')
+      .evaluateAll((labels) => labels.map((label) => label.getBoundingClientRect().top)),
+  ]);
+  if (!bar || !tip || !card || !legend) throw new Error('Expected visible chart geometry.');
+  expect(dates.length).toBeGreaterThan(0);
+  expect(tip.y + tip.height).toBeLessThanOrEqual(legend.y);
+  expect(tip.y + tip.height).toBeLessThanOrEqual(Math.min(...dates));
+  expect(tip.x).toBeGreaterThanOrEqual(card.x);
+  expect(tip.x + tip.width).toBeLessThanOrEqual(card.x + card.width);
   expect(tip.x + tip.width).toBeGreaterThan(bar.x);
   expect(tip.x).toBeLessThan(bar.x + bar.width);
-  expect(
-    Math.min(Math.abs(tip.y - bar.y - bar.height), Math.abs(bar.y - tip.y - tip.height)),
-  ).toBeLessThanOrEqual(2);
+  expect(Math.abs(bar.y - tip.y - tip.height)).toBeLessThanOrEqual(2);
   await values.hover();
   await expect(values).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(values).toBeHidden();
 }
+
+test('a focused readout moves beside the bar when scrolling leaves no room above', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 900 });
+  await page.goto(overviewPath('vi') + FIXTURE);
+  const chart = page.locator('app-decision-trend');
+  const day = chart.getByRole('toolbar').getByRole('button').nth(1);
+  const tip = chart.getByRole('tooltip');
+  await day.focus();
+  await expect(tip).toBeVisible();
+  await day.evaluate((button) => button.scrollIntoView({ block: 'start', inline: 'nearest' }));
+  await expect(async () => {
+    const [bar, panel, card] = await Promise.all([
+      day.locator('.trend-segments').boundingBox(),
+      tip.boundingBox(),
+      page.locator('[data-dashboard-trend]').boundingBox(),
+    ]);
+    if (!bar || !panel || !card) throw new Error('Expected visible chart geometry.');
+    expect(panel.y).toBeLessThan(bar.y + bar.height);
+    expect(panel.y + panel.height).toBeGreaterThan(bar.y);
+    expect(panel.y + panel.height).toBeLessThanOrEqual(bar.y + bar.height + 1);
+    expect(
+      Math.min(Math.abs(panel.x + panel.width - bar.x), Math.abs(bar.x + bar.width - panel.x)),
+    ).toBeLessThanOrEqual(1);
+    expect(panel.x).toBeGreaterThanOrEqual(card.x);
+    expect(panel.x + panel.width).toBeLessThanOrEqual(card.x + card.width);
+  }).toPass();
+  await page.keyboard.press('Escape');
+  await expect(tip).toBeHidden();
+  await expect(day).toBeFocused();
+});
 
 test('one failed source leaves other dashboard facts visible and retries only locally', async ({
   page,

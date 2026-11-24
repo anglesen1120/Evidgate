@@ -92,9 +92,15 @@
         </hlm-select>
       </div>
       <div class="grid min-w-0 content-start gap-(--eg-space-2) md:row-span-3 md:grid-rows-subgrid">
-        <label hlmLabel for="catalog-framework" class="whitespace-normal">{{
-          copy.framework
-        }}</label>
+        <app-field-hint
+          [descriptionId]="'catalog-framework-hint'"
+          [label]="copy.framework"
+          [text]="copy.frameworkHint"
+        >
+          <label hlmLabel for="catalog-framework" class="whitespace-normal">{{
+            copy.framework
+          }}</label>
+        </app-field-hint>
         <input
           hlmInput
           id="catalog-framework"
@@ -102,11 +108,8 @@
           class="min-h-(--eg-control-touch) min-w-0 w-full"
           [ngModel]="draft().framework"
           (ngModelChange)="updateDraft({ framework: $event })"
-          [attr.aria-describedby]="'catalog-framework-hint'"
+          [aria-describedby]="'catalog-framework-hint'"
         />
-        <p id="catalog-framework-hint" class="eg-type-caption text-muted-foreground">
-          {{ copy.frameworkHint }}
-        </p>
       </div>
       <div class="grid min-w-0 content-start gap-(--eg-space-2) md:row-span-3 md:grid-rows-subgrid">
         <label hlmLabel for="catalog-search" class="whitespace-normal">{{ copy.search }}</label>
@@ -187,12 +190,14 @@
     [retryEligible]="store.loadError()?.retryable ?? false"
     (retry)="store.reload()"
   >
-    <p
-      id="catalog-owner-help"
-      class="eg-type-caption text-muted-foreground px-(--eg-space-5) py-(--eg-space-4) md:px-(--eg-space-6)"
-    >
-      {{ ownerHelp() }}
-    </p>
+    @if (ownerUnavailable(); as reason) {
+      <p
+        id="catalog-owner-help"
+        class="eg-type-caption text-muted-foreground px-(--eg-space-5) py-(--eg-space-4) md:px-(--eg-space-6)"
+      >
+        {{ reason }}
+      </p>
+    }
     @if (canReadMembers() && members.status() === 'error' && canAssign()) {
       <app-inline-feedback
         class="mx-(--eg-space-5) mb-(--eg-space-4) block md:mx-(--eg-space-6)"
@@ -213,7 +218,7 @@
       [ownerFailure]="store.ownerFailure"
       [selection]="readableSelection()"
       (selectionChange)="setRecord($event)"
-      [ownerHelp]="ownerHelp()"
+      [ownerHelp]="ownerUnavailable() ?? copy.ownersHint"
       [saveOwner]="assignOwner"
       [reloadOwner]="reloadOwner"
     />

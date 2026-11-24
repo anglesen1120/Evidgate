@@ -53,7 +53,13 @@
         <p class="mb-(--eg-space-4)">
           <bdi>{{ display(row().org_id) }}</bdi> / <bdi>{{ display(row().project_id) }}</bdi>
         </p>
-        <label hlmLabel for="catalog-record-owner">{{ copy.owner }}</label>
+        <app-field-hint
+          [descriptionId]="'catalog-record-help'"
+          [label]="copy.owner"
+          [text]="ownerHelp()"
+        >
+          <label hlmLabel for="catalog-record-owner">{{ copy.owner }}</label>
+        </app-field-hint>
         <hlm-select
           [ngModel]="draft()"
           (ngModelChange)="choose($event)"
@@ -82,9 +88,6 @@
             }
           </hlm-select-content>
         </hlm-select>
-        <p id="catalog-record-help" class="eg-type-caption mt-(--eg-space-3) text-muted-foreground">
-          {{ ownerHelp() }}
-        </p>
       } @else {
         <app-case-record-facts [row]="row()" [ownerName]="ownerName()" />
         @if (!eligible()) {

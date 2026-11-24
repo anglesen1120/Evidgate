@@ -1,3 +1,4 @@
+import { FieldHintComponent } from '../../../shared/ui/forms/field-hint.component';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -63,6 +64,7 @@ const orderedWindows = (group: AbstractControl): ValidationErrors | null => {
 @Component({
   selector: 'app-retention-form',
   imports: [
+    FieldHintComponent,
     ReactiveFormsModule,
     HlmButton,
     HlmCardImports,
@@ -118,13 +120,13 @@ export class RetentionFormComponent {
       {
         id: 'retention-artifact',
         label: this.copy.artifact,
-        describedBy: 'retention-hint',
+        hint: this.copy.hint,
         error: () => this.fieldError('artifact_days', form),
       },
       {
         id: 'retention-metadata',
         label: this.copy.metadata,
-        describedBy: 'retention-hint',
+        hint: this.copy.hint,
         error: () => this.fieldError('metadata_days', form),
       },
     ]);

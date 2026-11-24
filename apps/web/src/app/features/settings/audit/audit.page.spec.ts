@@ -220,10 +220,10 @@ describe('AuditPage', () => {
     const load = vi.spyOn(store, 'load');
     for (const name of ['from', 'to']) {
       expect(root.querySelector(`[name="${name}"]`)?.getAttribute('aria-describedby')).toBe(
-        'audit-date-hint',
+        `audit-${name}-hint`,
       );
     }
-    expect(root.querySelector('#audit-date-hint')?.textContent).toMatch(/\S/);
+    expect(root.querySelector('#audit-from-hint')?.textContent).toMatch(/\S/);
     input(root, 'from', '2026-10-22T10:30');
     input(root, 'to', '2026-10-21T10:30');
     submit(root);
@@ -233,7 +233,7 @@ describe('AuditPage', () => {
     expect(root.querySelector('[name="from"]')?.getAttribute('aria-invalid')).toBe('true');
     for (const name of ['from', 'to']) {
       expect(root.querySelector(`[name="${name}"]`)?.getAttribute('aria-describedby')).toBe(
-        'audit-date-hint audit-range-error',
+        `audit-${name}-hint audit-range-error`,
       );
     }
     expect(root.querySelector('#audit-range-error')?.textContent).toMatch(/\S/);
@@ -244,7 +244,7 @@ describe('AuditPage', () => {
     expect(root.querySelector('#audit-range-error')).toBeNull();
     for (const name of ['from', 'to']) {
       expect(root.querySelector(`[name="${name}"]`)?.getAttribute('aria-describedby')).toBe(
-        'audit-date-hint',
+        `audit-${name}-hint`,
       );
     }
   });

@@ -107,11 +107,14 @@ describe('DevSignInComponent', () => {
     expect(element('label').getAttribute('for')).toBe(input.id);
     expect(input.getAttribute('aria-describedby')).toBe('dev-sign-in-note');
     expect(element('#dev-sign-in-note').textContent).toContain(fixture.componentInstance.note);
+    const hint = element('button[aria-controls="dev-sign-in-note"]');
+    expect(hint.getAttribute('type')).toBe('button');
+    expect(hint.getAttribute('aria-expanded')).toBe('false');
     expect(element('form').getAttribute('aria-labelledby')).toBe('dev-sign-in-heading');
     expect(input.hasAttribute('hlmInput')).toBe(true);
     expect(element('label').hasAttribute('hlmLabel')).toBe(true);
-    expect(element('button').hasAttribute('hlmBtn')).toBe(true);
-    expect(element<HTMLButtonElement>('button').disabled).toBe(false);
+    expect(element('button[type="submit"]').hasAttribute('hlmBtn')).toBe(true);
+    expect(element<HTMLButtonElement>('button[type="submit"]').disabled).toBe(false);
     expect(element('[role="alert"]').textContent?.trim()).toBe('');
   });
 
@@ -131,7 +134,7 @@ describe('DevSignInComponent', () => {
     expect(input.value).toBe('');
     expect(input.readOnly).toBe(true);
     expect(document.activeElement).toBe(input);
-    expect(element<HTMLButtonElement>('button').disabled).toBe(true);
+    expect(element<HTMLButtonElement>('button[type="submit"]').disabled).toBe(true);
     expect(element('form').getAttribute('aria-busy')).toBe('true');
     expect(element('[role="status"]').textContent).toContain(fixture.componentInstance.submitting);
     expect(element('[role="status"]').getAttribute('aria-live')).toBe('polite');
@@ -173,7 +176,7 @@ describe('DevSignInComponent', () => {
     expect(element('[role="alert"]').textContent).toContain(fixture.componentInstance.wrongSecret);
     expect(element('input').getAttribute('aria-invalid')).toBe('true');
     expect(element('input').getAttribute('aria-describedby')).toContain('dev-sign-in-error');
-    expect(element<HTMLButtonElement>('button').disabled).toBe(false);
+    expect(element<HTMLButtonElement>('button[type="submit"]').disabled).toBe(false);
     expect(session.reload).not.toHaveBeenCalled();
     submit();
     http.expectOne('/v1/dev/session').flush(null, { status: 204, statusText: 'No Content' });
@@ -226,7 +229,7 @@ describe('DevSignInComponent', () => {
       await settle();
       expect(element('[role="alert"]').textContent).toContain(fixture.componentInstance.failed);
       expect(element('[role="status"]').textContent?.trim()).toBe('');
-      expect(element<HTMLButtonElement>('button').disabled).toBe(false);
+      expect(element<HTMLButtonElement>('button[type="submit"]').disabled).toBe(false);
       expect(session.reload).not.toHaveBeenCalled();
     },
   );
@@ -237,7 +240,7 @@ describe('DevSignInComponent', () => {
     http.expectOne('/v1/dev/session').flush({}, { status: 404, statusText: 'Not Found' });
     await settle();
     expect(element('[role="alert"]').textContent).toContain(fixture.componentInstance.unavailable);
-    expect(element<HTMLButtonElement>('button').disabled).toBe(false);
+    expect(element<HTMLButtonElement>('button[type="submit"]').disabled).toBe(false);
   });
 
   it.each(['rejected', 'unauthenticated'])(
@@ -256,7 +259,7 @@ describe('DevSignInComponent', () => {
       await settle();
       expect(element('[role="alert"]').textContent).toContain(fixture.componentInstance.failed);
       expect(element('input').getAttribute('aria-invalid')).toBeNull();
-      expect(element<HTMLButtonElement>('button').disabled).toBe(false);
+      expect(element<HTMLButtonElement>('button[type="submit"]').disabled).toBe(false);
       expect(router.navigateByUrl).not.toHaveBeenCalled();
     },
   );

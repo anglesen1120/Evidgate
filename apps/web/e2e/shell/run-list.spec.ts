@@ -442,6 +442,8 @@ for (const locale of LOCALES) {
       await openRunFilters(page);
       await page.locator('#run-state').focus();
       await page.keyboard.press('Tab');
+      await expect(page.locator('button[aria-controls="run-decision-hint"]')).toBeFocused();
+      await page.keyboard.press('Tab');
       await expect(page.locator('#run-decision')).toBeFocused();
       await page.keyboard.press('Tab');
       await expect(page.locator('#run-scope')).toBeFocused();

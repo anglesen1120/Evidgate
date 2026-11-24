@@ -1,3 +1,4 @@
+import { FieldHintComponent } from '../../../../shared/ui/forms/field-hint.component';
 import { formatDate } from '@angular/common';
 import {
   ChangeDetectionStrategy,
@@ -20,7 +21,7 @@ import { shortDateFormat } from '../../../../shared/time/short-date-format';
 /** Selection and pagination are intents; only the page decides which revision is authoritative. */
 @Component({
   selector: 'app-evidence-revision-selector',
-  imports: [HlmButton, HlmIcon, HlmLabel, HlmSelectImports, BrnSelectTrigger],
+  imports: [FieldHintComponent, HlmButton, HlmIcon, HlmLabel, HlmSelectImports, BrnSelectTrigger],
   host: { class: 'block min-w-0' },
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './evidence-revision-selector.component.html',

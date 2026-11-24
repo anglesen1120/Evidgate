@@ -94,6 +94,7 @@ import { AUTHORING_READ, IMPEX_COPY } from './import-export.copy';
             data-choose-import-file
             [variant]="imports.work().file ? 'outline' : 'default'"
             [attr.aria-controls]="'authoring-import-file'"
+            [attr.aria-describedby]="'import-file-hint'"
             class="min-h-(--eg-control-touch) whitespace-normal"
             [disabled]="imports.work().pending"
             (focusin)="panel()?.rememberFocus($event)"

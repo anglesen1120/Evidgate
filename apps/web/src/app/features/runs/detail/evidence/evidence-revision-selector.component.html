@@ -1,5 +1,11 @@
 <div class="flex min-w-0 flex-wrap items-center gap-x-(--eg-space-4) gap-y-(--eg-space-2)">
-  <label hlmLabel for="evidence-revision-select">{{ copy.revisionLabel }}</label>
+  <app-field-hint
+    [descriptionId]="'evidence-pin-help'"
+    [label]="copy.revisionLabel"
+    [text]="copy.pinHelp"
+  >
+    <label hlmLabel for="evidence-revision-select">{{ copy.revisionLabel }}</label>
+  </app-field-hint>
   <hlm-select
     class="block w-full min-w-0 max-w-full min-[768px]:w-fit"
     [value]="selectedValue()"
@@ -54,10 +60,4 @@
       {{ loadingMore() ? copy.loadingOlder : copy.loadOlder }}
     </button>
   }
-  <p
-    class="m-0 basis-full text-xs leading-(--eg-leading-xs) text-muted-foreground"
-    id="evidence-pin-help"
-  >
-    {{ copy.pinHelp }}
-  </p>
 </div>

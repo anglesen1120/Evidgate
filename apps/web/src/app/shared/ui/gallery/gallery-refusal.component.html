@@ -90,20 +90,24 @@
           ></textarea>
         </div>
         <div class="grid gap-2">
-          <label
-            hlmLabel
-            for="gallery-refusal-notify"
-            class="flex min-h-(--eg-control-touch) items-center gap-2"
-            ><hlm-checkbox
-              [inputId]="'gallery-refusal-notify'"
-              [aria-label]="notifyLabel"
-              [checked]="notify()"
-              (checkedChange)="notify.set($event)"
-            />{{ notifyLabel }}</label
+          <app-field-hint
+            [descriptionId]="'gallery-refusal-notify-hint'"
+            [label]="notifyLabel"
+            [text]="notifyHint"
           >
-          <p class="m-0 text-xs text-(--eg-text-muted)" i18n="@@shared.gallery.refusal.notify-hint">
-            Email to the sample requester, shown in the preview only.
-          </p>
+            <label
+              hlmLabel
+              for="gallery-refusal-notify"
+              class="flex min-h-(--eg-control-touch) items-center gap-2"
+              ><hlm-checkbox
+                [inputId]="'gallery-refusal-notify'"
+                [aria-label]="notifyLabel"
+                [aria-describedby]="'gallery-refusal-notify-hint'"
+                [checked]="notify()"
+                (checkedChange)="notify.set($event)"
+              />{{ notifyLabel }}</label
+            >
+          </app-field-hint>
           <label
             hlmLabel
             for="gallery-refusal-resubmit"

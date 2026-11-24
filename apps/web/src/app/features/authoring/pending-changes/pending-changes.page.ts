@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 import { rowsDuringFetch } from '../../../shared/ui/data-table/rows-during-fetch';
+=======
+import { FieldHintComponent } from '../../../shared/ui/forms/field-hint.component';
+>>>>>>> origin/develop
 import { DOCUMENT, NgTemplateOutlet } from '@angular/common';
 import {
   afterRenderEffect,
@@ -59,6 +63,7 @@ interface Consent {
   changeDetection: ChangeDetectionStrategy.OnPush,
   providers: [PendingChangesStore],
   imports: [
+    FieldHintComponent,
     RouterLink,
     FormsModule,
     HlmButton,

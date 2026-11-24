@@ -94,7 +94,13 @@
       class="grid min-w-0 items-start gap-3 @sm:grid-cols-2 @3xl:grid-cols-[repeat(2,minmax(0,1fr))_repeat(2,minmax(0,1.55fr))] [&_input]:box-border [&_input]:min-w-0 [&_input]:w-full"
     >
       <div class="grid min-w-0 gap-2">
-        <label hlmLabel for="security-project">{{ copy.project }}</label>
+        <app-field-hint
+          [descriptionId]="'security-project-hint'"
+          [label]="copy.project"
+          [text]="copy.projectHint"
+        >
+          <label hlmLabel for="security-project">{{ copy.project }}</label>
+        </app-field-hint>
         <input
           hlmInput
           id="security-project"
@@ -128,7 +134,9 @@
       </div>
       @for (field of feedback().fields; track field.id) {
         <div class="grid min-w-0 gap-2">
-          <label hlmLabel [for]="field.id">{{ field.label }}</label>
+          <app-field-hint [descriptionId]="field.hintId" [label]="field.label" [text]="field.hint">
+            <label hlmLabel [for]="field.id">{{ field.label }}</label>
+          </app-field-hint>
           <input
             hlmInput
             [id]="field.id"
@@ -150,10 +158,6 @@
       }
     </div>
     <div class="flex flex-wrap items-center justify-between gap-3">
-      <div class="grid gap-1 text-xs text-muted-foreground">
-        <p id="security-project-hint" class="m-0">{{ copy.projectHint }}</p>
-        <p id="security-time-hint" class="m-0">{{ copy.timeHint }}</p>
-      </div>
       <div class="flex flex-wrap items-end gap-2">
         <button
           hlmBtn

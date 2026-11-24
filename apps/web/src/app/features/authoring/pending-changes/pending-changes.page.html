@@ -220,7 +220,13 @@
           }
         }
         <div *appDesktopMutation class="field" data-pending-mutation>
-          <label hlmLabel for="pending-local-reason">{{ copy.reasonLabel }}</label>
+          <app-field-hint
+            [descriptionId]="'pending-reason-hint'"
+            [label]="copy.reasonLabel"
+            [text]="copy.reasonHint"
+          >
+            <label hlmLabel for="pending-local-reason">{{ copy.reasonLabel }}</label>
+          </app-field-hint>
           <textarea
             hlmInput
             id="pending-local-reason"
@@ -240,9 +246,6 @@
             </div>
           </dl>
         }
-        <p id="pending-reason-hint" class="full-text text-sm text-muted-foreground">
-          {{ copy.reasonHint }}
-        </p>
         <p class="m-0 min-h-(--eg-leading-sm)" role="status">
           {{ store.applying() ? copy.applying : '' }}
         </p>
