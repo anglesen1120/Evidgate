@@ -94,9 +94,8 @@ for (const locale of LOCALES) {
     await expect(page.locator(ROWS).nth(1).locator('[data-reminder="expires-soon"]')).toBeVisible();
     await expect(page.locator(ROWS).nth(2).locator('[data-reminder="expired"]')).toBeVisible();
     await expect(page.locator(ROWS).nth(4).locator('[data-rotation-reminder]')).toHaveCount(0);
-    await expect(page.locator('app-secret-reference-list [data-page="next"]')).toHaveAttribute(
-      'aria-disabled',
-      'true',
+    await expect(page.locator('app-secret-reference-list app-data-table-pager button')).toHaveCount(
+      0,
     );
     await expectNoPlaintext(page);
   });
@@ -365,37 +364,16 @@ for (const locale of LOCALES) {
           await expect(page.locator(CI_ROWS)).toHaveCount(0);
           const pager = section.locator('app-data-table-pager');
           if (variant === 'settings-empty') {
-            // Empty metadata still supports paging, but never exposes row or mutation actions.
-            await expect(section.locator('button:not(app-data-table-pager button)')).toHaveCount(0);
-            await expect(pager).toBeVisible();
-            await expect(pager.getByRole('status')).toHaveText(
-              locale === 'en' ? 'Page 1' : 'Trang 1',
-            );
-            for (const direction of ['previous', 'next']) {
-              await expect(pager.locator(`[data-page="${direction}"]`)).toHaveAttribute(
-                'aria-disabled',
-                'true',
-              );
-            }
-            const size = pager.getByRole('combobox', {
-              name: locale === 'en' ? 'Rows per page' : 'Số hàng mỗi trang',
-            });
-            await expect(size).toContainText('20');
-            await size.click();
-            for (const option of ['20', '50', '100']) {
-              await expect(page.getByRole('option', { name: option, exact: true })).toBeVisible();
-            }
-            await page.keyboard.press('Escape');
+            await expect(section.locator('button')).toHaveCount(0);
+            await expect(pager.locator('.page-range')).toContainText('0–0');
+            await expect(pager.getByRole('navigation')).toHaveCount(0);
           } else {
             await expect(pager).toHaveCount(0);
             await expect(section.locator('button')).toHaveCount(0);
           }
         }
         if (variant === 'settings') {
-          await expect(section.locator('[data-page="next"]')).toHaveAttribute(
-            'aria-disabled',
-            'true',
-          );
+          await expect(section.locator('app-data-table-pager button')).toHaveCount(0);
         }
         await expectNoBindingChallenge(page);
         await expectNoA11yViolations(page, `CI bindings ${variant} ${locale} ${theme}`);

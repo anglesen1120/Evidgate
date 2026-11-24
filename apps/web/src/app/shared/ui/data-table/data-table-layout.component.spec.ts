@@ -218,8 +218,6 @@ describe('Shared table column layout and reflow', () => {
     expect(root.querySelector('th')?.getAttribute('data-column-priority')).toBe('primary');
     for (const cell of root.querySelectorAll('th.numeric,td.numeric')) {
       expect(cell.getAttribute('data-column-role')).toBe('number');
-      expect(cell.classList.contains('[&.numeric]:tabular-nums')).toBe(true);
-      expect(cell.classList.contains('[&.numeric]:text-right')).toBe(true);
     }
     expect(root.querySelector('td.numeric .value')?.classList.contains('whitespace-nowrap')).toBe(
       true,

@@ -66,7 +66,7 @@ describe('QuotaPanelComponent page-size recovery', () => {
     expect(data.calls.at(-1)).toMatchObject({ limit: 50, cursor: undefined });
     expect(await (await harness.sizeTrigger()).text()).toBe('50');
     expect(await harness.pageError()).toBeNull();
-    expect(await (await harness.pagers())[0]?.text()).toContain('Page 1');
+    expect(await (await harness.pagers())[0]?.text()).toContain('Showing 1–1');
     expect(store.projectPage()).toBe(1);
     expect(store.projectPageSize()).toBe(50);
     expect(store.usageSummary()?.metrics[0]?.projects[0]?.project_id).toBe('resized');

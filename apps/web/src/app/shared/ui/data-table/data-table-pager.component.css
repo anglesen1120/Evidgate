@@ -30,6 +30,16 @@
 .page-range {
   flex: 1 1 auto;
   overflow-wrap: anywhere;
+  color: var(--eg-text-muted);
+}
+
+.page-range:focus-visible {
+  outline: var(--eg-focus-width) solid var(--eg-focus);
+  outline-offset: var(--eg-focus-offset);
+}
+
+.eg-table-pagination[role='presentation'] .page-feedback.invisible {
+  display: none;
 }
 
 .size-field label {

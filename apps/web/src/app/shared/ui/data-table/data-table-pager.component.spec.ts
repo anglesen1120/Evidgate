@@ -18,6 +18,7 @@ import { DataTablePagerComponent } from './data-table-pager.component';
   template: `
     <app-data-table-pager
       [pageSize]="served()"
+      [hasNext]="true"
       [busy]="busy()"
       (pageSizeChange)="request($event)"
     />
@@ -46,6 +47,7 @@ class PagerHarness extends ComponentHarness {
   readonly nav = this.locatorFor('nav');
   readonly current = this.locatorFor('[role="status"]');
   readonly statuses = this.locatorForAll('[role="status"]');
+  readonly controls = this.locatorForAll('button');
   readonly range = this.locatorFor('.page-range');
   readonly label = this.locatorFor('label');
   readonly trigger = this.locatorFor('hlm-select-trigger button');
@@ -64,6 +66,7 @@ class PagerHarness extends ComponentHarness {
 
 async function render() {
   const fixture = TestBed.createComponent(DataTablePagerComponent);
+  fixture.componentRef.setInput('hasNext', true);
   const previous = vi.fn();
   const next = vi.fn();
   const size = vi.fn();
@@ -92,6 +95,56 @@ describe('DataTablePagerComponent', () => {
       expect(statuses).toHaveLength(1);
       expect(TestbedHarnessEnvironment.getNativeElement(statuses[0]!)).toBe(current);
     }
+  });
+
+  it.each([
+    { count: 0, total: 0, text: '0–0 of 0' },
+    { count: 1, total: null, text: '1–1' },
+    { count: 3, total: 3, text: '1–3 of 3' },
+    { count: 20, total: null, text: '1–20' },
+  ])('keeps only the range when $count records fit the smallest size', async (row) => {
+    const { fixture, pager } = await render();
+    fixture.componentRef.setInput('count', row.count);
+    fixture.componentRef.setInput('total', row.total);
+    fixture.componentRef.setInput('hasNext', false);
+    expect(await pager.controls()).toHaveLength(0);
+    expect(await pager.statuses()).toHaveLength(0);
+    expect(await (await pager.range()).text()).toBe(`Showing ${row.text}`);
+  });
+
+  it('still offers a smaller size when a single page has more than 20 records', async () => {
+    const { fixture, pager } = await render();
+    fixture.componentRef.setInput('pageSize', 50);
+    fixture.componentRef.setInput('count', 21);
+    fixture.componentRef.setInput('hasNext', false);
+    expect(await (await pager.trigger()).text()).toBe('50');
+    expect(await (await pager.next()).getAttribute('aria-disabled')).toBe('true');
+  });
+
+  it('keeps the focused control through the fetch, then hands focus to the remaining range', async () => {
+    const { fixture, pager } = await render();
+    const next = await pager.next();
+    await next.focus();
+    await next.click();
+    fixture.componentRef.setInput('busy', true);
+    fixture.componentRef.setInput('hasNext', false);
+    expect(await (await pager.feedback()).hasClass('invisible')).toBe(false);
+    expect(await next.isFocused()).toBe(true);
+    fixture.componentRef.setInput('busy', false);
+    expect(await pager.controls()).toHaveLength(0);
+    expect(await (await pager.range()).isFocused()).toBe(true);
+    expect(await (await pager.range()).getProperty('tabIndex')).toBe(-1);
+  });
+
+  it('does not reclaim focus if the user left before the response', async () => {
+    const { fixture, pager } = await render();
+    const next = await pager.next();
+    await next.focus();
+    await next.blur();
+    const outside = document.activeElement;
+    fixture.componentRef.setInput('hasNext', false);
+    expect(await pager.controls()).toHaveLength(0);
+    expect(document.activeElement).toBe(outside);
   });
 
   it('reserves local feedback for every pending pager action without adding a live announcer', async () => {
@@ -136,8 +189,7 @@ describe('DataTablePagerComponent', () => {
     { page: 2, total: 53, count: 20, more: true, text: '21–40 of 53', back: true },
     { page: 2, total: 53, count: 6, more: true, text: '21–26 of 53', back: true },
     { page: 3, total: 53, count: 13, more: false, text: '41–53 of 53', back: true },
-    { page: 1, total: 0, count: 0, more: false, text: '0–0 of 0', back: false },
-    { page: 1, total: 3, count: 3, more: false, text: '1–3 of 3', back: false },
+    { page: 1, total: null, count: 1, more: true, text: '1–1', back: false },
     { page: 4, total: null, count: 11, more: true, text: '1–11', back: true },
     { page: 5, total: null, count: 20, more: false, text: '1–20', back: true },
     { page: 2, total: null, count: 0, more: false, text: '0–0', back: true },
@@ -183,7 +235,6 @@ describe('DataTablePagerComponent', () => {
   it.each([
     { page: 1, hasNext: true, previousMuted: true, nextMuted: false },
     { page: 2, hasNext: false, previousMuted: false, nextMuted: true },
-    { page: 1, hasNext: false, previousMuted: true, nextMuted: true },
   ])('keeps server boundaries focusable on page $page with hasNext=$hasNext', async (row) => {
     const { fixture, pager } = await render();
     fixture.componentRef.setInput('page', row.page);

@@ -192,7 +192,13 @@ for (const locale of ['en', 'vi'] as const) {
       }
       if (!stacked) {
         for (const header of await headers.all()) {
-          await expect(header).toHaveCSS('vertical-align', 'top');
+          await expect(header).toHaveCSS('vertical-align', 'middle');
+        }
+        const numbers = page.locator('app-attempts-table :is(th,td)[data-column-role="number"]');
+        await expect(numbers.first()).toBeVisible();
+        for (const cell of await numbers.all()) {
+          await expect(cell).toHaveCSS('text-align', 'end');
+          await expect(cell).toHaveCSS('font-variant-numeric', 'tabular-nums');
         }
       }
     }

@@ -165,12 +165,13 @@ describe('CaseListPage', () => {
 
   it('renders the genuine empty state without a continuation or table', async () => {
     list.mockResolvedValue({ items: [], next_cursor: null });
-    const { harness } = await render();
+    const { fixture, harness } = await render();
     expect(await harness.empty()).not.toBeNull();
     expect(await harness.text()).toContain('No test identities in this project');
     expect(await harness.table()).toBeNull();
-    expect(await (await harness.next()).getAttribute('aria-disabled')).toBe('true');
-    expect(await (await harness.previous()).getAttribute('aria-disabled')).toBe('true');
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('app-data-table-pager button'),
+    ).toBeNull();
   });
 
   it('shows the current-page loaded count visibly and announces its local match count', async () => {

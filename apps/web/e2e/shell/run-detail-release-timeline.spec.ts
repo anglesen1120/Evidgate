@@ -156,19 +156,9 @@ async function tabThroughProducers(page: Page): Promise<Locator[]> {
   await tabThroughTableScroller(page, table);
   await tabThroughRunControls(page, table, 2);
 
-  const pager = producers.getByRole('navigation', { name: 'Table pagination', exact: true });
-  const size = pager.getByRole('combobox', { name: 'Rows per page', exact: true });
-  const previous = pager.getByRole('button', { name: 'Previous page', exact: true });
-  const next = pager.getByRole('button', { name: 'Next page', exact: true });
-  await expect(pager.getByRole('status')).toHaveText('Page 1');
-  await expect(previous).toHaveAttribute('aria-disabled', 'true');
-  await expect(next).toHaveAttribute('aria-disabled', 'true');
-  const pagerStops = [size, previous, next];
-  for (const stop of pagerStops) {
-    await page.keyboard.press('Tab');
-    await expect(stop).toBeFocused();
-  }
-  return [...(await copies.all()), ...pagerStops];
+  await expect(producers.getByRole('navigation', { name: 'Table pagination' })).toHaveCount(0);
+  await expect(producers.locator('app-data-table-pager .page-range')).toBeVisible();
+  return copies.all();
 }
 
 test('the unbound regions add no keyboard stops', async ({ page }) => {

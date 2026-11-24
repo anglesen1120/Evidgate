@@ -159,6 +159,7 @@ describe('RunListPage paging recovery', () => {
     });
     store.setPageSize.mockReturnValue(request);
     const { fixture } = await render();
+    store.hasNext.set(true);
     const pager = await TestbedHarnessEnvironment.loader(fixture).getHarness(RunPagerHarness);
     await pager.chooseSize(50);
     expect(store.setPageSize).toHaveBeenCalledWith(50);

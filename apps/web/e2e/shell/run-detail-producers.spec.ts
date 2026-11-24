@@ -125,8 +125,7 @@ for (const locale of LOCALES) {
     // An empty declaration is a fact about the run, not a failed read: no error state, no retry.
     await expect(producers.locator('[data-state="error"]')).toHaveCount(0);
     await expect(producers.getByRole('alert')).toHaveCount(0);
-    await expect(producers.locator('button[data-page="previous"]')).toBeDisabled();
-    await expect(producers.locator('button[data-page="next"]')).toBeDisabled();
+    await expect(producers.locator('app-data-table-pager button')).toHaveCount(0);
     await expect(producers.locator('app-data-table-pager .page-range')).toHaveText(range('0–0', 0));
     await expectNoA11yViolations(page, 'run detail, producers empty state');
   });
@@ -218,22 +217,10 @@ for (const locale of LOCALES) {
       await expect(copy).toBeFocused();
       await page.keyboard.press('Shift+Tab');
     }
-    // The independent attempts pager precedes the first producer copy, with no
-    // inner scrolling-region stop between the two tables.
+    // A single attempts page adds no pager stops before the producer copies.
     await expect(scroller).not.toBeFocused();
     const attempts = page.locator('app-attempts-table');
-    const attemptsPager = attempts.locator('app-data-table-pager');
-    const attemptsNext = attemptsPager.locator('button[data-page="next"]');
-    const attemptsPrevious = attemptsPager.locator('button[data-page="previous"]');
-    const attemptsPageSize = attemptsPager.locator('hlm-select-trigger button');
-    await expect(attemptsNext).toBeFocused();
-    await expect(attemptsNext).toHaveAttribute('aria-disabled', 'true');
-    await page.keyboard.press('Shift+Tab');
-    await expect(attemptsPrevious).toBeFocused();
-    await expect(attemptsPrevious).toHaveAttribute('aria-disabled', 'true');
-    await page.keyboard.press('Shift+Tab');
-    await expect(attemptsPageSize).toBeFocused();
-    await page.keyboard.press('Shift+Tab');
+    await expect(attempts.locator('app-data-table-pager button')).toHaveCount(0);
     await expect(attempts.locator('app-copy-value-button button').last()).toBeFocused();
 
     // `#producer-<slot>` is the documented anchor: a deep link lands on, and focuses, that row.

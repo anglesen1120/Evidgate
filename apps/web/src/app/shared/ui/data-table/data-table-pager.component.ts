@@ -4,11 +4,15 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
+  ElementRef,
   inject,
   Injector,
   input,
+  linkedSignal,
   LOCALE_ID,
+  type OnChanges,
   output,
+  viewChild,
 } from '@angular/core';
 import { FormsModule, type NgModel } from '@angular/forms';
 import { HlmButton } from '@evidgate/ui/button';
@@ -24,6 +28,7 @@ import {
 } from '@evidgate/ui/select';
 import { HlmTooltip } from '@evidgate/ui/tooltip';
 
+const SMALLEST_PAGE_SIZE = 20;
 let nextPagerId = 0;
 
 @Component({
@@ -45,7 +50,7 @@ let nextPagerId = 0;
   templateUrl: './data-table-pager.component.html',
   styleUrl: './data-table-pager.component.css',
 })
-export class DataTablePagerComponent {
+export class DataTablePagerComponent implements OnChanges {
   private readonly locale = inject(LOCALE_ID);
   private readonly injector = inject(Injector);
 
@@ -57,6 +62,8 @@ export class DataTablePagerComponent {
   readonly busy = input(false);
   /** Retry cooldowns lock controls without claiming that a request is still pending. */
   readonly fetching = input<boolean | undefined>(undefined);
+  /** A failed page request can retain the displayed page but withhold its next cursor. */
+  readonly recovering = input(false);
   protected readonly pending = computed(() => this.fetching() ?? this.busy());
   /** A loaded-row window has a fixed render cap, not a server page size or total. */
   readonly loadedCaption = input<string | null>(null);
@@ -64,7 +71,23 @@ export class DataTablePagerComponent {
   readonly next = output<void>();
   readonly pageSizeChange = output<number>();
 
-  protected readonly sizes = [20, 50, 100];
+  protected readonly sizes = [SMALLEST_PAGE_SIZE, 50, 100];
+  private readonly range = viewChild<ElementRef<HTMLElement>>('range');
+  protected readonly showControls = linkedSignal<boolean | undefined, boolean>({
+    source: () => {
+      if (this.page() > 1 || this.hasNext()) return true;
+      if (
+        this.loadedCaption() === null &&
+        (this.pageSize() > SMALLEST_PAGE_SIZE ||
+          (this.total() ?? this.count()) > SMALLEST_PAGE_SIZE)
+      ) {
+        return true;
+      }
+      // Preserve the displayed page's controls until its replacement is served.
+      return this.pending() || this.recovering() ? undefined : false;
+    },
+    computation: (visible, previous) => visible ?? previous?.value ?? false,
+  });
   protected readonly sizeId = `eg-table-pager-size-${nextPagerId++}`;
   protected readonly sizeLabel = $localize`:@@shared.data-table.rows-per-page:Rows per page`;
   protected readonly previousLabel = $localize`:@@shared.data-table.previous:Previous page`;
@@ -101,6 +124,15 @@ export class DataTablePagerComponent {
       : $localize`:@@shared.data-table.showing-loaded-range:Showing ${start}:start:–${end}:end: of ${loaded}:loaded: loaded records`;
   });
   private awaitingRender = false;
+
+  ngOnChanges(): void {
+    if (this.showControls()) return;
+    const range = this.range()?.nativeElement;
+    // Hand off before Angular removes the focused controls, never from elsewhere on the page.
+    if (range?.parentElement?.contains(range.ownerDocument.activeElement)) {
+      range.focus({ preventScroll: true });
+    }
+  }
 
   protected move(forward: boolean): void {
     if ((forward ? !this.canNext() : this.page() <= 1) || !this.beginIntent()) return;

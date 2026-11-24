@@ -9,6 +9,14 @@ export class ProducerStatusTableHarness extends ComponentHarness {
   readonly size = this.locatorFor('app-data-table-pager hlm-select-trigger button');
   readonly options = this.documentRootLocatorFactory().locatorForAll('[role="option"]');
 
+  async hasNavigation(): Promise<boolean> {
+    return (
+      (await this.locatorForOptional(
+        'app-data-table-pager [data-page], app-data-table-pager nav[aria-label]',
+      )()) !== null
+    );
+  }
+
   async rowIds(): Promise<(string | null)[]> {
     return Promise.all((await this.rows()).map((row) => row.getAttribute('data-row-id')));
   }

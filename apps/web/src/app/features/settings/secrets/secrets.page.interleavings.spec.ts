@@ -288,7 +288,9 @@ describe('SecretsPage sinks and interleavings', () => {
       const option = options[labels.indexOf(String(size))];
       if (!option) throw new Error('Expected requested page size');
       await option.click();
-      expect(await chosen.text()).toBe(String(size));
+      const after = await page.sizes();
+      expect(after).toHaveLength(2);
+      expect(await after[kind === 'tokens' ? 0 : 1]?.text()).toBe(String(size));
       expect(await untouched.text()).toBe('20');
       const changed = kind === 'tokens' ? store.setPageSize : store.setCiBindingsPageSize;
       const unchanged = kind === 'tokens' ? store.setCiBindingsPageSize : store.setPageSize;
@@ -337,7 +339,7 @@ describe('SecretsPage sinks and interleavings', () => {
       }
       expect(store.load).toHaveBeenNthCalledWith(2, 'p1');
       expect(store.load).toHaveBeenCalledTimes(2);
-      expect(await (await page.tokenSummary()).text()).toBe('Page 1');
+      expect(store.page()).toBe(1);
       expect(store.ciBindingsPage()).toBe(3);
       expect(store.ciBindings()).toEqual(bindingData.body.items);
       expect(store.loadCiBindings).toHaveBeenCalledExactlyOnceWith('p1');

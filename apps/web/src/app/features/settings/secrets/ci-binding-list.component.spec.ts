@@ -87,16 +87,12 @@ describe('CiBindingListComponent (09.7.1-F15)', () => {
   });
 
   it('renders the onboarding empty guidance without any mutation control', async () => {
-    const { root, fixture } = await render('empty', []);
+    const { root } = await render('empty', []);
     expect(root.querySelector('[data-ci-empty]')?.textContent).toContain(
       'No CI bindings for this project. Bindings are created during onboarding.',
     );
-    const pager = await TestbedHarnessEnvironment.harnessForFixture(fixture, BindingPagerHarness);
-    expect(await (await pager.size()).getAttribute('role')).toBe('combobox');
-    expect(await (await pager.previous()).getAttribute('aria-disabled')).toBe('true');
-    expect(await (await pager.next()).getAttribute('aria-disabled')).toBe('true');
-    expect(root.querySelector('[data-ci-empty] button')).toBeNull();
-    expect(root.querySelector('button:not(app-data-table-pager button)')).toBeNull();
+    expect(root.querySelector('app-data-table-pager .page-range')?.textContent).toContain('0–0');
+    expect(root.querySelector('button')).toBeNull();
   });
 
   it('renders only explicit metadata, all verification labels and the pending hint', async () => {

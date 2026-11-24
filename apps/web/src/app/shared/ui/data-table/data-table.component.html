@@ -21,7 +21,7 @@
 <div
   #scrollElement
   hlmTableContainer
-  class="scroll min-w-0 rounded-md border border-border focus-visible:outline-[length:var(--eg-focus-width)] focus-visible:outline-solid focus-visible:outline-ring focus-visible:outline-offset-[var(--eg-focus-offset)]"
+  class="scroll min-w-0 focus-visible:outline-[length:var(--eg-focus-width)] focus-visible:outline-solid focus-visible:outline-ring focus-visible:outline-offset-[var(--eg-focus-offset)]"
   [class.eg-table-narrow]="narrow()"
   [attr.tabindex]="horizontalScrolls() ? 0 : null"
   [attr.role]="horizontalScrolls() ? 'region' : null"
@@ -118,7 +118,7 @@
           *cdkHeaderCellDef
           role="columnheader"
           scope="col"
-          class="cell bg-(--eg-surface-raised) text-xs font-semibold text-(--eg-text-muted)"
+          class="cell bg-(--eg-surface-raised) text-sm font-medium text-(--eg-text-muted)"
           [class]="cellClasses"
           [class.numeric]="column.role === 'number' || column.align === 'end'"
           [hlmTableColumn]="column.role"

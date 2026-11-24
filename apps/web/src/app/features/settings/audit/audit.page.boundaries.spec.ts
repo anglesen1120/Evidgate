@@ -39,6 +39,13 @@ class AuditPagingHarness extends ComponentHarness {
   readonly size = this.locatorFor('app-data-table-pager hlm-select-trigger button');
   readonly retry = this.locatorFor('[data-audit-paging-error] button');
   readonly pagingError = this.locatorFor('[data-audit-paging-error]');
+  async hasNavigation(): Promise<boolean> {
+    return (
+      (await this.locatorForOptional(
+        'app-data-table-pager [data-page], app-data-table-pager nav[aria-label]',
+      )()) !== null
+    );
+  }
 }
 
 class AuditDialogHarness extends ComponentHarness {
@@ -121,13 +128,7 @@ describe('AuditPage boundary browsing and export scope', () => {
         if (store.hasNext()) await (await harness.next()).click();
       }
       expect(seen).toEqual(entries.map((event) => event.created_at));
-      const next = await harness.next();
-      expect(await next.getAttribute('aria-disabled')).toBe('true');
-      expect(await next.getProperty('disabled')).toBe(false);
-      await next.focus();
-      await next.click();
-      await next.sendKeys(TestKey.ENTER);
-      expect(await next.isFocused()).toBe(true);
+      expect(await harness.hasNavigation()).toBe(count > 20);
       expect(store.page()).toBe(Math.max(1, Math.ceil(count / 20)));
       expect(list).toHaveBeenCalledTimes(Math.max(1, Math.ceil(count / 20)));
     },
@@ -307,28 +308,27 @@ describe('AuditPage boundary browsing and export scope', () => {
     expect(list).toHaveBeenLastCalledWith('org-1', { limit: 50, action: 'auth.login' });
   });
 
-  it('announces terminal navigation as unavailable and refuses mouse or keyboard activation', async () => {
-    list.mockResolvedValue({ items: [row(1)], next_cursor: null });
+  it('hides controls on a terminal first page and refuses activation of disabled Next on a terminal later page', async () => {
+    list
+      .mockResolvedValueOnce({ items: [row(1)], next_cursor: 'c1' })
+      .mockResolvedValueOnce({ items: [row(2)], next_cursor: null });
     const fixture = TestBed.createComponent(AuditPage);
     await fixture.whenStable();
     const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, AuditPagingHarness);
+    await (await harness.next()).click();
+    expect(fixture.debugElement.injector.get(AuditStore).page()).toBe(2);
     const next = await harness.next();
     const previous = await harness.previous();
     expect(await next.getProperty('disabled')).toBe(false);
-    expect(await previous.getProperty('disabled')).toBe(false);
     expect(await next.getAttribute('aria-disabled')).toBe('true');
-    expect(await previous.getAttribute('aria-disabled')).toBe('true');
+    expect(await previous.getAttribute('aria-disabled')).not.toBe('true');
     await next.focus();
     expect(await next.isFocused()).toBe(true);
     await next.click();
     await next.sendKeys(TestKey.ENTER);
     expect(await next.isFocused()).toBe(true);
-    await previous.click();
-    await previous.focus();
-    await previous.sendKeys(TestKey.ENTER);
-    expect(await previous.isFocused()).toBe(true);
-    expect(list).toHaveBeenCalledTimes(1);
-    expect(fixture.debugElement.injector.get(AuditStore).rows()).toEqual([row(1)]);
+    expect(list).toHaveBeenCalledTimes(2);
+    expect(fixture.debugElement.injector.get(AuditStore).rows()).toEqual([row(2)]);
   });
 });
 
