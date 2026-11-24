@@ -1,5 +1,13 @@
 import type { MembersStore } from './members.store';
-import { EMPTY_PAGE, PAGE, SELF_ESCALATION, mountMembersStore, pageMember, typedFailure, type FakeMembersDataService } from './members.store.test-support';
+import {
+  EMPTY_PAGE,
+  PAGE,
+  SELF_ESCALATION,
+  mountMembersStore,
+  pageMember,
+  typedFailure,
+  type FakeMembersDataService,
+} from './members.store.test-support';
 
 describe('MembersStore cursor pages', () => {
   let store: MembersStore;
@@ -39,16 +47,19 @@ describe('MembersStore cursor pages', () => {
     expect(data.roleCalls).toBe(1);
   });
 
-  it.each([EMPTY_PAGE, PAGE])('does not request another page for a complete response', async (page) => {
-    data.pages = [page];
-    await store.load('org');
-    await store.previous();
-    await store.loadMore();
-    expect(store.page()).toBe(1);
-    expect(store.members()).toEqual(page.items);
-    expect(store.hasMore()).toBe(false);
-    expect(data.membershipCalls).toBe(1);
-  });
+  it.each([EMPTY_PAGE, PAGE])(
+    'does not request another page for a complete response',
+    async (page) => {
+      data.pages = [page];
+      await store.load('org');
+      await store.previous();
+      await store.loadMore();
+      expect(store.page()).toBe(1);
+      expect(store.members()).toEqual(page.items);
+      expect(store.hasMore()).toBe(false);
+      expect(data.membershipCalls).toBe(1);
+    },
+  );
 
   it.each([50, 100, 20])('resets cursor history and requests selected size %s', async (size) => {
     await store.load('org');
@@ -102,16 +113,23 @@ describe('MembersStore cursor pages', () => {
     expect(store.loadError()).toBeNull();
   });
 
-  it.each(['forbidden', 'unauthenticated', 'not_found'] as const)('clears visible data when navigation is refused as %s', async (kind) => {
-    await store.load('org');
-    data.membersFailure = typedFailure(SELF_ESCALATION, kind, kind === 'forbidden' ? 403 : kind === 'unauthenticated' ? 401 : 404);
-    data.failCursorPagesOnly = true;
-    await store.loadMore();
-    expect(store.members()).toEqual([]);
-    expect(store.phase()).toBe('error');
-    expect(store.loadError()?.kind).toBe(kind);
-    expect(store.hasMore()).toBe(false);
-  });
+  it.each(['forbidden', 'unauthenticated', 'not_found'] as const)(
+    'clears visible data when navigation is refused as %s',
+    async (kind) => {
+      await store.load('org');
+      data.membersFailure = typedFailure(
+        SELF_ESCALATION,
+        kind,
+        kind === 'forbidden' ? 403 : kind === 'unauthenticated' ? 401 : 404,
+      );
+      data.failCursorPagesOnly = true;
+      await store.loadMore();
+      expect(store.members()).toEqual([]);
+      expect(store.phase()).toBe('error');
+      expect(store.loadError()?.kind).toBe(kind);
+      expect(store.hasMore()).toBe(false);
+    },
+  );
   it('discards a late next-page success after a size change', async () => {
     await store.load('org');
     data.manual = true;

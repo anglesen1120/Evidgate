@@ -14,7 +14,12 @@ import { intentHeaders, type Intent } from '../http/intent';
 export class ApiTokensService {
   private readonly gateway = inject(ApiGateway);
 
-  list(project: string, cursor?: string, signal?: AbortSignal, limit = 20): Promise<ApiTokenListResponse> {
+  list(
+    project: string,
+    cursor?: string,
+    signal?: AbortSignal,
+    limit = 20,
+  ): Promise<ApiTokenListResponse> {
     return this.gateway.call((client) =>
       listApiTokens({
         client,

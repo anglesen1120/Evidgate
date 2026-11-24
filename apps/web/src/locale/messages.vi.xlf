@@ -22822,6 +22822,10 @@
       <trans-unit id="orgoverview.project-id" datatype="html"><source>Project ID</source><target>Mã dự án</target></trans-unit>
       <trans-unit id="orgoverview.project-name" datatype="html"><source>Name</source><target>Tên</target></trans-unit>
       <trans-unit id="orgoverview.open-project" datatype="html"><source>Open project</source><target>Mở dự án</target></trans-unit>
+      <trans-unit id="settings.members.page-load-failed" datatype="html"><source>The members page could not be loaded. The members already shown are unchanged.</source><target>Không thể tải trang thành viên. Các thành viên đang hiển thị không thay đổi.</target></trans-unit>
+      <trans-unit id="settings.members.order" datatype="html"><source>Oldest first · creation date</source><target>Cũ nhất trước · ngày tạo</target></trans-unit>
+      <trans-unit id="settings.policy.history-order" datatype="html"><source>Oldest first</source><target>Cũ nhất trước</target></trans-unit>
+      <trans-unit id="settings.api-tokens.order" datatype="html"><source>Oldest created first</source><target>Theo ngày tạo, cũ nhất trước</target></trans-unit>
 </body>
   </file>
 </xliff>

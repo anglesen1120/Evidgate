@@ -27,7 +27,9 @@ const withNextPage = (): Promise<ApiTokenListResponse> =>
 
 /** The page's next control, clicked as the user would. */
 function clickNext(): void {
-  const next = document.querySelector<HTMLButtonElement>('app-data-table-pager [data-page="next"][aria-disabled="false"]');
+  const next = document.querySelector<HTMLButtonElement>(
+    'app-data-table-pager [data-page="next"][aria-disabled="false"]',
+  );
   if (!next) throw new Error('Missing next-page control');
   next.click();
 }
@@ -59,7 +61,12 @@ describe('ApiTokensPage cursor readback', () => {
     await harness.navigateByUrl(`${PAGE_URL}?project=project-1&cursor=page-2&ref=1`);
     await until(harness, () => offeredProjects().join() === 'project-1');
     // The control exists only once the list read that offers a second page has landed.
-    await until(harness, () => document.querySelector('app-data-table-pager [data-page="next"][aria-disabled="false"]') !== null);
+    await until(
+      harness,
+      () =>
+        document.querySelector('app-data-table-pager [data-page="next"][aria-disabled="false"]') !==
+        null,
+    );
     const store = harness.routeDebugElement?.injector.get(ApiTokensStore);
     if (!store) throw new Error('The page did not mount');
     expect(store.cursor()).toBe('page-2');
@@ -90,7 +97,12 @@ describe('ApiTokensPage cursor readback', () => {
     const navigate = vi.spyOn(router, 'navigate');
     await harness.navigateByUrl(`${PAGE_URL}?project=project-1`);
     await until(harness, () => offeredProjects().join() === 'project-1');
-    await until(harness, () => document.querySelector('app-data-table-pager [data-page="next"][aria-disabled="false"]') !== null);
+    await until(
+      harness,
+      () =>
+        document.querySelector('app-data-table-pager [data-page="next"][aria-disabled="false"]') !==
+        null,
+    );
     const store = harness.routeDebugElement?.injector.get(ApiTokensStore);
     if (!store) throw new Error('The page did not mount');
 
@@ -128,7 +140,12 @@ describe('ApiTokensPage cursor readback', () => {
     const router = TestBed.inject(Router);
     const navigate = vi.spyOn(router, 'navigate');
     await harness.navigateByUrl(`${PAGE_URL}?project=project-1&cursor=page-2`);
-    await until(harness, () => document.querySelector('app-data-table-pager [data-page="next"][aria-disabled="false"]') !== null);
+    await until(
+      harness,
+      () =>
+        document.querySelector('app-data-table-pager [data-page="next"][aria-disabled="false"]') !==
+        null,
+    );
     const store = harness.routeDebugElement?.injector.get(ApiTokensStore);
     if (!store) throw new Error('The page did not mount');
     const url = router.url;

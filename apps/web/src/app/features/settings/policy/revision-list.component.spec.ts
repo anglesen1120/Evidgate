@@ -42,7 +42,10 @@ describe('RevisionListComponent', () => {
     const fixture = TestBed.createComponent(RevisionListComponent);
     fixture.componentRef.setInput('rows', [row]);
     fixture.componentRef.setInput('headId', row.id);
-    const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, RevisionHistoryHarness);
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(
+      fixture,
+      RevisionHistoryHarness,
+    );
     const rendered = await harness.row();
     expect(await rendered.getAttribute('data-revision-no')).toBe('3');
     expect(await rendered.getAttribute('data-revision-state')).toBe(row.state);
@@ -51,13 +54,18 @@ describe('RevisionListComponent', () => {
     expect(await (await harness.hash()).text()).toContain(row.hash);
     expect(await (await harness.time()).text()).toBe('06:00:00 26/10/2026 UTC');
     expect(await (await harness.time()).getAttribute('datetime')).toBe(row.created_at);
-    expect(await (await harness.section()).getAttribute('aria-labelledby')).toBe('policy-revisions-title');
+    expect(await (await harness.section()).getAttribute('aria-labelledby')).toBe(
+      'policy-revisions-title',
+    );
     expect(await harness.copyButton()).toBeDefined();
     expect(await (await harness.section()).text()).toContain('Oldest first');
   });
   it('keeps empty history labelled and navigation disabled on its only page', async () => {
     const fixture = TestBed.createComponent(RevisionListComponent);
-    const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, RevisionHistoryHarness);
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(
+      fixture,
+      RevisionHistoryHarness,
+    );
     expect(await (await harness.pager()).text()).toContain('Page 1');
     expect(await harness.rows()).toHaveLength(0);
     expect(await (await harness.empty()).text()).toBe('No revisions available.');
@@ -72,7 +80,10 @@ describe('RevisionListComponent', () => {
     const previous = vi.fn();
     fixture.componentInstance.next.subscribe(next);
     fixture.componentInstance.previous.subscribe(previous);
-    const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, RevisionHistoryHarness);
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(
+      fixture,
+      RevisionHistoryHarness,
+    );
     expect(await (await harness.pager()).text()).toContain('Page 2');
     await (await harness.previous()).click();
     expect(previous).toHaveBeenCalledTimes(1);
@@ -92,12 +103,18 @@ describe('RevisionListComponent', () => {
     fixture.componentInstance.selected.subscribe(selected);
     fixture.componentRef.setInput('rows', [row]);
     fixture.componentRef.setInput('selectedId', row.id);
-    const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, RevisionHistoryHarness);
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(
+      fixture,
+      RevisionHistoryHarness,
+    );
     const action = await harness.view();
     await action.focus();
     expect(await action.getAttribute('aria-haspopup')).toBe('dialog');
     await action.click();
-    expect(selected).toHaveBeenCalledExactlyOnceWith({ id: row.id, trigger: expect.any(HTMLButtonElement) });
+    expect(selected).toHaveBeenCalledExactlyOnceWith({
+      id: row.id,
+      trigger: expect.any(HTMLButtonElement),
+    });
     fixture.componentRef.setInput('busy', true);
     await action.click();
     expect(selected).toHaveBeenCalledTimes(1);
@@ -106,7 +123,10 @@ describe('RevisionListComponent', () => {
     const fixture = TestBed.createComponent(RevisionListComponent);
     const changed = vi.fn();
     fixture.componentInstance.pageSizeChange.subscribe(changed);
-    const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, RevisionHistoryHarness);
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(
+      fixture,
+      RevisionHistoryHarness,
+    );
     expect(await (await harness.size()).text()).toBe('20');
     await (await harness.size()).click();
     const options = await harness.options();

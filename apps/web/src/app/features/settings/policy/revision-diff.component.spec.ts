@@ -110,7 +110,10 @@ describe('RevisionDiffComponent', { timeout: 15_000 }, () => {
     store.openedRevision.set(head);
     const { fixture } = await render();
     fixture.componentRef.setInput('selectedRevisionId', head.id);
-    const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, DiffSelectionHarness);
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(
+      fixture,
+      DiffSelectionHarness,
+    );
     expect(await (await harness.target()).text()).toContain('Revision 2');
     expect(await (await harness.base()).text()).toContain('Revision 1');
     expect(await harness.changes()).not.toHaveLength(0);
@@ -118,7 +121,10 @@ describe('RevisionDiffComponent', { timeout: 15_000 }, () => {
   it('retains selected base, target and comparison when history moves off their page', async () => {
     const { fixture } = await render();
     fixture.componentRef.setInput('selectedRevisionId', head.id);
-    const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, DiffSelectionHarness);
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(
+      fixture,
+      DiffSelectionHarness,
+    );
     const before = await Promise.all((await harness.changes()).map((row) => row.text()));
     store.loadBody.mockClear();
     store.revisions.set([{ ...head, id: 'later', revision_no: 3 }]);

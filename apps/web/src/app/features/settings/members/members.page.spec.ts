@@ -231,7 +231,6 @@ describe('Members page (09.7.1-T2)', () => {
     }
   });
 
-
   it('keeps the remove dialog open and renders last_admin verbatim as text with its code (AC2)', async () => {
     store.remove.mockImplementation(() => {
       store.removeState.set({ phase: 'failed', error: lastAdmin });

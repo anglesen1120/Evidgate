@@ -10,9 +10,15 @@ class TokenPagingHarness extends ComponentHarness {
   private readonly previousButton = this.locatorFor('app-data-table-pager [data-page="previous"]');
   private readonly sizeButton = this.locatorFor('app-data-table-pager hlm-select-trigger button');
 
-  async text(): Promise<string> { return (await this.summary()).text(); }
-  async next(): Promise<void> { await (await this.nextButton()).click(); }
-  async previous(): Promise<void> { await (await this.previousButton()).click(); }
+  async text(): Promise<string> {
+    return (await this.summary()).text();
+  }
+  async next(): Promise<void> {
+    await (await this.nextButton()).click();
+  }
+  async previous(): Promise<void> {
+    await (await this.previousButton()).click();
+  }
   async chooseSize(size: number): Promise<void> {
     await (await this.sizeButton()).click();
     const options = await this.documentRootLocatorFactory().locatorForAll('[role="option"]')();
@@ -38,16 +44,24 @@ describe('API tokens shared pager', () => {
     await pager.next();
     await h.settle();
     expect(await pager.text()).toBe('Page 2');
-    expect(h.navigate).toHaveBeenLastCalledWith([], expect.objectContaining({
-      queryParams: { project: 'project-1', cursor: 'middle' },
-      queryParamsHandling: 'merge', replaceUrl: false,
-    }));
+    expect(h.navigate).toHaveBeenLastCalledWith(
+      [],
+      expect.objectContaining({
+        queryParams: { project: 'project-1', cursor: 'middle' },
+        queryParamsHandling: 'merge',
+        replaceUrl: false,
+      }),
+    );
     await pager.previous();
     await h.settle();
     expect(await pager.text()).toBe('Page 1');
-    expect(h.navigate).toHaveBeenLastCalledWith([], expect.objectContaining({
-      queryParams: { project: 'project-1', cursor: null }, replaceUrl: false,
-    }));
+    expect(h.navigate).toHaveBeenLastCalledWith(
+      [],
+      expect.objectContaining({
+        queryParams: { project: 'project-1', cursor: null },
+        replaceUrl: false,
+      }),
+    );
   });
 
   it('changes the request size through Helm and resets the cursor', async () => {

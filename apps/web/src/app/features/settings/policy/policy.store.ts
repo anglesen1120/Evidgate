@@ -180,9 +180,23 @@ export class PolicyStore {
     }
 
     this.projectIdSignal.set(projectId);
-    const { id: openedId, revision_no, hash, state, created_by, created_at, version } = revision.value;
+    const {
+      id: openedId,
+      revision_no,
+      hash,
+      state,
+      created_by,
+      created_at,
+      version,
+    } = revision.value;
     this.openedRevisionSignal.set({
-      id: openedId, revision_no, hash, state, created_by, created_at, version,
+      id: openedId,
+      revision_no,
+      hash,
+      state,
+      created_by,
+      created_at,
+      version,
     });
     this.startReads(projectId);
     await this.readList(id, generation, true);

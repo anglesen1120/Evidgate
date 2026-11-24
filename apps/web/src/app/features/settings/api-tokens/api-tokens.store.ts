@@ -144,7 +144,11 @@ export const ApiTokensStore = signalStore(
       },
       loader: async ({ params, abortSignal }) => {
         const page = await data.list(params.project, params.cursor, abortSignal, params.limit);
-        return { items: page.items.map(metadata), next_cursor: page.next_cursor, cursor: params.cursor };
+        return {
+          items: page.items.map(metadata),
+          next_cursor: page.next_cursor,
+          cursor: params.cursor,
+        };
       },
     });
     const visiblePage = linkedSignal({
@@ -154,7 +158,12 @@ export const ApiTokensStore = signalStore(
         value: pageResource.hasValue() ? pageResource.value() : undefined,
         error: pageResource.error(),
       }),
-      computation: (source, previous) => {
+      computation: (
+        source,
+        previous,
+      ):
+        | { items: ApiTokenView[]; next_cursor: string | null; cursor: string | undefined }
+        | undefined => {
         if (!source.scope) return undefined;
         const error = source.error;
         if (
@@ -162,7 +171,8 @@ export const ApiTokensStore = signalStore(
           (error.error.kind === 'forbidden' ||
             error.error.kind === 'unauthenticated' ||
             error.error.kind === 'not_found')
-        ) return undefined;
+        )
+          return undefined;
         if (source.value) return source.value;
         return sameScope(source.scope, previous?.source.scope) &&
           source.size === previous?.source.size
@@ -201,8 +211,14 @@ export const ApiTokensStore = signalStore(
     hasNext: computed(() => {
       const next = store.visiblePage()?.next_cursor;
       const index = store.requestCursors().indexOf(store.visiblePage()?.cursor);
-      return !!next && next !== store.cursor() &&
-        !store.requestCursors().slice(0, index + 1).includes(next);
+      return (
+        !!next &&
+        next !== store.cursor() &&
+        !store
+          .requestCursors()
+          .slice(0, index + 1)
+          .includes(next)
+      );
     }),
     // The dialog belongs to the project it was opened on, even if the selection moves under it.
     createOpen: computed(() => store.createOrigin() !== null),

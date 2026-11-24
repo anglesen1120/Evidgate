@@ -179,8 +179,16 @@ import { escapeFormatChars } from '../../../shared/ui/values/ref-name-display';
           (pageSizeChange)="changePageSize($event)"
         />
         @if (store.cursor() && store.page() === 1) {
-          <button hlmBtn [variant]="'outline'" type="button" data-api-first
-            [disabled]="store.pageResource.isLoading()" (click)="first()">{{ copy.first }}</button>
+          <button
+            hlmBtn
+            [variant]="'outline'"
+            type="button"
+            data-api-first
+            [disabled]="store.pageResource.isLoading()"
+            (click)="first()"
+          >
+            {{ copy.first }}
+          </button>
         }
       }
     }

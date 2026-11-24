@@ -205,16 +205,16 @@ export class RevisionDiffComponent {
       target: this.targetId(),
     }),
     computation: (source, previous): readonly PolicyRevisionSummaryDto[] => {
-      const rows = source.opened && !source.rows.some((row) => row.id === source.opened?.id)
-        ? [...source.rows, source.opened]
-        : source.rows;
-      const pinned = previous?.source.project === source.project
-        ? previous?.value.filter((row) => row.id === source.base || row.id === source.target) ?? []
-        : [];
-      return [
-        ...rows,
-        ...pinned.filter((row) => !rows.some((current) => current.id === row.id)),
-      ];
+      const rows =
+        source.opened && !source.rows.some((row) => row.id === source.opened?.id)
+          ? [...source.rows, source.opened]
+          : source.rows;
+      const pinned =
+        previous?.source.project === source.project
+          ? (previous?.value.filter((row) => row.id === source.base || row.id === source.target) ??
+            [])
+          : [];
+      return [...rows, ...pinned.filter((row) => !rows.some((current) => current.id === row.id))];
     },
   });
   protected readonly phase = signal<'empty' | 'loading' | 'ready' | 'error'>('empty');

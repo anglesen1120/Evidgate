@@ -40,15 +40,7 @@ const activation: PolicyActivationStateDto = {
   activated_at: '2026-10-26T00:00:00Z',
 };
 
-const head: PolicyRevisionSummaryDto = {
-  id: revision.id,
-  revision_no: revision.revision_no,
-  hash: revision.hash,
-  state: revision.state,
-  created_by: revision.created_by,
-  created_at: revision.created_at,
-  version: revision.version,
-};
+const head: PolicyRevisionSummaryDto = revision;
 
 class PolicyOverviewHarness extends ComponentHarness {
   static hostSelector = 'app-policy-page';
@@ -395,7 +387,10 @@ describe('PolicyPage', () => {
   it('requests one next page and keeps View/detail on the selected history page', async () => {
     store.hasMore.set(true);
     const { fixture } = await render();
-    const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, PolicyOverviewHarness);
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(
+      fixture,
+      PolicyOverviewHarness,
+    );
     await (await harness.more()).click();
     expect(store.loadMore).toHaveBeenCalledTimes(1);
     store.page.set(2);

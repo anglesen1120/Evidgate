@@ -119,7 +119,9 @@ describe('ApiTokensPage states', () => {
     const h = mount();
     h.list.mockResolvedValueOnce({ items: [ROW], next_cursor: 'next-page' });
     await h.settle();
-    const next = h.root.querySelector<HTMLButtonElement>('app-data-table-pager [data-page="next"][aria-disabled="false"]');
+    const next = h.root.querySelector<HTMLButtonElement>(
+      'app-data-table-pager [data-page="next"][aria-disabled="false"]',
+    );
     if (!next) throw new Error('Missing next-page control');
     next.click();
     await h.settle();
@@ -303,7 +305,9 @@ describe('ApiTokensPage states', () => {
 });
 
 function openNextPage(root: HTMLElement): void {
-  const next = root.querySelector<HTMLButtonElement>('app-data-table-pager [data-page="next"][aria-disabled="false"]');
+  const next = root.querySelector<HTMLButtonElement>(
+    'app-data-table-pager [data-page="next"][aria-disabled="false"]',
+  );
   if (!next) throw new Error('Missing next-page control');
   next.click();
 }

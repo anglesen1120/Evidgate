@@ -88,7 +88,9 @@
         class="m-0 mt-1 text-xs text-muted-foreground"
         data-members-order
         i18n="@@settings.members.order"
-      >Oldest first · creation date</p>
+      >
+        Oldest first · creation date
+      </p>
       <div hlmCardAction class="flex items-center gap-2 text-xs text-muted-foreground">
         <span i18n="@@settings.count-on-page">On this page</span>
         <span class="font-semibold tabular-nums">{{ visibleMembers().length | number }}</span>
@@ -120,18 +122,18 @@
   </section>
 </app-request-state>
 @if (store.phase() === 'ready') {
-    <app-data-table-pager
-      class="pagination border-t border-border px-4 py-3"
-      [page]="store.page()"
-      [pageSize]="store.pageSize()"
-      [count]="visibleMembers().length"
-      [total]="null"
-      [hasNext]="store.hasMore()"
-      [busy]="paging() || store.busy() || !retryReady()"
-      (previous)="previous()"
-      (next)="next()"
-      (pageSizeChange)="changePageSize($event)"
-    />
+  <app-data-table-pager
+    class="pagination border-t border-border px-4 py-3"
+    [page]="store.page()"
+    [pageSize]="store.pageSize()"
+    [count]="visibleMembers().length"
+    [total]="null"
+    [hasNext]="store.hasMore()"
+    [busy]="paging() || store.busy() || !retryReady()"
+    (previous)="previous()"
+    (next)="next()"
+    (pageSizeChange)="changePageSize($event)"
+  />
   @if (store.members().length > 0) {
     <app-role-matrix
       class="mt-6"

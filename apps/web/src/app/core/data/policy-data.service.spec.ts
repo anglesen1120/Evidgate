@@ -186,15 +186,18 @@ describe('PolicyDataService (09.7.1-T4)', () => {
     await expect(read).resolves.toEqual({ items: [], nextCursor: null, headRevisionId: null });
   });
 
-  it.each([20, 50, 100])('listRevisions() sends selected limit %i with its opaque cursor', async (limit) => {
-    const read = service.listRevisions(REVISION_ID, 'opaque+/cursor', limit);
-    const request = await takeRequest(httpMock, LIST_URL);
-    const query = new URL(request.request.urlWithParams).searchParams;
-    expect(query.get('limit')).toBe(String(limit));
-    expect(query.get('cursor')).toBe('opaque+/cursor');
-    flushPage(request, { items: [ROW], next_cursor: null });
-    await expect(read).resolves.toMatchObject({ items: [ROW], nextCursor: null });
-  });
+  it.each([20, 50, 100])(
+    'listRevisions() sends selected limit %i with its opaque cursor',
+    async (limit) => {
+      const read = service.listRevisions(REVISION_ID, 'opaque+/cursor', limit);
+      const request = await takeRequest(httpMock, LIST_URL);
+      const query = new URL(request.request.urlWithParams).searchParams;
+      expect(query.get('limit')).toBe(String(limit));
+      expect(query.get('cursor')).toBe('opaque+/cursor');
+      flushPage(request, { items: [ROW], next_cursor: null });
+      await expect(read).resolves.toMatchObject({ items: [ROW], nextCursor: null });
+    },
+  );
 
   it('listRevisions() hands back the ETag as the head, unquoted', async () => {
     const head = '018f0000-0000-7000-8000-0000000000b2';

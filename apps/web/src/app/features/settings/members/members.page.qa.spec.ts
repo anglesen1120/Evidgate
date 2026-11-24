@@ -25,8 +25,12 @@ class PagedData {
       ? Promise.resolve({ items: [MEMBER], next_cursor: 'next' })
       : this.next();
   }
-  listRoles() { return Promise.resolve(ROLES); }
-  listPermissions() { return Promise.resolve([]); }
+  listRoles() {
+    return Promise.resolve(ROLES);
+  }
+  listPermissions() {
+    return Promise.resolve([]);
+  }
 }
 
 class MembersHarness extends ComponentHarness {
@@ -64,7 +68,10 @@ describe('MembersPage cursor pagination', () => {
       providers: [
         provideZonelessChangeDetection(),
         { provide: MembersDataService, useValue: data },
-        { provide: SessionStore, useValue: { currentOrg: signal({ id: 'org' }), has: () => false } },
+        {
+          provide: SessionStore,
+          useValue: { currentOrg: signal({ id: 'org' }), has: () => false },
+        },
       ],
     });
   });
@@ -79,10 +86,18 @@ describe('MembersPage cursor pagination', () => {
   }
 
   function unavailable(): Promise<MembershipListResponse> {
-    return Promise.reject(new ApiRequestError({
-      kind: 'unavailable', status: 503, code: 'unavailable', message: REFUSAL,
-      requestId: 'request', retryable: true, details: [], retryAfterSeconds: null,
-    }));
+    return Promise.reject(
+      new ApiRequestError({
+        kind: 'unavailable',
+        status: 503,
+        code: 'unavailable',
+        message: REFUSAL,
+        requestId: 'request',
+        retryable: true,
+        details: [],
+        retryAfterSeconds: null,
+      }),
+    );
   }
 
   it('replaces rows and page counts, keeps all role columns, and supports Previous after Next', async () => {
@@ -138,7 +153,8 @@ describe('MembersPage cursor pagination', () => {
     const page = await render();
     await (await page.next()).click();
     await (await page.size()).click();
-    const options = await TestbedHarnessEnvironment.documentRootLoader(fixture).getAllHarnesses(OptionHarness);
+    const options =
+      await TestbedHarnessEnvironment.documentRootLoader(fixture).getAllHarnesses(OptionHarness);
     const texts = await Promise.all(options.map(async (option) => (await option.host()).text()));
     expect(texts).toEqual(['20', '50', '100']);
     const fifty = options[texts.indexOf('50')];

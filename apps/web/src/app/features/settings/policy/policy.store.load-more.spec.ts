@@ -182,26 +182,29 @@ describe('PolicyStore (09.7.1-T4)', () => {
       },
     );
 
-    it.each([50, 100])('resets the cursor and passes selected size %i on every request', async (size) => {
-      data.pages = [
-        page([summary(ANCHOR_ID, 1, 'retired')], '1', HEAD_ID),
-        page([summary(SECOND_ID, 2, 'active')], null, HEAD_ID),
-      ];
-      await store.open(ANCHOR_ID);
-      await store.loadMore();
-      await store.setPageSize(size);
-      expect(store.page()).toBe(1);
-      expect(store.pageSize()).toBe(size);
-      expect(store.revisions().map((row) => row.id)).toEqual([ANCHOR_ID]);
-      expect(data.listCalls.at(-1)?.cursor).toBeUndefined();
-      await store.loadMore();
-      expect(data.listLimits).toEqual([20, 20, size, size]);
-      data.revisions.set(SECOND_ID, revision(SECOND_ID, PROJECT_ID, 2, 'active'));
-      await store.open(SECOND_ID);
-      expect(store.page()).toBe(1);
-      expect(store.pageSize()).toBe(size);
-      expect(data.listCalls.at(-1)).toEqual({ revisionId: SECOND_ID, cursor: undefined });
-    });
+    it.each([50, 100])(
+      'resets the cursor and passes selected size %i on every request',
+      async (size) => {
+        data.pages = [
+          page([summary(ANCHOR_ID, 1, 'retired')], '1', HEAD_ID),
+          page([summary(SECOND_ID, 2, 'active')], null, HEAD_ID),
+        ];
+        await store.open(ANCHOR_ID);
+        await store.loadMore();
+        await store.setPageSize(size);
+        expect(store.page()).toBe(1);
+        expect(store.pageSize()).toBe(size);
+        expect(store.revisions().map((row) => row.id)).toEqual([ANCHOR_ID]);
+        expect(data.listCalls.at(-1)?.cursor).toBeUndefined();
+        await store.loadMore();
+        expect(data.listLimits).toEqual([20, 20, size, size]);
+        data.revisions.set(SECOND_ID, revision(SECOND_ID, PROJECT_ID, 2, 'active'));
+        await store.open(SECOND_ID);
+        expect(store.page()).toBe(1);
+        expect(store.pageSize()).toBe(size);
+        expect(data.listCalls.at(-1)).toEqual({ revisionId: SECOND_ID, cursor: undefined });
+      },
+    );
 
     it('ignores unsupported and unchanged sizes without resetting history', async () => {
       await store.open(ANCHOR_ID);
@@ -223,9 +226,15 @@ describe('PolicyStore (09.7.1-T4)', () => {
       expect(store.paging()).toBe(true);
       expect(store.page()).toBe(1);
       expect(store.revisions().map((row) => row.id)).toEqual([ANCHOR_ID]);
-      data.pendingLists[0]?.reject(typedFailure({
-        error: { code: 'unavailable', message: 'Busy', request_id: HEAD_ID, retryable: true },
-      }, 'unavailable', 503));
+      data.pendingLists[0]?.reject(
+        typedFailure(
+          {
+            error: { code: 'unavailable', message: 'Busy', request_id: HEAD_ID, retryable: true },
+          },
+          'unavailable',
+          503,
+        ),
+      );
       await navigation;
       expect(store.paging()).toBe(false);
       expect(store.page()).toBe(1);
