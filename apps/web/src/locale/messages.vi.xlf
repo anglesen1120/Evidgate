@@ -3645,8 +3645,6 @@
       <trans-unit id="authoring.ai-settings.settings-id" datatype="html"><source>Settings identity</source><target>Mã cài đặt</target></trans-unit>
       <trans-unit id="authoring.ai-settings.hash" datatype="html"><source>Content hash</source><target>Mã băm nội dung</target></trans-unit>
       <trans-unit id="authoring.ai-settings.history-tab" datatype="html"><source>Version history</source><target>Lịch sử phiên bản</target></trans-unit>
-      <trans-unit id="authoring.ai-settings.pages" datatype="html"><source>Version history pages</source><target>Các trang lịch sử phiên bản</target></trans-unit>
-      <trans-unit id="authoring.ai-settings.no-match" datatype="html"><source>No loaded versions match this filter</source><target>Không có phiên bản đã tải khớp bộ lọc</target></trans-unit>
       <trans-unit id="authoring.ai-settings.empty-history" datatype="html"><source>No saved settings versions</source><target>Chưa có phiên bản cài đặt được lưu</target></trans-unit>
       <trans-unit id="authoring.ai-settings.saved-versions" datatype="html"><source>Saved settings versions</source><target>Các phiên bản cài đặt đã lưu</target></trans-unit>
       <trans-unit id="authoring.ai-settings.empty-page" datatype="html"><source>No versions on this page</source><target>Trang này không có phiên bản nào</target></trans-unit>
@@ -3691,10 +3689,7 @@
       <trans-unit id="authoring.ai-settings.preview-description" datatype="html"><source>Replace every guidance field in the draft only. Nothing is saved until Save new version.</source><target>Chỉ thay tất cả trường hướng dẫn trong bản nháp. Chưa lưu cho đến khi chọn Lưu phiên bản mới.</target></trans-unit>
       <trans-unit id="authoring.ai-settings.cancel" datatype="html"><source>Cancel</source><target>Hủy</target></trans-unit>
       <trans-unit id="authoring.ai-settings.replace" datatype="html"><source>Replace draft</source><target>Thay bản nháp</target></trans-unit>
-      <trans-unit id="authoring.ai-settings.filter" datatype="html"><source>Filter loaded versions by reason</source><target>Lọc phiên bản đã tải theo lý do</target></trans-unit>
       <trans-unit id="authoring.ai-settings.compare" datatype="html"><source>Compare with <x id="INTERPOLATION" equiv-text="{{ row.version_no }}"/></source><target>So sánh với <x id="INTERPOLATION" equiv-text="{{ row.version_no }}"/></target></trans-unit>
-      <trans-unit id="authoring.ai-settings.first" datatype="html"><source>First page</source><target>Trang đầu</target></trans-unit>
-      <trans-unit id="authoring.ai-settings.next" datatype="html"><source>Next page</source><target>Trang tiếp</target></trans-unit>
       <trans-unit id="authoring.ai-settings.immutable" datatype="html"><source>Version <x id="INTERPOLATION" equiv-text="{{ version.version_no }}"/> — read-only</source><target>Phiên bản <x id="INTERPOLATION" equiv-text="{{ version.version_no }}"/> — chỉ đọc</target></trans-unit>
       <trans-unit id="authoring.ai-settings.restore-unavailable" datatype="html"><source>Restore is unavailable: this screen provides read-only history.</source><target>Không thể khôi phục: màn hình này chỉ cho phép đọc lịch sử.</target></trans-unit>
       <trans-unit id="authoring.ai-settings.diff-title" datatype="html"><source>Compare version <x id="INTERPOLATION" equiv-text="{{ before.version_no }}"/> with <x id="INTERPOLATION_1" equiv-text="{{ after.version_no }}"/></source><target>So sánh phiên bản <x id="INTERPOLATION" equiv-text="{{ before.version_no }}"/> với <x id="INTERPOLATION_1" equiv-text="{{ after.version_no }}"/></target></trans-unit>
@@ -3707,7 +3702,6 @@
       <trans-unit id="authoring.ai-settings.cursor-cycle" datatype="html"><source>The server repeated a page cursor. Return to the first page to retry.</source><target>Máy chủ lặp lại con trỏ trang. Quay về trang đầu để thử lại.</target></trans-unit>
       <trans-unit id="authoring.case-table.selection-summary" datatype="html"><source> <x id="INTERPOLATION" equiv-text="{{ selectedCount() | number }}"/> of <x id="INTERPOLATION_1" equiv-text="{{ rows().length | number }}"/> loaded selected; applies to visible rows only </source><target>Đã chọn <x id="INTERPOLATION" equiv-text="{{ selectedCount() | number }}"/> trong <x id="INTERPOLATION_1" equiv-text="{{ rows().length | number }}"/> ca đã tải; chỉ áp dụng cho các hàng đang hiển thị</target></trans-unit>
       <trans-unit id="authoring.case-table.select-case" datatype="html"><source>Select case <x id="code" equiv-text="row.code"/></source><target>Chọn ca kiểm thử <x id="code" equiv-text="row.code"/></target></trans-unit>
-      <trans-unit id="authoring.case-table.loaded-count" datatype="html"><source><x id="INTERPOLATION" equiv-text="{{ store.rows().length | number }}"/> cases loaded</source><target>Đã tải <x id="INTERPOLATION" equiv-text="{{ store.rows().length | number }}"/> ca kiểm thử</target></trans-unit>
       <trans-unit id="authoring.case-table.scope-help" datatype="html"><source>Filters search the server list. Authoring coverage means a live automated identity is linked; it is not an execution result.</source><target>Bộ lọc tìm trong danh sách trên máy chủ. Độ bao phủ khi soạn thảo nghĩa là có liên kết đến định danh tự động hoá đang hoạt động; đây không phải kết quả thực thi.</target></trans-unit>
       <trans-unit id="authoring.case-table.filters" datatype="html"><source>Filter cases</source><target>Lọc ca kiểm thử</target></trans-unit>
       <trans-unit id="authoring.case-table.item" datatype="html"><source>Checklist item ID</source><target>ID mục checklist</target></trans-unit>
@@ -3745,11 +3739,8 @@
       <trans-unit id="authoring.case-table.no-match" datatype="html"><source>No test cases match these filters</source><target>Không có ca kiểm thử khớp bộ lọc</target></trans-unit>
       <trans-unit id="authoring.case-table.no-match-help" datatype="html"><source>Clear the filters to inspect cases in the same hierarchy scope.</source><target>Xoá bộ lọc để xem các ca kiểm thử trong cùng phạm vi phân cấp.</target></trans-unit>
       <trans-unit id="authoring.case-table.stale" datatype="html"><source>Case list may be stale</source><target>Danh sách ca kiểm thử có thể đã cũ</target></trans-unit>
-      <trans-unit id="authoring.case-table.stale-help" datatype="html"><source>Refresh failed; previously loaded cases are still shown. Retry explicitly to refresh this region only.</source><target>Không thể làm mới; các ca đã tải vẫn được hiển thị. Hãy chủ động thử lại để chỉ làm mới vùng này.</target></trans-unit>
+<trans-unit id="authoring.case-table.stale-help" datatype="html"><source>The request failed; the previously loaded page is still shown. Retry explicitly to load the requested page.</source><target>Yêu cầu không thành công; trang đã tải trước đó vẫn được hiển thị. Hãy chủ động thử lại để tải trang được yêu cầu.</target></trans-unit>
       <trans-unit id="authoring.case-table.pagination" datatype="html"><source>Manual case pagination</source><target>Phân trang ca kiểm thử thủ công</target></trans-unit>
-      <trans-unit id="authoring.case-table.page-size" datatype="html"><source>Page size</source><target>Số ca mỗi trang</target></trans-unit>
-      <trans-unit id="authoring.case-table.more" datatype="html"><source>Load more cases</source><target>Tải thêm ca kiểm thử</target></trans-unit>
-      <trans-unit id="authoring.case-table.loading-more" datatype="html"><source>Loading more cases…</source><target>Đang tải thêm ca kiểm thử…</target></trans-unit>
       <trans-unit id="authoring.case-table.select" datatype="html"><source>Select visible rows</source><target>Chọn các hàng đang hiển thị</target></trans-unit>
       <trans-unit id="authoring.case-table.selection" datatype="html"><source>Selection</source><target>Lựa chọn</target></trans-unit>
       <trans-unit id="authoring.case-table.selection-help" datatype="html"><source>Selection applies to visible rows only, not unloaded cases or hidden record pages.</source><target>Lựa chọn chỉ áp dụng cho các hàng đang hiển thị, không bao gồm ca chưa tải hoặc các trang bản ghi đang ẩn.</target></trans-unit>
@@ -3892,14 +3883,6 @@
         <source>No versions recorded</source>
         <target state="translated">Chưa có phiên bản nào</target>
       </trans-unit>
-      <trans-unit id="authoring.editor.history-filter" datatype="html">
-        <source>Filter loaded versions by reason</source>
-        <target state="translated">Lọc các phiên bản đã tải theo lý do</target>
-      </trans-unit>
-      <trans-unit id="authoring.editor.history-no-match" datatype="html">
-        <source>No loaded versions match this filter</source>
-        <target state="translated">Không có phiên bản đã tải nào khớp với bộ lọc này</target>
-      </trans-unit>
       <trans-unit id="authoring.editor.history-partial" datatype="html">
         <source>Loading more versions failed. Previously loaded versions are retained.</source>
         <target state="translated">Không tải được các phiên bản tiếp theo. Những phiên bản đã tải vẫn được giữ nguyên.</target>
@@ -3931,18 +3914,6 @@
       <trans-unit id="authoring.editor.length-error" datatype="html">
         <source>Shorten this field to the character limit shown below.</source>
         <target state="translated">Rút ngắn nội dung để không vượt giới hạn ký tự bên dưới.</target>
-      </trans-unit>
-      <trans-unit id="authoring.editor.load-more" datatype="html">
-        <source>Load more</source>
-        <target state="translated">Tải thêm</target>
-      </trans-unit>
-      <trans-unit id="authoring.editor.loaded-count" datatype="html">
-        <source><x id="INTERPOLATION" equiv-text="{{ store.rows().length }}"/> versions loaded</source>
-        <target state="translated">Đã tải <x id="INTERPOLATION" equiv-text="{{ store.rows().length }}"/> phiên bản</target>
-      </trans-unit>
-      <trans-unit id="authoring.editor.loading-more" datatype="html">
-        <source>Loading older versions…</source>
-        <target state="translated">Đang tải các phiên bản cũ hơn…</target>
       </trans-unit>
       <trans-unit id="authoring.editor.low" datatype="html">
         <source>Low</source>
@@ -4217,13 +4188,11 @@
       <trans-unit id="authoring.import-export.bytes" datatype="html"><source>bytes</source><target>byte</target></trans-unit>
       <trans-unit id="authoring.import-export.data-rows" datatype="html"><source>data rows</source><target>dòng dữ liệu</target></trans-unit>
       <trans-unit id="authoring.import-export.history" datatype="html"><source>Authoring versions</source><target>Các phiên bản biên soạn</target></trans-unit>
-      <trans-unit id="authoring.import-export.history-hint" datatype="html"><source>Latest import versions in this project, up to 50 per page. Version numbers belong to each entity. Only this authorized history read confirms a version.</source><target>Các phiên bản nhập mới nhất của dự án, tối đa 50 phiên bản mỗi trang. Số phiên bản thuộc từng thực thể. Chỉ dữ liệu lịch sử được cấp quyền này xác nhận một phiên bản.</target></trans-unit>
+<trans-unit id="authoring.import-export.history-hint" datatype="html"><source>Import versions, newest first (server order). Version numbers belong to each entity. Only this authorized history read confirms a version.</source><target>Các phiên bản nhập, mới nhất trước (thứ tự máy chủ). Số phiên bản thuộc về từng thực thể. Chỉ lịch sử được đọc với quyền phù hợp này mới xác nhận một phiên bản.</target></trans-unit>
       <trans-unit id="authoring.import-export.history-failed" datatype="html"><source>Version history could not be loaded. The file and preview remain available.</source><target>Không tải được lịch sử phiên bản. Tệp và nội dung xem trước vẫn được giữ lại.</target></trans-unit>
       <trans-unit id="authoring.import-export.history-stale" datatype="html"><source>Version history is stale because its refresh failed. The file and preview remain available.</source><target>Lịch sử phiên bản đã cũ vì không thể làm mới. Tệp và nội dung xem trước vẫn được giữ lại.</target></trans-unit>
       <trans-unit id="authoring.import-export.history-empty" datatype="html"><source>No import versions were returned for this project.</source><target>Không có phiên bản nhập nào được trả về cho dự án này.</target></trans-unit>
       <trans-unit id="authoring.import-export.history-refresh" datatype="html"><source>Refresh version history</source><target>Làm mới lịch sử phiên bản</target></trans-unit>
-      <trans-unit id="authoring.import-export.history-older" datatype="html"><source>Older import versions</source><target>Các phiên bản nhập cũ hơn</target></trans-unit>
-      <trans-unit id="authoring.import-export.history-latest" datatype="html"><source>Latest import versions</source><target>Các phiên bản nhập mới nhất</target></trans-unit>
       <trans-unit id="authoring.import-export.version" datatype="html"><source>Entity version</source><target>Phiên bản thực thể</target></trans-unit>
       <trans-unit id="authoring.import-export.entity" datatype="html"><source>Entity</source><target>Thực thể</target></trans-unit>
       <trans-unit id="authoring.import-export.source" datatype="html"><source>Source</source><target>Nguồn</target></trans-unit>
@@ -4318,7 +4287,6 @@
       <trans-unit id="authoring.pending-changes.stale-queue" datatype="html"><source>Refresh failed. These are previously loaded changes, not a confirmed current queue.</source><target>Không thể làm mới. Đây là các thay đổi đã tải trước đó, chưa xác nhận là hàng chờ hiện tại.</target></trans-unit>
       <trans-unit id="authoring.pending-changes.select-change" datatype="html"><source>Select change</source><target>Chọn thay đổi</target></trans-unit>
       <trans-unit id="authoring.pending-changes.change-id" datatype="html"><source>Change id</source><target>Mã thay đổi</target></trans-unit>
-      <trans-unit id="authoring.pending-changes.load-more" datatype="html"><source>Load more changes</source><target>Tải thêm thay đổi</target></trans-unit>
       <trans-unit id="authoring.pending-changes.batch-summary" datatype="html"><source>Batch summary</source><target>Tóm tắt lô</target></trans-unit>
       <trans-unit id="authoring.pending-changes.exact-ids" datatype="html"><source>Exact reviewed change ids</source><target>Đúng các mã thay đổi đã xem xét</target></trans-unit>
       <trans-unit id="authoring.pending-changes.metadata" datatype="html"><source>Implementation metadata · read-only</source><target>Siêu dữ liệu triển khai · chỉ đọc</target></trans-unit>
@@ -4337,7 +4305,7 @@
       <trans-unit id="authoring.pending-changes.comment-required" datatype="html"><source>Enter a comment before queueing it.</source><target>Nhập bình luận trước khi xếp hàng.</target></trans-unit>
       <trans-unit id="authoring.pending-changes.review-tab-title" datatype="html"><source>Pending changes for this item</source><target>Thay đổi đang chờ của mục này</target></trans-unit>
       <trans-unit id="authoring.pending-changes.item-empty" datatype="html"><source>No loaded pending change targets this item.</source><target>Không có thay đổi đang chờ nào đã tải nhắm đến mục này.</target></trans-unit>
-      <trans-unit id="authoring.pending-changes.item-scope" datatype="html"><source>This list includes loaded changes for this item. Load more to inspect older pending changes.</source><target>Danh sách này gồm các thay đổi đã tải của mục này. Tải thêm để xem các thay đổi đang chờ cũ hơn.</target></trans-unit>
+<trans-unit id="authoring.pending-changes.item-scope" datatype="html"><source>Server filters: pending changes for this item. Use the table pagination to inspect other changes.</source><target>Bộ lọc phía máy chủ: các thay đổi đang chờ cho mục này. Dùng phân trang của bảng để xem các thay đổi khác.</target></trans-unit>
       <trans-unit id="authoring.pending-changes.open-queue" datatype="html"><source>Review the project pending queue</source><target>Xem xét hàng chờ của dự án</target></trans-unit>
       <trans-unit id="authoring.pending-changes.queue-delete-title" datatype="html"><source>Queue a delete for this item?</source><target>Xếp hàng thao tác xoá mục này?</target></trans-unit>
       <trans-unit id="authoring.pending-changes.queue-delete-body" datatype="html"><source>This only queues a delete for review. The item is not deleted until an authorized reviewer applies the batch.</source><target>Thao tác này chỉ xếp hàng yêu cầu xoá để xem xét. Mục chỉ bị xoá khi người có quyền áp dụng lô.</target></trans-unit>
@@ -22612,7 +22580,6 @@
       <trans-unit id="authoring.ai-settings.configured-languages" datatype="html"><source>Configured output languages</source><target>Ngôn ngữ đầu ra đã cấu hình</target></trans-unit>
       <trans-unit id="authoring.ai-settings.loaded-templates" datatype="html"><source>Loaded templates</source><target>Số mẫu đã tải</target></trans-unit>
       <trans-unit id="authoring.ai-settings.versions-on-page" datatype="html"><source>Versions on this page</source><target>Số phiên bản trên trang này</target></trans-unit>
-      <trans-unit id="authoring.ai-settings.visible-versions" datatype="html"><source>Showing <x id="INTERPOLATION"/> of <x id="INTERPOLATION_1"/> loaded versions</source><target>Đang hiển thị <x id="INTERPOLATION"/> trong số <x id="INTERPOLATION_1"/> phiên bản đã tải</target></trans-unit>
       <trans-unit id="onboarding.record.actions" datatype="html"><source>Actions</source><target>Thao tác</target></trans-unit>
       <trans-unit id="onboarding.record.binding" datatype="html"><source>CI binding details</source><target>Chi tiết liên kết CI</target></trans-unit>
       <trans-unit id="onboarding.record.token" datatype="html"><source>Ingest token details</source><target>Chi tiết mã thông báo tiếp nhận</target></trans-unit>
@@ -22640,7 +22607,7 @@
       <trans-unit id="authoring.pending-changes.actions" datatype="html"><source>Actions</source><target>Thao tác</target></trans-unit>
       <trans-unit id="authoring.pending-changes.view-title" datatype="html"><source>Change details</source><target>Chi tiết thay đổi</target></trans-unit>
       <trans-unit id="authoring.pending-changes.payload-preview" datatype="html"><source>Change preview</source><target>Xem trước thay đổi</target></trans-unit>
-      <trans-unit id="authoring.pending-changes.view-instructions" datatype="html"><source>View a change to inspect its details. Use the checkboxes to select the changes to apply.</source><target>Chọn Xem để đọc chi tiết từng thay đổi. Đánh dấu vào ô của những thay đổi cần áp dụng.</target></trans-unit>
+<trans-unit id="authoring.pending-changes.view-instructions" datatype="html"><source>Server filter: pending changes. View a change to inspect its details. Use the checkboxes to select the changes to apply.</source><target>Bộ lọc phía máy chủ: các thay đổi đang chờ. Xem một thay đổi để kiểm tra chi tiết. Dùng các ô chọn để chọn những thay đổi cần áp dụng.</target></trans-unit>
       <trans-unit id="authoring.pending-changes.more-actions" datatype="html"><source>More actions</source><target>Thao tác khác</target></trans-unit>
       <trans-unit id="authoring.editor.content-hint" datatype="html"><source>Expected results change only through explicit manual edits.</source><target>Kết quả mong đợi chỉ thay đổi khi bạn trực tiếp chỉnh sửa.</target></trans-unit>
       <trans-unit id="authoring.editor.version-column" datatype="html"><source>Version</source><target>Phiên bản</target></trans-unit>
@@ -22653,7 +22620,6 @@
       <trans-unit id="authoring.pending-changes.select-column" datatype="html"><source>Select</source><target>Chọn</target></trans-unit>
       <trans-unit id="authoring.import-export.choose-file" datatype="html"><source>Choose file</source><target>Chọn tệp</target></trans-unit>
       <trans-unit id="authoring.import-export.no-file-hint" datatype="html"><source>No rows have been validated or imported.</source><target>Chưa có dòng nào được kiểm tra hoặc nhập.</target></trans-unit>
-      <trans-unit id="authoring.import-export.showing-range" datatype="html"><source>Showing 1–<x id="end"/> of <x id="loaded"/> loaded versions</source><target>Đang hiển thị từ 1 đến <x id="end"/> trong số <x id="loaded"/> phiên bản đã tải</target></trans-unit>
       <trans-unit id="authoring.case-table.count-unverified" datatype="html"><source>Count unavailable with the current filter</source><target>Không xác định được số lượng với bộ lọc hiện tại</target></trans-unit>
       <trans-unit id="catalog.case-list.count-unverified" datatype="html"><source>Count unavailable with the current filter</source><target>Không xác định được số lượng với bộ lọc hiện tại</target></trans-unit>
 <trans-unit id="settings.members.view" datatype="html"><source>View member</source><target>Xem thành viên</target></trans-unit>
@@ -22801,6 +22767,15 @@
       <trans-unit id="quota.panel.project-order" datatype="html"><source>Projects ordered oldest first</source><target>Dự án được sắp xếp từ cũ nhất đến mới nhất</target></trans-unit>
       <trans-unit id="quota.panel.project-page-failed" datatype="html"><source>Project page unavailable. The previous page is still shown.</source><target>Không tải được trang dự án. Trang trước vẫn đang hiển thị.</target></trans-unit>
       <trans-unit id="quota.panel.retry-project-page" datatype="html"><source>Retry project page</source><target>Thử tải lại trang dự án</target></trans-unit>
+<trans-unit id="authoring.ai-settings.history-order" datatype="html"><source>Fixed server order: newest version first</source><target>Thứ tự máy chủ cố định: phiên bản mới nhất trước</target></trans-unit>
+<trans-unit id="authoring.ai-settings.page-filter" datatype="html"><source>Filter this page by reason</source><target>Lọc lý do trên trang này</target></trans-unit>
+<trans-unit id="authoring.ai-settings.page-no-match" datatype="html"><source>No versions on this page match this filter</source><target>Không có phiên bản nào trên trang này khớp với bộ lọc</target></trans-unit>
+<trans-unit id="authoring.case-table.order" datatype="html"><source>Case code ascending; case ID breaks ties</source><target>Mã ca kiểm thử tăng dần; sắp theo ID nếu trùng mã</target></trans-unit>
+<trans-unit id="authoring.case-table.empty-page" datatype="html"><source>No manual cases on this page</source><target>Không có ca kiểm thử thủ công trên trang này</target></trans-unit>
+<trans-unit id="authoring.case-table.empty-page-help" datatype="html"><source>Use Previous records to return to an earlier page, or refresh to start again.</source><target>Dùng nút Bản ghi trước để quay lại trang trước hoặc làm mới để bắt đầu lại.</target></trans-unit>
+<trans-unit id="authoring.editor.history-page-filter" datatype="html"><source>Filter this page by reason</source><target>Lọc lý do trên trang này</target></trans-unit>
+<trans-unit id="authoring.editor.history-page-no-match" datatype="html"><source>No versions on this page match this filter</source><target>Không có phiên bản nào trên trang này khớp với bộ lọc</target></trans-unit>
+<trans-unit id="authoring.pending-changes.ordered-caption" datatype="html"><source><x id="caption" equiv-text="caption"/> — Oldest first (server order)</source><target><x id="caption" equiv-text="caption"/> — Cũ nhất trước (thứ tự máy chủ)</target></trans-unit>
 </body>
   </file>
 </xliff>

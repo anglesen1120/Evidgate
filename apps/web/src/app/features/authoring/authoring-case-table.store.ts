@@ -29,6 +29,8 @@ interface CaseTableState {
   scopeKey: string;
   rows: readonly ManualCaseListItemDto[];
   nextCursor: string | null;
+  page: number;
+  requestCursors: readonly (string | null)[];
   status: 'loading' | 'ready' | 'error';
   error: ApiError | null;
   loadingMore: boolean;
@@ -40,7 +42,11 @@ interface CaseTableState {
   /** Which route value was refused, so the notice can name the filter the recovery clears. */
   invalidLinkField: 'item' | 'node' | null;
   /** The read that failed, so Retry replays it instead of restarting the walk. */
-  failedRead: { readonly cursor: string | null; readonly append: boolean } | null;
+  failedRead: {
+    readonly cursor: string | null;
+    readonly append: boolean;
+    readonly page: number;
+  } | null;
 }
 const failure = (code: string, message: string): ApiError => ({
   kind: 'unexpected',
@@ -98,11 +104,13 @@ const QUERY_TOO_LONG = refusedLink(
 export const AuthoringCaseTableStore = signalStore(
   withState<CaseTableState>({
     projectId: null,
-    query: { limit: 50 },
+    query: { limit: 20 },
     routeCursor: null,
     scopeKey: '',
     rows: [],
     nextCursor: null,
+    page: 1,
+    requestCursors: [null],
     status: 'loading',
     error: null,
     loadingMore: false,
@@ -135,11 +143,16 @@ export const AuthoringCaseTableStore = signalStore(
       page: ManualCaseListResponse,
       cursor: string | null,
       append: boolean,
+      targetPage: number,
     ): string | null {
+      const history = [...store.requestCursors().slice(0, targetPage - 1), cursor];
       const step = takeKeysetPage({
         cursor,
         items: page.items,
-        nextCursor: page.next_cursor,
+        nextCursor:
+          page.next_cursor !== null && history.includes(page.next_cursor)
+            ? cursor
+            : page.next_cursor,
         seen: new Set(append ? store.rows().map((row) => row.case_id) : []),
         keyOf: (row) => row.case_id,
         refusals: REFUSALS,
@@ -159,31 +172,38 @@ export const AuthoringCaseTableStore = signalStore(
         });
         return null;
       }
-      const combined = append ? [...store.rows(), ...step.fresh] : step.fresh;
-      const retained = retainKeysetRows(combined, step.nextCursor, cap);
+      const retained = retainKeysetRows(step.fresh, step.nextCursor, cap);
       patchState(store, {
         rows: retained.rows,
         nextCursor: retained.nextCursor,
         browseCapped: retained.capped,
         routeCursor: cursor,
+        page: targetPage,
+        requestCursors: history,
         status: 'ready',
         stale: false,
         error: null,
         failedRead: null,
       });
       store._wait.clear();
-      // The accepted page keeps its request cursor even when it lands on the cap: the caller
-      // still owns the URL step and the focus handoff for the rows it just received, while
-      // `nextCursor: null` alone says the walk cannot continue.
+      // The URL follows only accepted reads; failed navigation leaves the current page intact.
       return cursor;
     }
-    async function read(append: boolean, cursorOverride?: string): Promise<string | null> {
+    async function read(
+      append: boolean,
+      cursorOverride?: string | null,
+      targetPage = append ? store.page() + 1 : store.page(),
+    ): Promise<string | null> {
       const projectId = store.projectId();
       if (!projectId || !store._wait.ready() || store.loadingMore()) return null;
       if (store.invalidLink()) return null;
-      // The cap only ends the walk forward: a first-page read still replaces the capped list.
       if (append && store.browseCapped()) return null;
-      const cursor = cursorOverride ?? (append ? store.nextCursor() : store.routeCursor());
+      const cursor =
+        cursorOverride !== undefined
+          ? cursorOverride
+          : append
+            ? store.nextCursor()
+            : store.routeCursor();
       if (append && !cursor) return null;
       // Every read restates the search guard: a URL-supplied or stale value never reaches the wire.
       if (queryTooLong(store.query().q ?? '')) {
@@ -202,13 +222,13 @@ export const AuthoringCaseTableStore = signalStore(
       const query = { ...store.query(), ...(cursor ? { cursor } : {}) };
       patchState(store, {
         error: null,
-        loadingMore: append,
-        ...(append ? {} : { status: 'loading' as const }),
+        loadingMore: true,
+        ...(store.rows().length > 0 ? {} : { status: 'loading' as const }),
       });
       try {
         const page = await data.listManualCases(projectId, query, controller.signal);
         if (controller.signal.aborted || store._run.controller !== controller) return null;
-        return acceptPage(page, cursor, append);
+        return acceptPage(page, cursor, append, targetPage);
       } catch (error: unknown) {
         if (controller.signal.aborted || store._run.controller !== controller) return null;
         const typed = isApiRequestError(error) ? error.error : UNRESOLVED;
@@ -221,7 +241,7 @@ export const AuthoringCaseTableStore = signalStore(
           browseCapped: denied ? false : store.browseCapped(),
           status: retained ? 'ready' : 'error',
           stale: retained,
-          failedRead: denied ? null : { cursor, append },
+          failedRead: denied ? null : { cursor, append, page: targetPage },
         });
         store._wait.start(typed.retryAfterSeconds);
         return null;
@@ -263,6 +283,8 @@ export const AuthoringCaseTableStore = signalStore(
           scopeKey,
           rows: [],
           nextCursor: null,
+          page: 1,
+          requestCursors: [cursor ?? null],
           loadingMore: false,
           stale: false,
           browseCapped: false,
@@ -275,18 +297,18 @@ export const AuthoringCaseTableStore = signalStore(
         await read(false);
       },
       async reload(): Promise<void> {
-        // Explicit refresh restarts the walk; keeping a page cursor would drop the pages before it.
-        // The cap notice stays until the replacement page lands, so a failed refresh does not
-        // describe the same retained rows as an uncapped list.
-        patchState(store, { routeCursor: null });
-        await read(false);
+        await read(false, null, 1);
       },
       retry: (): Promise<string | null> => {
         const failed = store.failedRead();
         if (failed === null) return Promise.resolve(null);
-        return failed.append && failed.cursor !== null ? read(true, failed.cursor) : read(false);
+        return read(failed.append, failed.cursor, failed.page);
       },
       loadMore: () => read(true),
+      previous: () =>
+        store.page() > 1
+          ? read(false, store.requestCursors()[store.page() - 2] ?? null, store.page() - 1)
+          : Promise.resolve(null),
       cancel: abort,
     };
   }),

@@ -14,7 +14,7 @@ export class SettingsHarness extends ComponentHarness {
   readonly historyTab = this.locatorFor('[data-ai-history-tab]');
   readonly emptyTitle = this.locatorFor('app-ai-settings-history app-empty-pattern h2');
   readonly nextHistoryPage = this.locatorFor(
-    'nav[aria-label="Version history pages"] button:last-child',
+    'app-ai-settings-history app-data-table-pager button[data-page="next"]',
   );
   async attribute(selector: string, name: string) {
     return (await this.locatorFor(selector)()).getAttribute(name);

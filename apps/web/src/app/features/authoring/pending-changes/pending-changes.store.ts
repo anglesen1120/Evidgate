@@ -114,6 +114,10 @@ export const PendingChangesStore = signalStore(
             targetId,
             rows: [],
             nextCursor: null,
+            requestCursors: [null],
+            pageRowIds: [],
+            page: 1,
+            pendingPage: null,
             queueStatus: 'idle',
             queueError: null,
             queueStale: false,
@@ -138,11 +142,78 @@ export const PendingChangesStore = signalStore(
       async reload(): Promise<void> {
         await reload();
       },
-      async loadMore(): Promise<void> {
+      async next(): Promise<void> {
         const project = store.projectId();
         const cursor = store.nextCursor();
-        if (project === null || cursor === null || store.queueLoading() || store.applying()) return;
+        if (
+          project === null ||
+          cursor === null ||
+          store.queueLoading() ||
+          store.applying() ||
+          store.discardingId() !== null ||
+          store.queueing() ||
+          store.applyRequest() !== null ||
+          !store.retryReady()
+        )
+          return;
         await read(project, cursor, false);
+      },
+      async previous(): Promise<void> {
+        const project = store.projectId();
+        if (
+          project === null ||
+          store.page() === 1 ||
+          store.queueLoading() ||
+          store.applying() ||
+          store.discardingId() !== null ||
+          store.queueing() ||
+          store.applyRequest() !== null ||
+          !store.retryReady()
+        )
+          return;
+        const page = store.page() - 1;
+        await read(project, store.requestCursors()[page - 1] ?? null, false, page);
+      },
+      async setPageSize(size: number): Promise<void> {
+        if (
+          ![20, 50, 100].includes(size) ||
+          (size === store.pageSize() && store.page() === 1) ||
+          store.applying() ||
+          store.discardingId() !== null ||
+          store.queueing() ||
+          store.applyRequest() !== null ||
+          !store.retryReady()
+        )
+          return;
+        patchState(store, {
+          pageSize: size,
+          rows: [],
+          selectedIds: [],
+          selectionTouched: false,
+          previewId: null,
+          batchEtag: null,
+          queueStatus: 'loading',
+          nextCursor: null,
+          page: 1,
+          requestCursors: [null],
+          pageRowIds: [],
+        });
+        await reload();
+      },
+      async retryPage(): Promise<void> {
+        const project = store.projectId();
+        const pending = store.pendingPage();
+        if (
+          project === null ||
+          pending === null ||
+          store.queueLoading() ||
+          store.applying() ||
+          store.discardingId() !== null ||
+          store.queueing() ||
+          !store.retryReady()
+        )
+          return;
+        await read(project, pending.cursor, pending.page === 1, pending.page);
       },
       toggle(id: string): void {
         const selected = new Set(store.selectedIds());

@@ -89,6 +89,25 @@ describe('ImportExportDataService', () => {
     }
   });
 
+  it('submits every original row for preview and confirmation, independently of the visible page', async () => {
+    const text = JSON.stringify({
+      rows: Array.from({ length: 101 }, (_, index) => ({
+        kind: 'node',
+        key: `n${index + 1}`,
+        title: `Title ${index + 1}`,
+      })),
+    });
+    const file = new File([text], 'source.json');
+    for (const dryRun of [true, false]) {
+      const call = service.importFile('project', file, 'json', dryRun, `intent-${dryRun}`);
+      const pending = await takeRequest('/authoring/import');
+      expect(pending.request.body).toBe(text);
+      pending.flush(JSON.stringify(report), { headers: JSON_HEADERS });
+      await call;
+    }
+    expect(await file.text()).toBe(text);
+  });
+
   it('refuses an XLSX filename sent as text instead of decoding workbook bytes', async () => {
     await expect(
       service.importFile('project', new File(['PK'], 'file.xlsx'), 'csv', true, 'key'),
@@ -281,12 +300,28 @@ describe('ImportExportDataService', () => {
     expect(pending.request.method).toBe('GET');
     expect([...new URL(pending.request.urlWithParams).searchParams]).toEqual([
       ['source', 'import'],
-      ['limit', '50'],
+      ['limit', '20'],
     ]);
     expect(pending.request.headers.has('Idempotency-Key')).toBe(false);
     pending.flush(JSON.stringify({ items: [], next_cursor: null }), { headers: JSON_HEADERS });
     expect(await call).toEqual({ items: [], next_cursor: null });
   });
+
+  it.each([20, 50, 100])(
+    'passes selected limit %s and the opaque import-history cursor',
+    async (limit) => {
+      const call = service.listVersions('project', undefined, 'opaque+/=', limit);
+      const pending = await takeRequest('/authoring/versions');
+      const query = new URL(pending.request.urlWithParams).searchParams;
+      expect([...query]).toEqual([
+        ['source', 'import'],
+        ['limit', String(limit)],
+        ['cursor', 'opaque+/='],
+      ]);
+      pending.flush(JSON.stringify({ items: [], next_cursor: null }), { headers: JSON_HEADERS });
+      expect(await call).toEqual({ items: [], next_cursor: null });
+    },
+  );
 
   it('exports exactly the chosen format, node and included kinds and keeps the server filename', async () => {
     const call = service.exportFile('project', {
