@@ -20268,14 +20268,7 @@
         <source>On this page before filtering by scope: <x id="count" equiv-text="count"/></source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/list/run-list.page.ts</context>
-          <context context-type="linenumber">365</context>
-        </context-group>
-      </trans-unit>
-      <trans-unit id="runs.list.page-count" datatype="html">
-        <source>Returned on this page: <x id="count" equiv-text="count"/></source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/runs/list/run-list.page.ts</context>
-          <context context-type="linenumber">366</context>
+          <context context-type="linenumber">364</context>
         </context-group>
       </trans-unit>
       <trans-unit id="review.generated-scripts.title" datatype="html">

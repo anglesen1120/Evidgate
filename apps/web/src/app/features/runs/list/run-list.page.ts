@@ -359,10 +359,8 @@ export class RunListPage {
     target?.focus();
   }
 
-  protected loadedText(): string {
+  protected filteredCountText(): string {
     const count = formatNumber(this.store.loadedCount(), this.locale);
-    return this.store.filters().scope
-      ? $localize`:@@runs.list.page-filtered-count:On this page before filtering by scope: ${count}:count:`
-      : $localize`:@@runs.list.page-count:Returned on this page: ${count}:count:`;
+    return $localize`:@@runs.list.page-filtered-count:On this page before filtering by scope: ${count}:count:`;
   }
 }

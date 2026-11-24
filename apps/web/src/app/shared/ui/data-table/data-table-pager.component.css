@@ -46,9 +46,13 @@
   cursor: progress;
 }
 
-.page-actions .page-boundary {
+/* Unavailable chevrons stay transparent and muted in both themes: the global
+   disabled fill reads as a filled button beside the outline one. */
+:host .page-actions button[aria-disabled='true'] {
+  background-color: transparent;
+  border-color: var(--eg-border);
   color: var(--eg-text-muted);
-  border-color: var(--eg-border-control);
+  box-shadow: none;
 }
 
 .page-feedback {
