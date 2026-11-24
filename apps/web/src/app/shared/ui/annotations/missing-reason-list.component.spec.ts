@@ -50,6 +50,21 @@ describe('MissingReasonList (FR-09-2/6)', () => {
     expect(root.querySelector('.reason-text')?.hasAttribute('tabindex')).toBe(false);
   });
 
+  it('forwards the opt-in icon-only copy to every reason code and keeps the text default', () => {
+    const fixture = TestBed.createComponent(MissingReasonList);
+    fixture.componentRef.setInput('reasons', reasons);
+    fixture.detectChanges();
+    const root = fixture.nativeElement as HTMLElement;
+    const buttons = () => [
+      ...root.querySelectorAll<HTMLElement>('button[aria-label="Copy Reason code"]'),
+    ];
+    expect(buttons().every((button) => button.textContent?.trim() === 'Copy')).toBe(true);
+    fixture.componentRef.setInput('iconOnlyCopy', true);
+    fixture.detectChanges();
+    expect(buttons()).toHaveLength(2);
+    expect(buttons().every((button) => button.querySelector('svg, hlm-icon') !== null)).toBe(true);
+  });
+
   it.each(states)('covers the %s state without inferring a verdict', (state) => {
     const fixture = TestBed.createComponent(MissingReasonList);
     fixture.componentRef.setInput('reasons', state === 'empty' ? [] : reasons);

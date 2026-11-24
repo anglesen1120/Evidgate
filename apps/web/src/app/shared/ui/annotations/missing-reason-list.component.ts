@@ -33,6 +33,7 @@ export type MissingReason = {
               [value]="reason.code"
               [label]="codeLabel"
               [truncate]="false"
+              [iconOnlyCopy]="iconOnlyCopy()"
             />
             @if (reason.href) {
               <a
@@ -57,6 +58,8 @@ export type MissingReason = {
   `,
 })
 export class MissingReasonList {
+  /** Opt-in icon copy buttons; the default keeps the labelled text button. */
+  readonly iconOnlyCopy = input(false);
   readonly reasons = input<readonly MissingReason[]>([]);
   /** Caller-supplied headings must already be localized. */
   readonly heading = input<string>();

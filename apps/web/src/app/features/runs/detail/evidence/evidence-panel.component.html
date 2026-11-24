@@ -148,6 +148,7 @@
           <app-missing-reason-list
             class="[&_ul]:ps-0 [&_li+li]:border-t [&_li+li]:border-border [&_li+li]:pt-(--eg-space-3)"
             [reasons]="reasons()"
+            [iconOnlyCopy]="true"
           />
         } @else {
           <p class="m-0 text-muted-foreground">{{ copy.missingUnavailable }}</p>
