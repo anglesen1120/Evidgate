@@ -63,6 +63,7 @@ export class DataTablePagerComponent {
   protected readonly sizeLabel = $localize`:@@shared.data-table.rows-per-page:Rows per page`;
   protected readonly previousLabel = $localize`:@@shared.data-table.previous:Previous records`;
   protected readonly nextLabel = $localize`:@@shared.data-table.next:Next records`;
+  protected readonly loadingLabel = $localize`:@@shared.states.loading.label:Loading…`;
   protected readonly landmark = computed(() => {
     const caption = this.loadedCaption();
     return caption === null

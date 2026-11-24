@@ -6,6 +6,7 @@ import {
   localePath,
   ORG_ACME,
   PROJECT_STOREFRONT,
+  seedStoredTheme,
   SETTINGS_AUDIT_ONLY_GRANTS,
   settingsTabPath,
   withVariants,
@@ -103,6 +104,41 @@ for (const locale of ['en', 'vi'] as const) {
   }
 }
 
+for (const locale of ['en', 'vi'] as const) {
+  for (const theme of ['light', 'dark'] as const) {
+    for (const width of [390, 768, 1440]) {
+      test(`runs ${locale} ${theme} at ${width}px: Previous feedback stays beside the pager without shifting controls`, async ({
+        page,
+      }, testInfo) => {
+        await seedStoredTheme(page, theme);
+        await page.setViewportSize({ width, height: 900 });
+        const path = address('runs').replace('/en/', `/${locale}/`);
+        await page.goto(`${path}&fixture.latency=1000`);
+        const rows = page.locator(ROWS.runs);
+        await expect(rows).toHaveCount(20);
+        const pager = page.locator('app-data-table-pager');
+        await pager.locator('[data-page="next"]').click();
+        await expect(rows).toHaveCount(13);
+        const previous = pager.locator('[data-page="previous"]');
+        await previous.scrollIntoViewIfNeeded();
+        const before = await previous.boundingBox();
+        await previous.click();
+        const feedback = pager.getByRole('progressbar');
+        await expect(feedback).toBeInViewport();
+        await expect(feedback).toHaveAccessibleName(locale === 'en' ? 'Loading…' : 'Đang tải…');
+        const after = await previous.boundingBox();
+        expect(before).not.toBeNull();
+        expect(after).not.toBeNull();
+        expect(Math.abs(after!.x - before!.x)).toBeLessThanOrEqual(1);
+        expect(Math.abs(after!.y - before!.y)).toBeLessThanOrEqual(1);
+        await page.screenshot({ path: testInfo.outputPath('previous-loading.png') });
+        await expect(rows).toHaveCount(20);
+        await expect(feedback).toHaveCount(0);
+      });
+    }
+  }
+}
+
 for (const surface of ['runs', 'audit'] as const) {
   test(`${surface}: twenty then thirteen records, Previous and View preserve the committed page`, async ({
     page,
@@ -159,16 +195,46 @@ for (const surface of ['runs', 'audit'] as const) {
     await next.dblclick();
     const table = page.locator('app-data-table');
     await expect(table.getByRole('table')).toHaveAttribute('aria-busy', 'true');
-    const bar = table.locator('[data-table-progress]');
+    const bar = table.getByRole('progressbar', { name: 'Loading…', exact: true });
+    const feedback = page
+      .locator('app-data-table-pager')
+      .getByRole('progressbar', { name: 'Loading…', exact: true });
     await expect(bar).toBeVisible();
+    await expect(feedback).toBeInViewport();
     expect(
       await bar.evaluate((element) => getComputedStyle(element, '::after').animationName),
+    ).toBe('none');
+    expect(
+      await feedback
+        .locator('.page-spinner')
+        .evaluate((element) => getComputedStyle(element).animationName),
     ).toBe('none');
     expect(await rowIds(page, surface)).toEqual(first);
     await expect(table.locator('app-loading-pattern').getByRole('status')).toHaveText('');
     await expect(page.locator(ROWS[surface])).toHaveCount(13);
     await expect(bar).toHaveCount(0);
     expect(await requests(page, surface)).toHaveLength(2);
+
+    const second = await rowIds(page, surface);
+    const previous = page.getByRole('button', { name: 'Previous records', exact: true });
+    await previous.click();
+    await expect(table.getByRole('table')).toHaveAttribute('aria-busy', 'true');
+    await expect(bar).toBeVisible();
+    await expect(feedback).toBeInViewport();
+    expect(await rowIds(page, surface)).toEqual(second);
+    await expect.poll(() => rowIds(page, surface)).toEqual(first);
+    await expect(bar).toHaveCount(0);
+    await expect(feedback).toHaveCount(0);
+
+    await page.getByRole('combobox', { name: 'Rows per page' }).click();
+    await page.getByRole('option', { name: '50', exact: true }).click();
+    await expect(table.getByRole('table')).toHaveAttribute('aria-busy', 'true');
+    await expect(bar).toBeVisible();
+    await expect(feedback).toBeInViewport();
+    expect(await rowIds(page, surface)).toEqual(first);
+    await expect(page.locator(ROWS[surface])).toHaveCount(33);
+    await expect(bar).toHaveCount(0);
+    await expect(feedback).toHaveCount(0);
   });
 
   test(`${surface}: changing page size resets the cursor and supports fifty and one hundred`, async ({

@@ -19,13 +19,25 @@
     </div>
   }
   <div class="page-actions">
+    <!-- Reserve feedback beside the controls: the table header can be above the viewport. -->
+    <span
+      data-page-feedback
+      class="page-feedback"
+      [class.invisible]="!busy()"
+      [attr.role]="busy() ? 'progressbar' : null"
+      [attr.aria-label]="busy() ? loadingLabel : null"
+      [attr.aria-hidden]="busy() ? null : true"
+    >
+      <span class="page-spinner" aria-hidden="true"></span>
+      {{ loadingLabel }}
+    </span>
     <button
       #previousPage
       hlmBtn
       type="button"
       [attr.data-page]="'previous'"
       [variant]="'outline'"
-      [class.page-boundary]="!busy() && page() <= 1"
+      [class.page-boundary]="page() <= 1"
       [disabled]="loadedCaption() !== null && page() <= 1"
       [attr.aria-busy]="busy()"
       [attr.aria-disabled]="busy() || page() <= 1"
@@ -39,7 +51,7 @@
       type="button"
       [attr.data-page]="'next'"
       [variant]="'outline'"
-      [class.page-boundary]="!busy() && !canNext()"
+      [class.page-boundary]="!canNext()"
       [disabled]="loadedCaption() !== null && !canNext()"
       [attr.aria-busy]="busy()"
       [attr.aria-disabled]="busy() || !canNext()"
