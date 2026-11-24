@@ -44,43 +44,42 @@
       /></ng-template>
       <ng-template #actions let-row>
         <button
-          hlmBtn
+          appRowAction
           type="button"
-          [variant]="'outline'"
+          [label]="viewName(row.version_no)"
           #opener
           [hlmDialogTriggerFor]="dialog"
           [attr.aria-label]="viewName(row.version_no)"
-          (click)="inspect(row.version_no, opener)"
+          (click)="inspect(row.version_no, opener.nativeElement)"
           [attr.data-ai-version-view]="row.version_no"
-          i18n="@@authoring.history.view"
-        >
-          View
-        </button>
+        ></button>
       </ng-template>
       <ng-template #compare let-row>
         <div class="flex flex-wrap gap-(--eg-space-3)">
           <button
-            hlmBtn
-            [variant]="'ghost'"
+            appRowAction
+            [icon]="'lucideCheck'"
+            label="Select version {{ row.version_no }}"
+            i18n-label="@@authoring.ai-settings.select-baseline"
+            aria-label="Select version {{ row.version_no }}"
+            i18n-aria-label="@@authoring.ai-settings.select-baseline"
             type="button"
             data-ai-inspect
             (click)="store.selectVersion(row.version_no)"
             [attr.aria-pressed]="store.selectedVersion() === row.version_no"
-            i18n="@@authoring.ai-settings.select-baseline"
-          >
-            Select version {{ row.version_no }}
-          </button>
+          ></button>
           <button
-            hlmBtn
-            [variant]="'ghost'"
+            appRowAction
+            [icon]="'lucideFileDiff'"
+            label="Compare with {{ row.version_no }}"
+            i18n-label="@@authoring.ai-settings.compare"
+            aria-label="Compare with {{ row.version_no }}"
+            i18n-aria-label="@@authoring.ai-settings.compare"
             type="button"
             [disabled]="store.selectedVersion() === 0"
             [attr.aria-describedby]="showCompareHint ? 'ai-compare-reason' : null"
             (click)="store.compareWith(row.version_no)"
-            i18n="@@authoring.ai-settings.compare"
-          >
-            Compare with {{ row.version_no }}
-          </button>
+          ></button>
         </div>
       </ng-template>
       @if (rows().length) {

@@ -18,6 +18,7 @@ import { HlmInput } from '@evidgate/ui/input';
 import { HlmLabel } from '@evidgate/ui/label';
 import { AbsoluteTimeComponent } from '../../../shared/time/absolute-time.component';
 import { DataTableComponent } from '../../../shared/ui/data-table/data-table.component';
+import { RowActionComponent } from '../../../shared/ui/data-table/row-action.component';
 import type {
   DataTableCellContext,
   DataTableColumn,
@@ -60,6 +61,7 @@ type CandidateCell = TemplateRef<DataTableCellContext<QueueCandidateViewModel>>;
   imports: [
     PercentPipe,
     DataTableComponent,
+    RowActionComponent,
     RouterLink,
     HlmButton,
     HlmCard,

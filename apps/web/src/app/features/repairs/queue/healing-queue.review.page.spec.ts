@@ -15,7 +15,9 @@ class QueueHarness extends ComponentHarness {
   readonly disabledReview = (id: string) =>
     this.locatorFor('[data-row-id="' + id + '"] button[disabled]')();
   readonly summaryLink = (id: string) =>
-    this.locatorFor('[data-row-id="' + id + '"] a[data-summary]')();
+    this.locatorFor('[data-row-id="' + id + '"] a[aria-label^="View summary"]')();
+  readonly summaryIcon = (id: string) =>
+    this.locatorFor('[data-row-id="' + id + '"] a[data-summary] hlm-icon')();
   readonly pendingIcon = this.locatorFor('[data-row-id="cand-73"] .pending hlm-icon');
   readonly pending = this.locatorFor('[data-row-id="cand-73"] .pending');
   readonly headers = this.locatorForAll('app-data-table [role="columnheader"]');
@@ -27,7 +29,8 @@ class QueueHarness extends ComponentHarness {
   readonly cartChoice = this.locatorFor('[data-row-id="cand-77"] [role="checkbox"]');
   readonly search = this.locatorFor('input[type="search"]');
   readonly filters = this.locatorForAll('button[data-filter]');
-  readonly shadowLink = this.locatorFor('[data-row-id="cand-73"] a[data-shadow]');
+  readonly shadowLink = this.locatorFor('[data-row-id="cand-73"] a[aria-label^="View "]');
+  readonly shadowIcon = this.locatorFor('[data-row-id="cand-73"] a[data-shadow] hlm-icon');
   readonly destinations = this.locatorForAll(
     'a[href*="/dev/shadow-detail/"], a[href*="/dev/healing-approval/"]',
   );
@@ -116,10 +119,14 @@ describe('HealingQueueReviewPage', () => {
     expect(await (await queue.shadowLink()).getAttribute('href')).toBe(
       '/dev/shadow-detail/orgs/org-a/projects/proj-b?id=cand-73',
     );
-    expect(await (await queue.shadowLink()).text()).toBe('View');
+    expect(await (await queue.shadowLink()).text({ exclude: '[popover]' })).toBe('');
     expect(await (await queue.shadowLink()).getAttribute('aria-label')).toContain(
       'Required delivery address',
     );
+    expect(await (await queue.shadowIcon()).getAttribute('aria-hidden')).toBe('true');
+    const shadow = await queue.shadowLink();
+    await shadow.focus();
+    expect(await shadow.isFocused()).toBe(true);
     expect(await Promise.all((await queue.headers()).map((header) => header.text()))).toEqual([
       'Select for review',
       'Candidate',
@@ -171,7 +178,16 @@ describe('HealingQueueReviewPage', () => {
       if (!supported) {
         const note = 'Detail not available in this review specimen.';
         const summary = await queue.summaryLink(id);
-        expect(await summary.text()).toBe('View summary');
+        expect(await summary.text({ exclude: '[popover]' })).toBe('');
+        expect(await summary.getAttribute('aria-label')).toContain('View summary');
+        const label = (await summary.getAttribute('aria-label')) ?? '';
+        expect(label).toMatch(/^View summary for \S.+/);
+        expect(await (await queue.record(id)).text()).toContain(
+          label.replace(/^View summary for /, ''),
+        );
+        expect(await (await queue.summaryIcon(id)).getAttribute('aria-hidden')).toBe('true');
+        await summary.focus();
+        expect(await summary.isFocused()).toBe(true);
         expect(await summary.getAttribute('href')).toContain(`id=${id}`);
         expect(await (await queue.record(id)).text()).toContain(note);
         expect(await (await queue.detail()).text()).toContain(note);

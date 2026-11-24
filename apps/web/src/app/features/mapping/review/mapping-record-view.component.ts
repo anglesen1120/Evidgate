@@ -50,7 +50,7 @@ import type {
 export class MappingRecordViewComponent {
   readonly row = input.required<MappingRowViewModel>();
   readonly context = input.required<MappingResolutionViewModel>();
-  readonly opener = input.required<HTMLButtonElement>();
+  readonly opener = input.required<HTMLElement>();
   readonly readOnly = input.required<boolean>();
   readonly dismissed = output<void>();
   protected readonly copy = mappingCopy;

@@ -166,34 +166,25 @@
                   <td hlmTd [attr.data-label]="copy.actions">
                     <div class="flex flex-wrap gap-2 md:justify-end">
                       <button
-                        hlmBtn
+                        appRowAction
                         #viewButton
-                        type="button"
-                        class="shrink-0 whitespace-nowrap"
-                        [variant]="'outline'"
-                        [size]="'sm'"
+                        [label]="copy.view + ' ' + displayText(t.name)"
                         [attr.data-view]="t.key"
                         [attr.aria-haspopup]="'dialog'"
                         [attr.aria-label]="copy.view + ' ' + displayText(t.name)"
-                        (click)="openRecord(t.key, 'view', viewButton)"
-                      >
-                        {{ copy.view }}
-                      </button>
+                        (click)="openRecord(t.key, 'view', viewButton.nativeElement)"
+                      ></button>
                       @if (editAllowed() && t.key === 'production') {
                         <button
-                          hlmBtn
+                          appRowAction
                           #editButton
-                          type="button"
-                          class="shrink-0 whitespace-nowrap"
-                          [variant]="'ghost'"
-                          [size]="'sm'"
+                          [icon]="'lucidePencil'"
+                          [label]="copy.edit + ' ' + displayText(t.name)"
                           [attr.data-edit]="t.key"
                           [attr.aria-haspopup]="'dialog'"
                           [attr.aria-label]="copy.edit + ' ' + displayText(t.name)"
-                          (click)="openRecord(t.key, 'edit', editButton)"
-                        >
-                          {{ copy.edit }}
-                        </button>
+                          (click)="openRecord(t.key, 'edit', editButton.nativeElement)"
+                        ></button>
                       }
                     </div>
                   </td>

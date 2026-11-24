@@ -201,14 +201,14 @@
                     </th>
                     <td hlmTd class="text-end whitespace-nowrap">
                       <a
-                        hlmBtn
-                        [variant]="'outline'"
+                        appRowAction
+                        [icon]="'lucideInfo'"
+                        [label]="c.metadata + ' · ' + item.id"
                         [routerLink]="[]"
                         [queryParams]="{ id: item.id }"
                         [attr.aria-current]="item.id === record.id ? 'page' : null"
                         [attr.aria-label]="c.metadata + ' · ' + item.id"
-                        >{{ c.metadata }}</a
-                      >
+                      ></a>
                     </td>
                   </tr>
                 }

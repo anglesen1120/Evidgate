@@ -134,15 +134,13 @@
   </ng-template>
   <ng-template #actionCell let-row>
     <a
-      hlmBtn
-      [variant]="'outline'"
+      appRowAction
+      [label]="viewLabel(row.title)"
       data-view
-      class="w-max min-w-(--eg-control-touch) whitespace-nowrap"
       [routerLink]="store.path('failure-detail')"
       [queryParams]="{ id: row.id }"
       [attr.aria-label]="viewLabel(row.title)"
-      >{{ c.view }}</a
-    >
+    ></a>
   </ng-template>
   @if (!store.visible().length) {
     <app-empty-pattern
