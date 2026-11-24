@@ -38,8 +38,10 @@
   outline-offset: var(--eg-focus-offset);
 }
 
-.eg-table-pagination[role='presentation'] .page-feedback.invisible {
-  display: none;
+/* Without controls the footer needs one text line, not a touch target.
+   Keep the translated loading label's space even while it is invisible. */
+.eg-table-pagination[role='presentation'] .page-feedback {
+  min-block-size: var(--eg-leading-sm);
 }
 
 .size-field label {

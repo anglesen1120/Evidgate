@@ -112,13 +112,15 @@
     </colgroup>
     @for (column of resolvedColumns(); track column.id; let index = $index) {
       <ng-container [cdkColumnDef]="column.id">
+        <!-- Column minima use ch from the header font. Keep labels at metadata size
+             so desktop tables retain their columns; body cells stay at the table text size. -->
         <th
           cdk-header-cell
           hlmTh
           *cdkHeaderCellDef
           role="columnheader"
           scope="col"
-          class="cell bg-(--eg-surface-raised) text-sm font-medium text-(--eg-text-muted)"
+          class="cell bg-(--eg-surface-raised) text-xs font-semibold text-(--eg-text-muted)"
           [class]="cellClasses"
           [class.numeric]="column.role === 'number' || column.align === 'end'"
           [hlmTableColumn]="column.role"

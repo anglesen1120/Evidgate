@@ -136,6 +136,20 @@ describe('DataTablePagerComponent', () => {
     expect(await (await pager.range()).getProperty('tabIndex')).toBe(-1);
   });
 
+  it('keeps single-page controls while recovering, then hands focus to the range', async () => {
+    const { fixture, pager } = await render();
+    const next = await pager.next();
+    await next.focus();
+    fixture.componentRef.setInput('hasNext', false);
+    fixture.componentRef.setInput('recovering', true);
+    fixture.componentRef.setInput('busy', false);
+    expect(await pager.controls()).not.toHaveLength(0);
+    expect(await next.isFocused()).toBe(true);
+    fixture.componentRef.setInput('recovering', false);
+    expect(await pager.controls()).toHaveLength(0);
+    expect(await (await pager.range()).isFocused()).toBe(true);
+  });
+
   it('does not reclaim focus if the user left before the response', async () => {
     const { fixture, pager } = await render();
     const next = await pager.next();

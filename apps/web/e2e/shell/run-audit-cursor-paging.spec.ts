@@ -60,7 +60,8 @@ const retainedTables = [
   },
   {
     name: 'api tokens',
-    path: `/dev/settings-api-tokens/orgs/${ORG_ACME}`,
+    // A bookmarked cursor offers a way back to the first page even without a next cursor.
+    path: `/dev/settings-api-tokens/orgs/${ORG_ACME}?project=${PROJECT_STOREFRONT}&cursor=bookmarked`,
     grant: 'settings-api-tokens-read',
     rows: 'app-api-token-list [data-api-token-row]',
   },
@@ -88,6 +89,8 @@ for (const locale of ['en', 'vi'] as const) {
         const pager = page.locator('app-data-table-pager').first();
         if (surface.name === 'security events') {
           await pager.locator('[data-page="next"]').click();
+        } else if (surface.name === 'api tokens') {
+          await page.locator('[data-api-first]').click();
         } else {
           await pager.getByRole('combobox').click();
           await page.getByRole('option', { name: '50', exact: true }).click();
@@ -99,6 +102,8 @@ for (const locale of ['en', 'vi'] as const) {
         if (surface.name === 'catalog')
           await expect(page.locator('[data-catalog-summary]')).toHaveText('');
         await expect(feedback).toHaveCount(0);
+        if (surface.name === 'api tokens')
+          await expect(page).toHaveURL((url) => !url.searchParams.has('cursor'));
       });
     }
   }
@@ -289,14 +294,14 @@ for (const surface of ['runs', 'audit'] as const) {
     const before = (await requests(page, surface)).length;
     await page.locator(`[data-${surface === 'runs' ? 'run' : 'audit'}-apply]`).click();
     await expect.poll(async () => (await requests(page, surface)).length).toBe(before + 1);
-    await expect(rows).toHaveCount(surface === 'runs' ? 1 : 6);
+    const filteredCount = surface === 'runs' ? 1 : 6;
+    await expect(rows).toHaveCount(filteredCount);
     const filtered = (await requests(page, surface)).at(-1);
     expect(filtered?.searchParams.has('cursor')).toBe(false);
     expect(filtered?.searchParams.get(surface === 'runs' ? 'ref_name' : 'action')).toBeTruthy();
-    await expect(pager.getByRole('button', { name: 'Previous page', exact: true })).toHaveAttribute(
-      'aria-disabled',
-      'true',
-    );
+    await expect(pager.getByText(`Showing 1–${filteredCount}`, { exact: true })).toBeVisible();
+    await expect(pager.getByRole('navigation')).toHaveCount(0);
+    await expect(pager.locator('button, [role="combobox"]')).toHaveCount(0);
     await page.locator(`[data-${surface === 'runs' ? 'run' : 'audit'}-clear]`).click();
     await expect(rows).toHaveCount(20);
     await expect.poll(async () => (await requests(page, surface)).length).toBe(before + 2);
