@@ -3,7 +3,7 @@ import { ComponentHarness } from '@angular/cdk/testing';
 export class ProducerStatusTableHarness extends ComponentHarness {
   static hostSelector = 'app-producer-status-table';
   readonly rows = this.locatorForAll('tr[data-row-id]');
-  readonly summary = this.locatorFor('app-data-table-pager [role="status"]');
+  readonly summary = this.locatorFor('app-data-table-pager .page-range');
   readonly previous = this.locatorFor('button[data-page="previous"]');
   readonly next = this.locatorFor('button[data-page="next"]');
   readonly size = this.locatorFor('app-data-table-pager hlm-select-trigger button');

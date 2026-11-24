@@ -9,6 +9,10 @@
 }
 
 .eg-table-pagination {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-block-start: var(--eg-space-4);
   column-gap: var(--eg-space-5);
   row-gap: var(--eg-space-2);
   font-variant-numeric: tabular-nums;
@@ -23,7 +27,7 @@
   max-inline-size: 100%;
 }
 
-.eg-table-pagination > .page-range {
+.page-range {
   flex: 1 1 auto;
   overflow-wrap: anywhere;
 }

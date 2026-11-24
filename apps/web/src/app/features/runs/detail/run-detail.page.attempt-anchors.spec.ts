@@ -36,7 +36,7 @@ class AnchorPagingHarness extends ComponentHarness {
   readonly producers = this.locatorFor('app-producer-status-table');
   readonly producerNext = this.locatorFor('app-producer-status-table [data-page="next"]');
   readonly producerSummary = this.locatorFor(
-    'app-producer-status-table app-data-table-pager [role="status"]',
+    'app-producer-status-table app-data-table-pager .page-range',
   );
   readonly retry = this.locatorFor('app-attempts-table app-error-pattern button');
   readonly back = this.locatorFor('a');
@@ -285,7 +285,7 @@ describe('RunDetailPage attempt anchor paging', () => {
     await (await table.producerNext()).click();
     pending.resolve(page(21, 'third'));
     await settle(harness);
-    expect(await (await table.producerSummary()).text()).toContain('41–60 of 60');
+    expect(await (await table.producerSummary()).text()).toBe('Showing 41–60 of 60');
     expect(listAttempts).toHaveBeenCalledTimes(2);
     expect(listEvidenceRevisions).toHaveBeenCalledTimes(1);
   });

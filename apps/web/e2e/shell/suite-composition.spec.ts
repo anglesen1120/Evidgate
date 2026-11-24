@@ -58,6 +58,12 @@ const STRATEGY = '[data-testid="suite-strategy"]';
 const WARNINGS_UNAVAILABLE = '[data-testid="suite-warnings-unavailable"]';
 
 for (const locale of LOCALES) {
+  const number = new Intl.NumberFormat(locale);
+  const range = (start: number, end: number) => {
+    const span = `${number.format(start)}–${number.format(end)}`;
+    const total = number.format(LARGE.members.length);
+    return locale === 'vi' ? `Hiển thị ${span} trên ${total}` : `Showing ${span} of ${total}`;
+  };
   test(`pinned revision renders its matrix, strategy and dependencies (${locale})`, async ({
     page,
   }) => {
@@ -165,12 +171,11 @@ for (const locale of LOCALES) {
     const flat = page.getByTestId('suite-members-flat');
     const rows = flat.locator('tbody tr');
     const pager = page.locator('app-data-table-pager');
-    const shown = pager.locator('[role="status"]');
+    const shown = pager.locator('.page-range');
     await expect(flat).toBeVisible();
     await expect(flat.locator('thead th')).toHaveCount(5);
     await expect(rows).toHaveCount(20);
-    await expect(shown).toContainText('1–20');
-    await expect(shown).toContainText(String(LARGE.members.length));
+    await expect(shown).toHaveText(range(1, 20));
     await expectNoA11yViolations(page, `suite composition flat ${locale}`);
 
     const next = pager.locator('button[data-page="next"]');
@@ -178,18 +183,18 @@ for (const locale of LOCALES) {
     await expect(previous).toBeDisabled();
     await next.click();
     await expect(rows).toHaveCount(20);
-    await expect(shown).toContainText('21–40');
+    await expect(shown).toHaveText(range(21, 40));
     await expect(next).toBeFocused();
     await pager.locator('hlm-select-trigger button').click();
     await page.getByRole('option', { name: '100', exact: true }).click();
-    await expect(shown).toContainText('1–100');
+    await expect(shown).toHaveText(range(1, 100));
     await expect(previous).toBeDisabled();
     const seen: string[] = [];
     for (let offset = 0; offset < LARGE.members.length; offset += 100) {
       if (offset > 0) await next.click();
       const count = Math.min(100, LARGE.members.length - offset);
       await expect(rows).toHaveCount(count);
-      await expect(shown).toContainText(`${offset + 1}–${offset + count}`);
+      await expect(shown).toHaveText(range(offset + 1, offset + count));
       seen.push(
         ...(await flat.locator('[data-suite-flat-member-id]').allTextContents()).map((id) =>
           id.trim(),
@@ -216,7 +221,7 @@ for (const locale of LOCALES) {
       await next.focus();
       await page.keyboard.press(key);
       await expect(rows, `${key} retains a bounded member page`).toHaveCount(20);
-      await expect(page.locator('app-data-table-pager [role="status"]')).toContainText('21–40');
+      await expect(page.locator('app-data-table-pager .page-range')).toHaveText(range(21, 40));
       await expect(next, `${key} leaves focus on the control`).toBeFocused();
     }
   });

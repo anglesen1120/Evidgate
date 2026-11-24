@@ -44,9 +44,9 @@ class PagerOwner {
 class PagerHarness extends ComponentHarness {
   static hostSelector = 'app-data-table-pager';
   readonly nav = this.locatorFor('nav');
-  readonly summary = this.locatorFor('[role="status"]');
+  readonly current = this.locatorFor('[role="status"]');
+  readonly statuses = this.locatorForAll('[role="status"]');
   readonly range = this.locatorFor('.page-range');
-  readonly current = this.locatorFor('[aria-current="page"]');
   readonly label = this.locatorFor('label');
   readonly trigger = this.locatorFor('hlm-select-trigger button');
   readonly previous = this.locatorFor('button[data-page="previous"]');
@@ -83,24 +83,32 @@ describe('DataTablePagerComponent', () => {
     });
   });
 
+  it('keeps a single live page number when the total becomes known', async () => {
+    const { fixture, pager } = await render();
+    const current = TestbedHarnessEnvironment.getNativeElement(await pager.current());
+    for (const total of [null, 60, null]) {
+      fixture.componentRef.setInput('total', total);
+      const statuses = await pager.statuses();
+      expect(statuses).toHaveLength(1);
+      expect(TestbedHarnessEnvironment.getNativeElement(statuses[0]!)).toBe(current);
+    }
+  });
+
   it('reserves local feedback for every pending pager action without adding a live announcer', async () => {
     const { fixture, pager } = await render();
     const feedback = await pager.feedback();
     expect(await feedback.text()).toBe('Loading…');
     expect(await feedback.getAttribute('role')).toBeNull();
-    expect(await feedback.getAttribute('aria-hidden')).toBe('true');
     expect(await feedback.hasClass('invisible')).toBe(true);
     for (let read = 0; read < 3; read++) {
       fixture.componentRef.setInput('busy', true);
       expect(await feedback.getAttribute('role')).toBe('progressbar');
       expect(await feedback.getAttribute('aria-label')).toBe('Loading…');
       expect(await feedback.getAttribute('aria-live')).toBeNull();
-      expect(await feedback.getAttribute('aria-hidden')).toBeNull();
       expect(await feedback.hasClass('invisible')).toBe(false);
       expect(await (await pager.nav()).getAttribute('aria-busy')).toBe('true');
       fixture.componentRef.setInput('busy', false);
       expect(await feedback.getAttribute('role')).toBeNull();
-      expect(await feedback.getAttribute('aria-hidden')).toBe('true');
       expect(await feedback.hasClass('invisible')).toBe(true);
     }
   });
@@ -114,11 +122,10 @@ describe('DataTablePagerComponent', () => {
     expect(await feedback.getAttribute('role')).toBe('progressbar');
     fixture.componentRef.setInput('fetching', false);
     expect(await feedback.getAttribute('role')).toBeNull();
-    expect(await feedback.getAttribute('aria-hidden')).toBe('true');
     expect(await feedback.hasClass('invisible')).toBe(true);
     expect(await (await pager.nav()).getAttribute('aria-busy')).toBe('false');
     const button = await pager.next();
-    expect(await button.getAttribute('aria-busy')).toBe('false');
+    expect(await button.getAttribute('aria-busy')).toBeNull();
     expect(await button.getAttribute('aria-disabled')).toBe('true');
     await button.click();
     expect(next).not.toHaveBeenCalled();
@@ -141,10 +148,8 @@ describe('DataTablePagerComponent', () => {
     fixture.componentRef.setInput('total', total);
     fixture.componentRef.setInput('count', count);
     fixture.componentRef.setInput('hasNext', more);
-    const summary = await pager.summary();
     expect(await (await pager.range()).text()).toBe(`Showing ${text}`);
     expect(await (await pager.current()).text()).toBe(`Page ${page}`);
-    expect(await summary.getAttribute('aria-live')).toBe('polite');
     expect(await (await pager.nav()).getAttribute('aria-label')).toBe('Table pagination');
     await (await pager.previous()).click();
     await (await pager.next()).click();
@@ -212,7 +217,7 @@ describe('DataTablePagerComponent', () => {
     expect(await (await pager.previous()).hasClass('page-boundary')).toBe(true);
     expect(await button.hasClass('page-boundary')).toBe(false);
     for (const action of [await pager.previous(), button]) {
-      expect(await action.getAttribute('aria-busy')).toBe('true');
+      expect(await action.getAttribute('aria-busy')).toBeNull();
       expect(await action.getAttribute('aria-disabled')).toBe('true');
       expect(await action.getProperty('disabled')).toBe(false);
       expect(await action.getProperty('tabIndex')).toBe(0);

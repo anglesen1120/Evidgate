@@ -133,8 +133,8 @@ test('the list, a row and the way back are keyboard-reachable and identifiable',
   await expect(attemptsRegion).toBeFocused();
   await expect(page.locator('app-attempts-table [data-attempt-row]')).toHaveCount(7);
   for (const [selector, rows, copies, summary] of [
-    ['app-attempts-table', 'tbody', 7, 'Page 1'],
-    ['#producers', 'app-data-table', 2, '1–2 of 2'],
+    ['app-attempts-table', 'tbody', 7, 'Showing 1–7'],
+    ['#producers', 'app-data-table', 2, 'Showing 1–2 of 2'],
   ] as const) {
     const root = page.locator(selector);
     if (selector === '#producers') await tabThroughTableScroller(page, root);
@@ -152,7 +152,7 @@ test('the list, a row and the way back are keyboard-reachable and identifiable',
       await expect(button).toHaveAttribute('aria-disabled', 'true');
       await page.keyboard.press('Enter');
       await expect(button).toBeFocused();
-      await expect(pager.getByRole('status')).toContainText(summary);
+      await expect(pager.locator('.page-range')).toHaveText(summary);
     }
   }
 
