@@ -114,7 +114,9 @@ async function reachCap(page: Page, surface: Surface, locale: ShellLocale): Prom
   }
   const requests = await reads(page, surface.endpoint);
   expect(requests).toHaveLength(1);
-  const query = new URL(requests[0], page.url()).searchParams;
+  const [firstRequest] = requests;
+  if (!firstRequest) throw new Error('The capped read was not requested');
+  const query = new URL(firstRequest, page.url()).searchParams;
   expect(query.get('cursor')).toBeNull();
   if (surface.operation !== 'listAuthoringTree') {
     expect(query.get('limit')).toBe(String(CASE_PAGE_SIZE));

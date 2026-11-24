@@ -324,14 +324,18 @@ describe('Shared table column layout and reflow', () => {
     fixture.componentInstance.narrow.set(true);
     await fixture.whenStable();
     expect(root.querySelectorAll('.eg-table-record')).toHaveLength(200);
-    expect(root.querySelector('.page-range')?.textContent).toBe('Showing 1–200 of 201 loaded records');
+    expect(root.querySelector('.page-range')?.textContent).toBe(
+      'Showing 1–200 of 201 loaded records',
+    );
     const buttons = root.querySelectorAll<HTMLButtonElement>('.eg-table-pagination button');
     expect(buttons[0]?.getAttribute('aria-disabled')).toBe('true');
     buttons[1]!.click();
     await fixture.whenStable();
     expect(root.querySelectorAll('.eg-table-record')).toHaveLength(1);
     expect(root.querySelector('.eg-table-record')?.getAttribute('data-row-id')).toBe('demo-200');
-    expect(root.querySelector('.page-range')?.textContent).toBe('Showing 201–201 of 201 loaded records');
+    expect(root.querySelector('.page-range')?.textContent).toBe(
+      'Showing 201–201 of 201 loaded records',
+    );
     expect(buttons[1]?.getAttribute('aria-disabled')).toBe('true');
     expect(root.querySelector('.scroll')?.contains(buttons[0]!)).toBe(false);
     fixture.componentRef.setInput('rows', dataTableFixtureRows(1));

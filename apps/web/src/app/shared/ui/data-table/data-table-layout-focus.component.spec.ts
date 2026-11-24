@@ -317,7 +317,9 @@ describe('Shared table focus across record reflow', () => {
     await fixture.whenStable();
     control(200, 'identity', 'button').focus();
     await resize(480);
-    expect(root.querySelector('nav .page-range')?.textContent).toBe('Showing 201–201 of 201 loaded records');
+    expect(root.querySelector('nav .page-range')?.textContent).toBe(
+      'Showing 201–201 of 201 loaded records',
+    );
     expect(document.activeElement).toBe(control(200, 'identity', 'button'));
     await resize(1280);
     expect(document.activeElement).toBe(control(200, 'identity', 'button'));
