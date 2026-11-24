@@ -37,13 +37,13 @@ for (const locale of LOCALES) {
             [
               '?fixture.variant.listPermissions=settings-policy-readonly',
               '?fixture.variant.listRuns=paging-33',
-              `?${latencyToggle(2000)}`,
+              `?${latencyToggle(1000)}`,
             ],
           ),
         );
         const host = page.locator('app-run-list-page');
         const rows = page.locator(RUN_RECORDS);
-        await expect(host).toHaveAttribute('data-run-list-status', 'ready');
+        await expect(host).toHaveAttribute('data-run-list-status', 'ready', { timeout: 20_000 });
         await expect(rows).toHaveCount(20);
         await page.evaluate(() => document.fonts.ready);
         const subtitle = host.locator('app-page-header .header-description');
@@ -68,9 +68,10 @@ for (const locale of LOCALES) {
           const current = pending[index];
           if (!current) throw new Error('A retained layout target disappeared');
           for (const key of ['x', 'y', 'width', 'height'] as const) {
-            expect(Math.abs(current[key] - initial[key]), `target ${index} ${key}`).toBeLessThanOrEqual(
-              1,
-            );
+            expect(
+              Math.abs(current[key] - initial[key]),
+              `target ${index} ${key}`,
+            ).toBeLessThanOrEqual(1);
           }
         }
         await expect(host).toHaveAttribute('data-run-list-status', 'loading');

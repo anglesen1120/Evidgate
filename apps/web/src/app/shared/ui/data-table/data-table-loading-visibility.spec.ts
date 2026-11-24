@@ -5,7 +5,9 @@ import { chromium, type Browser, type Page } from '@playwright/test';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 function stylesheet(path: string): string {
-  const file = [resolve(path), resolve('apps/web', path)].find((candidate) => existsSync(candidate));
+  const file = [resolve(path), resolve('apps/web', path)].find((candidate) =>
+    existsSync(candidate),
+  );
   if (!file) throw new Error(`Cannot locate stylesheet: ${path}`);
   return readFileSync(file, 'utf8');
 }
