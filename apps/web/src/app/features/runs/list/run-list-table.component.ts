@@ -182,8 +182,8 @@ export class RunListTableComponent {
       cell: (row) => this.displayLabel(row.rerun_label ?? row.reprocess_label ?? ''),
       role: 'text',
       priority: 'secondary',
-      overflow: 'truncate',
-      width: { min: 'calc(13ch + var(--eg-space-4) * 2)' },
+      overflow: 'wrap',
+      width: { min: 'calc(13ch + var(--eg-space-4) * 2)', preferred: 'max-content' },
       cellTemplate: this.scopeCell(),
     },
     {

@@ -30,6 +30,7 @@ const COPY = {
 } as const;
 
 for (const locale of LOCALES) {
+  const path = localePath(locale, `/dev/run-list/orgs/${ORG_ACME}/projects/${PROJECT_STOREFRONT}`);
   for (const theme of THEMES) {
     test(`filter scope and fixed creation order stay visible (${locale}, ${theme})`, async ({
       page,
@@ -38,10 +39,6 @@ for (const locale of LOCALES) {
       await seedStoredTheme(page, theme);
       await page.emulateMedia({ reducedMotion: 'reduce' });
       await page.setViewportSize({ width: 1440, height: 900 });
-      const path = localePath(
-        locale,
-        `/dev/run-list/orgs/${ORG_ACME}/projects/${PROJECT_STOREFRONT}`,
-      );
       await page.goto(
         withVariants(path, [
           '?fixture.variant.listPermissions=settings-policy-readonly',
@@ -70,6 +67,27 @@ for (const locale of LOCALES) {
           width,
         );
       }
+    });
+
+    test(`rerun scope is readable without hovering at 1440px (${locale}, ${theme})`, async ({
+      page,
+    }) => {
+      await seedStoredTheme(page, theme);
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await page.goto(
+        withVariants(path, [
+          '?fixture.variant.listPermissions=settings-policy-readonly',
+          '?fixture.variant.listRuns=ok',
+        ]),
+      );
+      const label = page.locator('td [data-run-rerun] app-data-table-value');
+      await expect(label).toHaveAttribute('title', 'failed_subset');
+      const text = label.locator('.value');
+      await expect(text).toHaveText('failed_subset');
+      await expect(text).toBeVisible();
+      await page.evaluate(() => document.fonts.ready);
+      const overflow = await text.evaluate((element) => element.scrollWidth - element.clientWidth);
+      expect(overflow).toBeLessThanOrEqual(1);
     });
   }
 }
