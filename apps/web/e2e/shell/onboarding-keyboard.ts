@@ -156,6 +156,37 @@ export async function tabUntil(
   throw new Error(`${selector} is not in the Tab order; stopped at ${crossed.join(' → ')}`);
 }
 
+const hintedLabels = {
+  'onboarding-project-name': 'Project name',
+  'onboarding-project-slug': 'Project slug',
+  'connect-oidc-repo-id': 'GitHub numeric repository ID',
+  'connect-oidc-repo-name': 'Repository (owner/repo)',
+  'connect-oidc-refs': 'Allowed Git ref patterns',
+  'connect-oidc-workflows': 'Allowed workflow refs',
+  'connect-token-name': 'Token name',
+} as const;
+
+export type HintedFieldId = keyof typeof hintedLabels;
+
+/** A hint is its own stop immediately before its control, not part of the input's label. */
+export async function tabToHintedField(
+  page: Page,
+  id: HintedFieldId,
+  seek = false,
+): Promise<Locator> {
+  const label = hintedLabels[id];
+  const hint = page.getByRole('button', { name: `Hint: ${label}`, exact: true });
+  if (seek) await tabUntil(page, `button[aria-controls="${id}-hint"]`);
+  else await pressTab(page);
+  await expectKeyboardFocus(page, hint, `hint for ${label}`);
+  await expect(hint).toHaveAttribute('aria-controls', `${id}-hint`);
+  await expect(hint).toHaveAttribute('aria-expanded', 'false');
+  await pressTab(page);
+  const field = page.locator(`#${id}`);
+  await expectKeyboardFocus(page, field, label);
+  return field;
+}
+
 /**
  * Every enabled Tab stop inside the main region, named by its DOM contract. The identity list is
  * the budget assertion: a stray stop (a new control, a `tabindex="0"` wrapper) shows up by name, so

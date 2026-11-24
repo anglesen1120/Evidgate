@@ -22,6 +22,8 @@ import {
   stepButton,
   STEP_TITLE,
   tabUntil,
+  tabToHintedField,
+  type HintedFieldId,
 } from './onboarding-keyboard';
 import {
   expectNoReveal,
@@ -57,36 +59,22 @@ const WORKFLOW_REFS = 'acme/storefront-web/.github/workflows/evidgate.yml@refs/h
 /** The name this walkthrough types into the token form; the corpus echoes its own name back. */
 const TOKEN_NAME = 'CI upload (keyboard)';
 
-async function typeHintedField(page: Page, id: string, label: string, value: string, seek = false) {
-  const hint = page.getByRole('button', { name: `Hint: ${label}`, exact: true });
-  if (seek) await tabUntil(page, `button[aria-controls="${id}-hint"]`);
-  else await pressTab(page);
-  await expectKeyboardFocus(page, hint, `hint for ${label}`);
-  await expect(hint).toHaveAttribute('aria-controls', `${id}-hint`);
-  await expect(hint).toHaveAttribute('aria-expanded', 'false');
-  await pressTab(page);
-  const field = page.locator(`#${id}`);
-  await expectKeyboardFocus(page, field, label);
+async function typeHintedField(page: Page, id: HintedFieldId, value: string, seek = false) {
+  const field = await tabToHintedField(page, id, seek);
   await page.keyboard.type(value);
   await expect(field).toHaveValue(value);
 }
 
 async function fillProject(page: Page, name: string, slug: string, seek = false) {
-  await typeHintedField(page, 'onboarding-project-name', 'Project name', name, seek);
-  await typeHintedField(page, 'onboarding-project-slug', 'Project slug', slug);
+  await typeHintedField(page, 'onboarding-project-name', name, seek);
+  await typeHintedField(page, 'onboarding-project-slug', slug);
 }
 
 async function fillBinding(page: Page, seek = false) {
-  await typeHintedField(
-    page,
-    'connect-oidc-repo-id',
-    'GitHub numeric repository ID',
-    REPOSITORY_ID,
-    seek,
-  );
-  await typeHintedField(page, 'connect-oidc-repo-name', 'Repository (owner/repo)', REPOSITORY_NAME);
-  await typeHintedField(page, 'connect-oidc-refs', 'Allowed Git ref patterns', REF_PATTERNS);
-  await typeHintedField(page, 'connect-oidc-workflows', 'Allowed workflow refs', WORKFLOW_REFS);
+  await typeHintedField(page, 'connect-oidc-repo-id', REPOSITORY_ID, seek);
+  await typeHintedField(page, 'connect-oidc-repo-name', REPOSITORY_NAME);
+  await typeHintedField(page, 'connect-oidc-refs', REF_PATTERNS);
+  await typeHintedField(page, 'connect-oidc-workflows', WORKFLOW_REFS);
 }
 
 test.describe('W1 — step 1, create project (keyboard walkthrough plan)', () => {
@@ -304,7 +292,7 @@ test.describe('W2 — step 2, connect CI (OIDC then token)', () => {
     );
 
     // Walk through the refreshed bindings to the token hint and then its input.
-    await typeHintedField(page, 'connect-token-name', 'Token name', TOKEN_NAME, true);
+    await typeHintedField(page, 'connect-token-name', TOKEN_NAME, true);
 
     // 10.–11. The token reveal behaves the same way, and Dismiss lands on the token heading.
     await pressTab(page);
