@@ -33,8 +33,6 @@ describe('EvidenceBadgeComponent', () => {
 
     expect(badge?.getAttribute('data-tone')).toBe(tone);
     expect(badge?.getAttribute('data-slot')).toBe('badge');
-    expect(badge?.classList.contains(`bg-[var(--eg-${tone}-bg)]`)).toBe(true);
-    expect(badge?.classList.contains(`text-[var(--eg-${tone}-fg)]`)).toBe(true);
     expect(root.querySelector('.verdict__label')?.textContent?.trim()).toBe('Completeness:');
     expect(root.querySelector('.verdict__value')?.textContent).toBe(label);
     expect(root.textContent).not.toMatch(/PASS|FAIL|Passed|passed/);

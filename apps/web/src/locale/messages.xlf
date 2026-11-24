@@ -31160,7 +31160,7 @@
         <source>Status unavailable</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/chips/status-pill.component.ts</context>
-          <context context-type="linenumber">58</context>
+          <context context-type="linenumber">56</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.conflict.title" datatype="html">
@@ -31508,11 +31508,11 @@
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/states/loading-pattern.component.ts</context>
-          <context context-type="linenumber">89,93</context>
+          <context context-type="linenumber">87,91</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/states/loading-pattern.component.ts</context>
-          <context context-type="linenumber">127</context>
+          <context context-type="linenumber">125</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.data-table.pagination" datatype="html">
@@ -33812,6 +33812,13 @@
           <context context-type="linenumber">11,16</context>
         </context-group>
       </trans-unit>
+      <trans-unit id="shared.states.error.unknown-count" datatype="html">
+        <source>The record count is unknown.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/states/request-state.component.ts</context>
+          <context context-type="linenumber">121</context>
+        </context-group>
+      </trans-unit>
       <trans-unit id="shared.values.copy-label" datatype="html">
         <source>Copy <x id="LABEL" equiv-text="this.label()"/></source>
         <context-group purpose="location">
@@ -33865,21 +33872,21 @@
         <source>Show full</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/values/copyable-identifier.component.ts</context>
-          <context context-type="linenumber">238</context>
+          <context context-type="linenumber">234</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.values.close" datatype="html">
         <source>Close</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/values/copyable-identifier.component.ts</context>
-          <context context-type="linenumber">239</context>
+          <context context-type="linenumber">235</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.values.show-full-label" datatype="html">
         <source>Show full <x id="LABEL" equiv-text="this.label()"/></source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/values/copyable-identifier.component.ts</context>
-          <context context-type="linenumber">251</context>
+          <context context-type="linenumber">247</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.values.number-unavailable" datatype="html">
@@ -33935,49 +33942,49 @@
         <source>Evidence complete</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/verdict/evidence-badge.component.ts</context>
-          <context context-type="linenumber">61</context>
+          <context context-type="linenumber">59</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.evidence-badge.incomplete" datatype="html">
         <source>Evidence incomplete</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/verdict/evidence-badge.component.ts</context>
-          <context context-type="linenumber">63</context>
+          <context context-type="linenumber">61</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.evidence-badge.unavailable" datatype="html">
         <source>Evidence status unavailable</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/verdict/evidence-badge.component.ts</context>
-          <context context-type="linenumber">65</context>
+          <context context-type="linenumber">63</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.evidence-badge.unknown-detail" datatype="html">
         <source>Unknown evidence status: <x id="state" equiv-text="state"/></source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/verdict/evidence-badge.component.ts</context>
-          <context context-type="linenumber">71</context>
+          <context context-type="linenumber">69</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.evidence-badge.short.complete" datatype="html">
         <source>Complete</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/verdict/evidence-badge.component.ts</context>
-          <context context-type="linenumber">77</context>
+          <context context-type="linenumber">75</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.evidence-badge.short.incomplete" datatype="html">
         <source>Incomplete</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/verdict/evidence-badge.component.ts</context>
-          <context context-type="linenumber">79</context>
+          <context context-type="linenumber">77</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.evidence-badge.short.unavailable" datatype="html">
         <source>Unavailable</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/verdict/evidence-badge.component.ts</context>
-          <context context-type="linenumber">81</context>
+          <context context-type="linenumber">79</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.outcome-pill.dimension" datatype="html">
@@ -33991,63 +33998,63 @@
         <source>All tests passed</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/verdict/outcome-pill.component.ts</context>
-          <context context-type="linenumber">61</context>
+          <context context-type="linenumber">59</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.outcome-pill.has-failures" datatype="html">
         <source>Has failures</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/verdict/outcome-pill.component.ts</context>
-          <context context-type="linenumber">63</context>
+          <context context-type="linenumber">61</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.outcome-pill.no-results" datatype="html">
         <source>No results</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/verdict/outcome-pill.component.ts</context>
-          <context context-type="linenumber">65</context>
+          <context context-type="linenumber">63</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.outcome-pill.unavailable" datatype="html">
         <source>Outcome unavailable</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/verdict/outcome-pill.component.ts</context>
-          <context context-type="linenumber">67</context>
+          <context context-type="linenumber">65</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.outcome-pill.unknown-detail" datatype="html">
         <source>Unknown test outcome: <x id="state" equiv-text="state"/></source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/verdict/outcome-pill.component.ts</context>
-          <context context-type="linenumber">73</context>
+          <context context-type="linenumber">71</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.outcome-pill.short.all-passed" datatype="html">
         <source>All tests passed</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/verdict/outcome-pill.component.ts</context>
-          <context context-type="linenumber">79</context>
+          <context context-type="linenumber">77</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.outcome-pill.short.has-failures" datatype="html">
         <source>Has failures</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/verdict/outcome-pill.component.ts</context>
-          <context context-type="linenumber">81</context>
+          <context context-type="linenumber">79</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.outcome-pill.short.no-results" datatype="html">
         <source>No results</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/verdict/outcome-pill.component.ts</context>
-          <context context-type="linenumber">83</context>
+          <context context-type="linenumber">81</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.outcome-pill.short.unavailable" datatype="html">
         <source>Unavailable</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/verdict/outcome-pill.component.ts</context>
-          <context context-type="linenumber">85</context>
+          <context context-type="linenumber">83</context>
         </context-group>
       </trans-unit>
       <trans-unit id="auth.login.locale-en" datatype="html">

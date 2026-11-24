@@ -19,7 +19,8 @@ import { openFullValuePopover } from '@evidgate/ui/utils';
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrl: '../../../ui/utils/lib/full-value-popover.css',
   host: {
-    class: 'inline-flex min-w-0 items-center gap-(--eg-space-2) pointer-coarse:gap-(--eg-space-3)',
+    class:
+      'inline-flex min-h-(--eg-control-sm) min-w-0 items-center gap-(--eg-space-2) max-md:min-h-(--eg-control-touch) pointer-coarse:min-h-(--eg-control-touch) pointer-coarse:gap-(--eg-space-3)',
   },
   template: `
     <ng-content />
@@ -44,10 +45,10 @@ import { openFullValuePopover } from '@evidgate/ui/utils';
         #panel
         popover="manual"
         tabindex="0"
-        class="box-border w-max overflow-auto rounded-(--eg-radius-md) border border-border bg-popover p-(--eg-space-4) text-start text-sm font-normal text-popover-foreground whitespace-normal wrap-anywhere shadow-md"
+        class="box-border w-max overflow-auto rounded-(--eg-radius-md) border border-border bg-popover p-(--eg-space-4) text-start text-sm font-normal text-popover-foreground whitespace-normal wrap-anywhere shadow-(--eg-elevation-2)"
         [id]="descriptionId()"
         (keydown.escape)="escape($event, trigger)"
-        ><span class="block max-w-prose">{{ hint }}</span></span
+        ><span class="block max-w-[40ch]">{{ hint }}</span></span
       >
     }
   `,

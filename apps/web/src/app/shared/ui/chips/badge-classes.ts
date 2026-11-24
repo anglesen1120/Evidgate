@@ -6,6 +6,9 @@ import type { StatusTone } from './status-pill.component';
 export const BADGE_CLASSES =
   'h-auto min-h-[var(--eg-space-7)] max-w-[min(100%,24ch)] min-w-0 flex-nowrap justify-start gap-[var(--eg-space-2)] whitespace-nowrap rounded-(--eg-radius-sm) overflow-visible px-[var(--eg-space-3)] py-[var(--eg-space-1)] font-sans font-semibold text-[length:var(--eg-text-xs)] leading-(--eg-leading-xs)';
 
+/** Keep the full-value disclosure, but let the stored decision carry the visual emphasis. */
+export const QUIET_BADGE_CLASSES = hlm(BADGE_CLASSES, 'px-0 font-normal');
+
 export const IDENTITY_BADGE_CLASSES = hlm(
   BADGE_CLASSES,
   'bg-[var(--eg-neutral-bg)] text-[var(--eg-neutral-fg)] font-mono font-normal',

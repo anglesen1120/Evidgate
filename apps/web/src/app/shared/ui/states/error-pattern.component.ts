@@ -31,16 +31,13 @@ import type { ApiError } from '../../../core/http/api-error';
     } @else {
       <section
         hlmCard
-        class="state-panel state-panel--error min-w-0 items-start gap-(--eg-space-3) rounded-(--eg-radius-md) p-(--eg-space-5) text-start wrap-anywhere border-s-4 border-s-current bg-(--eg-danger-bg) text-(--eg-danger-fg)"
+        class="state-panel state-panel--error min-w-0 items-start gap-(--eg-space-3) p-(--eg-space-7) text-start wrap-anywhere"
       >
         <ng-container [ngTemplateOutlet]="content" />
       </section>
     }
     <ng-template #content>
-      <hlm-icon
-        [name]="'lucideTriangleAlert'"
-        class="size-(--eg-control-sm) text-(--eg-danger-fg)"
-      />
+      <hlm-icon [name]="'lucideTriangleAlert'" class="size-(--eg-space-7) text-(--eg-danger-fg)" />
       @for (failure of failures(); track failure) {
         <div
           hlmAlert
@@ -100,7 +97,7 @@ import type { ApiError } from '../../../core/http/api-error';
       @if (error(); as failure) {
         <p
           hlmCardDescription
-          class="state-panel__description m-0 max-w-full"
+          class="state-panel__description m-0 max-w-prose text-sm"
           [textContent]="failure.message"
         ></p>
         <p class="state-panel__metadata m-0 max-w-full text-muted-foreground">

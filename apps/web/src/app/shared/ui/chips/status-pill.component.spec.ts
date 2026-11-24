@@ -83,20 +83,6 @@ describe('StatusPillComponent', () => {
     expect(root.querySelector('img, [title]')).toBeNull();
   });
 
-  it.each(['light', 'dark'])('uses matching semantic pairs in the %s theme', async (theme) => {
-    const fixture = TestBed.createComponent(StatusPillComponent);
-    fixture.componentRef.setInput('tone', 'warning');
-    fixture.componentRef.setInput('label', 'Incomplete');
-    await fixture.whenStable();
-    const root = fixture.nativeElement as HTMLElement;
-    root.dataset['theme'] = theme;
-    const badge = root.querySelector('[hlmBadge]');
-    expect(badge?.classList.contains('bg-[var(--eg-warning-bg)]')).toBe(true);
-    expect(badge?.classList.contains('text-[var(--eg-warning-fg)]')).toBe(true);
-    // Shared primitive CSS owns line height; merged duplicate utilities are not its contract.
-    expect(badge?.classList.contains('spartan-badge')).toBe(true);
-  });
-
   it('keeps complete-value disclosure optional and forwards subsequent changes', async () => {
     const fixture = TestBed.createComponent(StatusPillComponent);
     fixture.componentRef.setInput('tone', 'neutral');

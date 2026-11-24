@@ -1,6 +1,6 @@
 @layer components {
   .spartan-skeleton {
     background: var(--eg-border);
-    border-radius: var(--eg-radius-pill);
+    border-radius: var(--eg-radius-sm);
   }
 }

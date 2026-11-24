@@ -10,10 +10,10 @@ import { HlmIcon } from '@evidgate/ui/icon';
   template: `
     <section
       hlmCard
-      class="state-panel state-panel--not-found min-w-0 items-start gap-(--eg-space-3) rounded-(--eg-radius-md) p-(--eg-space-5) text-start wrap-anywhere bg-(--eg-surface-raised) text-(--eg-text)"
+      class="state-panel state-panel--not-found min-w-0 items-start gap-(--eg-space-3) p-(--eg-space-7) text-start wrap-anywhere"
       role="status"
     >
-      <hlm-icon [name]="'lucideInfo'" class="size-(--eg-control-sm) text-(--eg-neutral-fg)" />
+      <hlm-icon [name]="'lucideInfo'" class="size-(--eg-space-7) text-(--eg-accent)" />
       <h2
         hlmCardTitle
         class="state-panel__title m-0 font-(family-name:--eg-font-display) text-lg"
@@ -21,7 +21,7 @@ import { HlmIcon } from '@evidgate/ui/icon';
       ></h2>
       <p
         hlmCardDescription
-        class="state-panel__description m-0 max-w-full"
+        class="state-panel__description m-0 max-w-prose text-sm"
         i18n="@@shared.states.not-found.description"
       >
         This page does not exist or you do not have access to it.

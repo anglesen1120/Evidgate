@@ -97,7 +97,7 @@ import { escapeFormatChars } from './ref-name-display';
       </span>
     </div>
     <ng-template #fullValue>
-      <h2 hlmDialogTitle class="full-value-heading">{{ label() }}</h2>
+      <h2 hlmDialogTitle>{{ label() }}</h2>
       <code class="full-value"><bdi [textContent]="displayValue()"></bdi></code>
       <hlm-dialog-footer>
         <button hlmBtn type="button" [variant]="'outline'" hlmDialogClose>{{ closeText }}</button>
@@ -193,10 +193,6 @@ import { escapeFormatChars } from './ref-name-display';
     }
     .identifier > .full-value {
       flex: 1 1 100%;
-    }
-    .full-value-heading {
-      font-size: var(--eg-text-lg);
-      line-height: var(--eg-leading-lg);
     }
     button {
       block-size: auto;
