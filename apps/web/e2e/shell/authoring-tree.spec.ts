@@ -31,7 +31,22 @@ for (const locale of LOCALES) {
     const root = page.locator(`[data-disclosure="${ROOT}"]`);
     const scope = page.locator(`[data-scope="${ROOT}"]`);
     const account = page.locator(`[data-scope="${ACCOUNT}"]`);
-    await tabTo(page, root);
+    const hint = page.getByRole('button', {
+      name: locale === 'vi' ? 'Gợi ý: Phân cấp dự án' : 'Hint: Project hierarchy',
+    });
+    const help = page.locator('#authoring-tree-keyboard');
+    const keys = locale === 'vi' ? /Phím mũi tên, Home, End/ : /Arrow keys, Home, End/;
+    await expect(help).toBeHidden();
+    await expect(page.locator('ul.hierarchy')).toHaveAccessibleDescription(keys);
+    await tabTo(page, hint);
+    await page.keyboard.press('Enter');
+    await expect(help).toBeVisible();
+    await expect(help).toHaveText(keys);
+    await page.keyboard.press('Escape');
+    await expect(help).toBeHidden();
+    await expect(hint).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(root).toBeFocused();
     await expect(root).toHaveAttribute('aria-expanded', 'false');
     await page.keyboard.press('Tab');
     await expect(scope).toBeFocused();
@@ -209,6 +224,31 @@ async function lastCaseQuery(page: Page): Promise<Record<string, string>> {
 
 for (const locale of LOCALES) {
   const base = readOnlyTreePath(locale);
+
+  test(`filter guidance remains accessible at 390px (${locale})`, async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(base);
+    const hint = page.getByRole('button', {
+      name: locale === 'vi' ? 'Gợi ý: Độ bao phủ' : 'Hint: Coverage',
+    });
+    const help = page.locator('#authoring-case-scope-help');
+    const text = locale === 'vi' ? /Bộ lọc tìm trong danh sách/ : /Filters search the server list/;
+    const coverage = page.locator('#authoring-case-covered');
+    await expect(help).toBeHidden();
+    await expect(page.locator('form.filters')).toHaveAccessibleDescription(text);
+    await expect(coverage).toHaveAccessibleDescription(text);
+    await page.locator('#authoring-case-state').focus();
+    await page.keyboard.press('Tab');
+    await expect(hint).toBeFocused();
+    await page.keyboard.press('Space');
+    await expect(help).toBeInViewport();
+    await expect(help).toHaveText(text);
+    await page.keyboard.press('Escape');
+    await expect(help).toBeHidden();
+    await expect(hint).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(coverage).toBeFocused();
+  });
 
   test(`case table sends every supported filter and restores URL history (${locale})`, async ({
     page,
