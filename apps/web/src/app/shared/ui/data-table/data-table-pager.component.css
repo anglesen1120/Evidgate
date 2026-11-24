@@ -26,3 +26,8 @@
   white-space: normal;
   overflow-wrap: anywhere;
 }
+
+.page-actions .page-boundary {
+  border-color: var(--eg-border);
+  font-weight: var(--eg-weight-regular);
+}

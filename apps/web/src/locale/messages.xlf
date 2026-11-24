@@ -4043,7 +4043,7 @@
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/data-table/data-table-pager.component.ts</context>
-          <context context-type="linenumber">87</context>
+          <context context-type="linenumber">89</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.pending-changes.select-column" datatype="html">
@@ -31502,49 +31502,49 @@
         <source>Rows per page</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/data-table/data-table-pager.component.ts</context>
-          <context context-type="linenumber">61</context>
+          <context context-type="linenumber">63</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.data-table.previous" datatype="html">
         <source>Previous records</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/data-table/data-table-pager.component.ts</context>
-          <context context-type="linenumber">62</context>
+          <context context-type="linenumber">64</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.data-table.next" datatype="html">
         <source>Next records</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/data-table/data-table-pager.component.ts</context>
-          <context context-type="linenumber">63</context>
+          <context context-type="linenumber">65</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.data-table.pagination" datatype="html">
         <source>Table pagination</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/data-table/data-table-pager.component.ts</context>
-          <context context-type="linenumber">67</context>
+          <context context-type="linenumber">69</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.data-table.pages" datatype="html">
         <source><x id="caption" equiv-text="caption"/> — loaded record pages</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/data-table/data-table-pager.component.ts</context>
-          <context context-type="linenumber">68</context>
+          <context context-type="linenumber">70</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.data-table.page-number" datatype="html">
         <source>Page <x id="page" equiv-text="page"/></source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/data-table/data-table-pager.component.ts</context>
-          <context context-type="linenumber">78</context>
+          <context context-type="linenumber">80</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.data-table.range" datatype="html">
         <source><x id="start" equiv-text="start"/>–<x id="end" equiv-text="end"/> of <x id="loaded" equiv-text="loaded"/></source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/data-table/data-table-pager.component.ts</context>
-          <context context-type="linenumber">86</context>
+          <context context-type="linenumber">88</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.data-table.no-rows" datatype="html">
