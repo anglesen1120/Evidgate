@@ -165,7 +165,9 @@ describe('ProducerStatusTableComponent paging', () => {
       original.map((slot) => ({ ...slot, lastSequence: 987 })),
     ]) {
       fixture.componentRef.setInput('slots', refreshed);
-      expect(await (await table.summary()).text()).toContain(page === 1 ? '21–40 of 53' : '41–53 of 53');
+      expect(await (await table.summary()).text()).toContain(
+        page === 1 ? '21–40 of 53' : '41–53 of 53',
+      );
       expect((await table.rowIds())[0]).toBe(page === 1 ? 'shard-20' : 'shard-40');
     }
     expect(await (await table.rows())[0]?.text()).toContain('987');

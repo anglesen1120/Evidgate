@@ -43,7 +43,7 @@
   }
   <div class="page-actions">
     <span
-      aria-current="page"
+      [attr.aria-current]="'page'"
       [attr.role]="knownTotal ? null : 'status'"
       [attr.aria-live]="knownTotal ? null : 'polite'"
       >{{ pageLabel() }}</span

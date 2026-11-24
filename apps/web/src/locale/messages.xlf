@@ -4046,7 +4046,7 @@
           <context context-type="linenumber">64</context>
         </context-group>
       </trans-unit>
-      <trans-unit id="shared.data-table.loaded-range" datatype="html">
+      <trans-unit id="authoring.pending-changes.loaded-range" datatype="html">
         <source>Loaded records <x id="start" equiv-text="first"/>–<x id="end" equiv-text="total"/> of <x id="loaded" equiv-text="total"/></source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-change-table.component.ts</context>

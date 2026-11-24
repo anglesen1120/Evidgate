@@ -83,7 +83,7 @@
 
 @media (prefers-reduced-motion: no-preference) {
   .page-spinner {
-    animation: page-read 1s linear infinite;
+    animation: page-read calc(var(--eg-duration-standard) * 5) linear infinite;
   }
 
   @keyframes page-read {
