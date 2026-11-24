@@ -445,7 +445,7 @@
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-case-rows.component.html</context>
-          <context context-type="linenumber">173,178</context>
+          <context context-type="linenumber">181,186</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-node-details.component.ts</context>
@@ -1072,38 +1072,38 @@
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.case-table.selection-summary" datatype="html">
-        <source> <x id="INTERPOLATION" equiv-text="{{ selectedCount() | number }}"/> of <x id="INTERPOLATION_1" equiv-text="{{ rows().length | number }}"/> loaded selected; applies to visible rows only </source>
+        <source> Selected <x id="INTERPOLATION" equiv-text="{{ selectedCount() | number }}"/> / <x id="INTERPOLATION_1" equiv-text="{{ visibleRows().length | number }}"/> visible cases </source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-case-rows.component.html</context>
-          <context context-type="linenumber">32,35</context>
+          <context context-type="linenumber">25,27</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.case-table.live-links" datatype="html">
         <source>Live links</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-case-rows.component.html</context>
-          <context context-type="linenumber">116,121</context>
+          <context context-type="linenumber">124,129</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.case-table.identifiers" datatype="html">
         <source>Identifiers</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-case-rows.component.ts</context>
-          <context context-type="linenumber">65</context>
+          <context context-type="linenumber">67</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.case-table.select-case" datatype="html">
         <source>Select case <x id="code" equiv-text="row.code"/></source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-case-rows.component.ts</context>
-          <context context-type="linenumber">129</context>
+          <context context-type="linenumber">131</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.case-table.view-name" datatype="html">
         <source>View <x id="name" equiv-text="escapeFormatChars(row.title)"/></source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-case-rows.component.ts</context>
-          <context context-type="linenumber">131</context>
+          <context context-type="linenumber">133</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.case-table.loaded-states" datatype="html">
@@ -1492,14 +1492,14 @@
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.case-table.narrow-help" datatype="html">
-        <source>Use a screen at least 768 pixels wide to select cases for export. Cases and filters remain readable here.</source>
+        <source>Use a screen at least 768 pixels wide to select cases. You can still inspect and filter cases here.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-case-table.copy.ts</context>
           <context context-type="linenumber">56</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.case-table.export" datatype="html">
-        <source>Export selected</source>
+        <source>Export selected (unavailable)</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-case-table.copy.ts</context>
           <context context-type="linenumber">57</context>
@@ -1533,81 +1533,60 @@
           <context context-type="linenumber">61</context>
         </context-group>
       </trans-unit>
-      <trans-unit id="authoring.case-table.title" datatype="html">
-        <source>Title</source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/authoring/authoring-case-table.copy.ts</context>
-          <context context-type="linenumber">62</context>
-        </context-group>
-      </trans-unit>
       <trans-unit id="authoring.case-table.links" datatype="html">
         <source>Linked automated case IDs</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-case-table.copy.ts</context>
-          <context context-type="linenumber">63</context>
+          <context context-type="linenumber">62</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.case-table.version" datatype="html">
         <source>Case version</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-case-table.copy.ts</context>
-          <context context-type="linenumber">64</context>
-        </context-group>
-      </trans-unit>
-      <trans-unit id="authoring.case-table.pending" datatype="html">
-        <source>Pending changes</source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/authoring/authoring-case-table.copy.ts</context>
-          <context context-type="linenumber">65</context>
-        </context-group>
-      </trans-unit>
-      <trans-unit id="authoring.case-table.pending-help" datatype="html">
-        <source>Pending change count unavailable; this list does not supply it.</source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/authoring/authoring-case-table.copy.ts</context>
-          <context context-type="linenumber">66</context>
+          <context context-type="linenumber">63</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.case-table.manual-case" datatype="html">
         <source>Manual case</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-case-table.copy.ts</context>
-          <context context-type="linenumber">67</context>
+          <context context-type="linenumber">64</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.case-table.priority-state" datatype="html">
         <source>Priority / lifecycle</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-case-table.copy.ts</context>
-          <context context-type="linenumber">68</context>
+          <context context-type="linenumber">65</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.case-table.view" datatype="html">
         <source>View</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-case-table.copy.ts</context>
-          <context context-type="linenumber">69</context>
+          <context context-type="linenumber">66</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.case-table.actions" datatype="html">
         <source>Actions</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-case-table.copy.ts</context>
-          <context context-type="linenumber">70</context>
+          <context context-type="linenumber">67</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.case-table.editor-unavailable" datatype="html">
         <source>Project scope unavailable</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-case-table.copy.ts</context>
-          <context context-type="linenumber">71</context>
+          <context context-type="linenumber">68</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.case-table.browse-capped-help" datatype="html">
         <source>Narrow the filters or choose another scope in the hierarchy to reach cases beyond the <x id="cap" equiv-text="formatNumber(cap, locale)"/> loaded here.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-case-table.copy.ts</context>
-          <context context-type="linenumber">79</context>
+          <context context-type="linenumber">76</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.case-table.unresolved" datatype="html">
@@ -20289,14 +20268,14 @@
         <source>On this page before filtering by scope: <x id="count" equiv-text="count"/></source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/list/run-list.page.ts</context>
-          <context context-type="linenumber">364</context>
+          <context context-type="linenumber">365</context>
         </context-group>
       </trans-unit>
       <trans-unit id="runs.list.page-count" datatype="html">
         <source>Returned on this page: <x id="count" equiv-text="count"/></source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/list/run-list.page.ts</context>
-          <context context-type="linenumber">365</context>
+          <context context-type="linenumber">366</context>
         </context-group>
       </trans-unit>
       <trans-unit id="review.generated-scripts.title" datatype="html">

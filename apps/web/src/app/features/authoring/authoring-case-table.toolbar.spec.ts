@@ -1,14 +1,15 @@
-import { ComponentHarness } from '@angular/cdk/testing';
+import { ComponentHarness, manualChangeDetection } from '@angular/cdk/testing';
 import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { signal } from '@angular/core';
-import { TestBed } from '@angular/core/testing';
+import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
-import type { ManualCaseListItemDto } from '@evidgate/sdk';
-import { of } from 'rxjs';
-import { describe, expect, it } from 'vitest';
+import type { ManualCaseListItemDto, ManualCaseListResponse } from '@evidgate/sdk';
+import { BehaviorSubject, firstValueFrom, of, Subject } from 'rxjs';
+import { describe, expect, it, vi } from 'vitest';
 import { provideLayoutTestStubs } from '../../shared/testing/layout.testing';
 import { NarrowMutationPolicy } from '../../shared/ui/narrow/narrow-mutation-policy';
 import { AuthoringCaseTableComponent } from './authoring-case-table.component';
+import { AuthoringCaseTableStore } from './authoring-case-table.store';
 import { AuthoringDataService } from './authoring-data.service';
 
 class ToolbarHarness extends ComponentHarness {
@@ -40,7 +41,14 @@ const row: ManualCaseListItemDto = {
 
 describe('Case table toolbar', () => {
   provideLayoutTestStubs();
-  async function mount() {
+  let fixture: ComponentFixture<AuthoringCaseTableComponent>;
+  async function mount(
+    list = vi.fn<AuthoringDataService['listManualCases']>().mockResolvedValue({
+      items: [row],
+      next_cursor: null,
+    }),
+    query = new BehaviorSubject(convertToParamMap({})),
+  ) {
     TestBed.configureTestingModule({
       imports: [AuthoringCaseTableComponent],
       providers: [
@@ -48,7 +56,7 @@ describe('Case table toolbar', () => {
         {
           provide: ActivatedRoute,
           useValue: {
-            queryParamMap: of(convertToParamMap({})),
+            queryParamMap: query,
             pathFromRoot: [{ paramMap: of(convertToParamMap({ projectId: 'project' })) }],
           },
         },
@@ -58,11 +66,11 @@ describe('Case table toolbar', () => {
         },
         {
           provide: AuthoringDataService,
-          useValue: { listManualCases: async () => ({ items: [row], next_cursor: null }) },
+          useValue: { listManualCases: list },
         },
       ],
     });
-    const fixture = TestBed.createComponent(AuthoringCaseTableComponent);
+    fixture = TestBed.createComponent(AuthoringCaseTableComponent);
     fixture.detectChanges();
     await fixture.whenStable();
     return TestbedHarnessEnvironment.harnessForFixture(fixture, ToolbarHarness);
@@ -76,6 +84,7 @@ describe('Case table toolbar', () => {
     const description = await (await bar.scope()).text();
     expect(description).toContain('not unloaded cases or hidden record pages');
     expect(await (await bar.host()).text({ exclude: '[popover]' })).not.toContain(description);
+    expect(await (await bar.host()).text()).not.toContain('Pending change count unavailable');
     expect(await (await bar.selection()).getAttribute('aria-describedby')).toBe(
       'authoring-selection-help',
     );
@@ -95,6 +104,38 @@ describe('Case table toolbar', () => {
     expect(await (await bar.reason()).text()).toContain('No broader scope will be exported');
     await action.click();
     expect(await (await bar.counts())[0]?.text()).toBe('Selected 1 / 1 visible cases');
+  });
+
+  it('keeps refresh focusable without dispatching a reload while a filtered read retains rows', async () => {
+    const query = new BehaviorSubject(convertToParamMap({}));
+    const pending = new Subject<ManualCaseListResponse>();
+    const list = vi
+      .fn<AuthoringDataService['listManualCases']>()
+      .mockResolvedValueOnce({ items: [row], next_cursor: null })
+      .mockReturnValueOnce(firstValueFrom(pending))
+      .mockResolvedValueOnce({ items: [row], next_cursor: null });
+    const bar = await mount(list, query);
+    const reload = vi.spyOn(fixture.debugElement.injector.get(AuthoringCaseTableStore), 'reload');
+    await (await bar.refresh()).focus();
+    await manualChangeDetection(async () => {
+      query.next(convertToParamMap({ q: 'First' }));
+      fixture.detectChanges();
+      await vi.waitFor(() => expect(list).toHaveBeenCalledTimes(2));
+      fixture.detectChanges();
+      const refresh = await bar.refresh();
+      expect(await refresh.getAttribute('aria-disabled')).toBe('true');
+      expect(await refresh.getProperty('tabIndex')).toBe(0);
+      expect(await refresh.isFocused()).toBe(true);
+      await refresh.click();
+      expect(reload).not.toHaveBeenCalled();
+      pending.error(new Error('Read failed'));
+    });
+    await fixture.whenStable();
+    const refresh = await bar.refresh();
+    expect(await refresh.getAttribute('aria-disabled')).toBe('false');
+    await refresh.click();
+    expect(reload).toHaveBeenCalledTimes(1);
+    expect(list).toHaveBeenCalledTimes(3);
   });
 
   it('places selection before rows, leaves the pager last, and names the refresh icon and tooltip', async () => {

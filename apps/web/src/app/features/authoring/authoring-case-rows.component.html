@@ -17,7 +17,7 @@
       <span>{{ copy.select }}</span>
     </label>
     <app-field-hint
-      descriptionId="authoring-selection-help"
+      [descriptionId]="'authoring-selection-help'"
       [label]="copy.selection"
       [text]="copy.selectionHelp"
     >
@@ -27,7 +27,7 @@
     </app-field-hint>
     @if (selectedCount() > 0) {
       <app-field-hint
-        descriptionId="authoring-export-help"
+        [descriptionId]="'authoring-export-help'"
         [label]="copy.export"
         [text]="copy.exportHelp"
       >
@@ -37,7 +37,7 @@
           [variant]="'outline'"
           [size]="'sm'"
           [attr.aria-disabled]="true"
-          aria-describedby="authoring-export-help"
+          [attr.aria-describedby]="'authoring-export-help'"
           data-export-selection
           (click)="$event.preventDefault()"
         >

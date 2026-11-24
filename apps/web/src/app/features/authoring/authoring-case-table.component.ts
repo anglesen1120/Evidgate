@@ -115,6 +115,9 @@ export class AuthoringCaseTableComponent {
   protected readonly busy = computed(
     () => this.store.status() === 'loading' || this.request.isLoading(),
   );
+  protected readonly refreshUnavailable = computed(
+    () => this.busy() || this.store.loadingMore() || !this.store.retryReady(),
+  );
   readonly projectEmpty = input(false);
   readonly loadedInventory = computed(() =>
     this.store.status() === 'ready' && !this.busy() && !this.store.error() && !this.store.filtered()
@@ -258,6 +261,7 @@ export class AuthoringCaseTableComponent {
     this.navigate({ cursor: this.store.routeCursor() }, true);
   }
   protected async refresh(): Promise<void> {
+    if (this.refreshUnavailable()) return;
     const scope = this.routeState();
     await this.store.reload();
     if (

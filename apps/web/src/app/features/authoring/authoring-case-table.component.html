@@ -231,19 +231,17 @@
         @if (hasRows()) {
           <p class="help">{{ copy.order }}</p>
         }
-        @if (store.status() === 'ready') {
-          <button
-            appRowAction
-            type="button"
-            [icon]="'lucideRotateCw'"
-            [label]="copy.refresh"
-            [attr.aria-label]="copy.refresh"
-            aria-describedby="authoring-case-refresh-help"
-            [disabled]="busy() || store.loadingMore() || !store.retryReady()"
-            (click)="refresh()"
-            data-case-refresh
-          ></button>
-        }
+        <button
+          appRowAction
+          type="button"
+          [icon]="'lucideRotateCw'"
+          [label]="copy.refresh"
+          [attr.aria-label]="copy.refresh"
+          [attr.aria-describedby]="'authoring-case-refresh-help'"
+          [attr.aria-disabled]="refreshUnavailable()"
+          (click)="refresh()"
+          data-case-refresh
+        ></button>
       </div>
     }
     <app-request-state

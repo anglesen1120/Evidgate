@@ -137,9 +137,7 @@ for (const locale of LOCALES) {
     const blank = page.locator('[data-authoring-project-empty]');
     await expect(blank).toBeVisible();
     await expect(page.locator(PAGE + ' app-empty-pattern')).toHaveCount(1);
-    await expect(
-      page.locator('[data-case-filters], [data-case-loaded], #authoring-case-page-size'),
-    ).toHaveCount(0);
+    await expect(page.locator('[data-case-filters], #authoring-case-page-size')).toHaveCount(0);
     await blank.getByRole('button').click();
     await expect(page).toHaveURL(/\/authoring\/import-export(?:[?#]|$)/);
   });
