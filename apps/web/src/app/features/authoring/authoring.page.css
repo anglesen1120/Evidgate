@@ -75,7 +75,17 @@ button {
 }
 @media (min-width: 1200px) {
   .panes:not(.project-empty) {
-    grid-template-columns: minmax(calc(var(--eg-control-touch) * 7), 0.8fr) minmax(0, 2.2fr);
+    /* Wrap the panes when the shell leaves too little room for deep nodes and a native table. */
+    display: flex;
+    flex-wrap: wrap;
+  }
+  .tree-pane {
+    flex: 4 1 0;
+    min-inline-size: min(100%, calc(var(--eg-control-touch) * 7));
+  }
+  .case-pane {
+    flex: 11 1 0;
+    min-inline-size: min(100%, calc(var(--eg-control-touch) * 18));
   }
 }
 @media (768px <= width < 1200px) {
