@@ -17,6 +17,7 @@
   <app-loading-pattern
     [layout]="'table'"
     [busy]="status() === 'loading' || loadingMore()"
+    [announceProgress]="false"
     [hasRows]="status() === 'ready' && !!attempts()?.length"
     [label]="loadingMore() ? copy.loadingMore : undefined"
   />

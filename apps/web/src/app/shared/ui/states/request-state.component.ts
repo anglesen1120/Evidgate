@@ -42,6 +42,7 @@ import { patternForError } from './state-pattern';
           [layout]="tableLoading() ? 'table' : 'summary'"
           [busy]="true"
           [label]="loadingLabel()"
+          [announceProgress]="announceProgress()"
         />
       }
       @case ('error') {
@@ -99,6 +100,8 @@ export class RequestStateComponent {
 
   readonly status = input<'loading' | 'ready' | 'error'>('loading');
   readonly tableLoading = input(false);
+  /** A mounted pager can own progress semantics while the initial table skeleton stays visible. */
+  readonly announceProgress = input(true);
   readonly loadingLabel = input<string | undefined>();
   readonly error = input<ApiError | null>(null);
   readonly empty = input(false);

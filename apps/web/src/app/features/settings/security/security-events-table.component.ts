@@ -197,6 +197,7 @@ import { SECURITY_SEVERITY_LABELS, securityTypeLabel } from './security-events.c
     }
     <app-data-table
       [busy]="fetching()"
+      [progressAtPager]="true"
       class="[&>.caption]:sr-only [&>.scroll]:rounded-none [&>.scroll]:border-0"
       [rowHeight]="'compact'"
       [columns]="columns()"

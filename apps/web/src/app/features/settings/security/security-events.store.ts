@@ -182,7 +182,12 @@ export const SecurityEventsStore = signalStore(
       }));
     },
     setPageSize(pageSize: number): void {
-      if (![20, 50, 100].includes(pageSize) || pageSize === store.pageSize()) return;
+      if (
+        store.phase() !== 'ready' ||
+        ![20, 50, 100].includes(pageSize) ||
+        pageSize === store.pageSize()
+      )
+        return;
       patchState(store, { pageSize });
       store._selection.update((value) => ({ ...value, pageIndex: 0, cursors: [undefined] }));
     },

@@ -72,6 +72,21 @@ describe.each(['en-US', 'vi'])('ConnectionHealthComponent (%s)', (locale) => {
     expect(root.querySelector('button, a, [tabindex], [role="alert"]')).toBeNull();
   });
 
+  it('retains credential rows with one named progressbar when a table without a pager refetches', async () => {
+    setMetadata('tokens', [TOKEN]);
+    fixture.componentRef.setInput('fetching', true);
+    await vi.waitFor(() => {
+      fixture.detectChanges();
+      expect(root.querySelectorAll('[role="progressbar"]')).toHaveLength(1);
+    });
+    expect(root.querySelector('[role="progressbar"]')?.getAttribute('aria-label')).toBe('Loading…');
+    expect(root.textContent).toContain(TOKEN.name);
+    expect(root.querySelector('table')?.getAttribute('aria-busy')).toBe('true');
+    fixture.componentRef.setInput('fetching', false);
+    fixture.detectChanges();
+    expect(root.querySelector('[role="progressbar"]')).toBeNull();
+  });
+
   it('renders a healthy state with the shared pill, repository and usable explanation', async () => {
     setMetadata('bindings', [BINDING]);
     await fixture.whenStable();

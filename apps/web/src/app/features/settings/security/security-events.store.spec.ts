@@ -211,6 +211,27 @@ describe('SecurityEventsStore', () => {
       expect(list).toHaveBeenCalledTimes(1);
     },
   );
+  it('refuses a size change after a failed read until Retry restores a ready page', async () => {
+    list
+      .mockResolvedValueOnce({ items: [event], next_cursor: 'second' })
+      .mockRejectedValueOnce(new Error('cooldown'))
+      .mockResolvedValueOnce({ items: [event], next_cursor: null });
+    const store = TestBed.inject(SecurityEventsStore);
+    await settle();
+    store.next();
+    await settle();
+    expect(store.phase()).toBe('error');
+    store.setPageSize(50);
+    await settle();
+    expect(store.pageSize()).toBe(20);
+    expect(list).toHaveBeenCalledTimes(2);
+    store.reload();
+    await settle();
+    store.setPageSize(50);
+    await settle();
+    expect(store.pageSize()).toBe(50);
+  });
+
   it('keeps a failed target pending for Retry while retaining the successful rows and page number', async () => {
     list
       .mockResolvedValueOnce({ items: [event], next_cursor: 'second' })

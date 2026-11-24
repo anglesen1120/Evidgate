@@ -150,6 +150,7 @@
     >
       <app-data-table
         [busy]="store.history.isLoading()"
+        [progressAtPager]="true"
         [rows]="rows()"
         [columns]="columns()"
         [rowId]="rowId"

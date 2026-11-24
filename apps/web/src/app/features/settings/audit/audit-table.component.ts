@@ -220,6 +220,7 @@ const DETAILS_WIDTH: DataTableColumnWidth = {
     }
     <app-data-table
       [busy]="fetching()"
+      [progressAtPager]="true"
       class="[&_td]:py-(--eg-space-1)!"
       [columns]="columns()"
       [rows]="rows()"

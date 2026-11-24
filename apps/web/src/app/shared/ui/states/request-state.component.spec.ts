@@ -117,6 +117,20 @@ describe('RequestStateComponent route-level replacement', () => {
     expect(state?.querySelectorAll('[role="status"]')).toHaveLength(1);
   });
 
+  it('delegates table progress semantics to a mounted pager without hiding its track', async () => {
+    const table = TestBed.createComponent(RequestStateComponent);
+    const view = table.nativeElement as HTMLElement;
+    table.componentRef.setInput('tableLoading', true);
+    await vi.waitFor(() => {
+      table.detectChanges();
+      expect(view.querySelectorAll('[role="progressbar"]')).toHaveLength(1);
+    });
+    table.componentRef.setInput('announceProgress', false);
+    table.detectChanges();
+    expect(view.querySelector('[role="progressbar"]')).toBeNull();
+    expect(view.querySelector('[data-table-progress]')?.getAttribute('aria-hidden')).toBe('true');
+  });
+
   it('projects current content only when ready and nonempty, never while loading or failed', async () => {
     expect(root.querySelector('[data-testid="current-data"]')).not.toBeNull();
     host.status.set('loading');

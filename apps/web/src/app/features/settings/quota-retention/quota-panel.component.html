@@ -178,6 +178,7 @@
           </ng-template>
           <app-data-table
             [busy]="quota.projectPaging()"
+            [progressAtPager]="true"
             [columns]="[...columns(), { ...viewColumn, cellTemplate: projectAction }]"
             [rows]="metric.projects"
             [rowId]="projectId"
@@ -222,6 +223,7 @@
           <app-loading-pattern
             [layout]="'table'"
             [busy]="quota.projectPaging()"
+            [announceProgress]="false"
             [hasRows]="summary.metrics.length > 0"
           />
           <div hlmTableContainer>

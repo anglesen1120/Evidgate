@@ -89,6 +89,7 @@ import { API_TOKENS_COPY } from './api-tokens.copy';
       <app-loading-pattern
         [layout]="'table'"
         [busy]="fetching()"
+        [announceProgress]="false"
         [hasRows]="filtered().length > 0"
       />
       @if (filtered().length) {

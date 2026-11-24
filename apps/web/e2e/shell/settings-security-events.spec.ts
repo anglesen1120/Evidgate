@@ -98,6 +98,9 @@ for (const locale of LOCALES) {
       );
       const pager = page.locator(`${host} app-data-table-pager`);
       await expect(pager.getByRole('progressbar')).toBeVisible();
+      const results = page.locator('#security-results');
+      await expect(results.locator('[data-table-progress]')).toBeVisible();
+      await expect(results.getByRole('progressbar')).toHaveCount(1);
       await expect(page.locator(`${host} ${pattern}`)).toBeVisible();
       await expect(page.locator(rows)).toHaveCount(0);
       await expect(pager.getByRole('progressbar')).toHaveCount(0);
@@ -106,8 +109,11 @@ for (const locale of LOCALES) {
     });
   }
   test(`security loading state ${locale}`, async ({ page }) => {
-    await page.goto(path(locale, ['?fixture.variant.listSecurityEvents=slow']));
-    await expect(page.locator(`${host} app-loading-pattern`)).toBeVisible();
+    await page.goto(path(locale, ['?fixture.latency=1500']));
+    const results = page.locator('#security-results');
+    await expect(results.locator('[data-table-progress]')).toBeVisible();
+    await expect(results.getByRole('progressbar')).toHaveCount(1);
+    await expect(results.locator('app-data-table-pager').getByRole('progressbar')).toBeVisible();
     await ready(page);
     await expect(page.locator(rows)).toHaveCount(5);
   });
