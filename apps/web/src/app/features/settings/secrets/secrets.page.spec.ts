@@ -1,4 +1,6 @@
 import { InteractivityChecker } from '@angular/cdk/a11y';
+import { ComponentHarness } from '@angular/cdk/testing';
+import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import type { ApiError } from '../../../core/http/api-error';
@@ -17,6 +19,23 @@ import {
   chooseSecretProject,
   SECRET_DESKTOP_PROVIDER,
 } from './secrets-page.testing';
+
+class SecretsPagingHarness extends ComponentHarness {
+  static hostSelector = 'app-secrets-page';
+  readonly tokenTable = this.locatorFor('app-secret-reference-list table');
+  readonly tokenNav = this.locatorFor('app-secret-reference-list app-data-table-pager nav');
+  readonly tokenNext = this.locatorFor('app-secret-reference-list button[data-page="next"]');
+  readonly tokenPrevious = this.locatorFor(
+    'app-secret-reference-list button[data-page="previous"]',
+  );
+  readonly tokenSummary = this.locatorFor(
+    'app-secret-reference-list app-data-table-pager [role="status"]',
+  );
+  readonly tokenRows = this.locatorForAll('[data-secret-reference]');
+  readonly bindingNext = this.locatorFor('app-ci-binding-list button[data-page="next"]');
+  readonly bindingPrevious = this.locatorFor('app-ci-binding-list button[data-page="previous"]');
+  readonly bindingRetry = this.locatorFor('[data-ci-retry]');
+}
 describe('SecretsPage', () => {
   let store: FakeSecretsStore;
   const projects = signal([
@@ -154,10 +173,11 @@ describe('SecretsPage', () => {
     expect(store.rows()).toBe(original);
     expect(document.querySelector('[data-testid="reveal-value"]')).toBeNull();
   });
-  it('names pagination distinctly from the reference list', async () => {
-    const { root } = await render();
-    expect(root.querySelector('table')?.getAttribute('aria-label')).toBe('Secret references');
-    expect(root.querySelector('nav')?.getAttribute('aria-label')).toBe('Secret references pages');
+  it('keeps the token table named and uses the shared pagination landmark', async () => {
+    const { fixture } = await render();
+    const page = await TestbedHarnessEnvironment.harnessForFixture(fixture, SecretsPagingHarness);
+    expect(await (await page.tokenTable()).getAttribute('aria-label')).toBe('Secret references');
+    expect(await (await page.tokenNav()).getAttribute('aria-label')).toBe('Table pagination');
   });
   it('preserves a pending one-time rotation when list Retry is invoked', async () => {
     let settle: ((result: RotationResult | null) => void) | undefined;
@@ -347,18 +367,37 @@ describe('SecretsPage', () => {
       }
     },
   );
-  it('follows one cursor page per Load more and bounds the rendered rows to 200', async () => {
-    store.rows.set(Array.from({ length: 200 }, (_, index) => ({ ...base, id: `row${index}` })));
+  it('requests Next and Previous server pages and replaces rather than accumulates token rows', async () => {
+    const first = Array.from({ length: 20 }, (_, index) => ({ ...base, id: `row${index}` }));
+    store.rows.set(first);
     store.hasMore.set(true);
     store.loadMore.mockImplementation(() => {
-      store.rows.update((rows) => [...rows, { ...base, id: 'next' }]);
+      store.rows.set([{ ...base, id: 'next', name: 'Next page reference' }]);
+      store.page.set(2);
+      store.hasMore.set(false);
       return Promise.resolve();
     });
-    const { root, fixture } = await render();
-    root.querySelector<HTMLButtonElement>('[data-load-more]')?.click();
-    await fixture.whenStable();
+    store.previous.mockImplementation(() => {
+      store.rows.set(first);
+      store.page.set(1);
+      store.hasMore.set(true);
+      return Promise.resolve();
+    });
+    const { fixture } = await render();
+    const page = await TestbedHarnessEnvironment.harnessForFixture(fixture, SecretsPagingHarness);
+    expect(await page.tokenRows()).toHaveLength(20);
+    await (await page.tokenNext()).click();
     expect(store.loadMore).toHaveBeenCalledTimes(1);
-    expect(root.querySelectorAll('[data-secret-reference]')).toHaveLength(1);
+    expect(await page.tokenRows()).toHaveLength(1);
+    expect(await (await page.tokenSummary()).text()).toBe('Page 2');
+    expect(await (await page.tokenNext()).getAttribute('aria-disabled')).toBe('true');
+    await (await page.tokenNext()).click();
+    expect(store.loadMore).toHaveBeenCalledTimes(1);
+    await (await page.tokenPrevious()).click();
+    expect(store.previous).toHaveBeenCalledTimes(1);
+    expect(await page.tokenRows()).toHaveLength(20);
+    expect(store.loadMoreCiBindings).not.toHaveBeenCalled();
+    expect(store.previousCiBindings).not.toHaveBeenCalled();
   });
   it('omits CI bindings entirely and never reads them without project:read', async () => {
     const { root } = await render();
@@ -430,18 +469,22 @@ describe('SecretsPage', () => {
     expect(root.querySelector('[data-ci-retry]')).toBeNull();
     expect(root.querySelector('[data-ci-binding]')).toBeNull();
   });
-  it('loads one further CI page and recovers a rejected cursor read through Retry', async () => {
+  it('requests CI Next and Previous independently and retries a rejected page without resetting scope', async () => {
     canReadBindings.set(true);
+    store.ciBindingsPage.set(2);
     store.hasMoreCiBindings.set(true);
     store.loadMoreCiBindings.mockRejectedValueOnce(new Error('cursor could not be read'));
-    const { root, fixture } = await render();
-    root.querySelector<HTMLButtonElement>('[data-ci-load-more]')?.click();
-    await fixture.whenStable();
+    const { fixture } = await render();
+    const page = await TestbedHarnessEnvironment.harnessForFixture(fixture, SecretsPagingHarness);
+    await (await page.bindingPrevious()).click();
+    expect(store.previousCiBindings).toHaveBeenCalledTimes(1);
+    await (await page.bindingNext()).click();
     expect(store.loadMoreCiBindings).toHaveBeenCalledTimes(1);
-    expect(root.querySelector('[data-ci-retry]')).not.toBeNull();
-    root.querySelector<HTMLButtonElement>('[data-ci-retry]')?.click();
-    await fixture.whenStable();
-    expect(store.loadCiBindings).toHaveBeenLastCalledWith('p1');
-    expect(store.loadCiBindings).toHaveBeenCalledTimes(2);
+    await (await page.bindingRetry()).click();
+    expect(store.retryCiBindingsPage).toHaveBeenCalledTimes(1);
+    expect(store.loadCiBindings).toHaveBeenCalledExactlyOnceWith('p1');
+    expect(store.loadMore).not.toHaveBeenCalled();
+    expect(store.previous).not.toHaveBeenCalled();
+    expect(store.ciBindingsPage()).toBe(2);
   });
 });
