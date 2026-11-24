@@ -1,4 +1,4 @@
-import { ComponentHarness } from '@angular/cdk/testing';
+import { ComponentHarness, TestKey } from '@angular/cdk/testing';
 import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import {
   ChangeDetectionStrategy,
@@ -19,6 +19,7 @@ import { RowActionComponent } from './row-action.component';
       #trigger
       [label]="label()"
       [attr.aria-label]="label()"
+      [attr.aria-describedby]="description()"
       [disabled]="disabled()"
       [tone]="tone()"
       (click)="clicks = clicks + 1; opener = trigger.nativeElement"
@@ -28,6 +29,7 @@ import { RowActionComponent } from './row-action.component';
 })
 class Host {
   readonly label = signal('View Dev Project');
+  readonly description = signal<string | null>(null);
   readonly disabled = signal(false);
   readonly tone = signal<'neutral' | 'danger'>('neutral');
   clicks = 0;
@@ -45,7 +47,6 @@ class ActionHarness extends ComponentHarness {
   }
   async focus() {
     await (await this.host()).focus();
-    await (await this.host()).dispatchEvent('focus');
   }
   async focused() {
     return (await this.host()).isFocused();
@@ -55,6 +56,18 @@ class ActionHarness extends ComponentHarness {
   }
   async hasClass(name: string) {
     return (await this.host()).hasClass(name);
+  }
+  async description() {
+    return (await this.host()).getAttribute('aria-describedby');
+  }
+  async slot() {
+    return (await this.host()).getAttribute('data-slot');
+  }
+  async escape() {
+    await (await this.host()).sendKeys(TestKey.ESCAPE);
+  }
+  async hover() {
+    await (await this.host()).dispatchEvent('pointerenter', { pointerType: 'mouse' });
   }
 }
 
@@ -87,11 +100,31 @@ async function setup() {
 }
 
 describe('RowActionComponent', () => {
+  const originalShow = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'showPopover');
+  const originalHide = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'hidePopover');
+  beforeEach(() => {
+    Object.defineProperty(HTMLElement.prototype, 'showPopover', {
+      configurable: true,
+      value: vi.fn(),
+    });
+    Object.defineProperty(HTMLElement.prototype, 'hidePopover', {
+      configurable: true,
+      value: vi.fn(),
+    });
+  });
+  afterEach(() => {
+    TestBed.resetTestingModule();
+    if (originalShow) Object.defineProperty(HTMLElement.prototype, 'showPopover', originalShow);
+    else Reflect.deleteProperty(HTMLElement.prototype, 'showPopover');
+    if (originalHide) Object.defineProperty(HTMLElement.prototype, 'hidePopover', originalHide);
+    else Reflect.deleteProperty(HTMLElement.prototype, 'hidePopover');
+  });
   it('renders a named native icon button with the compact Helm recipe and keyboard focus', async () => {
     const { action, host } = await setup();
     expect(await action.name()).toBe('View Dev Project');
     expect(await action.hasClass('spartan-button-size-icon-sm')).toBe(true);
     expect(await action.hasClass('spartan-button-variant-ghost')).toBe(true);
+    expect(await action.slot()).toBe('button');
     expect(await (await action.icon()).getAttribute('aria-hidden')).toBe('true');
     await action.focus();
     expect(await action.focused()).toBe(true);
@@ -111,11 +144,32 @@ describe('RowActionComponent', () => {
   it('shows the contextual tooltip on keyboard focus', async () => {
     const { fixture, action } = await setup();
     await action.focus();
-    await vi.waitFor(async () => {
-      const tooltip =
-        await TestbedHarnessEnvironment.documentRootLoader(fixture).getHarness(TooltipHarness);
-      expect(await tooltip.text()).toContain('View Dev Project');
-    });
+    const tooltip =
+      await TestbedHarnessEnvironment.documentRootLoader(fixture).getHarness(TooltipHarness);
+    expect(await tooltip.text()).toContain('View Dev Project');
+    window.dispatchEvent(new Event('scroll'));
+    expect(await tooltip.text()).toContain('View Dev Project');
+    expect(await action.focused()).toBe(true);
+  });
+
+  it('merges and restores a consumer description across tooltip show and Escape', async () => {
+    const { action, host } = await setup();
+    host.description.set('row-summary row-status');
+    await action.focus();
+    expect(await action.description()).toMatch(/^row-summary row-status row-action-tooltip-/);
+    await action.escape();
+    expect(await action.description()).toBe('row-summary row-status');
+    expect(await action.focused()).toBe(true);
+  });
+
+  it('escapes server format controls in both accessible name and hover tooltip', async () => {
+    const { fixture, action, host } = await setup();
+    host.label.set('View Dev\u202eProject');
+    expect(await action.name()).toBe('View Dev⟨U+202E⟩Project');
+    await action.hover();
+    const tooltip =
+      await TestbedHarnessEnvironment.documentRootLoader(fixture).getHarness(TooltipHarness);
+    expect(await tooltip.text()).toBe('View Dev⟨U+202E⟩Project');
   });
 
   it('preserves native disabled semantics', async () => {
