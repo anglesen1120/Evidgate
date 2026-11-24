@@ -146,6 +146,24 @@ describe('SecretsDataService (09.7.1-T3)', () => {
     await expect(tokens).resolves.toEqual({ items: [], next_cursor: null });
   });
 
+  it.each([20, 50, 100])('passes a selected token page size of %i with its opaque cursor', async (limit) => {
+    const response = service.listIngestTokens('p-1', 'opaque-token-page', limit);
+    const request = await takeRequest(httpMock, TOKENS_URL);
+    expect(request.request.urlWithParams).toContain(`limit=${limit}`);
+    expect(request.request.urlWithParams).toContain('cursor=opaque-token-page');
+    flushPage(request, { items: [], next_cursor: null });
+    await expect(response).resolves.toEqual({ items: [], next_cursor: null });
+  });
+
+  it.each([20, 50, 100])('passes a selected binding page size of %i with its opaque cursor', async (limit) => {
+    const response = service.listCiBindings('p-1', 'opaque-binding-page', limit);
+    const request = await takeRequest(httpMock, BINDINGS_URL);
+    expect(request.request.urlWithParams).toContain(`limit=${limit}`);
+    expect(request.request.urlWithParams).toContain('cursor=opaque-binding-page');
+    flushPage(request, { items: [], next_cursor: null });
+    await expect(response).resolves.toEqual({ items: [], next_cursor: null });
+  });
+
   it('listIngestTokens() surfaces a 403 as the typed forbidden error, never a page', async () => {
     const tokens = service.listIngestTokens('p-1');
     const read = rejected(tokens);

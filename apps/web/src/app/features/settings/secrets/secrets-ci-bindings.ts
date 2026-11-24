@@ -34,17 +34,7 @@ export type CiBindingsPhase =
 /** The frozen empty list, so a reset and a fresh track share one array identity. */
 const NO_CI_BINDINGS: readonly CiBindingView[] = [];
 
-/**
- * The page appended to the rows already on screen, de-duplicated by `id`.
- *
- * A keyset cursor over `(created_at, id)` is stable, but a row can still arrive twice: a write
- * between two reads shifts the window, and the contract does not forbid a server repeating an
- * entry. Rendering it twice would give one binding two DOM rows, two keys and two versions of the
- * truth, so the second copy is dropped. The incoming page is de-duplicated against itself too.
- *
- * The existing array is returned unchanged when nothing new arrived, so a page that added no row
- * does not notify every consumer of the signal for nothing.
- */
+/** A repeated row within a server page must not create duplicate render keys. */
 function appendCiBindingRows(
   existing: readonly CiBindingView[],
   incoming: readonly CiBindingView[],
@@ -105,14 +95,15 @@ export class SecretsCiBindingsTrack {
   private readonly errorSignal = signal<ApiError | null>(null);
   private readonly nextCursorSignal = signal<string | null>(null);
   private readonly projectSignal = signal<string | null>(null);
-  /** The binding cursors already followed, the same contract-violation guard as the token list. */
-  private readonly followedCursors = new Set<string>();
-  /** Pages read for the current binding list, the first page included; page-capped as well. */
-  private pagesRead = 1;
+  private readonly pageSignal = signal(1);
+  private readonly pageSizeSignal = signal(20);
+  private pending = false;
+  private cursors: (string | undefined)[] = [undefined];
+  private failedPage: { cursor: string | undefined; page: number; size: number } | null = null;
   /** Bumped by every binding read AND by {@link reset}; older reads never write. */
   private generation = 0;
 
-  /** The project's CI bindings, in server order, as many cursor pages as have been followed. */
+  /** Only the current binding page is retained. */
   readonly rows = this.rowsSignal.asReadonly();
   /** The binding list's read state: see {@link CiBindingsPhase} for each phase. */
   readonly phase = this.phaseSignal.asReadonly();
@@ -125,6 +116,8 @@ export class SecretsCiBindingsTrack {
   readonly projectId = this.projectSignal.asReadonly();
   /** True while the server named another binding page, so the page's next control can be offered. */
   readonly hasMore = computed(() => this.nextCursorSignal() !== null);
+  readonly page = this.pageSignal.asReadonly();
+  readonly pageSize = this.pageSizeSignal.asReadonly();
 
   constructor(private readonly data: SecretsDataService) {}
 
@@ -148,63 +141,59 @@ export class SecretsCiBindingsTrack {
     await this.read(projectId);
   }
 
-  /**
-   * Follows the `next_cursor` once and appends the page, so the screen keeps the rows it already
-   * shows while the next one is on its way (never "load all").
-   *
-   * Three refusals, the same three as the token list's follow-up:
-   *
-   * - no project or no further page — including a page that named `null`, omitted `next_cursor` or
-   *   named an empty string — is not an error and sends NO request: the list is complete, and
-   *   {@link hasMore} already reads false;
-   * - a cursor already followed, or a page cap that still names another one, is a contract
-   *   violation thrown as a plain `Error`: a broken cursor costs visibility of the bug, not a hung
-   *   tab;
-   * - a typed server refusal is NOT a bug: it becomes the typed error (with the `forbidden` or
-   *   `error` phase when nothing is on screen) and the rows already read stay put.
-   *
-   * A row the list already holds is dropped rather than appended twice (see
-   * {@link appendCiBindingRows}), so the page can never show one binding under two keys.
-   */
+  /** Advance one page, refusing a cursor cycle or an unbounded walk. */
   async loadMore(): Promise<void> {
-    const projectId = this.projectSignal();
     const cursor = this.nextCursorSignal();
-    if (projectId === null || cursor === null) {
-      return;
-    }
-    if (this.followedCursors.has(cursor)) {
-      throw new Error(`the ci-binding list repeated cursor "${cursor}"`);
-    }
-    if (this.pagesRead >= MAX_CURSOR_PAGES) {
+    if (!cursor || this.pending) return;
+    if (this.cursors.includes(cursor)) throw new Error(`the ci-binding list repeated cursor "${cursor}"`);
+    if (this.pageSignal() >= MAX_CURSOR_PAGES) {
       throw new Error(`the ci-binding list did not finish within ${MAX_CURSOR_PAGES} pages`);
     }
+    await this.move(cursor, this.pageSignal() + 1);
+  }
 
+  async previous(): Promise<void> {
+    if (this.pageSignal() <= 1 || this.pending) return;
+    const page = this.pageSignal() - 1;
+    await this.move(this.cursors[page - 1], page);
+  }
+
+  async setPageSize(size: number): Promise<void> {
+    if (![20, 50, 100].includes(size) || size === this.pageSizeSignal() || this.pending) return;
+    await this.move(undefined, 1, size);
+  }
+
+  async retryPage(): Promise<void> {
+    const failed = this.failedPage;
+    if (failed && !this.pending) await this.move(failed.cursor, failed.page, failed.size);
+  }
+
+  private async move(cursor: string | undefined, page: number, size = this.pageSizeSignal()): Promise<void> {
+    const project = this.projectSignal();
+    if (!project) return;
     const generation = this.generation;
-    const read = await settledRead(() => this.data.listCiBindings(projectId, cursor));
-    // A newer read (another project, a reload, a reset) owns the state now: this page belongs to a
-    // list nobody renders any more — including its rows, which must not be appended to the new one.
-    if (generation !== this.generation) {
+    this.pending = true;
+    this.errorSignal.set(null);
+    const result = await settledRead(() =>
+      this.data.listCiBindings(project, cursor, size),
+    );
+    if (generation !== this.generation) return;
+    this.pending = false;
+    this.failedPage = { cursor, page, size };
+    if (!result.ok) {
+      if (!isApiRequestError(result.error)) throw result.error;
+      this.errorSignal.set(result.error.error);
+      if (!this.rowsSignal().length) this.phaseSignal.set(ciBindingsFailurePhase(result.error.error));
       return;
     }
-    if (!read.ok) {
-      // Only a typed refusal is the server's answer; a contract violation is re-thrown.
-      if (!isApiRequestError(read.error)) {
-        throw read.error;
-      }
-      const failure = read.error.error;
-      this.errorSignal.set(failure);
-      if (this.rowsSignal().length === 0) {
-        this.phaseSignal.set(ciBindingsFailurePhase(failure));
-      }
-      return;
-    }
-
-    this.followedCursors.add(cursor);
-    this.pagesRead += 1;
-    const page = read.value;
-    this.rowsSignal.update((rows) => appendCiBindingRows(rows, page.items));
-    this.nextCursorSignal.set(storedCursor(page.next_cursor));
-    this.phaseSignal.set(this.rowsSignal().length === 0 ? 'empty' : 'ready');
+    this.failedPage = null;
+    this.pageSizeSignal.set(size);
+    this.cursors = [...this.cursors.slice(0, page - 1), cursor];
+    this.pageSignal.set(page);
+    const rows = appendCiBindingRows(NO_CI_BINDINGS, result.value.items);
+    this.rowsSignal.set(rows);
+    this.nextCursorSignal.set(storedCursor(result.value.next_cursor));
+    this.phaseSignal.set(rows.length ? 'ready' : 'empty');
   }
 
   /**
@@ -221,8 +210,10 @@ export class SecretsCiBindingsTrack {
     this.errorSignal.set(null);
     this.nextCursorSignal.set(null);
     this.projectSignal.set(null);
-    this.followedCursors.clear();
-    this.pagesRead = 1;
+    this.cursors = [undefined];
+    this.pageSignal.set(1);
+    this.pending = false;
+    this.failedPage = null;
   }
 
   /**
@@ -235,11 +226,14 @@ export class SecretsCiBindingsTrack {
     this.projectSignal.set(projectId);
     this.phaseSignal.set('loading');
     this.errorSignal.set(null);
-    this.followedCursors.clear();
+    this.failedPage = null;
+    this.cursors = [undefined];
+    this.pageSignal.set(1);
+    this.pending = false;
     this.nextCursorSignal.set(null);
-    this.pagesRead = 1;
-
-    const first = await settledRead(() => this.data.listCiBindings(projectId));
+    const first = await settledRead(() =>
+      this.data.listCiBindings(projectId, undefined, this.pageSizeSignal()),
+    );
     // A newer read (or a reset) owns the state now.
     if (generation !== this.generation) {
       return;

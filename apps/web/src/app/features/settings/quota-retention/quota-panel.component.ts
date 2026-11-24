@@ -20,6 +20,7 @@ import type { NavIconName } from '../../../shell/nav/nav.models';
 import { AbsoluteTimeComponent } from '../../../shared/time/absolute-time.component';
 import { StatusPillComponent } from '../../../shared/ui/chips/status-pill.component';
 import { DataTableComponent } from '../../../shared/ui/data-table/data-table.component';
+import { DataTablePagerComponent } from '../../../shared/ui/data-table/data-table-pager.component';
 import type {
   DataTableCellContext,
   DataTableColumn,
@@ -45,6 +46,7 @@ type ProjectCell = TemplateRef<DataTableCellContext<UsageSummaryProjectDto>>;
     AbsoluteTimeComponent,
     StatusPillComponent,
     DataTableComponent,
+    DataTablePagerComponent,
     InlineFeedbackComponent,
     LoadingPatternComponent,
     NumberValueComponent,
@@ -61,6 +63,9 @@ export class QuotaPanelComponent {
   protected readonly metricLabel = quotaMetricLabel;
   protected readonly projectMetrics = computed(() =>
     this.quota.usageSummary()?.metrics.filter((metric) => metric.projects.length > 0),
+  );
+  protected readonly projectCount = computed(() =>
+    Math.max(0, ...(this.quota.usageSummary()?.metrics.map((metric) => metric.projects.length) ?? [])),
   );
   protected readonly inspected = linkedSignal<
     UsageSummaryDto | null,
@@ -141,6 +146,8 @@ export class QuotaPanelComponent {
     noAlert: $localize`:@@quota.panel.no-alert:No alert recorded`,
     incomplete: $localize`:@@quota.panel.incomplete:More project counters exist on the service. All counters returned in this response are available below; this is not the complete organization breakdown.`,
     failed: $localize`:@@quota.panel.summary-unavailable:Usage summary unavailable. Try loading it again.`,
+    pageFailed: $localize`:@@quota.panel.project-page-failed:Project page unavailable. The previous page is still shown.`,
+    retryPage: $localize`:@@quota.panel.retry-project-page:Retry project page`,
     retry: $localize`:@@quota.panel.retry:Reload usage`,
     storageTitle: $localize`:@@quota.panel.storage-title:Daily storage counters`,
     storageReason: $localize`:@@quota.panel.storage-reason:Daily storage and egress counters are unavailable because the service does not expose a read for them.`,

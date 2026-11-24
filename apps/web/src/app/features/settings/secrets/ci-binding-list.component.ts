@@ -22,6 +22,7 @@ import type { ApiError } from '../../../core/http/api-error';
 import { StatusPillComponent } from '../../../shared/ui/chips/status-pill.component';
 import { AbsoluteTimeComponent } from '../../../shared/time/absolute-time.component';
 import type { CiBindingsPhase } from './secrets.store';
+import { DataTablePagerComponent } from '../../../shared/ui/data-table/data-table-pager.component';
 
 export const CI_BINDINGS_COPY = {
   title: $localize`:@@settings.secrets.ci.title:CI bindings`,
@@ -60,6 +61,7 @@ export const CI_BINDINGS_COPY = {
     HlmSkeleton,
     HlmTableImports,
     AbsoluteTimeComponent,
+    DataTablePagerComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: {
@@ -271,23 +273,18 @@ export const CI_BINDINGS_COPY = {
             </table>
           </div>
         }
-        @if (hasMore() && !error() && !pagingFailure()) {
-          <div
-            class="flex flex-wrap items-center justify-end border-0 border-t border-solid border-border p-(--eg-space-5)"
-          >
-            <button
-              hlmBtn
-              [variant]="'outline'"
-              type="button"
-              data-ci-load-more
-              [disabled]="loading() || loadingMore()"
-              [attr.aria-busy]="loadingMore()"
-              (click)="requestLoadMore($event)"
-            >
-              {{ loadingMore() ? copy.loadingMore : copy.more }}
-            </button>
-          </div>
-        }
+        <div class="border-0 border-t border-solid border-border p-(--eg-space-5)">
+          <app-data-table-pager
+            [page]="page()"
+            [pageSize]="pageSize()"
+            [count]="rows().length"
+            [hasNext]="hasMore()"
+            [busy]="loading() || loadingMore()"
+            (previous)="previous.emit()"
+            (next)="loadMore.emit()"
+            (pageSizeChange)="pageSizeChange.emit($event)"
+          />
+        </div>
       }
       <!-- Outside the state branch: the live region must exist in every phase, forbidden included. -->
       <p class="empty:hidden" role="status">{{ loadingMore() ? copy.loadingMore : '' }}</p>
@@ -303,6 +300,10 @@ export class CiBindingListComponent {
   readonly hasMore = input(false);
   readonly loadingMore = input(false);
   readonly pagingFailure = input(false);
+  readonly page = input(1);
+  readonly pageSize = input(20);
+  readonly previous = output<void>();
+  readonly pageSizeChange = output<number>();
   readonly retry = output<void>();
   readonly loadMore = output<void>();
   protected readonly copy = CI_BINDINGS_COPY;
@@ -342,11 +343,6 @@ export class CiBindingListComponent {
     });
   }
 
-  protected requestLoadMore(event: Event): void {
-    if (this.loading() || this.loadingMore()) return;
-    this.armFocusRestore(event);
-    this.loadMore.emit();
-  }
   protected requestRetry(event: Event): void {
     if (this.loading() || this.loadingMore()) return;
     this.armFocusRestore(event);

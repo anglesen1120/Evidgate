@@ -316,7 +316,7 @@ describe('SecretsStore ci-bindings (09.7.1-F15)', () => {
     expect(JSON.stringify([store.ciBindingsError(), store.ciBindings()])).not.toContain('boom');
   });
 
-  it('appends the next page by following one cursor, without dropping a row it already shows', async () => {
+  it('replaces the current binding page by following one cursor', async () => {
     const firstPage = makeRows(2, 'p1');
     const third = pageRow(PAGE, 0);
     data.pages = [
@@ -330,10 +330,7 @@ describe('SecretsStore ci-bindings (09.7.1-F15)', () => {
 
     await store.loadMoreCiBindings();
 
-    expect(store.ciBindings().map((row) => row.id)).toEqual([
-      ...firstPage.map((row) => row.id),
-      third.id,
-    ]);
+    expect(store.ciBindings().map((row) => row.id)).toEqual([third.id]);
     expect(store.ciBindingsPhase()).toBe('ready');
     expect(store.hasMoreCiBindings()).toBe(false);
     expect(data.listCalls).toEqual([
@@ -353,7 +350,7 @@ describe('SecretsStore ci-bindings (09.7.1-F15)', () => {
     await store.loadCiBindings('p-1');
     await store.loadMoreCiBindings();
 
-    expect(store.ciBindings().map((row) => row.id)).toEqual([first.id, second.id, third.id]);
+    expect(store.ciBindings().map((row) => row.id)).toEqual([second.id, third.id]);
   });
 
   it('offers the next page on a full 200-row page that names a cursor, and sends no request after it', async () => {
@@ -372,9 +369,9 @@ describe('SecretsStore ci-bindings (09.7.1-F15)', () => {
     await store.loadMoreCiBindings();
 
     expect(data.listCalls).toHaveLength(2);
-    // The follow-up page was empty and named no cursor: the list now ends, with every row kept.
+    // The follow-up page was empty and named no cursor: the current page is empty.
     expect(store.hasMoreCiBindings()).toBe(false);
-    expect(store.ciBindings()).toHaveLength(FULL_PAGE_ROWS);
+    expect(store.ciBindings()).toHaveLength(0);
   });
 
   it('offers no next page on a full 200-row page that names none, and sends no request', async () => {
