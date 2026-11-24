@@ -62,7 +62,6 @@ interface ScopeFact {
       [columns]="columns()"
       [rows]="rows()"
       [rowId]="rowId"
-      [flow]="'page'"
       [caption]="copy.hierarchyDescription"
     />
     <dl

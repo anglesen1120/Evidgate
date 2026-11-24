@@ -1,6 +1,8 @@
 @layer components {
   .spartan-table-container {
-    @apply relative w-full overflow-auto;
+    @apply relative w-full overflow-x-auto;
+    max-block-size: none;
+    overflow-y: clip;
     max-inline-size: 100%;
     scroll-padding: var(--eg-space-3);
   }
@@ -198,14 +200,7 @@
     table-layout: fixed;
   }
 
-  .eg-table-long {
-    max-block-size: calc(var(--eg-row-default) * 9);
-    overflow: auto;
-    scroll-padding-block-start: var(--eg-table-header-height, calc(var(--eg-row-default) * 2));
-  }
-
-  .eg-table-sticky > .spartan-table-head,
-  .eg-table-long .spartan-table-header .spartan-table-head {
+  .eg-table-sticky > .spartan-table-head {
     position: sticky;
     inset-block-start: 0;
     z-index: var(--eg-z-sticky);

@@ -202,7 +202,6 @@ import { SECURITY_SEVERITY_LABELS, securityTypeLabel } from './security-events.c
       [rows]="rows()"
       [rowId]="rowId"
       [caption]="copy.caption"
-      [flow]="'page'"
       [fitToContainer]="true"
     />
   `,

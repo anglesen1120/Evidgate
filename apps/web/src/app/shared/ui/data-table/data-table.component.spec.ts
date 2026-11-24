@@ -160,13 +160,13 @@ describe('DataTableComponent', () => {
     overflow.mockRestore();
   });
 
-  it('R2: keeps the token-layered sticky header inside its own local scroll container', () => {
+  it('keeps ordinary headers and rows in one page-flow table', () => {
     const header = root.querySelector('.header-table') as HTMLElement;
     expect(header.parentElement).toBe(table);
     expect(table.parentElement).toBe(root.querySelector('.scroll'));
     expect(header.closest('cdk-virtual-scroll-viewport')).toBeNull();
-    expect(header.querySelector('.eg-table-sticky th')).not.toBeNull();
-    expect(root.querySelector('.scroll')?.classList.contains('eg-table-long')).toBe(true);
+    expect(header.querySelector('thead th')).not.toBeNull();
+    expect(header.querySelector('.eg-table-sticky')).toBeNull();
     expect(header.classList.contains('eg-table-layout')).toBe(true);
     expect(header.getAttribute('data-slot')).toBe('table');
   });

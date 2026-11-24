@@ -225,7 +225,6 @@ const DETAILS_WIDTH: DataTableColumnWidth = {
       [rowId]="rowId"
       [caption]="copy.caption"
       [rowHeight]="'compact'"
-      [flow]="tableFlow"
       [fitToContainer]="true"
     />
   `,
@@ -269,7 +268,6 @@ export class AuditTableComponent {
   private readonly detailsCell =
     viewChild<TemplateRef<DataTableCellContext<AuditEntryDto>>>('detailsCell');
   protected readonly rowId = (row: AuditEntryDto): string => row.id;
-  protected readonly tableFlow = 'page' as const;
   protected readonly columns = computed<readonly DataTableColumn<AuditEntryDto>[]>(() => {
     const time = this.timeCell();
     const actor = this.actorCell();

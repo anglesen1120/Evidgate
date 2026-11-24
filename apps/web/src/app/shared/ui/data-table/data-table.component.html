@@ -14,7 +14,6 @@
   #scrollElement
   hlmTableContainer
   class="scroll min-w-0 rounded-md border border-border focus-visible:outline-[length:var(--eg-focus-width)] focus-visible:outline-solid focus-visible:outline-ring focus-visible:outline-offset-[var(--eg-focus-offset)]"
-  [class.eg-table-long]="flow() === 'bounded' && !virtual() && !narrow()"
   [class.eg-table-narrow]="narrow()"
   [attr.tabindex]="horizontalScrolls() ? 0 : null"
   [attr.role]="horizontalScrolls() ? 'region' : null"
@@ -151,7 +150,7 @@
         cdk-header-row
         *cdkHeaderRowDef="columnIds()"
         class="border-0"
-        [class.eg-table-sticky]="virtual() || flow() === 'bounded'"
+        [class.eg-table-sticky]="virtual()"
         role="row"
         aria-rowindex="1"
       ></tr>

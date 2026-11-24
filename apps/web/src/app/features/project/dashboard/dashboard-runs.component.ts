@@ -41,7 +41,6 @@ import { escapeFormatChars } from '../../../shared/ui/values/ref-name-display';
       [rowId]="rowId"
       [caption]="copy.caption"
       [fitToContainer]="true"
-      [flow]="'page'"
     />
     <ng-template #identity let-row>
       <app-copyable-identifier [value]="row.run_id" [label]="copy.run" />
