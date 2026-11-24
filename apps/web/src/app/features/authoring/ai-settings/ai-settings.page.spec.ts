@@ -159,6 +159,11 @@ describe('AiSettingsPage', () => {
     await harness.click('[data-ai-history-tab]');
     const opener = await harness.view();
     expect(await opener.getAttribute('aria-label')).toBe('View version 1');
+    expect(await opener.text()).toBe('');
+    expect(await opener.getProperty('tagName')).toBe('BUTTON');
+    expect(
+      await harness.attribute('button[aria-label="View version 1"] hlm-icon', 'aria-hidden'),
+    ).toBe('true');
     await opener.focus();
     await opener.click();
     const title = await harness.dialogTitle();
@@ -187,7 +192,18 @@ describe('AiSettingsPage', () => {
     const { harness } = await mount();
     await harness.click('[data-ai-history-tab]');
     expect(await harness.count('#ai-compare-reason')).toBe(1);
-    await harness.click('[data-ai-inspect]');
+    const select = 'button[aria-label="Select version 1"]';
+    const compare = 'button[aria-label="Compare with 2"]';
+    expect(await harness.attribute(select, 'aria-pressed')).toBe('false');
+    expect(await harness.attribute(compare, 'disabled')).not.toBeNull();
+    expect(await harness.attribute(compare, 'aria-describedby')).toBe('ai-compare-reason');
+    await harness.click(select);
+    expect(await harness.attribute(select, 'aria-pressed')).toBe('true');
+    expect(await harness.attribute(compare, 'disabled')).toBeNull();
+    expect(await harness.attribute(select + ' hlm-icon', 'aria-hidden')).toBe('true');
+    expect(await harness.attribute(compare + ' hlm-icon', 'aria-hidden')).toBe('true');
+    expect(await harness.text()).not.toContain('Select version 1');
+    expect(await harness.text()).not.toContain('Compare with 2');
     await harness.click('[data-ai-version-view="1"]');
     expect(await (await harness.dialog())?.text()).toContain(version.settings.writing_style);
     await (await harness.dialogTitle()).sendKeys(TestKey.ESCAPE);
@@ -199,6 +215,9 @@ describe('AiSettingsPage', () => {
     expect(data.version).toHaveBeenCalledTimes(1);
     await (await harness.dialogTitle()).sendKeys(TestKey.ESCAPE);
     await vi.waitFor(async () => expect(await harness.dialog()).toBeNull());
+    await harness.click(compare);
+    expect(data.version).toHaveBeenCalledWith('p1', 2, expect.any(AbortSignal));
+    expect(data.save).not.toHaveBeenCalled();
   });
   it('moves between labelled panels on one horizontal tab stop without discarding the draft', async () => {
     const { harness } = await mount();

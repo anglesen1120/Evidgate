@@ -22,6 +22,7 @@ import { HlmTableImports } from '@evidgate/ui/table';
 import { StatusPillComponent } from '../chips';
 import { NarrowMutationPolicy } from '../narrow/narrow-mutation-policy';
 import { LiveStatusComponent } from '../states/live-status.component';
+import { RowActionComponent } from '../data-table/row-action.component';
 import { SectionHeaderComponent } from '../page-header/section-header.component';
 import { GALLERY_COPY } from './gallery-example-copy';
 import { GalleryMemberDialogComponent } from './gallery-member-dialog.component';
@@ -46,6 +47,7 @@ const PAGE_SIZE = 2;
     SectionHeaderComponent,
     GalleryMemberDialogComponent,
     LiveStatusComponent,
+    RowActionComponent,
   ],
   host: { class: 'block min-w-0' },
   templateUrl: './gallery-member-directory.component.html',
@@ -55,7 +57,10 @@ export class GalleryMemberDirectoryComponent {
   private readonly injector = inject(Injector);
   protected readonly policy = inject(NarrowMutationPolicy);
   private readonly listHeading = viewChild.required<ElementRef<HTMLHeadingElement>>('listHeading');
-  private readonly viewButtons = viewChildren<ElementRef<HTMLButtonElement>>('view');
+  private readonly viewButtons = viewChildren<RowActionComponent, ElementRef<HTMLButtonElement>>(
+    'view',
+    { read: ElementRef },
+  );
   protected readonly copy = MEMBER_COPY;
   protected readonly previous = GALLERY_COPY.previous;
   protected readonly next = GALLERY_COPY.next;

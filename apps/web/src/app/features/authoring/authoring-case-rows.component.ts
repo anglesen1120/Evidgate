@@ -27,6 +27,7 @@ import type {
   DataTableColumn,
 } from '../../shared/ui/data-table/data-table-column';
 import { DataTableValueComponent } from '../../shared/ui/data-table/data-table-value.component';
+import { RowActionComponent } from '../../shared/ui/data-table/row-action.component';
 import { CopyValueButtonComponent } from '../../shared/ui/values/copy-value-button.component';
 import { NarrowMutationPolicy } from '../../shared/ui/narrow/narrow-mutation-policy';
 import { escapeFormatChars } from '../../shared/ui/values/ref-name-display';
@@ -44,6 +45,7 @@ const selectionTrack = 'calc(var(--eg-control-touch) + var(--eg-space-2) * 2)';
     HlmDialogImports,
     DataTableComponent,
     DataTableValueComponent,
+    RowActionComponent,
     CopyValueButtonComponent,
     StatusPillComponent,
     RevisionChipComponent,

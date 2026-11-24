@@ -107,17 +107,13 @@
   <button
     [attr.aria-current]="current()?.id === record.id ? 'true' : null"
     #opener
-    hlmBtn
-    type="button"
-    [variant]="'outline'"
-    class="w-max min-h-(--eg-control-touch) min-w-(--eg-control-touch) whitespace-nowrap!"
+    appRowAction
+    [label]="copy.viewLabel(record.id)"
     [attr.aria-haspopup]="'dialog'"
     [attr.aria-label]="copy.viewLabel(record.id)"
     [attr.data-view]="record.id"
-    (click)="openRecord(record, opener)"
-  >
-    {{ copy.view }}
-  </button>
+    (click)="openRecord(record, opener.nativeElement)"
+  ></button>
 </ng-template>
 
 <hlm-dialog [autoFocus]="'[data-slot=dialog-title]'" (closed)="restoreFocusAfterReflow()">

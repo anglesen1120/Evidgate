@@ -10,7 +10,8 @@ import { agentPoolsFixture } from './agent-pools-review.fixture';
 class ReviewHarness extends ComponentHarness {
   static hostSelector = 'app-agent-pools-review';
   readonly title = this.locatorFor('h1');
-  readonly choices = this.locatorForAll('[data-view-record]');
+  readonly choices = this.locatorForAll('button[data-view-record]');
+  readonly viewIcons = this.locatorForAll('button[data-view-record] hlm-icon');
   readonly dialog = this.documentRootLocatorFactory().locatorForOptional('[role="dialog"]');
   async open(index = 0) {
     const trigger = (await this.choices())[index];
@@ -52,6 +53,12 @@ describe('Agent pools review', () => {
     expect(await (await view.title()).text()).toBe('Agent pools');
     expect(await view.dialog()).toBeNull();
     const trigger = await view.open();
+    expect(await trigger.text()).toBe('');
+    expect(await trigger.getProperty('type')).toBe('button');
+    expect(await trigger.getAttribute('aria-label')).toBe(
+      `View · ${agentPoolsFixture.directory[0]?.name}`,
+    );
+    expect(await view.viewIcons()).toHaveLength(agentPoolsFixture.directory.length);
     const dialog = await view.dialog();
     if (!dialog) throw new Error('Expected the selected record in a dialog');
     for (const fact of ['pool_01HX6D3K9M', 'sha256:5a73…90ce', 'web-linux-03'])

@@ -1,3 +1,5 @@
+import { ComponentHarness } from '@angular/cdk/testing';
+import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { TestBed } from '@angular/core/testing';
 import { clearTranslations, loadTranslations } from '@angular/localize';
 import type { IngestTokenView } from '@evidgate/sdk';
@@ -8,6 +10,12 @@ import { SECRET_DESKTOP_PROVIDER } from './secrets-page.testing';
 import { provideLayoutTestStubs } from '../../../shared/testing/layout.testing';
 
 const base = fixtureData.body.items[0] as IngestTokenView;
+class SecretActionsHarness extends ComponentHarness {
+  static hostSelector = 'app-secret-reference-list';
+  readonly inspect = this.locatorFor('button[data-secret-inspect]');
+  readonly rotate = this.locatorFor('button[data-rotate]');
+  readonly icons = this.locatorForAll('button[appRowAction] hlm-icon');
+}
 describe('SecretReferenceListComponent metadata boundary (AC3)', () => {
   provideLayoutTestStubs();
   beforeEach(() => TestBed.configureTestingModule({ providers: [SECRET_DESKTOP_PROVIDER] }));
@@ -135,33 +143,55 @@ describe('SecretReferenceListComponent metadata boundary (AC3)', () => {
     fixture.detectChanges();
     expect((fixture.nativeElement as HTMLElement).querySelector('[data-rotate]')).toBeNull();
   });
-  it('keeps the Helm rotation action keyboard-native and blocks activation while busy', () => {
+  it('keeps icon-only inspection and rotation native and blocks rotation while busy or refused', async () => {
     const fixture = TestBed.createComponent(SecretReferenceListComponent);
     fixture.componentRef.setInput('rows', [{ ...base, name: 'Long reference '.repeat(20) }]);
     fixture.componentRef.setInput('canWrite', true);
     fixture.detectChanges();
     const root = fixture.nativeElement as HTMLElement;
-    const button = root.querySelector<HTMLButtonElement>('[data-rotate]');
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(
+      fixture,
+      SecretActionsHarness,
+    );
+    const button = await harness.rotate();
+    const inspect = await harness.inspect();
+    expect(await inspect.text()).toBe('');
+    expect(await inspect.getAttribute('aria-label')).toBe(
+      `Inspect reference ${'Long reference '.repeat(20)}`,
+    );
+    expect(await button.text()).toBe('');
+    expect(await button.getAttribute('aria-label')).toBe(
+      `Rotate credential ${'Long reference '.repeat(20)}`,
+    );
+    expect(await button.hasClass('row-action-danger')).toBe(true);
+    const icons = await harness.icons();
+    expect(icons).toHaveLength(2);
+    for (const icon of icons) expect(await icon.getAttribute('aria-hidden')).toBe('true');
     const rotate = vi.fn();
     fixture.componentInstance.rotate.subscribe(rotate);
     expect(root.querySelector('[data-secret-reference]')?.getAttribute('data-slot')).toBe(
       'table-row',
     );
-    expect(button?.getAttribute('data-slot')).toBe('button');
-    expect(button?.type).toBe('button');
+    expect(await button.getProperty('type')).toBe('button');
     expect(root.querySelector('[data-secret-reference] h3')?.textContent).toBe(
       'Long reference '.repeat(20),
     );
-    button?.focus();
-    expect(document.activeElement).toBe(button);
-    button?.click();
+    await button.focus();
+    expect(await button.isFocused()).toBe(true);
+    await button.click();
     expect(rotate).toHaveBeenCalledOnce();
     fixture.componentRef.setInput('busy', true);
     fixture.componentRef.setInput('busyId', base.id);
-    fixture.detectChanges();
-    expect(button?.disabled).toBe(true);
-    expect(button?.getAttribute('aria-busy')).toBe('true');
-    button?.click();
+    await fixture.whenStable();
+    expect(await button.getProperty('disabled')).toBe(true);
+    expect(await button.getAttribute('aria-busy')).toBe('true');
+    await button.click();
+    expect(rotate).toHaveBeenCalledOnce();
+    fixture.componentRef.setInput('busy', false);
+    fixture.componentRef.setInput('blocked', true);
+    await fixture.whenStable();
+    expect(await button.getProperty('disabled')).toBe(true);
+    await button.click();
     expect(rotate).toHaveBeenCalledOnce();
   });
 });

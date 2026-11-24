@@ -1,3 +1,5 @@
+import { ComponentHarness, TestKey } from '@angular/cdk/testing';
+import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
@@ -8,6 +10,12 @@ import { CopyableIdentifierComponent } from '../../../shared/ui/values/copyable-
 import { AuditTableComponent } from './audit-table.component';
 
 provideLayoutTestStubs();
+class AuditActionsHarness extends ComponentHarness {
+  static hostSelector = 'app-audit-table';
+  readonly view = this.locatorFor('button[data-audit-view]');
+  readonly viewIcon = this.locatorFor('button[data-audit-view] hlm-icon');
+  readonly dialog = this.documentRootLocatorFactory().locatorForOptional('[role="dialog"]');
+}
 
 function row(id: string, changes: Partial<AuditEntryDto> = {}): AuditEntryDto {
   return {
@@ -57,6 +65,23 @@ describe('AuditTableComponent', () => {
     await fixture.whenStable();
     return { fixture, root: fixture.nativeElement as HTMLElement };
   }
+  it('opens audit facts from a contextual icon-only native action and restores focus', async () => {
+    const { fixture } = await render([row('audit-1')]);
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, AuditActionsHarness);
+    const trigger = await harness.view();
+    expect(await trigger.text()).toBe('');
+    expect(await trigger.getProperty('type')).toBe('button');
+    expect(await trigger.getAttribute('aria-label')).toBe('View · project.updated');
+    expect(await (await harness.viewIcon()).getAttribute('aria-hidden')).toBe('true');
+    await trigger.focus();
+    await trigger.click();
+    const dialog = await harness.dialog();
+    if (!dialog) throw new Error('Expected audit facts');
+    expect(await dialog.text()).toContain('project.updated');
+    await dialog.sendKeys(TestKey.ESCAPE);
+    expect(await harness.dialog()).toBeNull();
+    expect(await trigger.isFocused()).toBe(true);
+  });
   it.each([
     ['user', 'User'],
     ['ci_producer', 'CI producer'],
@@ -270,9 +295,8 @@ describe('AuditTableComponent', () => {
     expect(root.querySelector('app-absolute-time')?.classList.contains('whitespace-nowrap')).toBe(
       true,
     );
-    expect(root.querySelector('[data-audit-view]')?.classList.contains('whitespace-nowrap')).toBe(
-      true,
-    );
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, AuditActionsHarness);
+    expect(await (await harness.view()).text()).toBe('');
     const scanIds = fixture.debugElement
       .queryAll(By.directive(CopyableIdentifierComponent))
       .map(({ componentInstance }) => componentInstance as CopyableIdentifierComponent)
@@ -293,7 +317,7 @@ describe('AuditTableComponent', () => {
         const object = 'object-'.repeat(40);
         const request = 'request-'.repeat(40);
         const action = 'project.very-long-action-'.repeat(15);
-        const { root } = await render([
+        const { root, fixture } = await render([
           row('narrow', {
             actor_id: actor,
             object_id: object,
@@ -307,7 +331,13 @@ describe('AuditTableComponent', () => {
         for (const value of [actor, object, action]) expect(records?.textContent).toContain(value);
         expect(records?.querySelector('app-copyable-identifier .preview')).toBeNull();
         expect(records?.querySelector('app-absolute-time.whitespace-nowrap')).toBeNull();
-        expect(records?.querySelector('[data-audit-view].whitespace-nowrap')).toBeNull();
+        const harness = await TestbedHarnessEnvironment.harnessForFixture(
+          fixture,
+          AuditActionsHarness,
+        );
+        const view = await harness.view();
+        expect(await view.text()).toBe('');
+        expect(await view.getAttribute('aria-label')).toBe(`View · ${action}`);
         const labels = [...root.querySelectorAll('.eg-table-fact > dt')].map(
           (label) => label.textContent,
         );

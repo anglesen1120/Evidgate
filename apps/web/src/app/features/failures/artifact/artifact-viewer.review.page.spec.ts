@@ -10,6 +10,8 @@ class PageHarness extends ComponentHarness {
   static hostSelector = 'app-artifact-viewer-review';
   readonly text = async () => (await this.host()).text();
   readonly find = (selector: string) => this.locatorForOptional(selector)();
+  readonly metadata = this.locatorFor('table a[aria-label="Metadata · art-shot-92"]');
+  readonly metadataIcon = this.locatorFor('table a[aria-label="Metadata · art-shot-92"] hlm-icon');
 }
 
 class PreviewDialogHarness extends ComponentHarness {
@@ -84,6 +86,12 @@ describe('ArtifactViewerReviewPage', () => {
     expect(
       await (await page.find('table a[aria-current="page"]'))?.getAttribute('aria-label'),
     ).toContain('art-shot-92');
+    const metadata = await page.metadata();
+    expect(await metadata.text()).toBe('');
+    expect(await metadata.getAttribute('href')).toContain('id=art-shot-92');
+    expect(await (await page.metadataIcon()).getAttribute('aria-hidden')).toBe('true');
+    await metadata.focus();
+    expect(await metadata.isFocused()).toBe(true);
     expect(await page.find('iframe, object, embed, img[src], a[download]')).toBeNull();
   });
   it('does not substitute official metadata for unavailable Studio content', async () => {

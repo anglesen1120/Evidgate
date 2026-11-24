@@ -19,6 +19,10 @@ class RowsHarness extends ComponentHarness {
   readonly exportAction = this.locatorFor('[data-export-selection]');
   readonly selectionNotice = this.locatorFor('[data-selection-notice]');
   readonly links = this.locatorForAll('a[data-case-view]');
+  readonly identifiers = this.locatorFor('button[aria-label="Identifiers · SHOP-1"]');
+  readonly identifierIcon = this.locatorFor('button[aria-label="Identifiers · SHOP-1"] hlm-icon');
+  readonly viewIcon = this.locatorFor('a[data-case-view] hlm-icon');
+  readonly dialog = this.documentRootLocatorFactory().locatorForOptional('[role="dialog"]');
 }
 const row = (id: number): ManualCaseListItemDto => ({
   case_id: `018f0000-0000-7000-8000-${String(id).padStart(12, '0')}`,
@@ -80,7 +84,19 @@ describe('AuthoringCaseRowsComponent', () => {
     expect(await links[1]?.getAttribute('href')).toBe(
       '/orgs/O/projects/P/authoring/cases/' + row(2).case_id,
     );
-    expect(await links[1]?.getAttribute('aria-label')).toContain(row(2).title);
+    expect(await links[1]?.getAttribute('aria-label')).toBe('View ' + row(2).title);
+    expect(await links[1]?.text()).toBe('');
+    expect(await (await harness.viewIcon()).getAttribute('aria-hidden')).toBe('true');
+    expect(await (await harness.summary()).text()).toContain('0 of 2 loaded selected');
+  });
+
+  it('opens case identifiers from a named icon button without changing selection', async () => {
+    const { harness } = await mount();
+    const opener = await harness.identifiers();
+    expect(await opener.text()).toBe('');
+    expect(await (await harness.identifierIcon()).getAttribute('aria-hidden')).toBe('true');
+    await opener.click();
+    expect(await (await harness.dialog())?.text()).toContain(row(1).case_id);
     expect(await (await harness.summary()).text()).toContain('0 of 2 loaded selected');
   });
 

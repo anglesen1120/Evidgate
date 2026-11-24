@@ -37,6 +37,7 @@ function run(index: number, changes: Partial<RunSummary> = {}): RunSummary {
 class RunInspectionHarness extends ComponentHarness {
   static hostSelector = 'app-run-list-table';
   readonly view = this.locatorFor('button[aria-haspopup="dialog"]');
+  readonly viewIcon = this.locatorFor('button[aria-haspopup="dialog"] hlm-icon');
   viewFor(id: string) {
     return this.locatorFor(`button[aria-label="View ${id}"]`)();
   }
@@ -130,8 +131,10 @@ describe('RunListTableComponent', { timeout: 15_000 }, () => {
     await router.navigateByUrl('/?state=complete');
     const { fixture } = await render([run(3, { decision: 'FAIL' })]);
     const table = await TestbedHarnessEnvironment.harnessForFixture(fixture, RunInspectionHarness);
-    const view = await table.view();
+    const view = await table.viewFor(run(3).run_id);
     expect(await view.getAttribute('aria-label')).toBe(`View ${run(3).run_id}`);
+    expect(await view.text()).toBe('');
+    expect(await (await table.viewIcon()).getAttribute('aria-hidden')).toBe('true');
     await view.focus();
     await view.click();
     const dialog = await table.dialog();

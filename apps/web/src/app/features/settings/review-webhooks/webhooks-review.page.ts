@@ -22,6 +22,7 @@ import { HlmTableImports } from '@evidgate/ui/table';
 import { AbsoluteTimeComponent } from '../../../shared/time/absolute-time.component';
 import { PageHeaderComponent } from '../../../shared/ui/page-header/page-header.component';
 import { StatusPillComponent } from '../../../shared/ui/chips/status-pill.component';
+import { RowActionComponent } from '../../../shared/ui/data-table/row-action.component';
 import {
   EmptyPatternComponent,
   InlineFeedbackComponent,
@@ -42,6 +43,7 @@ import { notices } from './webhooks-review.states';
   imports: [
     DecimalPipe,
     HlmButton,
+    RowActionComponent,
     ...HlmCardImports,
     ShellIconComponent,
     SettingsPageCountsComponent,
@@ -64,6 +66,7 @@ import { notices } from './webhooks-review.states';
 export class WebhooksReviewPage {
   private readonly route = inject(ActivatedRoute);
   readonly model = input<WebhooksViewModel>(webhooksFixture);
+  protected readonly viewLabel = $localize`:@@review.directory.view:View`;
   protected readonly pageCounts = computed<readonly SettingsPageCount[]>(() =>
     this.model().metrics.map((metric) => ({
       label: metric.label,

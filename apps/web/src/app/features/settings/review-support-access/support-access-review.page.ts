@@ -24,6 +24,7 @@ import { HlmSelectImports } from '@evidgate/ui/select';
 import { HlmTableImports } from '@evidgate/ui/table';
 import { AbsoluteTimeComponent } from '../../../shared/time/absolute-time.component';
 import { StatusPillComponent } from '../../../shared/ui/chips/status-pill.component';
+import { RowActionComponent } from '../../../shared/ui/data-table/row-action.component';
 import { NarrowMutationPolicy } from '../../../shared/ui/narrow/narrow-mutation-policy';
 import { PageHeaderComponent } from '../../../shared/ui/page-header/page-header.component';
 import {
@@ -51,6 +52,7 @@ import {
   imports: [
     DecimalPipe,
     HlmButton,
+    RowActionComponent,
     HlmCard,
     HlmCardTitle,
     HlmDialogImports,
@@ -80,6 +82,7 @@ export class SupportAccessReviewPage {
   readonly viewModel = input<SupportAccessViewModel>(supportAccessFixture);
   private readonly query = toSignal(this.route.queryParamMap);
   protected readonly copy = copy;
+  protected readonly viewLabel = $localize`:@@review.directory.view:View`;
   protected readonly statuses = grantStatuses;
   protected readonly state = linkedSignal<SupportState>(() => {
     const raw = this.query()?.get('state');

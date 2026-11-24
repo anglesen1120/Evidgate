@@ -22,7 +22,8 @@ class QuotaPanelHarness extends ComponentHarness {
   readonly metricHeading = this.locatorFor('[data-quota-metric] h3');
   readonly projectHeading = this.locatorFor('[data-quota-projects] h3');
   readonly projectRows = this.locatorForAll('app-data-table [data-row-id]');
-  readonly viewActions = this.locatorForAll('[data-quota-view]');
+  readonly viewActions = this.locatorForAll('button[data-quota-view]');
+  readonly viewIcons = this.locatorForAll('button[data-quota-view] hlm-icon');
   readonly retry = this.locatorFor('button');
 }
 
@@ -216,7 +217,7 @@ describe('QuotaPanelComponent', () => {
     expect(root.querySelector('[data-quota-unavailable]')).toBeNull();
   });
 
-  it('reserves the short View label in both the project and recorded-state tables', async () => {
+  it('uses contextual icon-only View actions in both project and recorded-state tables', async () => {
     usageSummary.set({
       period: '2026-11',
       project: null,
@@ -226,7 +227,15 @@ describe('QuotaPanelComponent', () => {
     const { harness } = await render();
     const actions = await harness.viewActions();
     expect(actions).toHaveLength(2);
-    for (const action of actions) expect(await action.hasClass('short-action')).toBe(true);
+    expect(await harness.viewIcons()).toHaveLength(2);
+    for (const action of actions) {
+      expect(await action.text()).toBe('');
+      expect(await action.getProperty('type')).toBe('button');
+      expect(await action.getAttribute('aria-haspopup')).toBe('dialog');
+      expect(await action.getAttribute('aria-label')).toContain('View ·');
+    }
+    expect(await actions[0]?.getAttribute('aria-label')).toContain('project-one');
+    expect(await actions[1]?.getAttribute('aria-label')).not.toContain('project-one');
   });
 
   it('distinguishes the organization counter from its project breakdown in heading navigation', async () => {

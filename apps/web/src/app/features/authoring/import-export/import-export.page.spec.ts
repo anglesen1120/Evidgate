@@ -179,12 +179,14 @@ describe('ImportExportPage presentation and route heading contract', () => {
 
   it('views a loaded version in one labelled dialog and returns focus without a request', async () => {
     const { harness } = await setup(file());
-    const opener = '[data-import-version-view]';
+    const opener = `button[aria-label="View version 3 of ${history.items[0]?.entity_id}"]`;
     expect(await harness.textAt('[data-import-history] .caption')).toBe(IMPEX_COPY.history);
     expect(await harness.textAt('[data-history-range]')).toBe('Showing 1–1 of 1 loaded versions');
     expect(await harness.attr(opener, 'aria-label')).toContain(
       'View version 3 of ' + history.items[0]?.entity_id,
     );
+    expect(await harness.textAt(opener)).toBe('');
+    expect(await harness.attr(opener + ' hlm-icon', 'aria-hidden')).toBe('true');
     await harness.focus(opener);
     await harness.click(opener);
     const title = await harness.dialogTitle();

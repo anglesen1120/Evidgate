@@ -24,6 +24,7 @@ import type {
   DataTableColumnWidth,
 } from '../../../shared/ui/data-table/data-table-column';
 import { DataTableValueComponent } from '../../../shared/ui/data-table/data-table-value.component';
+import { RowActionComponent } from '../../../shared/ui/data-table/row-action.component';
 import { CopyableIdentifierComponent } from '../../../shared/ui/values/copyable-identifier.component';
 import { AUDIT_ACTOR_TYPE_LABELS } from './actor-type-labels';
 import { supportAccessOf } from './support-access';
@@ -52,6 +53,7 @@ const DETAILS_WIDTH: DataTableColumnWidth = {
     DataTableComponent,
     DataTableValueComponent,
     CopyableIdentifierComponent,
+    RowActionComponent,
     HlmButton,
     HlmTooltip,
     HlmDialogImports,
@@ -109,21 +111,17 @@ const DETAILS_WIDTH: DataTableColumnWidth = {
         }
       </div>
     </ng-template>
-    <ng-template #detailsCell let-row let-stacked="stacked">
+    <ng-template #detailsCell let-row>
       <button
-        hlmBtn
+        appRowAction
         #trigger
-        [variant]="'outline'"
+        [label]="copy.view + ' · ' + row.action"
         type="button"
         data-audit-view
         [attr.aria-haspopup]="'dialog'"
-        class="min-h-(--eg-control-touch)"
-        [class.whitespace-nowrap]="!stacked"
         [attr.aria-label]="copy.view + ' · ' + row.action"
-        (click)="inspected.set({ row, trigger })"
-      >
-        {{ copy.view }}
-      </button>
+        (click)="inspected.set({ row, trigger: trigger.nativeElement })"
+      ></button>
     </ng-template>
     @if (inspected(); as selection) {
       @let row = selection.row;
@@ -230,7 +228,7 @@ export class AuditTableComponent {
   readonly rows = input.required<readonly AuditEntryDto[]>();
   protected readonly inspected = linkedSignal<
     readonly AuditEntryDto[],
-    { row: AuditEntryDto; trigger: HTMLButtonElement } | null
+    { row: AuditEntryDto; trigger: HTMLElement } | null
   >({
     source: this.rows,
     computation: () => null,

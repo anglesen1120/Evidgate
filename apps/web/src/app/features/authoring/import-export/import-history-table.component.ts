@@ -19,6 +19,7 @@ import {
   type DataTableCellContext,
   type DataTableColumn,
 } from '../../../shared/ui/data-table';
+import { RowActionComponent } from '../../../shared/ui/data-table/row-action.component';
 import { CopyableIdentifierComponent } from '../../../shared/ui/values/copyable-identifier.component';
 import { escapeFormatChars } from '../../../shared/ui/values/ref-name-display';
 import { IMPEX_COPY } from './import-export.copy';
@@ -37,6 +38,7 @@ function template(cellTemplate: Cell | undefined) {
     RevisionChipComponent,
     CopyableIdentifierComponent,
     DataTableComponent,
+    RowActionComponent,
     HlmButton,
     HlmDialogImports,
   ],
@@ -48,7 +50,7 @@ export class ImportHistoryTableComponent {
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   readonly rows = input.required<readonly Version[]>();
   protected readonly selectedId = signal<string | null>(null);
-  private opener: HTMLButtonElement | null = null;
+  private opener: HTMLElement | null = null;
   protected readonly selected = computed(() =>
     this.rows().find((row) => row.version_id === this.selectedId()),
   );
@@ -114,7 +116,7 @@ export class ImportHistoryTableComponent {
   protected name(row: Version): string {
     return $localize`:@@authoring.import-export.view-version:View version ${row.version_no}:VERSION: of ${escapeFormatChars(row.entity_id)}:ENTITY:`;
   }
-  protected inspect(row: Version, opener: HTMLButtonElement): void {
+  protected inspect(row: Version, opener: HTMLElement): void {
     this.opener = opener;
     this.selectedId.set(row.version_id);
   }
