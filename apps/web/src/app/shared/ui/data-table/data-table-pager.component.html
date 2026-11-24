@@ -3,7 +3,12 @@
   @if (loadedCaption() === null) {
     <div class="size-field">
       <label hlmLabel [for]="sizeId">{{ sizeLabel }}</label>
-      <hlm-select [value]="pageSize()" (valueChange)="chooseSize($event)">
+      <hlm-select
+        #sizeField="ngModel"
+        [ngModel]="pageSize()"
+        [ngModelOptions]="{ standalone: true }"
+        (ngModelChange)="chooseSize($event, sizeField)"
+      >
         <hlm-select-trigger [buttonId]="sizeId"><hlm-select-value /></hlm-select-trigger>
         <hlm-select-content *hlmSelectPortal [aria-label]="sizeLabel">
           @for (size of sizes; track size) {

@@ -10,6 +10,7 @@ import {
   LOCALE_ID,
   output,
 } from '@angular/core';
+import { FormsModule, type NgModel } from '@angular/forms';
 import { HlmButton } from '@evidgate/ui/button';
 import { HlmLabel } from '@evidgate/ui/label';
 import {
@@ -26,6 +27,7 @@ let nextPagerId = 0;
 @Component({
   selector: 'app-data-table-pager',
   imports: [
+    FormsModule,
     HlmButton,
     HlmLabel,
     HlmSelect,
@@ -106,11 +108,14 @@ export class DataTablePagerComponent {
     }
   }
 
-  protected chooseSize(value: unknown): void {
-    if (typeof value !== 'number' || !this.sizes.includes(value) || value === this.pageSize()) {
-      return;
+  protected chooseSize(value: unknown, field: NgModel): void {
+    const served = this.pageSize();
+    if (value === served) return;
+    // Helm has already selected the requested size; only the owner can commit it.
+    field.control.setValue(served);
+    if (typeof value === 'number' && this.sizes.includes(value) && this.beginIntent()) {
+      this.pageSizeChange.emit(value);
     }
-    if (this.beginIntent()) this.pageSizeChange.emit(value);
   }
 
   private beginIntent(): boolean {
