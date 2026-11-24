@@ -48,9 +48,7 @@
 
 /* Unavailable chevrons stay transparent and muted in both themes: the global
    disabled fill reads as a filled button beside the outline one. */
-:host .page-actions button:is(.page-boundary, [aria-disabled='true']),
-:host .page-actions button:is(.page-boundary, [aria-disabled='true']):hover,
-:host .page-actions button:is(.page-boundary, [aria-disabled='true']):active {
+:host .page-actions button[aria-disabled='true'] {
   background-color: transparent;
   border-color: var(--eg-border);
   color: var(--eg-text-muted);

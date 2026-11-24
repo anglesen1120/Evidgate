@@ -169,7 +169,9 @@ describe('RunListPage', () => {
     const values = [...metrics.querySelectorAll('dd > app-number-value')];
     expect(values.map((cell) => cell.textContent?.trim())).toEqual(['3', '1', '1', '1']);
     expect(root.querySelector('[data-run-loaded-count]')).toBeNull();
-    expect(root.querySelector('app-data-table-pager .page-range')?.textContent).toContain('3');
+    expect(root.querySelector('app-data-table-pager .page-range')?.textContent?.trim()).toMatch(
+      /1–3$/,
+    );
     root.querySelector<HTMLButtonElement>('#run-state')?.click();
     await fixture.whenStable();
     const running = document.querySelector('[role="option"][data-value="running"]');
@@ -232,7 +234,9 @@ describe('RunListPage', () => {
       query.next(convertToParamMap(params));
       const { root } = await render();
       expect(root.querySelector('[data-run-loaded-count]')).toBeNull();
-      expect(root.querySelector('app-data-table-pager .page-range')?.textContent).toContain('1');
+      expect(root.querySelector('app-data-table-pager .page-range')?.textContent?.trim()).toMatch(
+        /1–1$/,
+      );
     },
   );
   it('marks a refused ref name as invalid and explains it inline', async () => {

@@ -118,10 +118,10 @@ for (const locale of LOCALES) {
         );
       }
     }
-    // Nothing is filtered here, so the pager range is the only count on the page.
+    // Nothing is filtered here, so the pager range is the only count in the footer.
     await expect(page.locator('[data-run-loaded-count]')).toHaveCount(0);
-    await expect(page.locator('app-data-table-pager .page-range')).toContainText(
-      String(runList.body.items.length),
+    await expect(page.locator('app-data-table-pager .page-range')).toHaveText(
+      new RegExp(`1–${runList.body.items.length}$`),
     );
     await expect(
       page.locator(

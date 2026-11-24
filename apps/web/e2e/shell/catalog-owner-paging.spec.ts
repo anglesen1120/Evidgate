@@ -111,19 +111,30 @@ for (const locale of LOCALES) {
       await expect(next).toBeEnabled();
       expect((await style(previous)).background).toBe(transparent);
       expect((await style(previous)).background).not.toBe((await style(next)).background);
+      const tokens = await page.evaluate(() => {
+        const probe = document.createElement('span');
+        const read = (token: string) => {
+          probe.style.color = `var(${token})`;
+          document.body.append(probe);
+          const value = getComputedStyle(probe).color;
+          probe.remove();
+          return value;
+        };
+        return { muted: read('--eg-text-muted'), border: read('--eg-border') };
+      });
+      expect((await style(previous)).color).toBe(tokens.muted);
+      expect((await style(previous)).border).toBe(tokens.border);
 
       await tabTo(page, previous);
       const focusRing = await previous.evaluate((el) => {
         const computed = getComputedStyle(el);
-        return (
-          el.matches(':focus-visible') &&
-          (computed.outlineStyle !== 'none' || computed.boxShadow !== 'none')
-        );
+        return el.matches(':focus-visible') && parseFloat(computed.outlineWidth) > 0;
       });
       expect(focusRing).toBe(true);
 
       const resting = await style(previous);
       await previous.hover();
+      expect(await style(previous)).toEqual(resting);
       await page.mouse.down();
       try {
         expect(await style(previous)).toEqual(resting);
