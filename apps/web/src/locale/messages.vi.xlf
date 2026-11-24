@@ -2460,7 +2460,6 @@
 <trans-unit id="runs.list.page-pagination" datatype="html"><source>Run pages</source><target>Các trang lượt chạy</target></trans-unit>
 <trans-unit id="runs.list.page-retry" datatype="html"><source>Retry page</source><target>Tải lại trang</target></trans-unit>
 <trans-unit id="runs.list.page-filtered-count" datatype="html"><source>On this page before filtering by scope: <x id="count" equiv-text="count"/></source><target>Số lượt chạy trên trang này trước khi lọc theo phạm vi: <x id="count" equiv-text="count"/></target></trans-unit>
-<trans-unit id="runs.list.page-count" datatype="html"><source>Returned on this page: <x id="count" equiv-text="count"/></source><target>Số lượt chạy trả về trên trang này: <x id="count" equiv-text="count"/></target></trans-unit>
 <trans-unit id="runs.list.ref-invalid" datatype="html"><source>Ref name not applied: use 1 to 255 characters with no control characters.</source><target>Tên tham chiếu không được áp dụng: dùng từ 1 đến 255 ký tự và không có ký tự điều khiển.</target></trans-unit>
 <trans-unit id="runs.list.table-caption" datatype="html"><source>Project runs</source><target>Lượt chạy của dự án</target></trans-unit>
 <trans-unit id="runs.list.column-id" datatype="html"><source>Run id</source><target>Mã lượt chạy</target></trans-unit>

@@ -249,14 +249,16 @@
       tabindex="-1"
       [attr.aria-busy]="store.busy()"
     >
-      <p
-        class="eg-type-caption me-auto min-w-0 text-muted-foreground tabular-nums wrap-anywhere"
-        role="status"
-        data-run-loaded-count
-        [attr.data-run-loaded-filtered]="!!store.filters().scope"
-      >
-        {{ showing() }} · {{ loadedText() }}
-      </p>
+      @if (store.filters().scope) {
+        <p
+          class="eg-type-caption me-auto min-w-0 text-muted-foreground tabular-nums wrap-anywhere"
+          role="status"
+          data-run-loaded-count
+          data-run-loaded-filtered="true"
+        >
+          {{ filteredCountText() }}
+        </p>
+      }
       @if (store.pagingError(); as failure) {
         <div
           hlmAlert

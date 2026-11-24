@@ -118,13 +118,10 @@ for (const locale of LOCALES) {
         );
       }
     }
-    await expect(page.locator('[data-run-loaded-count]')).toContainText(
+    // Nothing is filtered here, so the pager range is the only count on the page.
+    await expect(page.locator('[data-run-loaded-count]')).toHaveCount(0);
+    await expect(page.locator('app-data-table-pager .page-range')).toContainText(
       String(runList.body.items.length),
-    );
-    // Nothing is filtered here, so the count is the neutral one, not "filtered from".
-    await expect(page.locator('[data-run-loaded-count]')).toHaveAttribute(
-      'data-run-loaded-filtered',
-      'false',
     );
     await expect(
       page.locator(

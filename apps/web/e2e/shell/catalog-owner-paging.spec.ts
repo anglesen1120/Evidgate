@@ -89,6 +89,63 @@ for (const locale of LOCALES) {
         };
 
   for (const theme of THEMES) {
+    test(`pager mutes unavailable chevrons without hiding keyboard focus (${locale}, ${theme})`, async ({
+      page,
+    }) => {
+      await seedStoredTheme(page, theme);
+      await page.goto(base);
+      const pager = page.locator('app-data-table-pager');
+      const previous = pager.getByRole('button', { name: labels.previous });
+      const next = pager.getByRole('button', { name: labels.next });
+      const style = (button: Locator) =>
+        button.evaluate((el) => {
+          const computed = getComputedStyle(el);
+          return {
+            background: computed.backgroundColor,
+            border: computed.borderTopColor,
+            color: computed.color,
+          };
+        });
+      const transparent = 'rgba(0, 0, 0, 0)';
+      await expect(previous).toBeDisabled();
+      await expect(next).toBeEnabled();
+      expect((await style(previous)).background).toBe(transparent);
+      expect((await style(previous)).background).not.toBe((await style(next)).background);
+
+      await tabTo(page, previous);
+      const focusRing = await previous.evaluate((el) => {
+        const computed = getComputedStyle(el);
+        return (
+          el.matches(':focus-visible') &&
+          (computed.outlineStyle !== 'none' || computed.boxShadow !== 'none')
+        );
+      });
+      expect(focusRing).toBe(true);
+
+      const resting = await style(previous);
+      await previous.hover();
+      await page.mouse.down();
+      try {
+        expect(await style(previous)).toEqual(resting);
+      } finally {
+        await page.mouse.up();
+      }
+
+      await page.goto(
+        withVariants(path, [
+          '?fixture.variant.listCases=empty',
+          '?fixture.variant.listPermissions=catalog-owner',
+          '?fixture.variant.listMemberships=ok',
+          '?fixture.variant.updateCase=ok',
+        ]),
+      );
+      await expect(page.locator('app-empty-pattern')).toBeVisible();
+      await expect(previous).toBeDisabled();
+      await expect(next).toBeDisabled();
+      expect((await style(previous)).background).toBe(transparent);
+      expect(await style(next)).toEqual(await style(previous));
+    });
+
     test(`shared pager uses equal-height controls without overflow (${locale}, ${theme})`, async ({
       page,
     }) => {
