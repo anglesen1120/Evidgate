@@ -77,13 +77,19 @@
       [attr.aria-busy]="busy()"
     >
       <div hlmCardHeader class="border-b border-border pb-(--eg-space-4)">
-        <app-section-header
-          [title]="copy.hierarchy"
-          [description]="copy.hierarchyDescription"
-          [titleId]="'authoring-hierarchy-title'"
-          [headingLevel]="ownsPageHeading ? 2 : 3"
-          [size]="'subsection'"
-        />
+        <app-field-hint
+          [descriptionId]="'authoring-tree-keyboard'"
+          [label]="copy.hierarchy"
+          [text]="hasContent() ? copy.keyboard : undefined"
+        >
+          <app-section-header
+            [title]="copy.hierarchy"
+            [titleId]="'authoring-hierarchy-title'"
+            [headingLevel]="ownsPageHeading ? 2 : 3"
+            [size]="'subsection'"
+          />
+        </app-field-hint>
+        <p hlmCardDescription>{{ copy.hierarchyDescription }}</p>
       </div>
       <div hlmCardContent>
         @if (store.stale() && !denied()) {

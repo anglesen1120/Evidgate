@@ -1124,7 +1124,7 @@
         <source> Filter availability and help </source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-case-table.component.html</context>
-          <context context-type="linenumber">156,159</context>
+          <context context-type="linenumber">162,165</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.case-table.scope-help" datatype="html">
@@ -1908,21 +1908,21 @@
         <source>Could not load selected scope <x id="nodeId" equiv-text="failed"/></source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring.page.ts</context>
-          <context context-type="linenumber">184</context>
+          <context context-type="linenumber">186</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.tree.announce-selected" datatype="html">
         <source>Selected scope <x id="title" equiv-text="selected.title"/></source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring.page.ts</context>
-          <context context-type="linenumber">188</context>
+          <context context-type="linenumber">190</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.tree.announce-roots" datatype="html">
         <source>Scope set to all project roots</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring.page.ts</context>
-          <context context-type="linenumber">192</context>
+          <context context-type="linenumber">194</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.editor.narrow-draft" datatype="html">

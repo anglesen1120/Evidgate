@@ -16,6 +16,7 @@ import { HlmButton } from '@evidgate/ui/button';
 import { HlmCardImports } from '@evidgate/ui/card';
 import { combineLatest, distinctUntilChanged, map } from 'rxjs';
 import { RETAINED_ROWS_CAP } from '../../shared/keyset-retention';
+import { FieldHintComponent } from '../../shared/ui/forms/field-hint.component';
 import {
   HeaderActionsDirective,
   PageHeaderComponent,
@@ -38,6 +39,7 @@ import { AuthoringStore } from './authoring.store';
     NgTemplateOutlet,
     RouterLink,
     EmptyPatternComponent,
+    FieldHintComponent,
     NumberValueComponent,
     HlmButton,
     HlmCardImports,

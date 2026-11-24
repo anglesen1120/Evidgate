@@ -42,17 +42,22 @@
         <span class="ms-(--eg-space-2) text-(--eg-danger-fg)">{{ copy.invalidFilters }}</span>
       }
     </summary>
-    <p id="authoring-case-scope-help" class="help">{{ copy.scopeHelp }}</p>
     <form
       class="filters"
       (ngSubmit)="!(busy() || store.loadingMore()) && apply()"
       [attr.aria-label]="copy.filters"
       [attr.aria-describedby]="'authoring-case-scope-help'"
     >
-      <div class="filter-fields">
+      <div class="filter-fields grid">
         @for (field of filterFields; track field.key) {
           <div class="field">
-            <label hlmLabel [for]="'authoring-case-' + field.key">{{ field.label }}</label>
+            <app-field-hint
+              [descriptionId]="'authoring-case-scope-help'"
+              [label]="field.label"
+              [text]="field.key === 'covered' ? copy.scopeHelp : undefined"
+            >
+              <label hlmLabel [for]="'authoring-case-' + field.key">{{ field.label }}</label>
+            </app-field-hint>
             <hlm-select
               [name]="field.key"
               [ngModel]="draft()[field.key]"
@@ -62,6 +67,7 @@
               <hlm-select-trigger
                 class="h-(--eg-control-touch) w-full"
                 [buttonId]="'authoring-case-' + field.key"
+                [aria-describedby]="field.key === 'covered' ? 'authoring-case-scope-help' : null"
               >
                 <hlm-select-value [placeholder]="copy.all" />
               </hlm-select-trigger>

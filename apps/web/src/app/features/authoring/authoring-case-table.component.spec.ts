@@ -58,7 +58,7 @@ class TableHarness extends ComponentHarness {
     '[data-case-browse-capped] [role="status"], [data-case-browse-capped] [aria-live]',
   );
   readonly loaded = this.locatorFor('.pagination > app-data-table-pager [role="status"]');
-  readonly scopeHelp = this.locatorFor('#authoring-case-scope-help');
+  readonly scopeHelp = this.locatorFor('app-field-hint [popover]#authoring-case-scope-help');
   readonly clearEmpty = this.locatorFor('app-empty-pattern button');
   readonly invalidClear = this.locatorFor('[data-case-invalid-link] button');
 }
@@ -319,7 +319,7 @@ describe('AuthoringCaseTableComponent', () => {
     expect(list).not.toHaveBeenCalled();
   });
 
-  it('keeps server filter scope visible and labels the fixed code order', async () => {
+  it('puts server filter guidance in a hint and keeps the fixed code order visible', async () => {
     list.mockResolvedValueOnce({ items: [caseRow('1')], next_cursor: null });
     const harness = await mount();
     expect(await (await harness.filterHelp()).getProperty('open')).toBe(false);
