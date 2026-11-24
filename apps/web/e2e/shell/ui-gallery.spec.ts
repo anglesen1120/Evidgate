@@ -41,16 +41,15 @@ async function tableMetrics(page: Page): Promise<{
     scrollHeight: number;
     clientHeight: number;
   };
-  header: Box;
+  firstHeaderCell: Box;
   headerCells: readonly { left: number; width: number }[];
   bodyCells: readonly { left: number; width: number }[];
 }> {
   return page.evaluate(() => {
     const root = document.querySelector('[data-demo="table-small"]') as HTMLElement;
     const scroll = root.querySelector('.scroll') as HTMLElement;
-    // One table, one grid: the header row's first cell is the sticky element (`thead th` carries
-    // the sticky rule) and the body's first row is the first `tbody` row.
-    const header = root.querySelector('thead tr > *') as HTMLElement;
+    // The ordinary table's first header cell marks the top of the grid before the page scrolls.
+    const firstHeaderCell = root.querySelector('thead tr > *') as HTMLElement;
     const box = (element: Element) => {
       const rect = element.getBoundingClientRect();
       return {
@@ -78,7 +77,7 @@ async function tableMetrics(page: Page): Promise<{
         scrollHeight: scroll.scrollHeight,
         clientHeight: scroll.clientHeight,
       },
-      header: box(header),
+      firstHeaderCell: box(firstHeaderCell),
       headerCells: cells('thead tr > *'),
       bodyCells: cells('tbody tr:first-child > *'),
     };
@@ -367,7 +366,7 @@ test.describe('column alignment at a desktop width', () => {
     await openGallery(page, 'en', 'light');
     const metrics = await tableMetrics(page);
     expect(metrics.headerCells).toEqual(metrics.bodyCells);
-    expect(Math.abs(metrics.header.top - metrics.scroll.top)).toBeLessThanOrEqual(1.5);
+    expect(Math.abs(metrics.firstHeaderCell.top - metrics.scroll.top)).toBeLessThanOrEqual(1.5);
   });
 });
 
