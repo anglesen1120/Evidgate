@@ -45,7 +45,7 @@
 
   .spartan-button-variant-ghost:hover,
   .spartan-button-variant-ghost[aria-expanded='true'] {
-    background: var(--eg-surface-raised);
+    background: var(--eg-neutral-bg);
   }
 
   .spartan-button-variant-destructive {
