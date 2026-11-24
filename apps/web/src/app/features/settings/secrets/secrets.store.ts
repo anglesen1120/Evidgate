@@ -105,6 +105,9 @@ export class SecretsStore {
     if (this.projectIdSignal() !== projectId) {
       this.rowsSignal.set(NO_ROWS);
       this.nextCursorSignal.set(null);
+      this.cursors = [undefined];
+      this.pageSignal.set(1);
+      this.failedPage = null;
       const bindingProjectId = this.bindings.projectId();
       if (bindingProjectId !== null && bindingProjectId !== projectId) {
         this.bindings.reset();
@@ -151,7 +154,7 @@ export class SecretsStore {
   ): Promise<void> {
     const project = this.projectIdSignal();
     if (!project) return;
-    const generation = this.generation;
+    const generation = ++this.generation;
     this.pagingSignal.set(true);
     this.loadErrorSignal.set(null);
     const result = await settledRead(() => this.data.listIngestTokens(project, cursor, size));
@@ -159,9 +162,9 @@ export class SecretsStore {
     this.pagingSignal.set(false);
     this.failedPage = { cursor, page, size };
     if (!result.ok) {
+      this.phaseSignal.set(this.rowsSignal().length ? 'ready' : 'error');
       if (!isApiRequestError(result.error)) throw result.error;
       this.loadErrorSignal.set(result.error.error);
-      if (!this.rowsSignal().length) this.phaseSignal.set('error');
       return;
     }
     this.failedPage = null;
@@ -246,22 +249,18 @@ export class SecretsStore {
    */
   private async read(projectId: string): Promise<void> {
     const generation = ++this.generation;
+    const size = this.pageSizeSignal();
     this.projectIdSignal.set(projectId);
     this.phaseSignal.set('loading');
     this.loadErrorSignal.set(null);
-    this.failedPage = null;
-    this.cursors = [undefined];
-    this.pageSignal.set(1);
     this.pagingSignal.set(false);
-    this.nextCursorSignal.set(null);
-    const first = await settledRead(() =>
-      this.data.listIngestTokens(projectId, undefined, this.pageSizeSignal()),
-    );
+    const first = await settledRead(() => this.data.listIngestTokens(projectId, undefined, size));
     // A newer read owns the state now.
     if (generation !== this.generation) {
       return;
     }
     if (!first.ok) {
+      this.failedPage = { cursor: undefined, page: 1, size };
       if (isApiRequestError(first.error)) {
         this.loadErrorSignal.set(first.error.error);
       }
@@ -276,6 +275,9 @@ export class SecretsStore {
       return;
     }
 
+    this.failedPage = null;
+    this.cursors = [undefined];
+    this.pageSignal.set(1);
     this.rowsSignal.set(first.value.items);
     this.nextCursorSignal.set(first.value.next_cursor);
     this.phaseSignal.set('ready');

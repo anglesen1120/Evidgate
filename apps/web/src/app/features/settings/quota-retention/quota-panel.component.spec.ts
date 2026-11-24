@@ -7,8 +7,8 @@ import type { UsageSummaryDto, UsageSummaryMetricDto, UsageSummaryProjectDto } f
 import { By } from '@angular/platform-browser';
 import { ActivatedRoute } from '@angular/router';
 import { provideLayoutTestStubs } from '../../../shared/testing/layout.testing';
+import { DataTableCellComponent } from '../../../shared/ui/data-table/data-table-cell.component';
 import { DataTableComponent } from '../../../shared/ui/data-table/data-table.component';
-import { useLightweightTablePresentation } from '../../../shared/ui/data-table/data-table-volume.testing';
 import { QuotaPanelComponent } from './quota-panel.component';
 import { QuotaStore, type QuotaLoadState } from './quota.store';
 
@@ -384,7 +384,8 @@ describe('QuotaPanelComponent', () => {
     expect(root.querySelector('[data-quota-limit]')?.textContent?.trim()).toBe('987,654,321');
   });
   it('passes every row beyond the 200-row rendering boundary to the shared bounded renderer', async () => {
-    useLightweightTablePresentation();
+    // Keep the real table and both pagers; rich cell presentation is covered by the smaller cases.
+    TestBed.overrideComponent(DataTableCellComponent, { set: { template: '{{ value() }}' } });
     const projects = Array.from({ length: 201 }, (_unused, index) =>
       project({ project_id: `project-${index}` }),
     );
@@ -398,6 +399,8 @@ describe('QuotaPanelComponent', () => {
     const table = fixture.debugElement.query(By.directive(DataTableComponent))
       .componentInstance as DataTableComponent<UsageSummaryProjectDto>;
     expect(table.rows()).toHaveLength(201);
+    expect(root.querySelectorAll('app-data-table [data-row-id]')).toHaveLength(200);
+    expect(root.querySelector('[data-row-id="project-200"]')).toBeNull();
     expect(root.querySelector('[data-quota-projects-more]')?.textContent).toContain(
       'All counters returned',
     );
@@ -408,6 +411,7 @@ describe('QuotaPanelComponent', () => {
     next?.click();
     await fixture.whenStable();
     expect(root.querySelector('[data-row-id="project-200"]')).not.toBeNull();
+    expect(root.querySelectorAll('app-data-table [data-row-id]')).toHaveLength(1);
   });
 
   it('uses one coordinated server pager after all project tables without paging recorded metric state', async () => {
@@ -475,5 +479,21 @@ describe('QuotaPanelComponent', () => {
     await option.click();
     expect(setProjectPageSize).toHaveBeenCalledExactlyOnceWith(size);
     expect(nextProjectPage).not.toHaveBeenCalled();
+  });
+
+  it('restores the served size in the picker after a failed size replacement', async () => {
+    projectPage.set(2);
+    setProjectPageSize.mockImplementationOnce(() => projectPaging.set(true));
+    const { fixture, harness } = await render();
+    await (await harness.sizeTrigger()).click();
+    const options = await harness.sizeOptions();
+    await options[1]?.click();
+    expect(setProjectPageSize).toHaveBeenCalledExactlyOnceWith(50);
+    projectPaging.set(false);
+    projectPagingError.set(true);
+    await fixture.whenStable();
+    expect(await (await harness.sizeTrigger()).text()).toBe('20');
+    expect(projectPage()).toBe(2);
+    expect(projectPageSize()).toBe(20);
   });
 });

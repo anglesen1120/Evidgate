@@ -361,7 +361,33 @@ for (const locale of LOCALES) {
             ),
           ).toBeVisible();
           await expect(page.locator(CI_ROWS)).toHaveCount(0);
-          await expect(section.locator('button')).toHaveCount(0);
+          const pager = section.locator('app-data-table-pager');
+          if (variant === 'settings-empty') {
+            // Empty metadata still supports paging, but never exposes row or mutation actions.
+            await expect(section.locator('button:not(app-data-table-pager button)')).toHaveCount(0);
+            await expect(pager).toBeVisible();
+            await expect(pager.getByRole('status')).toHaveText(
+              locale === 'en' ? 'Page 1' : 'Trang 1',
+            );
+            for (const direction of ['previous', 'next']) {
+              await expect(pager.locator(`[data-page="${direction}"]`)).toHaveAttribute(
+                'aria-disabled',
+                'true',
+              );
+            }
+            const size = pager.getByRole('combobox', {
+              name: locale === 'en' ? 'Rows per page' : 'Số hàng mỗi trang',
+            });
+            await expect(size).toContainText('20');
+            await size.click();
+            for (const option of ['20', '50', '100']) {
+              await expect(page.getByRole('option', { name: option, exact: true })).toBeVisible();
+            }
+            await page.keyboard.press('Escape');
+          } else {
+            await expect(pager).toHaveCount(0);
+            await expect(section.locator('button')).toHaveCount(0);
+          }
         }
         if (variant === 'settings') {
           await expect(section.locator('[data-page="next"]')).toHaveAttribute(

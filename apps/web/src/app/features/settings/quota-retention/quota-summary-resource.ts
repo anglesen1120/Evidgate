@@ -4,30 +4,30 @@ import type { UsageSummaryDto } from '@evidgate/sdk';
 import { QuotaDataService } from '../../../core/data/quota-data.service';
 
 type ReadOutcome = { readonly value: UsageSummaryDto | null } | { readonly error: unknown };
-interface ProjectRequest {
+interface ProjectPagingState {
   readonly orgId: string;
   readonly limit: number;
   readonly cursors: readonly (string | undefined)[];
   readonly navigation: boolean;
 }
 interface ServedPage {
-  readonly request: ProjectRequest;
+  readonly request: ProjectPagingState;
   readonly value: UsageSummaryDto | null;
   readonly failed: boolean;
 }
 interface ReadResult {
-  readonly request: ProjectRequest;
+  readonly request: ProjectPagingState;
   readonly outcome: ReadOutcome;
 }
 interface PageSource {
   readonly scope: string | null;
-  readonly request: ProjectRequest | undefined;
+  readonly request: ProjectPagingState | undefined;
   readonly result: ReadResult | undefined;
 }
 
 async function readOnce(
   data: QuotaDataService,
-  params: ProjectRequest,
+  params: ProjectPagingState,
   abortSignal: AbortSignal,
 ): Promise<ReadOutcome> {
   try {
@@ -49,8 +49,7 @@ async function readOnce(
 function retainPage(source: PageSource, old: ServedPage | null | undefined): ServedPage | null {
   const current = source.request;
   if (current === undefined || source.scope !== current.orgId) return null;
-  const retained =
-    old?.request.orgId === current.orgId && old.request.limit === current.limit ? old : null;
+  const retained = old?.request.orgId === current.orgId ? old : null;
   if (source.result?.request !== current) return current.navigation ? retained : null;
   const outcome = source.result.outcome;
   if ('error' in outcome) {
@@ -62,7 +61,7 @@ function retainPage(source: PageSource, old: ServedPage | null | undefined): Ser
 }
 
 function pageActions(
-  request: WritableSignal<ProjectRequest | undefined>,
+  request: WritableSignal<ProjectPagingState | undefined>,
   served: Signal<ServedPage | null>,
   paging: Signal<boolean>,
   scope: () => string | null,
@@ -85,7 +84,7 @@ function pageActions(
     setPageSize: (size: number): void => {
       const current = request();
       if (current === undefined || ![20, 50, 100].includes(size) || size === current.limit) return;
-      request.set({ ...current, limit: size, cursors: [undefined], navigation: false });
+      request.set({ ...current, limit: size, cursors: [undefined], navigation: true });
     },
   };
 }
@@ -101,7 +100,7 @@ export interface QuotaSummaryReadOptions {
 /** A page replacement retains no project-row history, only opaque request cursors. */
 export function quotaSummaryRead(options: QuotaSummaryReadOptions) {
   const { scope, orgId, started, start, data } = options;
-  const request = linkedSignal((): ProjectRequest | undefined => {
+  const request = linkedSignal((): ProjectPagingState | undefined => {
     const active = scope();
     return active === null
       ? undefined
@@ -132,7 +131,7 @@ export function quotaSummaryRead(options: QuotaSummaryReadOptions) {
   const summary = computed(() => served()?.value ?? null);
   const paging = computed(() => response.isLoading());
   const page = computed(() => served()?.request.cursors.length ?? 1);
-  const pageSize = computed(() => request()?.limit ?? 20);
+  const pageSize = computed(() => served()?.request.limit ?? request()?.limit ?? 20);
   const pagingError = computed(() => served()?.failed === true && summary() !== null);
   const hasNext = computed(() => summary()?.next_cursor != null);
   function reload(): void {

@@ -298,9 +298,9 @@ describe('SecurityEventsStore', () => {
     expect(list).toHaveBeenCalledTimes(3);
   });
   it('caps the cursor walk at 200 pages and permits a backward step', async () => {
-    list.mockImplementation(async (_org, query) => {
+    list.mockImplementation((_org, query) => {
       const page = query.cursor ? Number(query.cursor) : 1;
-      return { items: [], next_cursor: String(page + 1) };
+      return Promise.resolve({ items: [], next_cursor: String(page + 1) });
     });
     const store = TestBed.inject(SecurityEventsStore);
     await settle();

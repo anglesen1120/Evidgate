@@ -38,14 +38,18 @@ describe('SecretsStore cursor pages', () => {
 
   beforeEach(() => {
     vi.resetAllMocks();
-    data.listIngestTokens.mockImplementation(async (_project, cursor) => ({
-      items: [{ ...token, id: cursor ?? 'first' }],
-      next_cursor: cursor === 'last' ? null : cursor ? 'last' : 'middle',
-    }));
-    data.listCiBindings.mockImplementation(async (_project, cursor) => ({
-      items: [{ ...binding, id: cursor ?? 'first-binding' }],
-      next_cursor: cursor ? null : 'second-binding',
-    }));
+    data.listIngestTokens.mockImplementation((_project, cursor) =>
+      Promise.resolve({
+        items: [{ ...token, id: cursor ?? 'first' }],
+        next_cursor: cursor === 'last' ? null : cursor ? 'last' : 'middle',
+      }),
+    );
+    data.listCiBindings.mockImplementation((_project, cursor) =>
+      Promise.resolve({
+        items: [{ ...binding, id: cursor ?? 'first-binding' }],
+        next_cursor: cursor ? null : 'second-binding',
+      }),
+    );
     TestBed.configureTestingModule({
       providers: [SecretsStore, { provide: SecretsDataService, useValue: data }],
     });

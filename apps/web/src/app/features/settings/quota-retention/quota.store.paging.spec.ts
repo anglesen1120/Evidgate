@@ -1,5 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 
+import { ApiRequestError } from '../../../core/http/api-error';
 import { TenantStore } from '../../../core/session/tenant.store';
 import {
   metric,
@@ -111,6 +112,62 @@ describe('QuotaStore project paging', () => {
     await settle();
     expect(store.projectPage()).toBe(1);
     expect(data.calls.at(-1)?.cursor).toBeUndefined();
+  });
+
+  it('retains the served size and all counters after a failed resize, then retries the intended first page', async () => {
+    const { store, data, settle, advance } = mountQuotaStore();
+    TestBed.inject(TenantStore).setOrg('org-one');
+    data.answer = page('first', 'second');
+    store.load();
+    await settle();
+    data.answer = page('second', 'third');
+    store.nextProjectPage();
+    await settle();
+    const served = store.usageSummary();
+    data.hold = true;
+    store.setProjectPageSize(50);
+    await advance();
+    expect(data.calls.at(-1)).toMatchObject({ limit: 50, cursor: undefined });
+    expect(store.usageSummary()).toBe(served);
+    expect(store.projectPage()).toBe(2);
+    expect(store.projectPageSize()).toBe(20);
+    data.fail(
+      new ApiRequestError({
+        kind: 'unexpected',
+        status: 503,
+        code: 'unexpected_status',
+        message: 'The API answered 503.',
+        requestId: 'req-quota-resize',
+        retryable: true,
+        details: [],
+        retryAfterSeconds: null,
+      }),
+    );
+    await settle();
+    expect(store.usageSummary()).toBe(served);
+    expect(store.projectPage()).toBe(2);
+    expect(store.projectPageSize()).toBe(20);
+    expect(store.projectPagingError()).toBe(true);
+    expect(store.loadState()).toBe('ready');
+    store.retryProjectPage();
+    await advance();
+    expect(data.calls).toHaveLength(4);
+    expect(data.calls.at(-1)).toMatchObject({ limit: 50, cursor: undefined });
+    expect(store.usageSummary()).toBe(served);
+    expect(store.projectPage()).toBe(2);
+    expect(store.projectPageSize()).toBe(20);
+    data.release(page('resized', null));
+    await settle();
+    expect(store.projectPage()).toBe(1);
+    expect(store.projectPageSize()).toBe(50);
+    expect(store.projectPagingError()).toBe(false);
+    expect(
+      store.usageSummary()?.metrics.map((entry) => entry.projects.map((row) => row.project_id)),
+    ).toEqual([['resized'], ['resized']]);
+    expect(store.usageSummary()?.metrics.map((entry) => entry.used)).toEqual([900, 800]);
+    expect(store.hasNextProjectPage()).toBe(false);
+    store.previousProjectPage();
+    expect(data.calls).toHaveLength(4);
   });
 
   it('refreshes a refused settings write on the selected page without resetting its size or cursor', async () => {
