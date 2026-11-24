@@ -2437,7 +2437,6 @@
 <trans-unit id="settings.secrets.ci.loading-more" datatype="html"><source>Loading more CI bindings…</source><target>Đang tải thêm liên kết CI…</target></trans-unit>
 <trans-unit id="runs.list.title" datatype="html"><source>Runs</source><target>Lượt chạy</target></trans-unit>
 <trans-unit id="runs.list.description" datatype="html"><source>Review collection state and the latest stored decision. Open a run for evidence completeness.</source><target>Xem trạng thái thu thập và quyết định đã lưu mới nhất. Mở lượt chạy để xem độ đầy đủ của bằng chứng.</target></trans-unit>
-<trans-unit id="runs.list.filters" datatype="html"><source>Filter runs</source><target>Lọc lượt chạy</target></trans-unit>
 <trans-unit id="runs.list.page-filter-hint" datatype="html"><source>Run scope filters this page only. State, decision and ref name filter all project runs.</source><target>Phạm vi lượt chạy chỉ lọc trang này. Trạng thái, quyết định và tên tham chiếu lọc tất cả lượt chạy của dự án.</target></trans-unit>
 <trans-unit id="runs.list.decision-filter" datatype="html"><source>Decision</source><target>Quyết định</target></trans-unit>
 <trans-unit id="runs.list.decision-hint" datatype="html"><source>The latest live evaluation determines the decision. Not evaluated means no live evaluation yet.</source><target>Quyết định dựa trên lần đánh giá hiện hành mới nhất. Chưa đánh giá nghĩa là chưa có lần đánh giá hiện hành nào.</target></trans-unit>
@@ -2516,7 +2515,6 @@
 <trans-unit id="runs.detail.back" datatype="html"><source>Back to runs</source><target>Quay lại danh sách lượt chạy</target></trans-unit>
 <trans-unit id="runs.detail.id" datatype="html"><source>Run id</source><target>Mã lượt chạy</target></trans-unit>
 <trans-unit id="runs.detail.state" datatype="html"><source>Collection state</source><target>Trạng thái thu thập</target></trans-unit>
-<trans-unit id="runs.detail.version" datatype="html"><source>Version</source><target>Phiên bản</target></trans-unit>
 <trans-unit id="runs.detail.purpose" datatype="html"><source>Purpose</source><target>Mục đích</target></trans-unit>
 <trans-unit id="runs.detail.ref" datatype="html"><source>Ref</source><target>Tham chiếu</target></trans-unit>
 <trans-unit id="runs.detail.ref-kind" datatype="html"><source>Ref kind</source><target>Loại tham chiếu</target></trans-unit>
@@ -3070,7 +3068,6 @@
 <trans-unit id="runs.decision.reason.stale-epoch-only" datatype="html"><source>Only evidence from stale producer epochs was received.</source><target>Chỉ nhận được bằng chứng thuộc các kỳ producer đã cũ.</target></trans-unit>
 <trans-unit id="runs.decision.reason.unknown-required-artifact-kind" datatype="html"><source>The policy requires an unrecognized artifact kind.</source><target>Chính sách yêu cầu một loại artifact không được nhận diện.</target></trans-unit>
 <trans-unit id="runs.detail.not-provided" datatype="html"><source>Not provided</source><target>Chưa được cung cấp</target></trans-unit>
-<trans-unit id="runs.detail.timeline.inferred" datatype="html"><source>Inferred from current state</source><target>Suy ra từ trạng thái hiện tại</target></trans-unit>
 <trans-unit id="runs.list.active-filters" datatype="html"><source>Active filters: <x id="count" equiv-text="count"/></source><target>Bộ lọc đang áp dụng: <x id="count"/></target></trans-unit>
 <trans-unit id="runs.list.evidence-hint" datatype="html"><source>Open the run for evidence completeness.</source><target>Mở lượt chạy để xem độ đầy đủ của bằng chứng.</target></trans-unit>
 <trans-unit id="runs.list.evidence-unavailable" datatype="html"><source>Unavailable</source><target>Chưa có thông tin</target></trans-unit>
@@ -3245,7 +3242,6 @@
       <trans-unit id="quota.panel.warned-short" datatype="html"><source>Near limit</source><target>Gần giới hạn</target></trans-unit>
       <trans-unit id="runs.detail.producers.after-cancel-short" datatype="html"><source>After cancel</source><target>Sau khi hủy</target></trans-unit>
       <trans-unit id="runs.detail.producers.stale-epoch-short" datatype="html"><source>Stale epoch</source><target>Thế hệ cũ</target></trans-unit>
-      <trans-unit id="runs.detail.timeline.inferred-short" datatype="html"><source>Inferred</source><target>Suy ra</target></trans-unit>
       <trans-unit id="settings.api-tokens.clear-search" datatype="html"><source>Clear search</source><target>Xóa tìm kiếm</target></trans-unit>
       <trans-unit id="settings.api-tokens.created-by" datatype="html"><source>Created by</source><target>Người tạo</target></trans-unit>
       <trans-unit id="settings.api-tokens.inspect-named" datatype="html"><source>Inspect token <x id="name" equiv-text="name"/></source><target>Kiểm tra token <x id="name" equiv-text="name"/></target></trans-unit>
@@ -22777,6 +22773,9 @@
 <trans-unit id="shared.data-table.cursor-range" datatype="html"><source>Showing <x id="start" equiv-text="start"/>–<x id="end" equiv-text="end"/></source><target>Hiển thị <x id="start" equiv-text="start"/>–<x id="end" equiv-text="end"/></target></trans-unit>
 <trans-unit id="shared.data-table.showing-loaded-range" datatype="html"><source>Showing <x id="start" equiv-text="start"/>–<x id="end" equiv-text="end"/> of <x id="loaded" equiv-text="loaded"/> loaded records</source><target>Hiển thị <x id="start" equiv-text="start"/>–<x id="end" equiv-text="end"/> trên <x id="loaded" equiv-text="loaded"/> bản ghi đã tải</target></trans-unit>
 <trans-unit id="shared.states.error.unknown-count" datatype="html"><source>The record count is unknown.</source><target>Chưa xác định được số lượng bản ghi.</target></trans-unit>
+<trans-unit id="runs.list.filter-toggle" datatype="html"><source>Filters</source><target>Bộ lọc</target></trans-unit>
+<trans-unit id="runs.detail.context-details" datatype="html"><source>Additional execution context</source><target>Thông tin thực thi bổ sung</target></trans-unit>
+<trans-unit id="runs.detail.run-version" datatype="html"><source>Run version</source><target>Phiên bản lượt chạy</target></trans-unit>
 </body>
   </file>
 </xliff>

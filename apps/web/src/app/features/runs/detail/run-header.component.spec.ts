@@ -23,18 +23,20 @@ describe('RunHeaderComponent', () => {
 
   it('labels four independent summary facts without fabricating an outcome or a decision', async () => {
     const { root } = await render();
-    expect(root.querySelectorAll('dl > [data-slot="card"]')).toHaveLength(4);
+    expect(root.querySelectorAll('section[data-slot="card"] dl > div')).toHaveLength(4);
     expect(root.querySelector('section')?.getAttribute('aria-labelledby')).toBe(
       'run-summary-title',
     );
-    expect(root.querySelector('#run-summary-title')?.textContent).toContain(run.run_id);
+    expect(root.querySelector('#run-summary-title')?.textContent?.trim()).toBe(
+      'Stored run decision',
+    );
     expect([...root.querySelectorAll('dt')].map((term) => term.textContent?.trim())).toEqual([
       'Evidence completeness',
       'Test outcome',
       'Stored run decision',
       'Evidence revision',
     ]);
-    expect(root.querySelector('app-run-state-pill')).not.toBeNull();
+    expect(root.querySelector('app-run-state-pill')).toBeNull();
     expect(root.querySelector('app-evidence-badge')?.textContent).toContain(
       'Completeness: Unavailable',
     );
@@ -59,6 +61,14 @@ describe('RunHeaderComponent', () => {
     expect(freeze?.querySelector('time')?.getAttribute('datetime')).toBe('2026-10-31T10:30:00Z');
     expect(root.querySelector('dl')?.textContent).toMatch(/Missing evidence reasons:\s*1/);
     expect(root.querySelector('app-decision-chip, app-outcome-pill')).toBeNull();
+    fixture.componentRef.setInput('latestSnapshot', {
+      revision_no: 3,
+      missing: [],
+      created_at: '2026-10-31T10:30:00Z',
+    });
+    await fixture.whenStable();
+    expect(root.querySelector('dl')?.textContent).not.toContain('Missing evidence reasons');
+    expect(root.querySelector('[data-run-latest-freeze] time')).not.toBeNull();
   });
 
   it('keeps incomplete collection explanation and a keyboard-focusable evidence action', async () => {
@@ -83,7 +93,8 @@ describe('RunHeaderComponent', () => {
     fixture.componentRef.setInput('runCompleteness', 'incomplete');
     await fixture.whenStable();
     expect(root.querySelector('[data-run-missing-summary]')).not.toBeNull();
-    expect(root.querySelector('app-run-state-pill')?.textContent).toContain('Complete');
+    const context = await render({ ...run, state: 'complete' }, 'context');
+    expect(context.root.querySelector('app-run-state-pill')?.textContent).toContain('Complete');
     fixture.componentRef.setInput('runCompleteness', 'complete');
     await fixture.whenStable();
     expect(root.querySelector('[data-run-missing-summary]')).toBeNull();
@@ -122,9 +133,8 @@ describe('RunHeaderComponent', () => {
     expect(root.querySelector('[data-run-fork]')?.textContent?.trim()).toBe('No');
     expect(root.textContent).not.toContain('Status unavailable');
     expect(root.querySelector('[data-run-ref] app-status-pill')).toBeNull();
-    const summary = await render(value);
-    expect(summary.root.textContent).toContain('Not provided');
-    expect(summary.root.querySelector('app-run-state-pill')).not.toBeNull();
+    expect(root.querySelector('[data-run-ref]')?.textContent?.trim()).toBe('Not provided');
+    expect(root.querySelector('app-run-state-pill')).not.toBeNull();
   });
 
   it('preserves complete provenance in one context card and escapes long untrusted refs', async () => {

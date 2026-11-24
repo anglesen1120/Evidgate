@@ -4,11 +4,7 @@
   >
     <app-shell-icon class="size-(--eg-space-6)" [name]="'run'" />
   </span>
-  <app-page-header
-    class="min-w-0 flex-1 [&_h1]:text-(length:--eg-space-7) [&_.header-description]:text-sm"
-    [title]="copy.title"
-    [description]="subtitle()"
-  >
+  <app-page-header class="min-w-0 flex-1" [title]="copy.title" [description]="subtitle()">
     <div
       appPageHeaderActions
       class="grid min-w-0 justify-items-start gap-(--eg-space-2) md:justify-items-end"
@@ -41,7 +37,7 @@
     hlmCard
     [attr.aria-label]="copy.loadedRuns"
     data-run-metrics
-    class="mb-(--eg-space-4) grid min-w-0 grid-cols-2 gap-px overflow-hidden rounded-(--eg-radius-lg) bg-border p-0 sm:grid-cols-4"
+    class="mb-(--eg-space-4) grid min-w-0 grid-cols-2 gap-px overflow-hidden bg-border p-0 sm:grid-cols-4"
   >
     @for (metric of loadedMetrics(); track metric.icon) {
       <div class="grid min-w-0 content-between gap-(--eg-space-4) bg-card p-(--eg-space-5)">
@@ -67,31 +63,35 @@
     }
   </dl>
 }
-<section
-  hlmCard
-  class="min-w-0 gap-0 overflow-visible rounded-(--eg-radius-lg) py-0"
-  aria-labelledby="run-register-title"
->
-  <header class="grid gap-(--eg-space-2) px-(--eg-space-5) pt-(--eg-space-5) md:px-(--eg-space-6)">
+<section hlmCard class="min-w-0 gap-0 overflow-visible py-0" aria-labelledby="run-register-title">
+  <header
+    class="flex min-w-0 flex-wrap items-center justify-between gap-(--eg-space-3) border-b border-border px-(--eg-space-5) py-(--eg-space-4) md:px-(--eg-space-6)"
+  >
     <h2 hlmCardTitle [size]="'subsection'" id="run-register-title">{{ copy.register }}</h2>
-    <p id="run-filter-hint" class="eg-type-caption text-muted-foreground wrap-anywhere">
+    <button
+      hlmBtn
+      type="button"
+      [variant]="'outline'"
+      id="run-filters-title"
+      #filterDisclosure
+      data-run-filter-disclosure
+      [attr.aria-controls]="'run-filter-panel'"
+      [attr.aria-expanded]="filtersOpen()"
+      (click)="toggleFilters()"
+    >
+      <span i18n="@@runs.list.filter-toggle">Filters</span>
+      <span class="sr-only">{{ activeFilterLabel() }}</span>
+      <span aria-hidden="true" class="tabular-nums">{{ activeFilterCount() }}</span>
+    </button>
+  </header>
+  <div
+    id="run-filter-panel"
+    [hidden]="!filtersOpen()"
+    class="px-(--eg-space-5) md:px-(--eg-space-6)"
+  >
+    <p id="run-filter-hint" class="eg-type-caption py-(--eg-space-3) text-muted-foreground">
       {{ copy.filterHint }}
     </p>
-  </header>
-  <details
-    class="min-w-0 border-b border-border px-(--eg-space-5) py-(--eg-space-3) md:px-(--eg-space-6)"
-    [open]="desktopFilters()"
-    data-run-filter-disclosure
-  >
-    <summary
-      class="min-h-(--eg-control-touch) cursor-pointer content-center rounded-(--eg-radius-sm) font-(weight:--eg-weight-semibold) focus-visible:outline-solid focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-ring focus-visible:outline-offset-(--eg-focus-offset)"
-    >
-      <span id="run-filters-title">{{ copy.filters }}</span>
-      <span
-        class="ms-(--eg-space-3) inline-block text-xs text-muted-foreground tabular-nums font-(weight:--eg-weight-regular)"
-        >{{ activeFilterLabel() }}</span
-      >
-    </summary>
     <form
       class="grid min-w-0 gap-(--eg-space-3) pb-(--eg-space-3)"
       (ngSubmit)="!store.busy() && apply()"
@@ -208,17 +208,17 @@
           </button>
         </div>
       </div>
-      @if (store.refRejected()) {
-        <p
-          class="m-0 text-[var(--eg-danger-fg)] [overflow-wrap:anywhere]"
-          id="run-ref-error"
-          role="alert"
-        >
-          {{ copy.refRejected }}
-        </p>
-      }
     </form>
-  </details>
+  </div>
+  @if (store.refRejected()) {
+    <p
+      class="m-0 text-[var(--eg-danger-fg)] [overflow-wrap:anywhere]"
+      id="run-ref-error"
+      role="alert"
+    >
+      {{ copy.refRejected }}
+    </p>
+  }
   <app-request-state
     class="block min-w-0"
     [class.p-(--eg-space-5)]="!store.rows().length || store.isEmpty()"

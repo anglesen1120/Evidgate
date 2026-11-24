@@ -1,16 +1,16 @@
 // The Runs flow uses the keyboard alone on the real fixtures build: no click or force.
 // Each assertion identifies focus by role/name, id or data hook, never by counting Tab stops.
-// Keep overflowing local scrollers, row copy/full-value actions and every shared pager in DOM
-// order, including focusable disabled boundaries, without permitting anonymous stops.
-// Attempts use server pages; producers expose a known-total range.
+// Keep overflowing scrollers, row copy/full-value actions and every shared pager in DOM order,
+// including focusable disabled boundaries, with no anonymous stops. Attempts use server pages.
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import runList from '../../../../fixtures/web-api/run-list/input.json';
 import runList250 from '../../../../fixtures/web-api/run-list-250/input.json';
 import { expectNoA11yViolations } from '../a11y/axe-scan';
 import { activeElement, localePath, ORG_ACME, PROJECT_STOREFRONT, withVariants } from './support';
-import { RUN_FILTER_SUMMARY, RUN_RECORDS } from './run-list.support';
+import { RUN_FILTER_BUTTON, RUN_RECORDS } from './run-list.support';
 import {
   auditRunTabStops,
+  enterRunDetails,
   tabThroughNarrowRunRecords,
   tabThroughRunControls,
   tabThroughTableScroller,
@@ -18,7 +18,7 @@ import {
 
 /** The grant set that holds `run:read`; the default G1 session grants no run code. */
 const RUN_READ_GRANT = '?fixture.variant.listPermissions=settings-policy-readonly';
-/** The fixture's first row — the row link's accessible name is the whole id, not its abbreviation. */
+const RUN_WITH_REVISION_AND_RELEASE = '?fixture.variant.getRun=detail-release';
 const FIRST_RUN = runList.body.items[0]!.run_id;
 const SELECT_STOPS = [
   '#run-state',
@@ -29,16 +29,13 @@ const SELECT_STOPS = [
 const FILTER_STOPS = [...SELECT_STOPS, '#run-ref', '[data-run-apply]', '[data-run-clear]'] as const;
 
 const FULL_PAGE_ROWS = 20;
-const LARGE_PAGE_FIRST = runList250.body.items[0]?.run_id;
-const LARGE_PAGE_SECOND = runList250.body.items[20]?.run_id;
-if (LARGE_PAGE_FIRST === undefined || LARGE_PAGE_SECOND === undefined) {
-  throw new Error('The paging specimen needs at least twenty-one records');
-}
+const LARGE_PAGE_FIRST = runList250.body.items[0]!.run_id;
+const LARGE_PAGE_SECOND = runList250.body.items[20]!.run_id;
 
-function listAddress(variant: string): string {
+function listAddress(...variants: string[]): string {
   return withVariants(
     localePath('en', `/dev/run-list/orgs/${ORG_ACME}/projects/${PROJECT_STOREFRONT}`),
-    [RUN_READ_GRANT, variant],
+    [RUN_READ_GRANT, ...variants],
   );
 }
 
@@ -78,18 +75,17 @@ async function enterMain(page: Page): Promise<void> {
 /** The filter disclosure precedes the controls and their optional guidance. */
 async function enterFilterDisclosure(page: Page): Promise<void> {
   await page.keyboard.press('Tab');
-  const summary = page.locator(RUN_FILTER_SUMMARY);
-  await expect(summary).toBeFocused();
-  await expectFocusRing(summary, '2px');
-  const disclosure = page.locator('[data-run-filter-disclosure]');
-  if ((await disclosure.getAttribute('open')) === null) await page.keyboard.press('Enter');
-  await expect(disclosure).toHaveAttribute('open', '');
+  const button = page.locator(RUN_FILTER_BUTTON);
+  await expect(button).toBeFocused();
+  await expectFocusRing(button, '2px');
+  if ((await button.getAttribute('aria-expanded')) === 'false') await page.keyboard.press('Enter');
+  await expect(button).toHaveAttribute('aria-expanded', 'true');
 }
 
 test('the list, a row and the way back are keyboard-reachable and identifiable', async ({
   page,
 }) => {
-  await page.goto(listAddress('?fixture.variant.listRuns=runs'));
+  await page.goto(listAddress('?fixture.variant.listRuns=runs', RUN_WITH_REVISION_AND_RELEASE));
   await listIsReady(page);
   await enterMain(page);
   await enterFilterDisclosure(page);
@@ -105,7 +101,8 @@ test('the list, a row and the way back are keyboard-reachable and identifiable',
   await tabThroughTableScroller(page, page.locator('app-run-list-table'));
 
   await page.keyboard.press('Tab');
-  const firstRow = page.locator('[data-run-row]').getByRole('link', { name: FIRST_RUN });
+  const firstRow = page.locator(`[data-run-id="${FIRST_RUN}"]`).getByRole('link');
+  await expect(firstRow).toHaveAccessibleName(`main (${FIRST_RUN})`);
   await expect(firstRow).toBeFocused();
   expect((await firstRow.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
 
@@ -127,25 +124,33 @@ test('the list, a row and the way back are keyboard-reachable and identifiable',
   // The header's inspect-evidence action sits between the back link and the run summary.
   await page.keyboard.press('Tab');
   await expect(page.getByRole('button', { name: 'Inspect evidence' })).toBeFocused();
-  await tabThroughRunControls(page, page.locator('app-run-header').first(), 2);
-  await page.keyboard.press('Tab');
-  const attemptsRegion = page.getByRole('region', { name: 'Attempts table' });
-  await expect(attemptsRegion).toBeFocused();
+  const summary = page.getByRole('region', { name: 'Stored run decision' });
+  for (const name of ['Show full Evidence revision', 'Copy Evidence revision']) {
+    await page.keyboard.press('Tab');
+    await expect(summary.getByRole('button', { name, exact: true })).toBeFocused();
+  }
+  const context = page.locator('app-run-header').last();
+  await tabThroughRunControls(page, context.locator('section > dl'), 3);
+  await enterRunDetails(page, context.locator('details'));
+  await tabThroughRunControls(page, context.locator('details'), 2);
+  await expect(page.getByRole('region', { name: 'Attempts table' })).toHaveAttribute(
+    'tabindex',
+    '-1',
+  );
   await expect(page.locator('app-attempts-table [data-attempt-row]')).toHaveCount(7);
   for (const [selector, rows, copies, summary] of [
-    ['app-attempts-table', 'tbody', 7, 'Showing 1–7'],
+    ['app-attempts-table', 'app-data-table', 7, 'Showing 1–7'],
     ['#producers', 'app-data-table', 2, 'Showing 1–2 of 2'],
   ] as const) {
     const root = page.locator(selector);
-    if (selector === '#producers') await tabThroughTableScroller(page, root);
+    await tabThroughTableScroller(page, root);
     await tabThroughRunControls(page, root.locator(rows), copies);
     await expect(root.getByRole('navigation', { name: 'Table pagination' })).toHaveCount(0);
     await expect(root.locator('app-data-table-pager .page-range')).toHaveText(summary);
   }
 
-  // Evidence and the latest live decision are tabs: only the selected tab is a Tab stop, the arrow
-  // keys move inside the list, and the selected panel is the next stop. The hidden panel leaves the
-  // order, so the walk never lands on it.
+  // Evidence and the latest live decision are tabs: only the selected tab is a Tab stop, arrows move
+  // inside the list, and the selected panel is the next stop; the hidden panel leaves the order.
   await page.keyboard.press('Tab');
   const evidenceTab = page.getByRole('tab', { name: 'Evidence' });
   await expect(evidenceTab).toBeFocused();
@@ -182,8 +187,9 @@ test('the list, a row and the way back are keyboard-reachable and identifiable',
   await page.keyboard.press('Tab');
   await expect(page.getByRole('combobox', { name: 'Evidence revision' })).toBeFocused();
   await expect(page.locator('app-evidence-panel app-copy-value-button button')).toHaveCount(0);
-  await tabThroughRunControls(page, page.locator('app-run-header').last(), 4);
-  await tabThroughRunControls(page, page.locator('app-manifest-panel'), 3);
+  const manifest = page.locator('app-manifest-panel details');
+  await enterRunDetails(page, manifest);
+  await tabThroughRunControls(page, manifest, 3);
   const copy = page.getByRole('button', { name: 'Copy full manifest hash' });
   expect((await copy.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
   const release = page.locator('app-release-panel');
@@ -334,8 +340,8 @@ test('the narrow server pages keep every fact reachable and preserve focus on a 
   await listIsReady(page);
   const records = page.locator(RUN_RECORDS);
   await expect(records).toHaveCount(20);
-  await expect(records.first().locator('dt')).toHaveCount(7);
-  await expect(records.first().locator('dd')).toHaveCount(7);
+  await expect(records.first().locator('dt')).toHaveCount(6);
+  await expect(records.first().locator('dd')).toHaveCount(6);
   await expect(page.locator('app-run-list-table .scroll[tabindex="0"]')).toHaveCount(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(800);
   await enterMain(page);
@@ -367,8 +373,15 @@ test('the narrow server pages keep every fact reachable and preserve focus on a 
   const lastId = await records.last().getAttribute('data-row-id');
   const lastView = records.last().getByRole('button', { name: `View ${lastId}`, exact: true });
   await expect(lastView).toBeFocused();
+  await page.keyboard.press('Enter');
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.locator('dd bdi').first()).toHaveText(lastId!);
+  await page.keyboard.press('Tab');
+  await expect(dialog.getByRole('button', { name: 'Copy Run ID' })).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(lastView).toBeFocused();
   await page.keyboard.press('Shift+Tab');
-  await expect(records.last().locator('app-copy-value-button button')).toBeFocused();
+  await expect(records.last().getByRole('link')).toBeFocused();
   await expect(records.last()).toBeInViewport();
   await expectNoA11yViolations(page, 'run list, 250 labelled records');
 });
@@ -427,7 +440,7 @@ test('Next replaces the page and retains its keyboard focus while busy and at th
   }
   await tabThroughTableScroller(page, page.locator('app-run-list-table'));
   for (let row = 0; row < FULL_PAGE_ROWS; row++) {
-    await tabThroughRunControls(page, rows.nth(row), 1, true);
+    await tabThroughRunControls(page, rows.nth(row), 0, true);
   }
   const pager = page.locator('app-data-table-pager');
   const previous = pager.getByRole('button', { name: 'Previous page', exact: true });
@@ -469,7 +482,7 @@ test('Next replaces the page and retains its keyboard focus while busy and at th
 });
 
 test('Next preserves pager focus in fitted tablet records', async ({ page }) => {
-  await page.setViewportSize({ width: 900, height: 900 });
+  await page.setViewportSize({ width: 768, height: 900 });
   await page.goto(listAddress('?fixture.variant.listRuns=paging-33&fixture.latency=1000'));
   await listIsReady(page);
   const rows = page.locator(RUN_RECORDS);

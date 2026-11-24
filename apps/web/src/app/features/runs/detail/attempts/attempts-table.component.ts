@@ -11,11 +11,12 @@ import {
   LOCALE_ID,
   output,
   untracked,
+  TemplateRef,
   viewChild,
 } from '@angular/core';
 import { HlmAlert } from '@evidgate/ui/alert';
 import { HlmCard, HlmCardTitle } from '@evidgate/ui/card';
-import { HlmTableImports } from '@evidgate/ui/table';
+import { DataTableComponent } from '../../../../shared/ui/data-table/data-table.component';
 import type { ApiError } from '../../../../core/http/api-error';
 import {
   StatusPillComponent,
@@ -26,7 +27,10 @@ import { ErrorPatternComponent } from '../../../../shared/ui/states/error-patter
 import { LoadingPatternComponent } from '../../../../shared/ui/states/loading-pattern.component';
 import { CopyValueButtonComponent } from '../../../../shared/ui/values/copy-value-button.component';
 import { DataTableValueComponent } from '../../../../shared/ui/data-table/data-table-value.component';
-import type { DataTableColumnWidth } from '../../../../shared/ui/data-table/data-table-column';
+import type {
+  DataTableCellContext,
+  DataTableColumn,
+} from '../../../../shared/ui/data-table/data-table-column';
 import { NumberValueComponent } from '../../../../shared/ui/values/number-value.component';
 import { escapeFormatChars } from '../../../../shared/ui/values/ref-name-display';
 import { attemptAnchorId } from '../evidence/run-evidence-anchors';
@@ -34,6 +38,13 @@ import { RUN_DETAIL_NOT_PROVIDED, runValueLabel } from '../run-value-label';
 import { groupAttempts } from './attempt-groups';
 import { DataTablePagerComponent } from '../../../../shared/ui/data-table/data-table-pager.component';
 import type { AttemptRow } from './attempt-summary';
+
+interface AttemptEntry {
+  readonly attempt: AttemptRow;
+  readonly anchor: string;
+  readonly preHealing: boolean;
+}
+type AttemptCell = TemplateRef<DataTableCellContext<AttemptEntry>>;
 
 @Component({
   selector: 'app-attempts-table',
@@ -46,7 +57,7 @@ import type { AttemptRow } from './attempt-summary';
     DataTablePagerComponent,
     HlmCard,
     HlmCardTitle,
-    HlmTableImports,
+    DataTableComponent,
     CopyValueButtonComponent,
     DataTableValueComponent,
     NumberValueComponent,
@@ -63,18 +74,6 @@ export class AttemptsTableComponent {
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   readonly attempts = input.required<AttemptRow[] | null>();
   protected readonly sectionSize = 'section' as const;
-  protected readonly columnRole = {
-    identity: 'identity',
-    text: 'text',
-    status: 'status',
-    number: 'number',
-  } as const;
-  protected readonly identifierKind = 'identifier' as const;
-  protected readonly primaryColumn = 'primary' as const;
-  protected readonly scanOverflow = 'truncate' as const;
-  protected readonly normalisedWidth = {
-    min: 'calc(14ch + var(--eg-space-4) * 2)',
-  } as const satisfies DataTableColumnWidth;
   /** The first page's request state; `ready` with `null` attempts is the unavailable state. */
   readonly status = input<'loading' | 'ready' | 'error'>('ready');
   /** The first page's failure (`status` = error) or the failed follow-up page (`ready`). */
@@ -94,9 +93,61 @@ export class AttemptsTableComponent {
   );
   protected readonly display = escapeFormatChars;
   protected readonly valueLabel = runValueLabel;
-  /** Deep-link target identity (`#attempt-<execution_key>-<n>`), shared with the reason links. */
-  protected readonly attemptAnchorId = attemptAnchorId;
-  protected readonly visibleGroups = computed(() => groupAttempts(this.attempts() ?? []));
+  protected readonly orderedRows = computed(() =>
+    groupAttempts(this.attempts() ?? []).flatMap((group) =>
+      group.attempts.map((attempt) => ({
+        attempt,
+        anchor: attemptAnchorId(attempt.executionKey, attempt.attemptNo),
+        preHealing: attempt === group.preHealingFailure,
+      })),
+    ),
+  );
+  protected readonly rowId = (entry: AttemptEntry) => entry.anchor;
+  private readonly identityCell = viewChild.required<AttemptCell>('identityCell');
+  private readonly rawCell = viewChild.required<AttemptCell>('rawCell');
+  private readonly statusCell = viewChild.required<AttemptCell>('statusCell');
+  private readonly durationCell = viewChild.required<AttemptCell>('durationCell');
+  private readonly artifactCell = viewChild.required<AttemptCell>('artifactCell');
+  protected readonly columns = computed<readonly DataTableColumn<AttemptEntry>[]>(() => [
+    {
+      id: 'execution',
+      header: this.copy.execution,
+      role: 'identity',
+      kind: 'identifier',
+      cell: (row) => row.attempt.executionKey,
+      cellTemplate: this.identityCell(),
+    },
+    {
+      id: 'raw',
+      header: this.copy.raw,
+      role: 'text',
+      priority: 'primary',
+      cell: (row) => row.attempt.rawStatus,
+      cellTemplate: this.rawCell(),
+    },
+    {
+      id: 'status',
+      header: this.copy.normalised,
+      role: 'status',
+      width: { min: 'calc(14ch + var(--eg-space-4) * 2)' },
+      cell: (row) => row.attempt.normalisedStatus,
+      cellTemplate: this.statusCell(),
+    },
+    {
+      id: 'duration',
+      header: this.copy.duration,
+      role: 'number',
+      cell: (row) => this.duration(row.attempt.durationMs) ?? this.copy.notProvided,
+      cellTemplate: this.durationCell(),
+    },
+    {
+      id: 'artifacts',
+      header: this.copy.artifacts,
+      role: 'number',
+      cell: (row) => row.attempt.artifactCount ?? this.copy.notProvided,
+      cellTemplate: this.artifactCell(),
+    },
+  ]);
   protected readonly copy = {
     title: $localize`:@@runs.detail.attempts.title:Attempts`,
     scrollRegion: $localize`:@@runs.detail.attempts.scroll-region:Attempts table`,

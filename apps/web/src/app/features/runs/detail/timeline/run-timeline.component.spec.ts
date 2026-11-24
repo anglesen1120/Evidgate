@@ -46,10 +46,10 @@ describe('RunTimelineComponent', () => {
     expect(section?.getAttribute('aria-labelledby')).toBe('run-timeline-title');
     expect(root.querySelector('ol')?.getAttribute('aria-labelledby')).toBe('run-timeline-title');
     expect(root.querySelector('#run-timeline-title')?.textContent).toBe('Run state timeline');
-    expect(root.querySelectorAll('ol > li')).toHaveLength(5);
+    expect(root.querySelectorAll('ol > li')).toHaveLength(3);
     expect(root.querySelectorAll('[aria-current="step"]')).toHaveLength(1);
     expect(root.querySelector('[aria-current="step"]')?.getAttribute('data-step')).toBe('running');
-    expect(stepStatus(root, 'created')).toContain('Inferred from current state');
+    expect(root.querySelector('[data-step="created"]')).toBeNull();
     expect(stepStatus(root, 'running')).toContain('Current step');
     expect(stepStatus(root, 'collecting')).toContain('Not reached yet');
     expect(stepStatus(root, 'complete')).toContain('Not reached yet');
@@ -77,10 +77,10 @@ describe('RunTimelineComponent', () => {
     },
   );
 
-  it('labels earlier main-path steps as inferred rather than recorded for a legacy run', async () => {
+  it('omits inferred historical steps instead of presenting them as recorded facts', async () => {
     const { root } = await render('collecting');
     for (const state of ['created', 'queued', 'running'] as const) {
-      expect(stepStatus(root, state)).toContain('Inferred from current state');
+      expect(root.querySelector(`[data-step="${state}"]`)).toBeNull();
     }
     expect(stepStatus(root, 'complete')).toContain('Not reached yet');
   });
@@ -89,14 +89,13 @@ describe('RunTimelineComponent', () => {
     const { root } = await render('incomplete');
     const rows = [...root.querySelectorAll('ol > li')];
     expect(rows.map((row) => row.getAttribute('data-step'))).toEqual([
-      'created',
       'queued',
       'running',
       'collecting',
       'complete',
       'incomplete',
     ]);
-    expect(stepStatus(root, 'created')).toContain('Inferred from current state');
+    expect(root.querySelector('[data-step="created"]')).toBeNull();
     // The deadline can close the run straight from queued or running, so no intermediate step is
     // claimed as served.
     for (const state of ['queued', 'running', 'collecting'] as const) {
@@ -117,7 +116,7 @@ describe('RunTimelineComponent', () => {
     expect(completeStatus).not.toContain('Reached');
     expect(completeStatus).not.toContain('Complete');
     expect(root.querySelector('[aria-current="step"]')?.getAttribute('data-step')).toBe('canceled');
-    expect(stepStatus(root, 'created')).toContain('Inferred from current state');
+    expect(root.querySelector('[data-step="created"]')).toBeNull();
     expect(stepStatus(root, 'running')).toContain('Not recorded');
   });
 
@@ -207,7 +206,7 @@ describe('RunTimelineComponent', () => {
     expect(root.querySelector('[data-step="queued"] time')).toBeNull();
     expect(root.querySelector('[data-step-times]')).toBeNull();
     expect(stepStatus(root, 'queued').trim()).toBe('Reached');
-    expect(stepStatus(root, 'created')).toContain('Inferred from current state');
+    expect(root.querySelector('[data-step="created"]')).toBeNull();
     expect(stepStatus(root, 'running').trim()).toBe('Reached');
   });
 

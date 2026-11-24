@@ -73,17 +73,17 @@ describe('RunListTableComponent', { timeout: 15_000 }, () => {
     expect(root.querySelectorAll('table[data-slot="table"][role="presentation"]')).toHaveLength(1);
     expect(root.querySelector('[data-run-row] a')).not.toBeNull();
     expect(root.querySelector('[data-run-decision] [hlmBadge]')).not.toBeNull();
-    expect(root.querySelector('[data-run-rerun] [hlmBadge]')).not.toBeNull();
+    expect(root.querySelector('[data-run-rerun] [hlmBadge]')).toBeNull();
     expect(root.querySelector('.eg-table-layout')).not.toBeNull();
   });
-  it('budgets all seven desktop facts while retaining complete identifier provenance', async () => {
+  it('budgets six desktop columns with a flexible human-readable subject', async () => {
     const { fixture, root } = await render([run(1)]);
     const table = fixture.debugElement
       .query(By.directive(DataTableComponent))
       .injector.get(DataTableComponent);
     expect(table.fitToContainer()).toBe(true);
     const minimums = {
-      id: 'calc(17ch + var(--eg-control-touch) + var(--eg-space-4) * 2 + var(--eg-space-2))',
+      id: 'calc(16ch + var(--eg-space-4) * 2)',
       state: 'calc(12ch + var(--eg-space-4) * 2)',
       evidence: 'calc(14ch + var(--eg-space-4) * 2)',
       decision: 'calc(15ch + var(--eg-space-4) * 2)',
@@ -98,16 +98,16 @@ describe('RunListTableComponent', { timeout: 15_000 }, () => {
         expect(cell.style.getPropertyValue('min-inline-size')).toBe(minimum);
       }
     }
-    expect(root.querySelector<HTMLElement>('th.cdk-column-id')?.style.inlineSize).toBe('1%');
+    expect(root.querySelector<HTMLElement>('th.cdk-column-id')?.style.inlineSize).toBe('auto');
     expect(root.querySelector<HTMLElement>('th.cdk-column-scope')?.style.inlineSize).toBe(
       'max-content',
     );
-    expect(root.querySelectorAll('[role="columnheader"]')).toHaveLength(7);
+    expect(root.querySelectorAll('[role="columnheader"]')).toHaveLength(6);
     expect(
       root.querySelector('[data-run-row] [data-run-created] time')?.getAttribute('datetime'),
     ).toBe(run(1).created_at);
     const identity = root.querySelector('[data-run-row] a');
-    expect(identity?.querySelector('span')?.textContent?.trim()).toBe('018f0000…00000001');
+    expect(identity?.querySelector('bdi')?.textContent?.trim()).toBe('main');
     expect(identity?.textContent).toContain(run(1).run_id);
   });
   it('keeps the empty table verdict-free with only the header row counted', async () => {
@@ -122,13 +122,14 @@ describe('RunListTableComponent', { timeout: 15_000 }, () => {
     const link = root.querySelector<HTMLAnchorElement>('.identifier a')!;
     expect(link.getAttribute('href')).toBe(`/${run(1).run_id}?state=complete&ref=main`);
     expect(root.querySelectorAll('a[href]')).toHaveLength(1);
-    const preview = link.querySelector('span')?.textContent?.trim();
-    expect(preview).toContain(run(1).run_id.slice(0, 8));
+    expect(link.querySelector('bdi')?.textContent?.trim()).toBe('main');
     expect(link.getAttribute('aria-label')).toBeNull();
-    expect(link.querySelector('time')?.getAttribute('datetime')).toBe(run(1).created_at);
+    expect(link.parentElement?.querySelector('time')?.getAttribute('datetime')).toBe(
+      run(1).created_at,
+    );
     expect(link.textContent?.trim().endsWith(`(${run(1).run_id})`)).toBe(true);
-    expect(link.classList.contains('whitespace-nowrap')).toBe(true);
-    expect(link.closest('.identifier')?.classList.contains('min-w-max')).toBe(true);
+    expect(link.querySelector('bdi')?.classList.contains('truncate')).toBe(true);
+    expect(link.closest('.identifier')?.classList.contains('min-w-0')).toBe(true);
   });
   it('opens the selected run in place and returns focus to View without changing the filter', async () => {
     const router = TestBed.inject(Router);
@@ -144,7 +145,7 @@ describe('RunListTableComponent', { timeout: 15_000 }, () => {
     const dialog = await table.dialog();
     expect(await dialog.text()).toContain(run(3).run_id);
     expect(await dialog.text()).toContain('FAIL');
-    expect(await table.fields()).toHaveLength(6);
+    expect(await table.fields()).toHaveLength(7);
     expect(router.url).toBe('/?state=complete&pageSize=50&cursor=opaque-page');
     await (await table.close()).click();
     expect(await view.isFocused()).toBe(true);
@@ -194,7 +195,7 @@ describe('RunListTableComponent', { timeout: 15_000 }, () => {
   it('keeps collection state, evidence unavailable and stored decisions independent; no outcome column', async () => {
     const unavailable = run(5);
     delete unavailable.decision;
-    const { root } = await render([
+    const { root, fixture } = await render([
       run(1, { decision: 'PASS' }),
       run(2, { state: 'incomplete', decision: 'FAIL' }),
       run(3, { decision: 'INCONCLUSIVE' }),
@@ -203,15 +204,7 @@ describe('RunListTableComponent', { timeout: 15_000 }, () => {
     ]);
     expect(
       [...root.querySelectorAll('[role="columnheader"]')].map((cell) => cell.textContent?.trim()),
-    ).toEqual([
-      'Run (oldest first)',
-      'State',
-      'Evidence',
-      'Decision',
-      'Ref',
-      'Run scope',
-      'Actions',
-    ]);
+    ).toEqual(['Run (oldest first)', 'Decision', 'State', 'Evidence', 'Run scope', 'Actions']);
     expect(root.querySelector('th.cdk-column-id button')).toBeNull();
     expect(root.querySelectorAll('[data-run-evidence] .status-pill--neutral')).toHaveLength(5);
     expect(root.querySelector('[data-run-evidence] .status-pill--success')).toBeNull();
@@ -241,6 +234,11 @@ describe('RunListTableComponent', { timeout: 15_000 }, () => {
     );
     expect(root.querySelector('[data-run-decision] [hlmBadge] .verdict__detail')).toBeNull();
     expect(root.querySelector('[data-run-decision] [title]')).toBeNull();
+    const table = await TestbedHarnessEnvironment.harnessForFixture(fixture, RunInspectionHarness);
+    await (await table.viewFor(unavailable.run_id)).click();
+    expect(await (await table.dialog()).text()).toContain(
+      'The decision could not be read. Try again.',
+    );
   });
   it('keeps dense state and evidence labels short with the explanation outside the badge', async () => {
     const { root } = await render([run(1)]);
@@ -279,7 +277,7 @@ describe('RunListTableComponent', { timeout: 15_000 }, () => {
     );
     expect(root.querySelector('time')?.getAttribute('datetime')).toBe(instant);
   });
-  it('uses primary/secondary column roles and renders all seven facts as shared narrow records', async () => {
+  it('uses primary/secondary column roles and renders six facts as shared narrow records', async () => {
     const { fixture, root } = await render([
       run(1, {
         rerun_label: 'retry-'.repeat(80),
@@ -292,25 +290,24 @@ describe('RunListTableComponent', { timeout: 15_000 }, () => {
       'status',
       'status',
       'status',
-      'identity',
       'text',
       'actions',
     ]);
     expect(headers[0]?.getAttribute('data-column-priority')).toBe('primary');
-    expect(headers[4]?.getAttribute('data-column-kind')).toBe('branch');
+    expect(headers[0]?.getAttribute('data-column-kind')).toBe('branch');
     fixture.debugElement
       .query(By.directive(DataTableComponent))
       .injector.get(DataTableComponent)
       .narrow.set(true);
     await fixture.whenStable();
     const record = root.querySelector('.eg-table-record');
-    expect(record?.querySelectorAll('dt')).toHaveLength(7);
-    expect(record?.querySelectorAll('dd')).toHaveLength(7);
+    expect(record?.querySelectorAll('dt')).toHaveLength(6);
+    expect(record?.querySelectorAll('dd')).toHaveLength(6);
     expect(record?.querySelector('[data-run-created] time')?.getAttribute('datetime')).toBe(
       run(1).created_at,
     );
-    expect(record?.querySelector('a')?.textContent).toBe(run(1).run_id);
-    expect(record?.querySelector('a')?.getAttribute('aria-label')).toBe(run(1).run_id);
+    expect(record?.querySelector('a bdi')?.textContent).toBe('main');
+    expect(record?.querySelector('a')?.getAttribute('href')).toBe(`/${run(1).run_id}`);
     expect(record?.querySelector('a')?.classList.contains('whitespace-nowrap')).toBe(false);
     expect(record?.querySelector('.identifier')?.classList.contains('min-w-max')).toBe(false);
     expect(record?.querySelector('.identifier')?.classList.contains('min-w-0')).toBe(true);
@@ -326,7 +323,7 @@ describe('RunListTableComponent', { timeout: 15_000 }, () => {
       run(1, { ref: { ...row.ref, name: special }, unverified_ref: true }),
       run(2),
     ]);
-    const ref = root.querySelector('.ref-cell bdi')!;
+    const ref = root.querySelector('[data-run-row] a bdi')!;
     expect(ref.textContent).toContain('release/việt⟨U+202E⟩⟨U+200D⟩<script>');
     expect(ref.textContent).not.toContain('\u202e');
     expect(root.querySelector('script')).toBeNull();
@@ -338,16 +335,14 @@ describe('RunListTableComponent', { timeout: 15_000 }, () => {
         ?.getAttribute('data-row-id'),
     ).toBe(row.run_id);
   });
-  it('renders a missing ref as body-font placeholder text and keeps real refs monospaced', async () => {
+  it('uses an absolute UTC subject instead of an absent ref and keeps real refs monospaced', async () => {
     const row = run(1);
     const { root } = await render([run(1), run(2, { ref: { ...row.ref, name: null } })]);
-    const refs = [...root.querySelectorAll('.ref-cell > bdi')];
-    const missing = refs.filter((ref) => ref.textContent?.includes('Ref unavailable'));
-    const real = refs.filter((ref) => ref.textContent?.includes('main'));
-    expect(missing.length).toBeGreaterThan(0);
-    expect(real.length).toBeGreaterThan(0);
-    expect(missing.every((ref) => !ref.classList.contains('font-mono'))).toBe(true);
-    expect(real.every((ref) => ref.classList.contains('font-mono'))).toBe(true);
+    const subjects = root.querySelectorAll('[data-run-row] a');
+    expect(subjects[0]?.querySelector('bdi.font-mono')?.textContent).toBe('main');
+    expect(subjects[1]?.querySelector('time')?.getAttribute('datetime')).toBe(row.created_at);
+    expect(subjects[1]?.textContent).toContain('UTC');
+    expect(subjects[1]?.querySelector('.font-mono')).toBeNull();
   });
   it('escapes and isolates format characters in rerun and reprocess labels', async () => {
     const { root } = await render([
@@ -392,14 +387,16 @@ describe('RunListTableComponent', { timeout: 15_000 }, () => {
     expect(root.textContent).toContain('Original run');
     expect(root.textContent).toContain('Derived run');
   });
-  it('renders missing refs with explicit unavailable copy and long refs through the shared overflow renderer', async () => {
+  it('retains the missing-ref explanation in View and the full long ref in the subject', async () => {
     const first = run(1);
     const name = 'feature/' + 'long-ref-'.repeat(60);
-    const { root } = await render([
+    const { fixture, root } = await render([
       run(1, { ref: { ...first.ref, name: null } }),
       run(2, { ref: { ...first.ref, name } }),
     ]);
-    expect(root.textContent).toContain('Ref unavailable');
+    const table = await TestbedHarnessEnvironment.harnessForFixture(fixture, RunInspectionHarness);
+    await (await table.viewFor(first.run_id)).click();
+    expect(await (await table.dialog()).text()).toContain('Ref unavailable');
     expect(root.textContent).toContain(name);
   });
   it.each([200, 201, 250])(
@@ -439,12 +436,23 @@ describe('RunListTableComponent', { timeout: 15_000 }, () => {
       }
     },
   );
-  it('copies the original full id rather than the shortened link preview', async () => {
+  it('copies the original full id from the named icon action in View', async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     vi.stubGlobal('navigator', { clipboard: { writeText } });
     try {
-      const { fixture, root } = await render([run(1)]);
-      root.querySelector<HTMLButtonElement>('[data-run-row] app-copy-value-button button')?.click();
+      const { fixture } = await render([run(1)]);
+      const table = await TestbedHarnessEnvironment.harnessForFixture(
+        fixture,
+        RunInspectionHarness,
+      );
+      await (await table.viewFor(run(1).run_id)).click();
+      const copy = document.querySelector<HTMLButtonElement>(
+        '[role="dialog"] app-copy-value-button button',
+      )!;
+      expect(copy.getAttribute('aria-label')).toBe('Copy Run id');
+      expect(copy.title).toBe(copy.getAttribute('aria-label'));
+      expect(copy.querySelector('hlm-icon')).not.toBeNull();
+      copy.click();
       await fixture.whenStable();
       expect(writeText).toHaveBeenCalledWith(run(1).run_id);
     } finally {

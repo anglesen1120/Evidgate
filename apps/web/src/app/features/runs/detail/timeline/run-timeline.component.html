@@ -22,16 +22,7 @@
         <app-status-pill
           data-step-status
           [tone]="stepTone(step.status, step.state)"
-          [label]="
-            step.status === 'reached' && (stateHistory() === null || step.state === 'created')
-              ? copy.inferredShort
-              : statusLabel(step.status)
-          "
-          [detail]="
-            step.status === 'reached' && (stateHistory() === null || step.state === 'created')
-              ? copy.inferred
-              : ''
-          "
+          [label]="statusLabel(step.status)"
         />
         @if (step.at; as at) {
           <span

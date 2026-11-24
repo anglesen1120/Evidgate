@@ -48,7 +48,13 @@ export class RunTimelineComponent {
   readonly afterCancelEvents = input<number | null>(null);
   protected readonly sectionSize = 'section' as const;
 
-  protected readonly steps = computed(() => runTimelineSteps(this.state(), this.stateHistory()));
+  // With no recorded arrival, a historical step is not an observed event.
+  protected readonly steps = computed(() =>
+    runTimelineSteps(this.state(), this.stateHistory()).filter(
+      (step) =>
+        step.status !== 'reached' || (step.state !== 'created' && this.stateHistory() !== null),
+    ),
+  );
   protected readonly canceled = computed(() => this.state() === 'canceled');
 
   // Same custom ids as the shared run-state pill so both surfaces share one translation.
@@ -72,8 +78,6 @@ export class RunTimelineComponent {
 
   protected readonly copy = {
     title: $localize`:@@runs.detail.timeline:Run state timeline`,
-    inferred: $localize`:@@runs.detail.timeline.inferred:Inferred from current state`,
-    inferredShort: $localize`:@@runs.detail.timeline.inferred-short:Inferred`,
     notProvided: RUN_DETAIL_NOT_PROVIDED,
     historyUnavailable: $localize`:@@runs.detail.timeline.history-unavailable:History unavailable for this run`,
     historyEmpty: $localize`:@@runs.detail.timeline.history-empty:No state changes recorded yet`,

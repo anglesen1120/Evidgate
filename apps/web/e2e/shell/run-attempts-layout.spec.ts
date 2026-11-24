@@ -3,11 +3,13 @@ import attemptsFixture from '../../../../fixtures/web-api/run-attempts/input.jso
 import { runDetailPath } from './run-detail.support';
 import { seedStoredTheme, type ShellLocale } from './support';
 
-// The attempts table stacks up to and including 767 px and keeps its columns from 768 px. Both
-// neighbouring widths are covered because the strict max-width utility stops at 766 px, which
-// used to leave a 767 px viewport with a visible header row above stacked records.
+// The shared data table stacks from its own container width, not the viewport: it switches to
+// labelled records below 768 px of container width, or when its columns do not fit. The mode is
+// therefore read from the rendered DOM (see renderedStacked). Both neighbouring widths are still
+// covered because the strict max-width utility stopped at 766 px in the past.
 const WIDTHS = [390, 766, 767, 768] as const;
-const STACKED_MAX = 767;
+const RECORD = '.eg-table-record[data-row-id]';
+const DESKTOP_ROW = 'tr[data-row-id]';
 
 /** A measured rectangle, in CSS pixels, relative to the viewport. */
 interface Box {
@@ -19,12 +21,7 @@ interface Box {
 
 /** Everything the browser answers about one attempts record at the current viewport width. */
 interface AttemptLayout {
-  tableDisplay: string;
-  headPosition: string;
-  head: Box;
-  bodyDisplay: string;
-  rowDisplay: string;
-  fieldDisplays: string[];
+  head: Box | null;
   labelDisplays: string[];
   fieldBoxes: Box[];
   recordInnerWidth: number;
@@ -33,40 +30,30 @@ interface AttemptLayout {
   headerWordsFit: boolean;
   /** Horizontal overflow of the scroll container, 0 when the layout fits its column. */
   containerOverflow: number;
-  /** Distance from the table's top to the first record: the header is out of flow when stacked. */
+  /** Distance from the top of the table or record list to its first data row. */
   firstRecordOffset: number;
 }
 
-async function attemptLayout(page: Page): Promise<AttemptLayout> {
-  return page.locator('app-attempts-table').evaluate((host): AttemptLayout => {
-    const table = host.querySelector('table');
-    const head = host.querySelector('thead');
-    const body = host.querySelector('tbody');
-    const record = host.querySelector('[data-attempt-row]');
-    const container = host.querySelector('.table-scroll');
-    if (
-      !(table instanceof HTMLElement) ||
-      !(head instanceof HTMLElement) ||
-      !(body instanceof HTMLElement) ||
-      !(record instanceof HTMLElement) ||
-      !(container instanceof HTMLElement)
-    ) {
-      throw new Error(
-        'Attempts table, header, body, first record and scroll container are required',
-      );
-    }
+async function attemptLayout(page: Page, stacked: boolean): Promise<AttemptLayout> {
+  const host = page.locator('app-attempts-table');
+  const first = host.locator(stacked ? RECORD : DESKTOP_ROW).first();
+  await expect(first).toBeVisible();
+  const identity = first.locator('[data-attempt-row]');
+  const rowId = await first.getAttribute('data-row-id');
+  expect(rowId).toMatch(/^attempt-/);
+  await expect(identity).toHaveAttribute('id', rowId!);
+  await expect(identity).toHaveAttribute('tabindex', '-1');
+  return first.evaluate((record, stacked): AttemptLayout => {
+    const container = record.closest('.scroll')!;
+    const tableOrList = record.closest(stacked ? 'ol' : 'table')!;
+    const head = container.querySelector('thead');
     const box = (target: Element): Box => {
       const rect = target.getBoundingClientRect();
       return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
     };
-    const fields = [...record.querySelectorAll<HTMLElement>('[role="rowheader"], [role="cell"]')];
-    const label = (field: HTMLElement): HTMLElement => {
-      const found = field.querySelector('[aria-hidden="true"]');
-      if (!(found instanceof HTMLElement)) {
-        throw new Error('Every stacked field carries its own label');
-      }
-      return found;
-    };
+    const fields = [
+      ...record.querySelectorAll<HTMLElement>(stacked ? ':scope > dl > div' : ':scope > td'),
+    ];
     const recordStyle = getComputedStyle(record);
     const wordFits = (element: Element): boolean => {
       const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
@@ -81,13 +68,10 @@ async function attemptLayout(page: Page): Promise<AttemptLayout> {
       return true;
     };
     return {
-      tableDisplay: getComputedStyle(table).display,
-      headPosition: getComputedStyle(head).position,
-      head: box(head),
-      bodyDisplay: getComputedStyle(body).display,
-      rowDisplay: getComputedStyle(record).display,
-      fieldDisplays: fields.map((field) => getComputedStyle(field).display),
-      labelDisplays: fields.map((field) => getComputedStyle(label(field)).display),
+      head: head && box(head),
+      labelDisplays: [...record.querySelectorAll('dt')].map(
+        (label) => getComputedStyle(label).display,
+      ),
       fieldBoxes: fields.map(box),
       recordInnerWidth:
         record.clientWidth -
@@ -95,11 +79,30 @@ async function attemptLayout(page: Page): Promise<AttemptLayout> {
         Number.parseFloat(recordStyle.paddingRight),
       fieldContentOverflow: fields.map((field) => field.scrollHeight - field.clientHeight),
       fieldMinimums: fields.map((field) => getComputedStyle(field).minInlineSize),
-      headerWordsFit: [...head.querySelectorAll('th')].every(wordFits),
+      headerWordsFit: [...container.querySelectorAll('th')].every(wordFits),
       containerOverflow: container.scrollWidth - container.clientWidth,
-      firstRecordOffset: box(record).y - box(table).y,
+      firstRecordOffset: box(record).y - box(tableOrList).y,
     };
-  });
+  }, stacked);
+}
+
+/**
+ * Reads which layout the shared data table rendered at the current viewport. The table stacks from
+ * its own container width, so the mode is read from the DOM after two frames. A desktop table needs
+ * a container of at least 768 px; a narrower container must render labelled records.
+ */
+async function renderedStacked(page: Page): Promise<boolean> {
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+      ),
+  );
+  const table = page.locator('app-attempts-table');
+  const stacked = (await table.locator(RECORD).count()) > 0;
+  const containerWidth = await table.evaluate((host) => host.clientWidth);
+  expect(stacked || containerWidth >= 768, `a ${containerWidth}px container must stack`).toBe(true);
+  return stacked;
 }
 
 async function openAttempts(page: Page, locale: ShellLocale = 'en'): Promise<void> {
@@ -120,21 +123,14 @@ for (const { width, locale } of WIDTHS.flatMap((width) =>
     await seedStoredTheme(page, 'light');
     await page.setViewportSize({ width, height: 900 });
     await openAttempts(page, locale);
-    const layout = await attemptLayout(page);
-    expect(layout.fieldDisplays).toHaveLength(5);
-    expect(layout.labelDisplays).toHaveLength(5);
+    const stacked = await renderedStacked(page);
+    const layout = await attemptLayout(page, stacked);
+    expect(layout.fieldBoxes).toHaveLength(5);
     expect(layout.containerOverflow, JSON.stringify(layout)).toBeLessThanOrEqual(1);
     const distinct = (values: number[]): number => new Set(values.map(Math.round)).size;
-    if (width <= STACKED_MAX) {
-      // One layout per width: the record header leaves the flow, every field stacks and the
-      // header row's own labels are on screen, so a visible header above the stack is a failure.
-      expect.soft(layout.tableDisplay).toBe('block');
-      expect.soft(layout.headPosition).toBe('absolute');
-      expect.soft(layout.head.width, JSON.stringify(layout)).toBeLessThanOrEqual(1);
-      expect.soft(layout.head.height, JSON.stringify(layout)).toBeLessThanOrEqual(1);
-      expect.soft(layout.bodyDisplay).toBe('block');
-      expect.soft(layout.rowDisplay).toBe('block');
-      expect.soft(layout.fieldDisplays).toEqual(Array(5).fill('block'));
+    if (stacked) {
+      // The ordered list replaces the table entirely; each value now has a visible term.
+      expect.soft(layout.head).toBeNull();
       expect.soft(layout.labelDisplays).toEqual(Array(5).fill('block'));
       expect.soft(layout.firstRecordOffset, JSON.stringify(layout)).toBeLessThanOrEqual(2);
       expect.soft(distinct(layout.fieldBoxes.map((field) => field.x))).toBe(1);
@@ -155,13 +151,8 @@ for (const { width, locale } of WIDTHS.flatMap((width) =>
           .toBeLessThanOrEqual(layout.fieldBoxes[index]!.y + 1);
       }
     } else {
-      expect.soft(layout.tableDisplay).toBe('table');
-      expect.soft(layout.headPosition).toBe('static');
-      expect.soft(layout.head.height, JSON.stringify(layout)).toBeGreaterThan(20);
-      expect.soft(layout.bodyDisplay).toBe('table-row-group');
-      expect.soft(layout.rowDisplay).toBe('table-row');
-      expect.soft(layout.fieldDisplays).toEqual(Array(5).fill('table-cell'));
-      expect.soft(layout.labelDisplays).toEqual(Array(5).fill('none'));
+      expect.soft(layout.head?.height, JSON.stringify(layout)).toBeGreaterThan(20);
+      expect.soft(layout.labelDisplays).toEqual([]);
       expect.soft(layout.firstRecordOffset, JSON.stringify(layout)).toBeGreaterThan(2);
       expect.soft(distinct(layout.fieldBoxes.map((field) => field.y))).toBe(1);
       expect.soft(distinct(layout.fieldBoxes.map((field) => field.x))).toBe(5);
@@ -171,22 +162,21 @@ for (const { width, locale } of WIDTHS.flatMap((width) =>
 }
 
 for (const locale of ['en', 'vi'] as const) {
-  test(`attempts keep stacked blocks below 768px and align only desktop cells (${locale})`, async ({
+  test(`attempts stack facts in a narrow container and align desktop cells (${locale})`, async ({
     page,
   }) => {
     await page.setViewportSize({ width: 767, height: 900 });
     await openAttempts(page, locale);
-    const row = page.locator('app-attempts-table [data-attempt-row]').first();
-    const fields = row.locator('[role="rowheader"], [role="cell"]');
-    const headers = page.locator('app-attempts-table thead [role="columnheader"]');
-    await expect(fields).toHaveCount(5);
-    await expect(headers).toHaveCount(5);
-    for (const width of [767, 768, 767]) {
+    const table = page.locator('app-attempts-table');
+    for (const width of [767, 1440, 768]) {
       await page.setViewportSize({ width, height: 900 });
-      const stacked = width < 768;
-      await expect(row).toHaveCSS('display', stacked ? 'block' : 'table-row');
+      const stacked = await renderedStacked(page);
+      const row = table.locator(stacked ? RECORD : DESKTOP_ROW).first();
+      const fields = row.locator(stacked ? ':scope > dl > div' : ':scope > td');
+      const headers = table.getByRole('columnheader');
+      await expect(fields).toHaveCount(5);
+      await expect(headers).toHaveCount(stacked ? 0 : 5);
       for (const field of await fields.all()) {
-        // Vertical alignment must not turn a stacked field back into a table cell.
         await expect(field).toHaveCSS('display', stacked ? 'block' : 'table-cell');
         if (!stacked) await expect(field).toHaveCSS('vertical-align', 'middle');
       }
@@ -205,19 +195,49 @@ for (const locale of ['en', 'vi'] as const) {
   });
 }
 
-test('attempts layout flips between 767px and 768px on resize', async ({ page }) => {
+test('attempts switch between labelled records and table rows on resize', async ({ page }) => {
   await seedStoredTheme(page, 'light');
-  await page.setViewportSize({ width: STACKED_MAX, height: 900 });
+  await page.setViewportSize({ width: 767, height: 900 });
   await openAttempts(page);
-  await expect.poll(async () => (await attemptLayout(page)).rowDisplay).toBe('block');
-  expect((await attemptLayout(page)).labelDisplays).toEqual(Array(5).fill('block'));
-  await page.setViewportSize({ width: STACKED_MAX + 1, height: 900 });
-  await expect.poll(async () => (await attemptLayout(page)).rowDisplay).toBe('table-row');
-  await expect
-    .poll(async () => (await attemptLayout(page)).labelDisplays)
-    .toEqual(Array(5).fill('none'));
-  await page.setViewportSize({ width: STACKED_MAX, height: 900 });
-  await expect.poll(async () => (await attemptLayout(page)).rowDisplay).toBe('block');
+  const table = page.locator('app-attempts-table');
+  const steps = [
+    { width: 767, stacked: true },
+    { width: 1440, stacked: false },
+    { width: 768, stacked: true },
+    { width: 767, stacked: true },
+  ] as const;
+  for (const { width, stacked } of steps) {
+    await page.setViewportSize({ width, height: 900 });
+    await expect(table.locator(stacked ? RECORD : DESKTOP_ROW)).toHaveCount(
+      attemptsFixture.body.items.length,
+    );
+    await expect(table.locator(stacked ? DESKTOP_ROW : RECORD)).toHaveCount(0);
+  }
+});
+
+test('attempts stack when their columns no longer fit the container', async ({ page }) => {
+  await seedStoredTheme(page, 'light');
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await openAttempts(page);
+  const table = page.locator('app-attempts-table');
+  await expect(table.locator(DESKTOP_ROW)).toHaveCount(attemptsFixture.body.items.length);
+  // Force every cell wider than the container so only the fit rule can switch the mode.
+  await page.evaluate(() => {
+    for (const cell of document.querySelectorAll<HTMLElement>(
+      'app-attempts-table th, app-attempts-table td',
+    )) {
+      cell.style.minWidth = '260px';
+      cell.style.whiteSpace = 'nowrap';
+    }
+  });
+  await page.setViewportSize({ width: 1279, height: 900 });
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await expect(table.locator(RECORD)).toHaveCount(attemptsFixture.body.items.length);
+  await expect(table.locator(DESKTOP_ROW)).toHaveCount(0);
+  const overflow = await page
+    .locator('app-attempts-table .scroll')
+    .evaluate((el) => el.scrollWidth - el.clientWidth);
+  expect(overflow).toBeLessThanOrEqual(0);
 });
 
 for (const locale of ['en', 'vi'] as const) {
@@ -229,7 +249,7 @@ for (const locale of ['en', 'vi'] as const) {
       `${runDetailPath({ locale })}&fixture.variant.listRunAttempts=page-1&fixture.latency=1500`,
     );
     const table = page.locator('app-attempts-table');
-    const rows = table.locator('[data-attempt-row]');
+    const rows = table.locator(DESKTOP_ROW);
     await expect(rows.first()).toBeVisible({ timeout: 15000 });
     const retained = await rows.allTextContents();
     const pager = table.locator('app-data-table-pager');

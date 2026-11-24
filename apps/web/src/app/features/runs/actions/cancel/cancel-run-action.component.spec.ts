@@ -16,6 +16,8 @@ import { cancelReasonError } from './cancel-run-state';
 class CancelActionHarness extends ComponentHarness {
   static hostSelector = 'app-cancel-run-action';
   private readonly trigger = this.locatorFor('[data-run-cancel-trigger]');
+  readonly visibleTrigger = this.locatorForOptional('[data-run-cancel-trigger]');
+  readonly reason = this.locatorFor('#run-cancel-disabled-reason');
   readonly status = this.locatorForOptional('[data-run-cancel-status]');
   async open(): Promise<void> {
     const trigger = await this.trigger();
@@ -127,8 +129,8 @@ describe('CancelRunActionComponent', () => {
     'does not open a cancellation dialog for %s',
     async (state) => {
       const h = await setup(true, state);
-      expect(await h.action.disabled()).toBe('true');
-      await h.action.open();
+      expect(await h.action.visibleTrigger()).toBeNull();
+      expect(await (await h.action.reason()).text()).toContain('This run is already terminal');
       expect(await h.loader.hasHarness(CancelDialogHarness)).toBe(false);
       expect(h.cancelRun).not.toHaveBeenCalled();
     },

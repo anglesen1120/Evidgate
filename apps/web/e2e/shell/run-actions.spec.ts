@@ -82,7 +82,10 @@ for (const locale of LOCALES) {
       await expect(status.getByRole('status')).toContainText(
         locale === 'vi' ? 'có thể vẫn đang dừng lại' : 'execution may still be stopping',
       );
-      await expect(trigger).toHaveAttribute('aria-disabled', 'true');
+      await expect(trigger).toHaveCount(0);
+      await expect(page.locator('#run-cancel-disabled-reason')).toContainText(
+        locale === 'vi' ? 'đã ở trạng thái kết thúc' : 'already terminal',
+      );
       await expect(
         page.getByText(locale === 'vi' ? 'Đã dừng' : 'Stopped', { exact: true }),
       ).toHaveCount(0);
@@ -103,12 +106,12 @@ for (const locale of LOCALES) {
       await expect(
         page.getByRole('button', { name: /^(Inspect evidence|Kiểm tra bằng chứng)/ }),
       ).toBeFocused();
-      // Run id, ref, and the evidence identifier (reveal and copy) are the only stops in the summary.
+      // The run id and ref copy controls are the only stops in the summary.
       const identityControls = page
         .locator('app-run-header')
         .first()
         .locator('button, [tabindex="0"]');
-      await expect(identityControls).toHaveCount(4);
+      await expect(identityControls).toHaveCount(2);
       for (const control of await identityControls.all()) {
         await page.keyboard.press('Tab');
         await expect(control).toBeFocused();
@@ -175,12 +178,10 @@ for (const locale of LOCALES) {
     }) => {
       await page.goto(path(locale, variant));
       const trigger = page.locator('[data-run-cancel-trigger]');
-      await expect(trigger).toHaveAttribute('aria-disabled', 'true');
+      await expect(trigger).toHaveCount(0);
       await expect(page.locator('#run-cancel-disabled-reason')).toContainText(
         locale === 'vi' ? 'đã ở trạng thái kết thúc' : 'already terminal',
       );
-      await trigger.focus();
-      await page.keyboard.press('Enter');
       await expect(page.getByRole('alertdialog')).toHaveCount(0);
     });
   }

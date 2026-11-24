@@ -14,25 +14,27 @@ import { CancelRunStore } from './cancel-run.store';
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'grid min-w-0 max-w-prose justify-items-start gap-(--eg-space-3)' },
   template: `
-    <button
-      hlmBtn
-      type="button"
-      [variant]="'outline'"
-      data-run-cancel-trigger
-      class="min-h-(--eg-control-touch)"
-      [attr.aria-disabled]="!store.canCancel() ? 'true' : null"
-      [tabIndex]="store.canCancel() ? 0 : -1"
-      [attr.aria-describedby]="
-        disabledReason()
-          ? 'run-cancel-disabled-reason'
-          : !store.opened() && announcement()
-            ? 'run-cancel-status'
-            : null
-      "
-      (click)="store.open()"
-    >
-      {{ copy.action }}
-    </button>
+    @if (!terminal()) {
+      <button
+        hlmBtn
+        type="button"
+        [variant]="'outline'"
+        data-run-cancel-trigger
+        class="min-h-(--eg-control-touch)"
+        [attr.aria-disabled]="!store.canCancel() ? 'true' : null"
+        [tabIndex]="store.canCancel() ? 0 : -1"
+        [attr.aria-describedby]="
+          disabledReason()
+            ? 'run-cancel-disabled-reason'
+            : !store.opened() && announcement()
+              ? 'run-cancel-status'
+              : null
+        "
+        (click)="store.open()"
+      >
+        {{ copy.action }}
+      </button>
+    }
     @if (disabledReason(); as reason) {
       <p id="run-cancel-disabled-reason" class="m-0 text-muted-foreground">{{ reason }}</p>
     }
@@ -77,10 +79,13 @@ export class CancelRunActionComponent {
         return '';
     }
   });
+  protected readonly terminal = computed(() => {
+    const state = this.store.detail.run()?.state;
+    return state !== undefined && isTerminalRun(state);
+  });
   protected readonly disabledReason = computed(() => {
     if (this.store.scope() === null) return this.copy.noPermission;
-    const state = this.store.detail.run()?.state;
-    if (state && isTerminalRun(state)) return this.copy.terminal;
+    if (this.terminal()) return this.copy.terminal;
     if (!this.store.viewport.canMutate()) return this.copy.desktop;
     return this.store.phase() === 'submitting' ? this.copy.submitting : '';
   });

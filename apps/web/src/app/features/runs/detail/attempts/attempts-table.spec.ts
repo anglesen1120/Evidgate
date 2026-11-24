@@ -1,5 +1,8 @@
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
+import { By } from '@angular/platform-browser';
+import { provideLayoutTestStubs } from '../../../../shared/testing/layout.testing';
+import { DataTableComponent } from '../../../../shared/ui/data-table/data-table.component';
 import { groupAttempts } from './attempt-groups';
 import type { AttemptRow } from './attempt-summary';
 import { AttemptsTableComponent } from './attempts-table.component';
@@ -62,6 +65,7 @@ describe('retry-chain grouping', () => {
 });
 
 describe('AttemptsTableComponent', () => {
+  provideLayoutTestStubs();
   beforeEach(() =>
     TestBed.configureTestingModule({
       imports: [AttemptsTableComponent],
@@ -70,26 +74,28 @@ describe('AttemptsTableComponent', () => {
   );
   afterEach(() => TestBed.resetTestingModule());
   it('keeps explicit table semantics and names every stacked field after its column', async () => {
-    const { root } = await render([row({ executionKey: 'long-'.repeat(100) })]);
-    const table = root.querySelector('table');
-    expect(table?.getAttribute('role')).toBe('table');
+    const { fixture, root } = await render([row({ executionKey: 'long-'.repeat(100) })]);
+    const table = root.querySelector('[role="table"]');
+    expect(table?.getAttribute('aria-rowcount')).toBe('2');
     const headers = [...root.querySelectorAll('thead [role="columnheader"]')].map((node) =>
       node.textContent?.trim(),
     );
     const attempt = rows(root)[0];
     expect(attempt?.getAttribute('role')).toBe('row');
-    expect(attempt?.querySelector('[role="rowheader"]')?.getAttribute('scope')).toBe('row');
-    expect(attempt?.querySelectorAll('[role="cell"]')).toHaveLength(4);
-    // The stacked layout drops the header row and labels each field above its own value, so each
-    // field's first element has to name its column and stay hidden from screen readers.
-    const fieldCells = [
-      attempt?.querySelector('[role="rowheader"]'),
-      ...(attempt?.querySelectorAll('[role="cell"]') ?? []),
-    ];
-    const labels = fieldCells.map((cell) => cell?.firstElementChild);
-    expect(labels.map((label) => label?.textContent?.trim())).toEqual(headers);
-    expect(labels.every((label) => label?.getAttribute('aria-hidden') === 'true')).toBe(true);
-    expect(root.querySelector('th[scope="row"] bdi')?.textContent).toBe('long-'.repeat(100));
+    expect(attempt?.querySelectorAll('[role="cell"]')).toHaveLength(5);
+    expect(attempt?.querySelector('[data-column-role="identity"] bdi')?.textContent).toBe(
+      'long-'.repeat(100),
+    );
+    const component = fixture.debugElement
+      .query(By.directive(DataTableComponent))
+      .injector.get(DataTableComponent);
+    component.narrow.set(true);
+    await fixture.whenStable();
+    const fields = root.querySelectorAll('.eg-table-record dl > div');
+    expect([...fields].map((field) => field.querySelector('dt')?.textContent?.trim())).toEqual(
+      headers,
+    );
+    expect([...fields].every((field) => field.querySelector('dd') !== null)).toBe(true);
   });
 
   it.each(statuses)(
@@ -109,8 +115,8 @@ describe('AttemptsTableComponent', () => {
         status === 'passed' ? 1 : 0,
       );
       const cells = [...attempt.children];
-      expect(cells[1]?.hasAttribute('data-attempt-raw')).toBe(true);
-      expect(cells[2]?.hasAttribute('data-attempt-normalised')).toBe(true);
+      expect(cells[1]?.querySelector('[data-attempt-raw]')).not.toBeNull();
+      expect(cells[2]?.querySelector('[data-attempt-normalised]')).not.toBeNull();
       if (status === 'blocked') expect(attempt.textContent).not.toContain('passed');
     },
   );
@@ -324,12 +330,16 @@ describe('AttemptsTableComponent', () => {
     expect(root.querySelector('app-data-table-pager')).not.toBeNull();
   });
 
-  it('uses a caption and scoped column/row headers', async () => {
+  it('names its table and associates execution identity with a stable focus target', async () => {
     const { root } = await render([row()]);
-    expect(root.querySelector('caption')?.textContent?.trim()).toBe('Attempts');
+    const caption = root.querySelector('.caption');
+    expect(caption?.textContent?.trim()).toBe('Attempts');
+    expect(root.querySelector('[role="table"]')?.getAttribute('aria-labelledby')).toBe(caption?.id);
     expect(root.querySelectorAll('thead th[scope="col"]')).toHaveLength(5);
-    expect(root.querySelectorAll('tbody th[scope="row"]')).toHaveLength(1);
-    expect(root.querySelector('.table-scroll')?.getAttribute('tabindex')).toBe('0');
+    const identity = root.querySelector('[data-column-role="identity"] [data-attempt-row]');
+    expect(identity?.id).toBe(root.querySelector('tbody tr')?.getAttribute('data-row-id'));
+    expect(identity?.getAttribute('tabindex')).toBe('-1');
+    expect(root.querySelector('.table-scroll')?.getAttribute('tabindex')).toBe('-1');
     expect(root.querySelector('section')?.getAttribute('aria-labelledby')).toBe('attempts-title');
     expect(root.querySelector('#attempts-title')?.textContent?.trim()).toBe('Attempts');
     expect(

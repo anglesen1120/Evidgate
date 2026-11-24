@@ -1,5 +1,4 @@
 import { FieldHintComponent } from '../../../shared/ui/forms/field-hint.component';
-import { BreakpointObserver } from '@angular/cdk/layout';
 import { DOCUMENT, formatNumber } from '@angular/common';
 import {
   afterNextRender,
@@ -16,10 +15,10 @@ import {
   signal,
   viewChild,
 } from '@angular/core';
-import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
-import { combineLatest, map } from 'rxjs';
+import { combineLatest } from 'rxjs';
 import { HlmAlert } from '@evidgate/ui/alert';
 import { HlmButton } from '@evidgate/ui/button';
 import { HlmCard, HlmCardTitle } from '@evidgate/ui/card';
@@ -77,25 +76,25 @@ export class RunListPage {
   private readonly locale = inject(LOCALE_ID);
   private readonly session = inject(SessionStore);
   protected readonly viewport = inject(NarrowMutationPolicy);
-
-  protected readonly desktopFilters = toSignal(
-    inject(BreakpointObserver)
-      .observe('(min-width: 768px)')
-      .pipe(map(({ matches }) => matches)),
-    { initialValue: false },
-  );
-
   private readonly document = inject(DOCUMENT);
-
   private readonly injector = inject(Injector);
   private readonly destroyRef = inject(DestroyRef);
 
+  protected readonly filtersOpen = signal(false);
+  // Safari does not focus a button on pointer click, so collapsing must focus the
+  // disclosure explicitly; otherwise a focused filter inside the hidden panel drops focus to body.
+  private readonly filterDisclosure = viewChild<ElementRef<HTMLButtonElement>>('filterDisclosure');
+  protected toggleFilters(): void {
+    const open = !this.filtersOpen();
+    this.filtersOpen.set(open);
+    if (!open) this.filterDisclosure()?.nativeElement.focus();
+  }
   protected draft = { ...EMPTY_RUN_LIST_FILTERS };
+  protected readonly activeFilterCount = computed(() =>
+    formatNumber(Object.values(this.store.filters()).filter(Boolean).length, this.locale),
+  );
   protected readonly activeFilterLabel = computed(() => {
-    const count = formatNumber(
-      Object.values(this.store.filters()).filter(Boolean).length,
-      this.locale,
-    );
+    const count = this.activeFilterCount();
     return $localize`:@@runs.list.active-filters:Active filters: ${count}:count:`;
   });
   protected readonly status = computed<'loading' | 'ready' | 'error'>(() => {
@@ -120,7 +119,6 @@ export class RunListPage {
     failedDecisions: $localize`:@@runs.list.failed-decisions:Stored FAIL decisions`,
     reruns: $localize`:@@runs.list.labeled-reruns:Labeled reruns`,
     register: $localize`:@@runs.list.table-caption:Project runs`,
-    filters: $localize`:@@runs.list.filters:Filter runs`,
     filterHint: $localize`:@@runs.list.page-filter-hint:Run scope filters this page only. State, decision and ref name filter all project runs.`,
     state: $localize`:@@runs.list.column-state:State`,
     decision: $localize`:@@runs.list.decision-filter:Decision`,

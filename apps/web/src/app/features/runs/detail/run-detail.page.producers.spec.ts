@@ -65,7 +65,7 @@ describe('RunDetailPage producer region', () => {
     const root = await open();
     const region = root.querySelector('section#producers[data-producer-status]');
     expect(region?.querySelector('h2')?.textContent).toBe('Producers');
-    const rows = [...root.querySelectorAll<HTMLElement>('tr[data-row-id]')];
+    const rows = [...root.querySelectorAll<HTMLElement>('#producers tr[data-row-id]')];
     expect(rows.map((row) => row.dataset['rowId'])).toEqual(['shard-9', 'shard-2']);
     for (const row of rows) {
       expect(row.querySelectorAll('[data-fact][data-unavailable]')).toHaveLength(4);
@@ -138,7 +138,7 @@ describe('RunDetailPage producer region', () => {
       shard_count: 50,
     });
     const root = await open();
-    expect(root.querySelectorAll('tr[data-row-id]')).toHaveLength(0);
+    expect(root.querySelectorAll('#producers tr[data-row-id]')).toHaveLength(0);
     expect(root.querySelector('#producers [data-state="empty"]')).not.toBeNull();
     expect(root.querySelector('#producers')?.textContent).not.toContain('finalized');
   });

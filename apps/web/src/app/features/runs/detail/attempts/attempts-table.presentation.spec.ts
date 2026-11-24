@@ -2,10 +2,14 @@ import { registerLocaleData } from '@angular/common';
 import viLocale from '@angular/common/locales/vi';
 import { LOCALE_ID, provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
+import { By } from '@angular/platform-browser';
+import { provideLayoutTestStubs } from '../../../../shared/testing/layout.testing';
+import { DataTableComponent } from '../../../../shared/ui/data-table/data-table.component';
 import { AttemptsTableComponent } from './attempts-table.component';
 import { render, row } from './attempts-table.test-support';
 
 describe('Attempts table shared presentation', () => {
+  provideLayoutTestStubs();
   beforeEach(() => {
     TestBed.configureTestingModule({
       imports: [AttemptsTableComponent],
@@ -35,16 +39,20 @@ describe('Attempts table shared presentation', () => {
     expect(root.querySelector('h2')?.getAttribute('data-title-size')).toBe('section');
   });
 
-  it('resets the native logical minimum and budgets the short normalized status', async () => {
-    const { root } = await render([row()]);
-    expect(root.querySelector('table')?.classList.contains('[min-inline-size:0]')).toBe(true);
-    const statuses = root.querySelectorAll<HTMLElement>('[data-column-role="status"]');
+  it('budgets the short normalized status in the fitted shared table', async () => {
+    const { fixture, root } = await render([row()]);
+    expect(
+      fixture.debugElement
+        .query(By.directive(DataTableComponent))
+        .injector.get(DataTableComponent)
+        .fitToContainer(),
+    ).toBe(true);
+    const statuses = root.querySelectorAll<HTMLElement>(
+      'th[data-column-role="status"], td[data-column-role="status"]',
+    );
     expect(statuses).toHaveLength(2);
-    const nativeMinimum = '[@media(min-width:768px)]:[min-inline-size:var(--eg-table-column-min)]';
     for (const cell of statuses) {
-      expect(cell.style.minInlineSize).toBe('');
-      expect(cell.classList.contains(nativeMinimum)).toBe(true);
-      expect(cell.style.getPropertyValue('--eg-table-column-min')).toBe(
+      expect(cell.style.getPropertyValue('min-inline-size')).toBe(
         'calc(14ch + var(--eg-space-4) * 2)',
       );
     }
@@ -59,21 +67,23 @@ describe('Attempts table shared presentation', () => {
   ] as const)(
     'releases every stacked field width and height for %s values',
     async (_name, attempt) => {
-      const { root } = await render([attempt]);
-      const record = root.querySelector('[data-attempt-row]')!;
-      for (const property of [
-        'inline-size:100%',
-        'min-inline-size:0',
-        'max-inline-size:none',
-        'block-size:auto',
-      ]) {
-        expect(record.classList.contains(`[@media(max-width:767px)]:[&>*]:[${property}]`)).toBe(
-          true,
-        );
-      }
-      expect(record.querySelectorAll('[role="rowheader"], [role="cell"]')).toHaveLength(5);
-      expect(root.querySelector('table')?.classList.contains('[&_th]:wrap-normal')).toBe(true);
-      expect(root.querySelector('table')?.classList.contains('[&_th]:wrap-anywhere')).toBe(false);
+      const { fixture, root } = await render([attempt]);
+      fixture.debugElement
+        .query(By.directive(DataTableComponent))
+        .injector.get(DataTableComponent)
+        .narrow.set(true);
+      await fixture.whenStable();
+      const record = root.querySelector('.eg-table-record')!;
+      expect(record.querySelectorAll('dt')).toHaveLength(5);
+      expect(record.querySelectorAll('dd')).toHaveLength(5);
+      expect(record.querySelector('[data-attempt-raw] bdi')?.textContent).toBe(attempt.rawStatus);
+      expect(record.querySelector('[data-attempt-duration]')?.textContent?.trim()).toBe(
+        attempt.durationMs === null ? 'Not provided' : '134 ms',
+      );
+      expect(record.querySelector('[data-attempt-artifacts]')?.textContent?.trim()).toBe(
+        attempt.artifactCount === null ? 'Not provided' : '12',
+      );
+      expect(root.querySelector('table')).toBeNull();
     },
   );
 
