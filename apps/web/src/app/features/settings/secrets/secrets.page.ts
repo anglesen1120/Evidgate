@@ -204,7 +204,10 @@ export class SecretsPage {
       !this.session.projects().some((project) => project.id === id)
     )
       return;
-    if (this.store.ciBindings().length && (this.store.ciBindingsError() || this.bindingsPagingFailure())) {
+    if (
+      this.store.ciBindings().length &&
+      (this.store.ciBindingsError() || this.bindingsPagingFailure())
+    ) {
       void this.pageBindings(() => this.store.retryCiBindingsPage());
     } else {
       this.bindingsPagingFailure.set(false);

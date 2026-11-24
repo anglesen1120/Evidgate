@@ -57,7 +57,9 @@ export const QuotaStore = signalStore(
     inject(DestroyRef).onDestroy(unregister);
 
     return {
-      permitted, orgId, scope,
+      permitted,
+      orgId,
+      scope,
       usageSummary: read.summary,
       load: read.load,
       reload: read.reload,

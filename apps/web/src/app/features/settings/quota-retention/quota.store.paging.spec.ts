@@ -1,7 +1,13 @@
 import { TestBed } from '@angular/core/testing';
 
 import { TenantStore } from '../../../core/session/tenant.store';
-import { metric, mountQuotaStore, project, serverFailure, summary } from './quota.store.test-support';
+import {
+  metric,
+  mountQuotaStore,
+  project,
+  serverFailure,
+  summary,
+} from './quota.store.test-support';
 
 function page(id: string, next: string | null) {
   return {
@@ -32,8 +38,9 @@ describe('QuotaStore project paging', () => {
     await settle();
     expect(data.calls.at(-1)?.cursor).toBe('second');
     expect(store.projectPage()).toBe(2);
-    expect(store.usageSummary()?.metrics.map((entry) => entry.projects.map((row) => row.project_id)))
-      .toEqual([['middle'], ['middle']]);
+    expect(
+      store.usageSummary()?.metrics.map((entry) => entry.projects.map((row) => row.project_id)),
+    ).toEqual([['middle'], ['middle']]);
     expect(store.usageSummary()?.metrics.map((entry) => entry.used)).toEqual([900, 800]);
 
     data.answer = page('last', null);
@@ -82,7 +89,6 @@ describe('QuotaStore project paging', () => {
     expect(store.projectPage()).toBe(2);
     expect(store.projectPagingError()).toBe(false);
   });
-
 
   it('retries a failed Previous request without discarding the current project page', async () => {
     const { store, data, settle } = mountQuotaStore();
@@ -198,4 +204,3 @@ describe('QuotaStore project paging', () => {
     expect(store.usageSummary()?.metrics[0]?.projects[0]?.project_id).toBe('first');
   });
 });
-

@@ -178,33 +178,39 @@ describe('SecurityEventsStore', () => {
       expect.any(AbortSignal),
     );
   });
-  it.each([20, 50, 100])('resets the cursor and preserves filters when size becomes %s', async (size) => {
-    list.mockResolvedValue({ items: [event], next_cursor: 'second' });
-    const store = TestBed.inject(SecurityEventsStore);
-    await settle();
-    if (size === 20) store.setPageSize(50);
-    store.apply({ ...EMPTY_SECURITY_FILTERS, projectId: 'project1' });
-    await settle();
-    store.next();
-    await settle();
-    store.setPageSize(size);
-    await settle();
-    expect(store.pageIndex()).toBe(0);
-    expect(store.pageSize()).toBe(size);
-    expect(list).toHaveBeenLastCalledWith(
-      'org1',
-      { limit: size, project_id: 'project1' },
-      expect.any(AbortSignal),
-    );
-  });
-  it.each([0, 25, 200, NaN])('refuses unsupported page size %s without another request', async (size) => {
-    const store = TestBed.inject(SecurityEventsStore);
-    await settle();
-    store.setPageSize(size);
-    await settle();
-    expect(store.pageSize()).toBe(20);
-    expect(list).toHaveBeenCalledTimes(1);
-  });
+  it.each([20, 50, 100])(
+    'resets the cursor and preserves filters when size becomes %s',
+    async (size) => {
+      list.mockResolvedValue({ items: [event], next_cursor: 'second' });
+      const store = TestBed.inject(SecurityEventsStore);
+      await settle();
+      if (size === 20) store.setPageSize(50);
+      store.apply({ ...EMPTY_SECURITY_FILTERS, projectId: 'project1' });
+      await settle();
+      store.next();
+      await settle();
+      store.setPageSize(size);
+      await settle();
+      expect(store.pageIndex()).toBe(0);
+      expect(store.pageSize()).toBe(size);
+      expect(list).toHaveBeenLastCalledWith(
+        'org1',
+        { limit: size, project_id: 'project1' },
+        expect.any(AbortSignal),
+      );
+    },
+  );
+  it.each([0, 25, 200, NaN])(
+    'refuses unsupported page size %s without another request',
+    async (size) => {
+      const store = TestBed.inject(SecurityEventsStore);
+      await settle();
+      store.setPageSize(size);
+      await settle();
+      expect(store.pageSize()).toBe(20);
+      expect(list).toHaveBeenCalledTimes(1);
+    },
+  );
   it('keeps a failed target pending for Retry while retaining the successful rows and page number', async () => {
     list
       .mockResolvedValueOnce({ items: [event], next_cursor: 'second' })
@@ -262,7 +268,8 @@ describe('SecurityEventsStore', () => {
       await settle();
       expect(store.rows()).toHaveLength(1);
       if (scope === 'organization') org.set({ id: 'org2' });
-      else if (scope === 'filter') store.apply({ ...EMPTY_SECURITY_FILTERS, projectId: 'project2' });
+      else if (scope === 'filter')
+        store.apply({ ...EMPTY_SECURITY_FILTERS, projectId: 'project2' });
       else store.setPageSize(50);
       expect(store.rows()).toEqual([]);
       await settle();

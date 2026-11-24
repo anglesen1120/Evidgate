@@ -28,6 +28,7 @@
 //   end enumerates the store's own fields and serialises every public signal to prove it, and the
 //   listed row carries no challenge — a list never does (`CiBindingView`'s own contract text).
 
+import { isSignal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import type {
   CiBindingListResponse,
@@ -564,18 +565,18 @@ describe('SecretsStore ci-bindings (09.7.1-F15)', () => {
     ];
     await store.loadCiBindings('p-1');
     await store.loadMoreCiBindings();
+    expect(store.ciBindings()).toEqual([]);
+    await store.previousCiBindings();
     expect(store.ciBindings()).toEqual(PAGE.items);
 
-    // Every public signal of the binding track, serialised: no challenge, no value of any kind.
-    const publicState = {
-      ciBindings: store.ciBindings(),
-      ciBindingsPhase: store.ciBindingsPhase(),
-      ciBindingsError: store.ciBindingsError(),
-      ciBindingsProjectId: store.ciBindingsProjectId(),
-      hasMoreCiBindings: store.hasMoreCiBindings(),
-      rows: store.rows(),
-      rotateState: store.rotateState(),
-    };
+    // Inspect real signals only: navigation methods can also take zero arguments.
+    const reads = [...data.listCalls];
+    const publicState = Object.fromEntries(
+      Object.entries(store).flatMap(([name, value]) => (isSignal(value) ? [[name, value()]] : [])),
+    );
+    expect(Object.keys(publicState)).toContain('ciBindings');
+    expect(publicState['ciBindings']).toEqual(PAGE.items);
+    expect(data.listCalls).toEqual(reads);
     const serialised = JSON.stringify(publicState);
     expect(serialised).not.toContain('challenge');
     expect(serialised).not.toContain('binding_challenge');

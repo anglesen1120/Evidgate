@@ -65,7 +65,10 @@ export class QuotaPanelComponent {
     this.quota.usageSummary()?.metrics.filter((metric) => metric.projects.length > 0),
   );
   protected readonly projectCount = computed(() =>
-    Math.max(0, ...(this.quota.usageSummary()?.metrics.map((metric) => metric.projects.length) ?? [])),
+    Math.max(
+      0,
+      ...(this.quota.usageSummary()?.metrics.map((metric) => metric.projects.length) ?? []),
+    ),
   );
   protected readonly inspected = linkedSignal<
     UsageSummaryDto | null,

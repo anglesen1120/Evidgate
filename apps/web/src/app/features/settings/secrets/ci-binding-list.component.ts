@@ -26,6 +26,7 @@ import { DataTablePagerComponent } from '../../../shared/ui/data-table/data-tabl
 
 export const CI_BINDINGS_COPY = {
   title: $localize`:@@settings.secrets.ci.title:CI bindings`,
+  order: $localize`:@@settings.secrets.order:Oldest first`,
   description: $localize`:@@settings.secrets.ci.description:Repository bindings and allowed CI references. Metadata only; bindings are managed during onboarding.`,
   provider: $localize`:@@settings.secrets.ci.provider:Provider`,
   status: $localize`:@@settings.secrets.ci.status:Verification state`,
@@ -88,6 +89,7 @@ export const CI_BINDINGS_COPY = {
           {{ copy.title }}
         </h2>
         <p class="text-muted-foreground">{{ copy.description }}</p>
+        <p class="text-xs text-muted-foreground">{{ copy.order }}</p>
       </header>
       @if (forbidden()) {
         <p

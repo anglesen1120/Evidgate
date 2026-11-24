@@ -31,7 +31,12 @@ async function readOnce(
   abortSignal: AbortSignal,
 ): Promise<ReadOutcome> {
   try {
-    const value = await data.summary(params.orgId, abortSignal, params.limit, params.cursors.at(-1));
+    const value = await data.summary(
+      params.orgId,
+      abortSignal,
+      params.limit,
+      params.cursors.at(-1),
+    );
     if (value?.next_cursor != null && params.cursors.includes(value.next_cursor)) {
       throw new Error('The usage summary repeated a forward cursor.');
     }

@@ -102,18 +102,21 @@ describe('QuotaDataService', () => {
     expect(reports).toBe(0);
   });
 
-  it.each([20, 50, 100])('forwards project page size %s and an opaque cursor without changing org totals', async (limit) => {
-    const cursor = 'opaque+/cursor==';
-    const read = service.summary('o-1', undefined, limit, cursor);
-    const request = await takeRequest(httpMock, SUMMARY_URL);
-    const query = new URL(request.request.urlWithParams).searchParams;
-    expect(query.get('limit')).toBe(String(limit));
-    expect(query.get('cursor')).toBe(cursor);
-    expect(query.has('project')).toBe(false);
-    request.flush(JSON.stringify(SUMMARY), { headers: JSON_HEADERS });
-    await expect(read).resolves.toEqual(SUMMARY);
-    expect(reports).toBe(0);
-  });
+  it.each([20, 50, 100])(
+    'forwards project page size %s and an opaque cursor without changing org totals',
+    async (limit) => {
+      const cursor = 'opaque+/cursor==';
+      const read = service.summary('o-1', undefined, limit, cursor);
+      const request = await takeRequest(httpMock, SUMMARY_URL);
+      const query = new URL(request.request.urlWithParams).searchParams;
+      expect(query.get('limit')).toBe(String(limit));
+      expect(query.get('cursor')).toBe(cursor);
+      expect(query.has('project')).toBe(false);
+      request.flush(JSON.stringify(SUMMARY), { headers: JSON_HEADERS });
+      await expect(read).resolves.toEqual(SUMMARY);
+      expect(reports).toBe(0);
+    },
+  );
 
   it('omits the cursor on the first explicitly sized project page', async () => {
     const read = service.summary('o-1', undefined, 20);

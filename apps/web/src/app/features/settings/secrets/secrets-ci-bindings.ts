@@ -145,7 +145,8 @@ export class SecretsCiBindingsTrack {
   async loadMore(): Promise<void> {
     const cursor = this.nextCursorSignal();
     if (!cursor || this.pending) return;
-    if (this.cursors.includes(cursor)) throw new Error(`the ci-binding list repeated cursor "${cursor}"`);
+    if (this.cursors.includes(cursor))
+      throw new Error(`the ci-binding list repeated cursor "${cursor}"`);
     if (this.pageSignal() >= MAX_CURSOR_PAGES) {
       throw new Error(`the ci-binding list did not finish within ${MAX_CURSOR_PAGES} pages`);
     }
@@ -168,22 +169,25 @@ export class SecretsCiBindingsTrack {
     if (failed && !this.pending) await this.move(failed.cursor, failed.page, failed.size);
   }
 
-  private async move(cursor: string | undefined, page: number, size = this.pageSizeSignal()): Promise<void> {
+  private async move(
+    cursor: string | undefined,
+    page: number,
+    size = this.pageSizeSignal(),
+  ): Promise<void> {
     const project = this.projectSignal();
     if (!project) return;
     const generation = this.generation;
     this.pending = true;
     this.errorSignal.set(null);
-    const result = await settledRead(() =>
-      this.data.listCiBindings(project, cursor, size),
-    );
+    const result = await settledRead(() => this.data.listCiBindings(project, cursor, size));
     if (generation !== this.generation) return;
     this.pending = false;
     this.failedPage = { cursor, page, size };
     if (!result.ok) {
       if (!isApiRequestError(result.error)) throw result.error;
       this.errorSignal.set(result.error.error);
-      if (!this.rowsSignal().length) this.phaseSignal.set(ciBindingsFailurePhase(result.error.error));
+      if (!this.rowsSignal().length)
+        this.phaseSignal.set(ciBindingsFailurePhase(result.error.error));
       return;
     }
     this.failedPage = null;

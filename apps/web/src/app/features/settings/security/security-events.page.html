@@ -57,6 +57,9 @@
     aria-labelledby="security-filters-heading"
   >
     <span id="security-filters-heading" class="sr-only">{{ copy.filters }}</span>
+    <p class="m-0 text-xs text-muted-foreground" i18n="@@settings.security.filter-scope">
+      Filters apply to all matching security events on the server.
+    </p>
     <app-form-error-summary [summaryId]="'security-filter-errors'" [feedback]="feedback()" />
     @let counted = store.phase() === 'ready' && !store.filters().severity;
     <fieldset class="m-0 min-w-0 border-0 p-0">

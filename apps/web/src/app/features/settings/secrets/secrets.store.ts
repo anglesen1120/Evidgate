@@ -134,7 +134,8 @@ export class SecretsStore {
   }
 
   async setPageSize(size: number): Promise<void> {
-    if (![20, 50, 100].includes(size) || size === this.pageSizeSignal() || this.pagingSignal()) return;
+    if (![20, 50, 100].includes(size) || size === this.pageSizeSignal() || this.pagingSignal())
+      return;
     await this.move(undefined, 1, size);
   }
 
@@ -143,15 +144,17 @@ export class SecretsStore {
     if (failed && !this.pagingSignal()) await this.move(failed.cursor, failed.page, failed.size);
   }
 
-  private async move(cursor: string | undefined, page: number, size = this.pageSizeSignal()): Promise<void> {
+  private async move(
+    cursor: string | undefined,
+    page: number,
+    size = this.pageSizeSignal(),
+  ): Promise<void> {
     const project = this.projectIdSignal();
     if (!project) return;
     const generation = this.generation;
     this.pagingSignal.set(true);
     this.loadErrorSignal.set(null);
-    const result = await settledRead(() =>
-      this.data.listIngestTokens(project, cursor, size),
-    );
+    const result = await settledRead(() => this.data.listIngestTokens(project, cursor, size));
     if (generation !== this.generation) return;
     this.pagingSignal.set(false);
     this.failedPage = { cursor, page, size };

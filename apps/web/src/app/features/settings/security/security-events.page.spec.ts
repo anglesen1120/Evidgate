@@ -1,4 +1,4 @@
-import { ComponentHarness, manualChangeDetection } from '@angular/cdk/testing';
+import { ComponentHarness, manualChangeDetection, TestKey } from '@angular/cdk/testing';
 import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { provideZonelessChangeDetection, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
@@ -254,11 +254,9 @@ describe('SecurityEventsPage', () => {
     expect(await (await harness.previous()).getAttribute('aria-disabled')).toBe('true');
     expect(await (await harness.next()).getAttribute('aria-disabled')).toBe('true');
     await (await harness.sizeTrigger()).click();
-    expect(await Promise.all((await harness.sizeOptions()).map((option) => option.text()))).toEqual([
-      '20',
-      '50',
-      '100',
-    ]);
+    expect(await Promise.all((await harness.sizeOptions()).map((option) => option.text()))).toEqual(
+      ['20', '50', '100'],
+    );
   });
   it('keeps the shared pager available for an empty page and refuses unavailable navigation', async () => {
     list.mockResolvedValue({ items: [], next_cursor: null });
@@ -285,8 +283,8 @@ describe('SecurityEventsPage', () => {
     await (await harness.details()).click();
     expect(await harness.dialog()).not.toBeNull();
     expect(list).toHaveBeenCalledTimes(2);
-    await (await harness.dialog())?.dispatchEvent('keydown', { key: 'Escape', keyCode: 27 });
-    expect(await harness.dialog()).toBeNull();
+    await (await harness.dialog())?.sendKeys(TestKey.ESCAPE);
+    await vi.waitFor(async () => expect(await harness.dialog()).toBeNull());
     expect(await (await harness.pager()).text()).toContain('Page 2');
     expect(list).toHaveBeenCalledTimes(2);
     await (await harness.next()).click();
@@ -357,11 +355,14 @@ describe('SecurityEventsPage', () => {
   it('keeps the loaded page visible and disables paging while the next request is pending', async () => {
     list.mockResolvedValueOnce({ items: [event], next_cursor: 'second' });
     const { fixture, harness } = await render();
-    const pending = Promise.withResolvers<{
-      items: SecurityEventItem[];
-      next_cursor: null;
-    }>();
-    list.mockReturnValueOnce(pending.promise);
+    let finish: (value: { items: SecurityEventItem[]; next_cursor: null }) => void = () =>
+      undefined;
+    list.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
     await manualChangeDetection(async () => {
       await (await harness.next()).click();
       fixture.detectChanges();
@@ -371,7 +372,7 @@ describe('SecurityEventsPage', () => {
       expect(await (await harness.next()).getAttribute('aria-disabled')).toBe('true');
       expect(await (await harness.previous()).getAttribute('aria-disabled')).toBe('true');
       expect(await (await harness.results()).getAttribute('aria-busy')).toBe('true');
-      pending.resolve({ items: [{ ...event, id: 'second' }], next_cursor: null });
+      finish({ items: [{ ...event, id: 'second' }], next_cursor: null });
     });
     await fixture.whenStable();
     expect(await (await harness.pager()).text()).toContain('Page 2');

@@ -48,12 +48,18 @@ class SecretsInteractionsHarness extends ComponentHarness {
   readonly sizes = this.locatorForAll('app-data-table-pager hlm-select-trigger button');
   readonly search = this.locatorFor('#secret-reference-search');
   readonly statusFilters = this.locatorForAll('app-secret-reference-list [role="group"] button');
-  readonly clear = this.locatorFor('app-secret-reference-list app-empty-pattern + button');
+  readonly clear = this.locatorFor('app-secret-reference-list td[colspan="3"] button');
   readonly inspect = this.locatorFor('[data-secret-inspect]');
   readonly options = this.documentRootLocatorFactory().locatorForAll('[role="option"]');
   readonly dialog = this.documentRootLocatorFactory().locatorFor('[role="dialog"]');
   readonly close = this.documentRootLocatorFactory().locatorFor('[role="dialog"] footer button');
   readonly openDialog = this.documentRootLocatorFactory().locatorForOptional('[role="dialog"]');
+
+  async searchReferences(value: string): Promise<void> {
+    const search = await this.search();
+    await search.setInputValue(value);
+    await search.dispatchEvent('input');
+  }
 }
 
 describe('SecretsPage sinks and interleavings', () => {
@@ -220,7 +226,10 @@ describe('SecretsPage sinks and interleavings', () => {
       return Promise.resolve();
     });
     const { fixture, root } = await render();
-    const page = await TestbedHarnessEnvironment.harnessForFixture(fixture, SecretsInteractionsHarness);
+    const page = await TestbedHarnessEnvironment.harnessForFixture(
+      fixture,
+      SecretsInteractionsHarness,
+    );
     await (await page.tokenNext()).click();
     await fixture.whenStable();
     fixture.detectChanges();
@@ -242,50 +251,57 @@ describe('SecretsPage sinks and interleavings', () => {
     { kind: 'tokens', size: 100 },
     { kind: 'bindings', size: 50 },
     { kind: 'bindings', size: 100 },
-  ])('changes only the $kind server page size to $size and resets that page', async ({ kind, size }) => {
-    canReadBindings.set(true);
-    store.ciBindings.set(bindingData.body.items as CiBindingView[]);
-    store.ciBindingsPhase.set('ready');
-    store.page.set(2);
-    store.ciBindingsPage.set(3);
-    store.setPageSize.mockImplementation(() => {
-      store.pageSize.set(size);
-      store.page.set(1);
-      return Promise.resolve();
-    });
-    store.setCiBindingsPageSize.mockImplementation(() => {
-      store.ciBindingsPageSize.set(size);
-      store.ciBindingsPage.set(1);
-      return Promise.resolve();
-    });
-    const { fixture } = await render();
-    const page = await TestbedHarnessEnvironment.harnessForFixture(fixture, SecretsInteractionsHarness);
-    const sizes = await page.sizes();
-    expect(sizes).toHaveLength(2);
-    const chosen = sizes[kind === 'tokens' ? 0 : 1];
-    const untouched = sizes[kind === 'tokens' ? 1 : 0];
-    if (!chosen || !untouched) throw new Error('Expected independent token and binding size controls');
-    expect(await chosen.text()).toBe('20');
-    await chosen.click();
-    const options = await page.options();
-    const labels = await Promise.all(options.map((option) => option.text()));
-    expect(labels).toEqual(['20', '50', '100']);
-    const option = options[labels.indexOf(String(size))];
-    if (!option) throw new Error('Expected requested page size');
-    await option.click();
-    expect(await chosen.text()).toBe(String(size));
-    expect(await untouched.text()).toBe('20');
-    const changed = kind === 'tokens' ? store.setPageSize : store.setCiBindingsPageSize;
-    const unchanged = kind === 'tokens' ? store.setCiBindingsPageSize : store.setPageSize;
-    expect(changed).toHaveBeenCalledExactlyOnceWith(size);
-    expect(unchanged).not.toHaveBeenCalled();
-    expect(store.page()).toBe(kind === 'tokens' ? 1 : 2);
-    expect(store.ciBindingsPage()).toBe(kind === 'bindings' ? 1 : 3);
-    expect(store.load).toHaveBeenCalledExactlyOnceWith('p1');
-    expect(store.loadCiBindings).toHaveBeenCalledExactlyOnceWith('p1');
-    expect(store.loadMore).not.toHaveBeenCalled();
-    expect(store.loadMoreCiBindings).not.toHaveBeenCalled();
-  });
+  ])(
+    'changes only the $kind server page size to $size and resets that page',
+    async ({ kind, size }) => {
+      canReadBindings.set(true);
+      store.ciBindings.set(bindingData.body.items as CiBindingView[]);
+      store.ciBindingsPhase.set('ready');
+      store.page.set(2);
+      store.ciBindingsPage.set(3);
+      store.setPageSize.mockImplementation(() => {
+        store.pageSize.set(size);
+        store.page.set(1);
+        return Promise.resolve();
+      });
+      store.setCiBindingsPageSize.mockImplementation(() => {
+        store.ciBindingsPageSize.set(size);
+        store.ciBindingsPage.set(1);
+        return Promise.resolve();
+      });
+      const { fixture } = await render();
+      const page = await TestbedHarnessEnvironment.harnessForFixture(
+        fixture,
+        SecretsInteractionsHarness,
+      );
+      const sizes = await page.sizes();
+      expect(sizes).toHaveLength(2);
+      const chosen = sizes[kind === 'tokens' ? 0 : 1];
+      const untouched = sizes[kind === 'tokens' ? 1 : 0];
+      if (!chosen || !untouched)
+        throw new Error('Expected independent token and binding size controls');
+      expect(await chosen.text()).toBe('20');
+      await chosen.click();
+      const options = await page.options();
+      const labels = await Promise.all(options.map((option) => option.text()));
+      expect(labels).toEqual(['20', '50', '100']);
+      const option = options[labels.indexOf(String(size))];
+      if (!option) throw new Error('Expected requested page size');
+      await option.click();
+      expect(await chosen.text()).toBe(String(size));
+      expect(await untouched.text()).toBe('20');
+      const changed = kind === 'tokens' ? store.setPageSize : store.setCiBindingsPageSize;
+      const unchanged = kind === 'tokens' ? store.setCiBindingsPageSize : store.setPageSize;
+      expect(changed).toHaveBeenCalledExactlyOnceWith(size);
+      expect(unchanged).not.toHaveBeenCalled();
+      expect(store.page()).toBe(kind === 'tokens' ? 1 : 2);
+      expect(store.ciBindingsPage()).toBe(kind === 'bindings' ? 1 : 3);
+      expect(store.load).toHaveBeenCalledExactlyOnceWith('p1');
+      expect(store.loadCiBindings).toHaveBeenCalledExactlyOnceWith('p1');
+      expect(store.loadMore).not.toHaveBeenCalled();
+      expect(store.loadMoreCiBindings).not.toHaveBeenCalled();
+    },
+  );
 
   it.each(['search', 'status', 'clear'] as const)(
     'resets the token server page on %s filter changes without resetting bindings',
@@ -300,12 +316,17 @@ describe('SecretsPage sinks and interleavings', () => {
         return Promise.resolve();
       });
       const { fixture } = await render();
-      const page = await TestbedHarnessEnvironment.harnessForFixture(fixture, SecretsInteractionsHarness);
-      const search = await page.search();
-      if (filter === 'clear') await search.setInputValue('no-matching-reference');
+      const page = await TestbedHarnessEnvironment.harnessForFixture(
+        fixture,
+        SecretsInteractionsHarness,
+      );
+      if (filter === 'clear') {
+        await page.searchReferences('no-matching-reference');
+        expect(await page.tokenRows()).toHaveLength(0);
+      }
       expect(store.load).toHaveBeenCalledTimes(1);
       store.page.set(2);
-      if (filter === 'search') await search.setInputValue('no-matching-reference');
+      if (filter === 'search') await page.searchReferences('no-matching-reference');
       else if (filter === 'clear') await (await page.clear()).click();
       else {
         const filters = await page.statusFilters();
@@ -318,9 +339,16 @@ describe('SecretsPage sinks and interleavings', () => {
       expect(store.load).toHaveBeenCalledTimes(2);
       expect(await (await page.tokenSummary()).text()).toBe('Page 1');
       expect(store.ciBindingsPage()).toBe(3);
+      expect(store.ciBindings()).toEqual(bindingData.body.items);
       expect(store.loadCiBindings).toHaveBeenCalledExactlyOnceWith('p1');
       expect(store.loadMore).not.toHaveBeenCalled();
       expect(store.previous).not.toHaveBeenCalled();
+      expect(store.loadMoreCiBindings).not.toHaveBeenCalled();
+      expect(store.previousCiBindings).not.toHaveBeenCalled();
+      expect(store.setCiBindingsPageSize).not.toHaveBeenCalled();
+      expect(await (await page.search()).getProperty('value')).toBe(
+        filter === 'search' ? 'no-matching-reference' : '',
+      );
       expect(await page.tokenRows()).toHaveLength(filter === 'clear' ? 1 : 0);
     },
   );
@@ -334,7 +362,10 @@ describe('SecretsPage sinks and interleavings', () => {
     const reference = { ...base, id: 'second-page-reference', name: 'Second page reference' };
     store.rows.set([reference]);
     const { fixture } = await render();
-    const page = await TestbedHarnessEnvironment.harnessForFixture(fixture, SecretsInteractionsHarness);
+    const page = await TestbedHarnessEnvironment.harnessForFixture(
+      fixture,
+      SecretsInteractionsHarness,
+    );
     const inspect = await page.inspect();
     await inspect.focus();
     await inspect.click();

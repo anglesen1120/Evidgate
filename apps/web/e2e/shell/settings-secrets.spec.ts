@@ -94,7 +94,10 @@ for (const locale of LOCALES) {
     await expect(page.locator(ROWS).nth(1).locator('[data-reminder="expires-soon"]')).toBeVisible();
     await expect(page.locator(ROWS).nth(2).locator('[data-reminder="expired"]')).toBeVisible();
     await expect(page.locator(ROWS).nth(4).locator('[data-rotation-reminder]')).toHaveCount(0);
-    await expect(page.locator('app-secret-reference-list [data-page="next"]')).toHaveAttribute('aria-disabled', 'true');
+    await expect(page.locator('app-secret-reference-list [data-page="next"]')).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
     await expectNoPlaintext(page);
   });
 
@@ -361,7 +364,10 @@ for (const locale of LOCALES) {
           await expect(section.locator('button')).toHaveCount(0);
         }
         if (variant === 'settings') {
-          await expect(section.locator('[data-page="next"]')).toHaveAttribute('aria-disabled', 'true');
+          await expect(section.locator('[data-page="next"]')).toHaveAttribute(
+            'aria-disabled',
+            'true',
+          );
         }
         await expectNoBindingChallenge(page);
         await expectNoA11yViolations(page, `CI bindings ${variant} ${locale} ${theme}`);
@@ -407,7 +413,9 @@ for (const locale of LOCALES) {
   });
 }
 
-test('CI bindings shared pager replaces pages, returns by cursor and resets page size (en)', async ({ page }) => {
+test('CI bindings shared pager replaces pages, returns by cursor and resets page size (en)', async ({
+  page,
+}) => {
   const firstPageRows = ciBindingsPageOne.body.items;
   const secondPageRows = ciBindingsPageTwo.body.items;
   expect(ciBindingsPageOne.body.next_cursor).toBeTruthy();
@@ -426,7 +434,7 @@ test('CI bindings shared pager replaces pages, returns by cursor and resets page
   await page.keyboard.press('Enter');
   await expect(page.locator(CI_ROWS)).toHaveCount(secondPageRows.length);
   await expect(page.locator(`${CI_ROWS} h3`)).toHaveText(
-    secondPageRows.map(binding => binding.repository_full_name),
+    secondPageRows.map((binding) => binding.repository_full_name),
   );
   await expect(pager.getByRole('status')).toHaveText('Page 2');
   await expect(next).toHaveAttribute('aria-disabled', 'true');
@@ -437,7 +445,7 @@ test('CI bindings shared pager replaces pages, returns by cursor and resets page
   await previous.click();
   await expect(pager.getByRole('status')).toHaveText('Page 1');
   await expect(page.locator(`${CI_ROWS} h3`)).toHaveText(
-    firstPageRows.map(binding => binding.repository_full_name),
+    firstPageRows.map((binding) => binding.repository_full_name),
   );
   await next.click();
   await expect(pager.getByRole('status')).toHaveText('Page 2');

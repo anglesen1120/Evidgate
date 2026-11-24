@@ -25,8 +25,12 @@ class SecretsPagingHarness extends ComponentHarness {
   readonly tokenTable = this.locatorFor('app-secret-reference-list table');
   readonly tokenNav = this.locatorFor('app-secret-reference-list app-data-table-pager nav');
   readonly tokenNext = this.locatorFor('app-secret-reference-list button[data-page="next"]');
-  readonly tokenPrevious = this.locatorFor('app-secret-reference-list button[data-page="previous"]');
-  readonly tokenSummary = this.locatorFor('app-secret-reference-list app-data-table-pager [role="status"]');
+  readonly tokenPrevious = this.locatorFor(
+    'app-secret-reference-list button[data-page="previous"]',
+  );
+  readonly tokenSummary = this.locatorFor(
+    'app-secret-reference-list app-data-table-pager [role="status"]',
+  );
   readonly tokenRows = this.locatorForAll('[data-secret-reference]');
   readonly bindingNext = this.locatorFor('app-ci-binding-list button[data-page="next"]');
   readonly bindingPrevious = this.locatorFor('app-ci-binding-list button[data-page="previous"]');

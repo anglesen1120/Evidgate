@@ -98,10 +98,19 @@ describe('QuotaPanelComponent', () => {
         {
           provide: QuotaStore,
           useValue: {
-            usageSummary, loadState, load, reload, projectPage, projectPageSize,
-            projectPaging, projectPagingError,
+            usageSummary,
+            loadState,
+            load,
+            reload,
+            projectPage,
+            projectPageSize,
+            projectPaging,
+            projectPagingError,
             hasNextProjectPage: () => usageSummary()?.next_cursor != null,
-            nextProjectPage, previousProjectPage, setProjectPageSize, retryProjectPage,
+            nextProjectPage,
+            previousProjectPage,
+            setProjectPageSize,
+            retryProjectPage,
           },
         },
       ],
@@ -403,7 +412,9 @@ describe('QuotaPanelComponent', () => {
 
   it('uses one coordinated server pager after all project tables without paging recorded metric state', async () => {
     usageSummary.set({
-      period: '2026-11', project: null, next_cursor: 'next',
+      period: '2026-11',
+      project: null,
+      next_cursor: 'next',
       metrics: [
         metric({ metric: 'results', used: 900, projects: [project()] }),
         metric({ metric: 'ai_tokens', used: 800, projects: [project()] }),
@@ -424,7 +435,9 @@ describe('QuotaPanelComponent', () => {
     projectPageSize.set(50);
     projectPagingError.set(true);
     usageSummary.set({
-      period: '2026-11', project: null, next_cursor: null,
+      period: '2026-11',
+      project: null,
+      next_cursor: null,
       metrics: [metric({ projects: [project()] })],
     });
     const { harness } = await render();
