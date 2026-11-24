@@ -3167,11 +3167,11 @@
 <trans-unit id="shared.data-table.rows-per-page" datatype="html"><source>Rows per page</source><target>Số hàng mỗi trang</target></trans-unit>
 <trans-unit id="shared.data-table.pagination" datatype="html"><source>Table pagination</source><target>Phân trang bảng</target></trans-unit>
 <trans-unit id="shared.data-table.page-number" datatype="html"><source>Page <x id="page" equiv-text="page"/></source><target>Trang <x id="page" equiv-text="page"/></target></trans-unit>
-<trans-unit id="shared.data-table.range" datatype="html"><source><x id="start" equiv-text="start"/>–<x id="end" equiv-text="end"/> of <x id="loaded" equiv-text="loaded"/></source><target><x id="start" equiv-text="start"/>–<x id="end" equiv-text="end"/> trên <x id="loaded" equiv-text="loaded"/></target></trans-unit>
+<trans-unit id="shared.data-table.range" datatype="html"><source>Showing <x id="start" equiv-text="start"/>–<x id="end" equiv-text="end"/> of <x id="loaded" equiv-text="loaded"/></source><target>Hiển thị <x id="start" equiv-text="start"/>–<x id="end" equiv-text="end"/> trên <x id="loaded" equiv-text="loaded"/></target></trans-unit>
 <trans-unit id="shared.data-table.loaded-range" datatype="html"><source>Loaded records <x id="start" equiv-text="start"/>–<x id="end" equiv-text="end"/> of <x id="loaded" equiv-text="loaded"/></source><target>Bản ghi đã tải <x id="start" equiv-text="start"/>–<x id="end" equiv-text="end"/> trên <x id="loaded" equiv-text="loaded"/></target></trans-unit>
-<trans-unit id="shared.data-table.next" datatype="html"><source>Next records</source><target>Bản ghi tiếp</target></trans-unit>
+<trans-unit id="shared.data-table.next" datatype="html"><source>Next page</source><target>Trang sau</target></trans-unit>
 <trans-unit id="shared.data-table.pages" datatype="html"><source><x id="caption" equiv-text="caption"/> — loaded record pages</source><target>Các trang bản ghi đã tải của <x id="caption" equiv-text="caption"/></target></trans-unit>
-<trans-unit id="shared.data-table.previous" datatype="html"><source>Previous records</source><target>Bản ghi trước</target></trans-unit>
+<trans-unit id="shared.data-table.previous" datatype="html"><source>Previous page</source><target>Trang trước</target></trans-unit>
 <trans-unit id="shared.decision-chip.short-unavailable" datatype="html"><source>Unavailable</source><target>Không khả dụng</target></trans-unit>
 <trans-unit id="shared.decision-chip.unknown-detail" datatype="html"><source>Unknown release decision: <x id="state" equiv-text="state"/></source><target>Quyết định phát hành chưa rõ: <x id="state" equiv-text="state"/></target></trans-unit>
 <trans-unit id="shared.evidence-badge.short.complete" datatype="html"><source>Complete</source><target>Đủ</target></trans-unit>
@@ -22773,11 +22773,13 @@
 <trans-unit id="authoring.ai-settings.page-no-match" datatype="html"><source>No versions on this page match this filter</source><target>Không có phiên bản nào trên trang này khớp với bộ lọc</target></trans-unit>
 <trans-unit id="authoring.case-table.order" datatype="html"><source>Case code ascending; case ID breaks ties</source><target>Mã ca kiểm thử tăng dần; sắp theo ID nếu trùng mã</target></trans-unit>
 <trans-unit id="authoring.case-table.empty-page" datatype="html"><source>No manual cases on this page</source><target>Không có ca kiểm thử thủ công trên trang này</target></trans-unit>
-<trans-unit id="authoring.case-table.empty-page-help" datatype="html"><source>Use Previous records to return to an earlier page, or refresh to start again.</source><target>Dùng nút Bản ghi trước để quay lại trang trước hoặc làm mới để bắt đầu lại.</target></trans-unit>
+<trans-unit id="authoring.case-table.empty-page-help" datatype="html"><source>Use Previous page to return to an earlier page, or refresh to start again.</source><target>Dùng nút Trang trước để quay lại trang trước hoặc làm mới để bắt đầu lại.</target></trans-unit>
 <trans-unit id="authoring.editor.history-page-filter" datatype="html"><source>Filter this page by reason</source><target>Lọc lý do trên trang này</target></trans-unit>
 <trans-unit id="authoring.editor.history-page-no-match" datatype="html"><source>No versions on this page match this filter</source><target>Không có phiên bản nào trên trang này khớp với bộ lọc</target></trans-unit>
 <trans-unit id="authoring.pending-changes.ordered-caption" datatype="html"><source><x id="caption" equiv-text="caption"/> — Oldest first (server order)</source><target><x id="caption" equiv-text="caption"/> — Cũ nhất trước (thứ tự máy chủ)</target></trans-unit>
 <trans-unit id="shared.field-hint.name" datatype="html"><source>Hint: <x id="label" equiv-text="this.label()"/></source><target>Gợi ý: <x id="label" equiv-text="this.label()"/></target></trans-unit>
+<trans-unit id="shared.data-table.cursor-range" datatype="html"><source>Showing <x id="start" equiv-text="start"/>–<x id="end" equiv-text="end"/></source><target>Hiển thị <x id="start" equiv-text="start"/>–<x id="end" equiv-text="end"/></target></trans-unit>
+<trans-unit id="shared.data-table.showing-loaded-range" datatype="html"><source>Showing <x id="start" equiv-text="start"/>–<x id="end" equiv-text="end"/> of <x id="loaded" equiv-text="loaded"/> loaded records</source><target>Hiển thị <x id="start" equiv-text="start"/>–<x id="end" equiv-text="end"/> trên <x id="loaded" equiv-text="loaded"/> bản ghi đã tải</target></trans-unit>
 </body>
   </file>
 </xliff>
