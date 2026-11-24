@@ -162,6 +162,23 @@ describe('Catalog permission and asynchronous interaction boundaries', () => {
     }
   });
 
+  it('keeps the status strip focusable but inert while a refetch is in flight', async () => {
+    const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+    const { fixture, harness, store } = await render();
+    list.mockReturnValue(new Promise(() => undefined));
+    store.setPageSize(50);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(store.status()).toBe('loading');
+    const tile = (await harness.tiles())[1];
+    if (!tile) throw new Error('Missing catalog status tile');
+    expect(await tile.getProperty<boolean>('disabled')).toBe(false);
+    expect(await tile.getAttribute('aria-disabled')).toBe('true');
+    navigate.mockClear();
+    await tile.click();
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
   it('does not request member choices or show a failure banner without membership read', async () => {
     canRead.set(false);
     memberStatus.set('error');
