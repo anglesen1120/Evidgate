@@ -350,13 +350,18 @@ describe('PolicyPage', () => {
   it('announces loading, labels the revision field and disables actions until the read completes', async () => {
     store.phase.set('loading');
     store.revisions.set([]);
-    const { root } = await render();
+    const { fixture, root } = await render();
     expect(root.querySelector('label[for="policy-revision-id"]')?.textContent).toContain(
       'Revision ID',
     );
-    expect(root.querySelector('[role="status"][aria-busy="true"]')?.textContent).toContain(
-      'Loading revisions',
-    );
+    const status = root.querySelector('app-loading-pattern [role="status"][aria-live="polite"]');
+    expect(status).not.toBeNull();
+    expect(status?.closest('[aria-busy="true"]')).toBeNull();
+    expect(root.querySelector('app-loading-pattern [aria-busy="true"]')).not.toBeNull();
+    await vi.waitFor(() => {
+      fixture.detectChanges();
+      expect(status?.textContent).toContain('Loading revisions');
+    });
     expect(root.querySelector('[hlmSkeleton]')?.getAttribute('aria-hidden')).toBe('true');
     expect(root.querySelector<HTMLInputElement>('#policy-revision-id')?.disabled).toBe(true);
     expect(root.querySelector<HTMLButtonElement>('[data-policy-open]')?.disabled).toBe(true);

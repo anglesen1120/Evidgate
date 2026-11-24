@@ -154,9 +154,9 @@ describe('EvidencePanelComponent', () => {
     fixture.componentRef.setInput('refreshFailed', true);
     await fixture.whenStable();
     expect(root.textContent).toContain(PROJECT.name);
-    expect(root.querySelector('[role="status"]')?.textContent).toContain(
-      'last confirmed resources',
-    );
+    expect(
+      root.querySelector('[data-resource-state="stale"][role="status"]')?.textContent,
+    ).toContain('last confirmed resources');
   });
 
   it('renders server-supplied project text as text, not HTML', async () => {

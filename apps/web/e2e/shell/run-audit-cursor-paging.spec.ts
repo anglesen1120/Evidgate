@@ -106,7 +106,7 @@ for (const surface of ['runs', 'audit'] as const) {
       await bar.evaluate((element) => getComputedStyle(element, '::after').animationName),
     ).toBe('none');
     expect(await rowIds(page, surface)).toEqual(first);
-    await expect(table.getByRole('status')).toHaveText('Loading…');
+    await expect(table.locator('app-loading-pattern').getByRole('status')).toHaveText('Loading…');
     await expect(page.locator(ROWS[surface])).toHaveCount(13);
     await expect(bar).toHaveCount(0);
     expect(await requests(page, surface)).toHaveLength(2);

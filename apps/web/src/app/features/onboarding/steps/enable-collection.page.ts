@@ -345,13 +345,12 @@ export class EnableCollectionPage {
   }
 
   /**
-   * The confirm vanishes on success, so the focus it carried would be dropped; the terminal panel's
-   * heading is the announcement target. Reading the ref inside the effect keeps it tracked, so the
-   * pass that mounts the panel re-runs it with a resolved element.
+   * Only this page's successful confirm replaces a pressed control. A restored activation must not
+   * move focus. The runner drops stale results, and tracking the ref waits for the heading to mount.
    */
   private focusEnabledHeading(): void {
     effect(() => {
-      if (this.enabled() === null) {
+      if (this.activation.result() === undefined) {
         return;
       }
       this.enabledHeadingRef()?.nativeElement.focus();

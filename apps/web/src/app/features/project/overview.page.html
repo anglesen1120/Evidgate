@@ -82,11 +82,7 @@
           (retry)="store.runs.reload()"
         >
           <p class="mt-0 text-sm text-muted-foreground">{{ copy.trendContext }}</p>
-          <app-decision-trend
-            [fetching]="store.runs.loading()"
-            [label]="sampleLabel()"
-            [points]="trend()"
-          />
+          <app-decision-trend [label]="sampleLabel()" [points]="trend()" />
         </app-dashboard-widget>
       }
       @if (attentionVisible()) {
