@@ -28,6 +28,7 @@ import type {
 } from '../../shared/ui/data-table/data-table-column';
 import { DataTableValueComponent } from '../../shared/ui/data-table/data-table-value.component';
 import { RowActionComponent } from '../../shared/ui/data-table/row-action.component';
+import { FieldHintComponent } from '../../shared/ui/forms/field-hint.component';
 import { CopyValueButtonComponent } from '../../shared/ui/values/copy-value-button.component';
 import { NarrowMutationPolicy } from '../../shared/ui/narrow/narrow-mutation-policy';
 import { escapeFormatChars } from '../../shared/ui/values/ref-name-display';
@@ -46,6 +47,7 @@ const selectionTrack = 'calc(var(--eg-control-touch) + var(--eg-space-2) * 2)';
     DataTableComponent,
     DataTableValueComponent,
     RowActionComponent,
+    FieldHintComponent,
     CopyValueButtonComponent,
     StatusPillComponent,
     RevisionChipComponent,

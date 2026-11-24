@@ -20,6 +20,7 @@ import { HlmSelectImports } from '@evidgate/ui/select';
 import { combineLatest, distinctUntilChanged, map } from 'rxjs';
 import { RETAINED_ROWS_CAP } from '../../shared/keyset-retention';
 import { DataTablePagerComponent } from '../../shared/ui/data-table/data-table-pager.component';
+import { RowActionComponent } from '../../shared/ui/data-table/row-action.component';
 import { InlineFeedbackComponent } from '../../shared/ui/states/inline-feedback.component';
 import { LiveStatusComponent } from '../../shared/ui/states/live-status.component';
 import { RequestStateComponent } from '../../shared/ui/states/request-state.component';
@@ -43,6 +44,7 @@ import { AuthoringCaseTableStore } from './authoring-case-table.store';
     FieldHintComponent,
     DecimalPipe,
     DataTablePagerComponent,
+    RowActionComponent,
     FormsModule,
     HlmButton,
     HlmInput,
@@ -112,6 +114,9 @@ export class AuthoringCaseTableComponent {
   );
   protected readonly busy = computed(
     () => this.store.status() === 'loading' || this.request.isLoading(),
+  );
+  protected readonly refreshUnavailable = computed(
+    () => this.busy() || this.store.loadingMore() || !this.store.retryReady(),
   );
   readonly projectEmpty = input(false);
   readonly loadedInventory = computed(() =>
@@ -256,6 +261,7 @@ export class AuthoringCaseTableComponent {
     this.navigate({ cursor: this.store.routeCursor() }, true);
   }
   protected async refresh(): Promise<void> {
+    if (this.refreshUnavailable()) return;
     const scope = this.routeState();
     await this.store.reload();
     if (
