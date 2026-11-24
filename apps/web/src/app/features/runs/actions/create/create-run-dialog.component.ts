@@ -1,17 +1,14 @@
 import { FieldHintComponent } from '../../../../shared/ui/forms/field-hint.component';
 import { DOCUMENT } from '@angular/common';
 import {
-  afterRenderEffect,
   ChangeDetectionStrategy,
   Component,
   computed,
   DestroyRef,
-  ElementRef,
   inject,
   input,
   output,
   signal,
-  viewChild,
 } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { HlmButton } from '@evidgate/ui/button';
@@ -153,11 +150,9 @@ export class CreateRunDialogComponent {
     this.kindOptions.find((o) => o.value === value)?.label ?? this.copy.none;
   protected readonly triggerLabel = (value: unknown) =>
     this.triggerOptions.find((o) => o.value === value)?.label ?? this.copy.none;
-  private readonly manifestControl = viewChild<ElementRef<HTMLInputElement>>('manifestControl');
   private readonly opener =
     this.document.activeElement instanceof HTMLElement ? this.document.activeElement : null;
   private readonly request = new AbortController();
-  private focused = false;
   private finished = false;
   private createdRunId: string | null = null;
 
@@ -166,13 +161,6 @@ export class CreateRunDialogComponent {
     this.destroyRef.onDestroy(() => {
       off();
       this.request.abort();
-    });
-    afterRenderEffect(() => {
-      const control = this.manifestControl()?.nativeElement;
-      if (control && !this.focused) {
-        control.focus();
-        this.focused = true;
-      }
     });
   }
 

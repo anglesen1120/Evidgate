@@ -8,15 +8,19 @@ import { FieldHintComponent } from './field-hint.component';
 @Component({
   imports: [HlmInput, FieldHintComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
+  host: { '(keydown.escape)': 'escaped.set(true)' },
   template: `
-    <app-field-hint [descriptionId]="'code-help'" label="Action code" [text]="guidance()">
-      <label for="code">Action code</label>
+    <app-field-hint [descriptionId]="'code-help'" [label]="label" [text]="guidance()">
+      <label for="code">{{ label }}</label>
     </app-field-hint>
     <input hlmInput id="code" [aria-describedby]="'code-help code-error'" />
-    <p id="code-error">Invalid code.</p>
+    <p id="code-error">{{ correction }}</p>
   `,
 })
 class Host {
+  readonly label = 'Action code';
+  readonly correction = 'Invalid code.';
+  readonly escaped = signal(false);
   readonly guidance = signal<string | undefined>('Use the exact code.');
 }
 
@@ -65,6 +69,19 @@ describe('FieldHintComponent', () => {
     expect(await trigger.getAttribute('aria-expanded')).toBe('false');
     expect(await trigger.isFocused()).toBe(true);
     expect(await input.getAttribute('aria-describedby')).toBe('code-help code-error');
+  });
+
+  it('handles Escape inside the panel without passing it to an enclosing dialog', async () => {
+    const { field, host } = await setup();
+    const trigger = await field.trigger();
+    const panel = await field.description();
+    await trigger.click();
+    await panel.focus();
+    expect(await panel.isFocused()).toBe(true);
+    await panel.sendKeys(TestKey.ESCAPE);
+    expect(await trigger.getAttribute('aria-expanded')).toBe('false');
+    expect(await trigger.isFocused()).toBe(true);
+    expect(host.escaped()).toBe(false);
   });
 
   it('removes the disclosure when optional guidance goes away', async () => {

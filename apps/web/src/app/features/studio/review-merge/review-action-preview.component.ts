@@ -21,7 +21,9 @@ const actions = {
   imports: [FieldHintComponent, HlmButton, HlmDialogImports, HlmLabel, HlmInput, HlmIcon],
   host: { class: 'inline-block min-w-0 max-w-full' },
   template: `
-    <hlm-dialog>
+    <hlm-dialog
+      [autoFocus]="kind() === 'submit' || kind() === 'changes' ? '#merge-note' : 'first-tabbable'"
+    >
       <button
         hlmBtn
         hlmDialogTrigger

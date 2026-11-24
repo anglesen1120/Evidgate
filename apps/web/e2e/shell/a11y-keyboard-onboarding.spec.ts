@@ -8,7 +8,7 @@
 // refusal paths the plan names are walked too: each step that disables or unmounts the control it
 // was pressed from parks focus on a target the page owns (the waiting line, then its own refusal
 // heading), and no assertion here pins a dropped-focus fallback as expected behaviour.
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 
 import { danglingDescriptions } from './dangling-descriptions';
 import {
@@ -57,6 +57,38 @@ const WORKFLOW_REFS = 'acme/storefront-web/.github/workflows/evidgate.yml@refs/h
 /** The name this walkthrough types into the token form; the corpus echoes its own name back. */
 const TOKEN_NAME = 'CI upload (keyboard)';
 
+async function typeHintedField(page: Page, id: string, label: string, value: string, seek = false) {
+  const hint = page.getByRole('button', { name: `Hint: ${label}`, exact: true });
+  if (seek) await tabUntil(page, `button[aria-controls="${id}-hint"]`);
+  else await pressTab(page);
+  await expectKeyboardFocus(page, hint, `hint for ${label}`);
+  await expect(hint).toHaveAttribute('aria-controls', `${id}-hint`);
+  await expect(hint).toHaveAttribute('aria-expanded', 'false');
+  await pressTab(page);
+  const field = page.locator(`#${id}`);
+  await expectKeyboardFocus(page, field, label);
+  await page.keyboard.type(value);
+  await expect(field).toHaveValue(value);
+}
+
+async function fillProject(page: Page, name: string, slug: string, seek = false) {
+  await typeHintedField(page, 'onboarding-project-name', 'Project name', name, seek);
+  await typeHintedField(page, 'onboarding-project-slug', 'Project slug', slug);
+}
+
+async function fillBinding(page: Page, seek = false) {
+  await typeHintedField(
+    page,
+    'connect-oidc-repo-id',
+    'GitHub numeric repository ID',
+    REPOSITORY_ID,
+    seek,
+  );
+  await typeHintedField(page, 'connect-oidc-repo-name', 'Repository (owner/repo)', REPOSITORY_NAME);
+  await typeHintedField(page, 'connect-oidc-refs', 'Allowed Git ref patterns', REF_PATTERNS);
+  await typeHintedField(page, 'connect-oidc-workflows', 'Allowed workflow refs', WORKFLOW_REFS);
+}
+
 test.describe('W1 — step 1, create project (keyboard walkthrough plan)', () => {
   test('the skip link, the stepper, both fields and the submit carry the flow into step 2', async ({
     page,
@@ -97,18 +129,7 @@ test.describe('W1 — step 1, create project (keyboard walkthrough plan)', () =>
     await expectCurrentStep(page, 1);
     await expectKeyboardFocus(page, stepButton(page, 5), 'blocked activation retains focus');
 
-    // 4.–5. Both fields, reached and filled with the keyboard only.
-    await pressTab(page);
-    const nameField = page.locator('#onboarding-project-name');
-    await expectKeyboardFocus(page, nameField, 'the project name field');
-    await page.keyboard.type(CREATED_PROJECT_NAME);
-    await expect(nameField).toHaveValue(CREATED_PROJECT_NAME);
-
-    await pressTab(page);
-    const slugField = page.locator('#onboarding-project-slug');
-    await expectKeyboardFocus(page, slugField, 'the project slug field');
-    await page.keyboard.type(CREATED_PROJECT_SLUG);
-    await expect(slugField).toHaveValue(CREATED_PROJECT_SLUG);
+    await fillProject(page, CREATED_PROJECT_NAME, CREATED_PROJECT_SLUG);
 
     // 6. The submit is the last stop of step 1: Back and Next are disabled on the first step, so a
     //    keyboard user cannot tab into them.
@@ -138,7 +159,7 @@ test.describe('W1 — step 1, create project (keyboard walkthrough plan)', () =>
     ).toBeVisible();
   });
 
-  test('step 1 exposes five discoverable steps and the three existing form Tab stops', async ({
+  test('step 1 exposes five discoverable steps and five form Tab stops in label order', async ({
     page,
   }) => {
     await page.goto(onboardingUrl('en', 'onboarding-empty'));
@@ -147,14 +168,16 @@ test.describe('W1 — step 1, create project (keyboard walkthrough plan)', () =>
 
     expect(
       await enabledTabStops(page),
-      'step 1 Tab stops inside main (five explained steps, both fields, the submit)',
+      'step 1 Tab stops inside main (five explained steps, two hints, two fields and submit)',
     ).toEqual([
       'onboarding-select-step-1',
       'onboarding-select-step-2',
       'onboarding-select-step-3',
       'onboarding-select-step-4',
       'onboarding-select-step-5',
+      'hint:onboarding-project-name-hint',
       'onboarding-project-name',
+      'hint:onboarding-project-slug-hint',
       '#onboarding-project-slug',
       'onboarding-project-submit',
     ]);
@@ -175,10 +198,7 @@ test.describe('W1 — step 1, create project (keyboard walkthrough plan)', () =>
     await expectCurrentStep(page, 1);
     await enterMainByKeyboard(page);
 
-    await tabUntil(page, '#onboarding-project-name');
-    await page.keyboard.type('Storefront web');
-    await pressTab(page);
-    await page.keyboard.type('storefront-web');
+    await fillProject(page, 'Storefront web', 'storefront-web', true);
     await tabUntil(page, '[data-testid="onboarding-project-submit"]');
     await page.keyboard.press('Enter');
 
@@ -248,30 +268,7 @@ test.describe('W2 — step 2, connect CI (OIDC then token)', () => {
     await pressTab(page);
     await expectKeyboardFocus(page, page.locator('[data-testid="cli-quickstart-copy"]'), 'Copy');
 
-    // 3.–6. The four OIDC fields, in reading order, filled with the keyboard.
-    await pressTab(page);
-    const repoId = page.locator('[data-testid="connect-oidc-repo-id"]');
-    await expectKeyboardFocus(page, repoId, 'the OIDC repository id field');
-    await page.keyboard.type(REPOSITORY_ID);
-    await expect(repoId).toHaveValue(REPOSITORY_ID);
-
-    await pressTab(page);
-    const repoName = page.locator('[data-testid="connect-oidc-repo-name"]');
-    await expectKeyboardFocus(page, repoName, 'the OIDC repository name field');
-    await page.keyboard.type(REPOSITORY_NAME);
-    await expect(repoName).toHaveValue(REPOSITORY_NAME);
-
-    await pressTab(page);
-    const refs = page.locator('[data-testid="connect-oidc-refs"]');
-    await expectKeyboardFocus(page, refs, 'the OIDC ref patterns field');
-    await page.keyboard.type(REF_PATTERNS);
-    await expect(refs).toHaveValue(REF_PATTERNS);
-
-    await pressTab(page);
-    const workflows = page.locator('[data-testid="connect-oidc-workflows"]');
-    await expectKeyboardFocus(page, workflows, 'the OIDC workflow refs field');
-    await page.keyboard.type(WORKFLOW_REFS);
-    await expect(workflows).toHaveValue(WORKFLOW_REFS);
+    await fillBinding(page);
 
     // 7. Enter on the submit opens the reveal, whose heading takes focus on its own.
     await pressTab(page);
@@ -306,13 +303,8 @@ test.describe('W2 — step 2, connect CI (OIDC then token)', () => {
       'the OIDC panel heading after Dismiss',
     );
 
-    // 9. Six Tabs from that heading: the four fields, the OIDC submit, then the token name. The
-    //    bindings heading, the empty list and the truncated notice add no stop.
-    await pressTab(page, 6);
-    const tokenName = page.locator('[data-testid="connect-token-name"]');
-    await expectKeyboardFocus(page, tokenName, 'the token name field');
-    await page.keyboard.type(TOKEN_NAME);
-    await expect(tokenName).toHaveValue(TOKEN_NAME);
+    // Walk through the refreshed bindings to the token hint and then its input.
+    await typeHintedField(page, 'connect-token-name', 'Token name', TOKEN_NAME, true);
 
     // 10.–11. The token reveal behaves the same way, and Dismiss lands on the token heading.
     await pressTab(page);
@@ -344,7 +336,7 @@ test.describe('W2 — step 2, connect CI (OIDC then token)', () => {
 
     // 12.–13. The token panel is the last section, so Back follows it; the seed's own step 2 is not
     //         done, so Next stays gated and is never a stop. Enter on Back returns to step 1.
-    await pressTab(page, 3);
+    await tabUntil(page, '[data-testid="onboarding-back"]');
     await expectKeyboardFocus(page, backButton(page), 'Back after the token panel');
     await expect(nextButton(page)).toBeDisabled();
     await page.keyboard.press('Enter');
@@ -364,14 +356,7 @@ test.describe('W2 — step 2, connect CI (OIDC then token)', () => {
     await expectCurrentStep(page, 2);
     await enterMainByKeyboard(page);
 
-    await tabUntil(page, '#connect-oidc-repo-id');
-    await page.keyboard.type(REPOSITORY_ID);
-    await pressTab(page);
-    await page.keyboard.type(REPOSITORY_NAME);
-    await pressTab(page);
-    await page.keyboard.type(REF_PATTERNS);
-    await pressTab(page);
-    await page.keyboard.type(WORKFLOW_REFS);
+    await fillBinding(page, true);
     await tabUntil(page, '[data-testid="connect-oidc-submit"]');
     await page.keyboard.press('Enter');
 

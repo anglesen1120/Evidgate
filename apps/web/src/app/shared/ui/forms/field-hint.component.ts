@@ -28,23 +28,25 @@ import { openFullValuePopover } from '@evidgate/ui/utils';
         #trigger
         hlmBtn
         type="button"
-        variant="ghost"
-        size="icon-sm"
+        [variant]="'ghost'"
+        [size]="'icon-sm'"
         class="shrink-0 text-muted-foreground pointer-coarse:size-(--eg-control-touch)"
         [attr.aria-label]="name()"
         [attr.aria-controls]="descriptionId()"
         [attr.aria-describedby]="descriptionId()"
         [attr.aria-expanded]="expanded()"
         (click)="toggle(trigger, panel)"
-        (keydown.escape)="escape($event)"
+        (keydown.escape)="escape($event, trigger)"
       >
         <hlm-icon name="lucideInfo" />
       </button>
       <span
         #panel
         popover="manual"
+        tabindex="0"
         class="box-border w-max overflow-auto rounded-(--eg-radius-md) border border-border bg-popover p-(--eg-space-4) text-start text-sm font-normal text-popover-foreground whitespace-normal wrap-anywhere shadow-md"
         [id]="descriptionId()"
+        (keydown.escape)="escape($event, trigger)"
         ><span class="block max-w-prose">{{ hint }}</span></span
       >
     }
@@ -93,9 +95,10 @@ export class FieldHintComponent {
     };
   }
 
-  protected escape(event: Event): void {
+  protected escape(event: Event, trigger: HTMLElement): void {
     if (!this.dismiss) return;
     event.stopPropagation();
     this.dismiss();
+    trigger.focus({ preventScroll: true });
   }
 }

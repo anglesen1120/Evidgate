@@ -3,6 +3,7 @@
   [closeOnOutsidePointerEvents]="false"
   [disableClose]="true"
   [restoreFocus]="false"
+  [autoFocus]="'#run-create-manifestId'"
   [aria-label]="copy.title"
   (closed)="finishClose()"
 >
@@ -46,7 +47,6 @@
           </app-field-hint>
           <input
             hlmInput
-            #manifestControl
             [id]="feedbackField.id"
             [name]="definition.key"
             [required]="definition.required"

@@ -31575,7 +31575,7 @@
         <source>Hint: <x id="label" equiv-text="this.label()"/></source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/forms/field-hint.component.ts</context>
-          <context context-type="linenumber">61</context>
+          <context context-type="linenumber">63</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.gallery.values.title" datatype="html">

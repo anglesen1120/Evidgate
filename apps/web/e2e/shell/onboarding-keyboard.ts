@@ -181,6 +181,8 @@ export async function enabledTabStops(page: Page): Promise<readonly string[]> {
         const testId = element.getAttribute('data-testid');
         if (testId !== null) return testId;
         if (element.id !== '') return `#${element.id}`;
+        const hint = element.closest('app-field-hint') && element.getAttribute('aria-controls');
+        if (hint) return `hint:${hint}`;
         return element.tagName.toLowerCase();
       });
   });
