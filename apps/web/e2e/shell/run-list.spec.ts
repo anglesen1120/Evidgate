@@ -111,9 +111,9 @@ for (const locale of LOCALES) {
         scopeCount,
       );
       if (row.ref.name?.includes('\u202e')) {
-        await expect(rendered.locator('a > bdi')).toHaveCount(1);
-        await expect(rendered.locator('a > bdi')).toContainText('⟨U+202E⟩');
-        expect(await rendered.locator('a > bdi').textContent()).not.toContain('\u202e');
+        await expect(rendered.locator('a bdi')).toHaveCount(1);
+        await expect(rendered.locator('a bdi')).toContainText('⟨U+202E⟩');
+        expect(await rendered.locator('a bdi').textContent()).not.toContain('\u202e');
       }
     }
     // Nothing is filtered here, so the pager range is the only count in the footer.

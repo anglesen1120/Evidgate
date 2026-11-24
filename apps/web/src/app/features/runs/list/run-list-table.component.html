@@ -23,27 +23,41 @@
     [attr.data-run-id]="row.run_id"
   >
     <a
-      class="grid min-h-(--eg-control-touch) min-w-0 max-w-full content-center font-semibold text-primary underline underline-offset-(--eg-space-1) focus-visible:outline-solid focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-ring focus-visible:outline-offset-(--eg-focus-offset)"
+      class="grid min-h-(--eg-control-touch) min-w-0 max-w-full content-center justify-items-start no-underline focus-visible:outline-solid focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-ring focus-visible:outline-offset-(--eg-focus-offset)"
+      [hlmTooltip]="copy.unverified"
+      [tooltipDisabled]="!row.unverified_ref"
       [routerLink]="[row.run_id]"
       [queryParamsHandling]="'preserve'"
     >
-      @if (row.ref.name; as ref) {
-        <bdi class="min-w-0 font-mono" [class.truncate]="!stacked">{{ displayRef(ref) }}</bdi>
-      } @else {
-        <span data-run-created class="tabular-nums"
-          ><app-absolute-time [value]="row.created_at"
-        /></span>
+      <span
+        class="flex min-w-0 max-w-full items-center gap-(--eg-space-2) font-semibold text-primary underline underline-offset-(--eg-space-1)"
+      >
+        @if (row.ref.name; as ref) {
+          <bdi class="min-w-0 font-mono" [class.truncate]="!stacked">{{ displayRef(ref) }}</bdi>
+        } @else {
+          <span data-run-created class="tabular-nums"
+            ><app-absolute-time [value]="row.created_at"
+          /></span>
+        }
+        @if (row.unverified_ref) {
+          <span
+            role="img"
+            class="inline-flex shrink-0 text-(--eg-warning-fg)"
+            [attr.aria-label]="copy.unverified"
+            data-run-unverified
+          >
+            <hlm-icon class="size-(--eg-space-5)" [name]="'lucideTriangleAlert'" />
+          </span>
+        }
+      </span>
+      @if (row.ref.name) {
+        <span class="eg-type-caption text-muted-foreground tabular-nums" data-run-created>
+          <app-absolute-time [value]="row.created_at" />
+        </span>
       }
+      <!-- The link name comes from its content, so it always contains the visible subject and time (WCAG 2.5.3). -->
       <span class="sr-only">({{ displayRef(row.run_id) }})</span>
     </a>
-    @if (row.ref.name) {
-      <span class="eg-type-caption text-muted-foreground tabular-nums" data-run-created>
-        <app-absolute-time [value]="row.created_at" />
-      </span>
-    }
-    @if (row.unverified_ref) {
-      <app-status-pill [tone]="'warning'" [label]="copy.unverified" data-run-unverified />
-    }
   </div>
 </ng-template>
 <ng-template #stateCell let-row>

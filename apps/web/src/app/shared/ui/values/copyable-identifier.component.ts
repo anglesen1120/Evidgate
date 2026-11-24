@@ -92,7 +92,7 @@ import { escapeFormatChars } from './ref-name-display';
           [value]="value()"
           [label]="label()"
           [size]="copySize()"
-          [iconOnly]="compact()"
+          [iconOnly]="compact() || iconOnlyCopy()"
         />
       </span>
     </div>
@@ -101,7 +101,12 @@ import { escapeFormatChars } from './ref-name-display';
       <code class="full-value"><bdi [textContent]="displayValue()"></bdi></code>
       <hlm-dialog-footer>
         <button hlmBtn type="button" [variant]="'outline'" hlmDialogClose>{{ closeText }}</button>
-        <app-copy-value-button [value]="value()" [label]="label()" [size]="copySize()" />
+        <app-copy-value-button
+          [value]="value()"
+          [label]="label()"
+          [size]="copySize()"
+          [iconOnly]="iconOnlyCopy()"
+        />
       </hlm-dialog-footer>
     </ng-template>
   `,
@@ -223,6 +228,7 @@ export class CopyableIdentifierComponent {
   protected readonly showPreview = computed(() => this.compact() || this.truncate());
   /** Applies the copy target size in both the scan row and its full-value dialog. */
   readonly copySize = input<CopyValueButtonSize>('sm');
+  readonly iconOnlyCopy = input(false);
   private readonly fullValue = viewChild.required<TemplateRef<unknown>>('fullValue');
   private readonly previewValue = viewChild<ElementRef<HTMLElement>>('previewValue');
   private readonly copyAction = viewChild.required<

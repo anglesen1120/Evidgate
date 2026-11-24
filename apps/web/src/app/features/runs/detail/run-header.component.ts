@@ -47,12 +47,13 @@ export class RunHeaderComponent {
   protected readonly sectionSize = 'section' as const;
   readonly view = input<'summary' | 'context'>('summary');
   readonly viewEvidence = output<void>();
-  /**
-   * Collection completeness of the newest frozen revision, when the revision list answered. The
-   * header badge describes the run's collection, never the revision the evidence region is pinned
-   * to.
-   */
+  // The incomplete-collection warning still describes the latest freeze, regardless of the pin.
   readonly runCompleteness = input<Completeness | null>(null);
+  readonly selectedEvidence = input<{
+    readonly completeness: Completeness;
+    readonly missing: readonly string[];
+  } | null>(null);
+  readonly evidenceQualifier = input<string | null>(null);
   readonly latestSnapshot = input<EvidenceRevision | null>(null);
   readonly decision = input<DecisionViewModel | null>(null);
   readonly decisionLoading = input(false);
@@ -87,6 +88,6 @@ export class RunHeaderComponent {
     none: $localize`:@@runs.detail.none:None recorded`,
     context: $localize`:@@runs.detail.context:Execution context`,
     environment: $localize`:@@runs.detail.environment:Environment`,
-    revision: $localize`:@@runs.detail.environment-revision:Revision`,
+    revision: $localize`:@@runs.detail.release.environment:Environment revision`,
   };
 }

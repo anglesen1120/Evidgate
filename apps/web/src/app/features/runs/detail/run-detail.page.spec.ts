@@ -50,9 +50,12 @@ describe('RunDetailPage', () => {
     expect(root.querySelector('[data-run-environment] bdi')?.textContent).toBe(
       run.environment.environment_key,
     );
-    expect(root.querySelector('[data-run-environment-revision]')?.textContent).toBe(
-      `Revision ${run.environment.revision_no}`,
-    );
+    const revision = root.querySelector('dd[data-run-environment-revision]');
+    expect(revision?.previousElementSibling?.textContent).toBe('Environment revision');
+    expect(revision?.textContent?.trim()).toBe(String(run.environment.revision_no));
+    const copy = root.querySelector('[data-run-environment] button.icon-only');
+    expect(copy?.getAttribute('title')).toBe('Copy Environment');
+    expect(copy?.getAttribute('aria-label')).toBe('Copy Environment');
     expect(root.querySelector('app-run-header [data-run-policy]')).toBeNull();
     expect(root.querySelector('[data-run-environment]')?.previousElementSibling?.textContent).toBe(
       'Environment',

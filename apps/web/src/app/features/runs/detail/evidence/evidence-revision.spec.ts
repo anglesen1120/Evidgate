@@ -114,12 +114,10 @@ describe('Run detail evidence revision', () => {
     expect(panel(root).querySelector('[data-evidence-selected]')?.textContent).toContain(
       'Selected evidence revision: 3',
     );
-    expect(panel(root).querySelector('[data-evidence-completeness]')?.textContent).toContain(
-      'Completeness: Complete',
-    );
-    expect(panel(root).querySelector('.reason-empty')?.textContent?.trim()).toBe(
-      'No missing evidence reasons reported',
-    );
+    const completeness = root.querySelector('.run-summary [data-evidence-completeness]');
+    expect(completeness?.textContent).toContain('Complete');
+    expect(completeness?.textContent).toContain('Selected evidence revision: 3');
+    expect(panel(root).querySelector('app-evidence-badge, [data-evidence-missing]')).toBeNull();
     expect(panel(root).querySelector('[data-evidence-evaluation]')?.textContent).toContain(
       'evaluation-3',
     );
@@ -149,7 +147,7 @@ describe('Run detail evidence revision', () => {
     expect(TestBed.inject(Location).path()).toContain('evidence_revision=2');
     expect(panel(root).querySelector('[data-evidence-search-older]')).not.toBeNull();
     // No data is invented for a pin that is not on a loaded page, even though the decision is.
-    expect(panel(root).querySelector('[data-evidence-completeness]')?.textContent).toContain(
+    expect(root.querySelector('.run-summary [data-evidence-completeness]')?.textContent).toContain(
       'Completeness: Unavailable',
     );
 
@@ -178,7 +176,7 @@ describe('Run detail evidence revision', () => {
     expect(panel(root).querySelector('[data-evidence-selected]')?.textContent).toContain(
       'Selected evidence revision: 9',
     );
-    expect(panel(root).querySelector('[data-evidence-completeness]')?.textContent).toContain(
+    expect(root.querySelector('.run-summary [data-evidence-completeness]')?.textContent).toContain(
       'Completeness: Unavailable',
     );
     // The newest revision is not substituted for the missing pin.
@@ -200,7 +198,7 @@ describe('Run detail evidence revision', () => {
     const evidence = panel(root);
     expect(evidence.querySelector('app-error-pattern')?.textContent).toContain('request-detail');
     // The decision's revision is still pinnable, so its own evidence stays available.
-    expect(evidence.querySelector('[data-evidence-completeness]')?.textContent).toContain(
+    expect(root.querySelector('.run-summary [data-evidence-completeness]')?.textContent).toContain(
       'Completeness: Incomplete',
     );
     expect(evidence.querySelector('[data-evidence-missing]')?.textContent).toContain(

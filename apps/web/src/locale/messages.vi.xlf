@@ -2436,7 +2436,6 @@
 <trans-unit id="settings.secrets.ci.more" datatype="html"><source>Load more CI bindings</source><target>Tải thêm liên kết CI</target></trans-unit>
 <trans-unit id="settings.secrets.ci.loading-more" datatype="html"><source>Loading more CI bindings…</source><target>Đang tải thêm liên kết CI…</target></trans-unit>
 <trans-unit id="runs.list.title" datatype="html"><source>Runs</source><target>Lượt chạy</target></trans-unit>
-<trans-unit id="runs.list.description" datatype="html"><source>Review collection state and the latest stored decision. Open a run for evidence completeness.</source><target>Xem trạng thái thu thập và quyết định đã lưu mới nhất. Mở lượt chạy để xem độ đầy đủ của bằng chứng.</target></trans-unit>
 <trans-unit id="runs.list.page-filter-hint" datatype="html"><source>Run scope filters this page only. State, decision and ref name filter all project runs.</source><target>Phạm vi lượt chạy chỉ lọc trang này. Trạng thái, quyết định và tên tham chiếu lọc tất cả lượt chạy của dự án.</target></trans-unit>
 <trans-unit id="runs.list.decision-filter" datatype="html"><source>Decision</source><target>Quyết định</target></trans-unit>
 <trans-unit id="runs.list.decision-hint" datatype="html"><source>The latest live evaluation determines the decision. Not evaluated means no live evaluation yet.</source><target>Quyết định dựa trên lần đánh giá hiện hành mới nhất. Chưa đánh giá nghĩa là chưa có lần đánh giá hiện hành nào.</target></trans-unit>
@@ -2607,7 +2606,6 @@
 <trans-unit id="runs.detail.attempts.server-order" datatype="html"><source>Server order: execution key ascending, then attempt number ascending.</source><target>Thứ tự máy chủ: khóa lượt thực thi tăng dần, sau đó số lần thử tăng dần.</target></trans-unit>
 <trans-unit id="runs.detail.attempts.page-loading" datatype="html"><source>Loading attempts page</source><target>Đang tải trang lượt chạy</target></trans-unit>
 <trans-unit id="runs.detail.attempts.page-loaded" datatype="html"><source>Attempts page loaded</source><target>Đã tải trang lượt chạy</target></trans-unit>
-<trans-unit id="runs.detail.environment-revision" datatype="html"><source>Revision</source><target>Phiên bản</target></trans-unit>
 <trans-unit id="suites.composition.suite-composition" datatype="html"><source>Suite composition</source><target>Thành phần bộ kiểm thử</target></trans-unit>
 <trans-unit id="suites.composition.revision" datatype="html"><source>Revision</source><target>Bản sửa đổi</target></trans-unit>
 <trans-unit id="suites.composition.status" datatype="html"><source>Status</source><target>Trạng thái</target></trans-unit>

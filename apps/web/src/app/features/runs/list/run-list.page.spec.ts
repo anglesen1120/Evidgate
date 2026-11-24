@@ -149,8 +149,12 @@ describe('RunListPage', () => {
     ]);
     const { fixture, root } = await render();
     const header = await TestbedHarnessEnvironment.loader(fixture).getHarness(HeaderHarness);
-    expect(await header.getDescription()).toBe('Runs on this page: 3 · Active filters: 0');
+    expect(await header.getDescription()).toBeNull();
     const metrics = root.querySelector('[data-run-metrics]')!;
+    expect(metrics.querySelector('app-shell-icon')).toBeNull();
+    expect(
+      [...metrics.querySelectorAll('dd > span')].map((note) => note.textContent?.trim()),
+    ).toEqual(['Showing 3', ...Array<string>(3).fill('Of 3 runs on this page')]);
     const values = [...metrics.querySelectorAll('dd > app-number-value')];
     expect(values.map((cell) => cell.textContent?.trim())).toEqual(['3', '1', '1', '1']);
     expect(root.querySelector('[data-run-loaded-count]')).toBeNull();
@@ -169,7 +173,7 @@ describe('RunListPage', () => {
     store.loadError.set(failure);
     await fixture.whenStable();
     expect(root.querySelector('[data-run-metrics]')).toBeNull();
-    expect(await header.getDescription()).not.toContain('Runs on this page:');
+    expect(await header.getDescription()).toBeNull();
   });
   it('offers not evaluated separately from verdicts and explains server filtering', async () => {
     const { fixture, root } = await render(true);

@@ -54,7 +54,10 @@ describe('RunHeaderComponent', () => {
       missing: ['missing_shard'],
       evaluation_id: null,
     });
-    fixture.componentRef.setInput('runCompleteness', 'incomplete');
+    fixture.componentRef.setInput('selectedEvidence', {
+      completeness: 'incomplete',
+      missing: ['missing_shard'],
+    });
     await fixture.whenStable();
     const freeze = root.querySelector('[data-run-latest-freeze]');
     expect(freeze?.textContent).toContain('Latest loaded freeze: 3');
@@ -66,6 +69,7 @@ describe('RunHeaderComponent', () => {
       missing: [],
       created_at: '2026-10-31T10:30:00Z',
     });
+    fixture.componentRef.setInput('selectedEvidence', { completeness: 'complete', missing: [] });
     await fixture.whenStable();
     expect(root.querySelector('dl')?.textContent).not.toContain('Missing evidence reasons');
     expect(root.querySelector('[data-run-latest-freeze] time')).not.toBeNull();

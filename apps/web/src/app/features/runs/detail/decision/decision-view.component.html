@@ -106,10 +106,12 @@
         class="m-0 grid min-w-0 grid-cols-[repeat(auto-fit,minmax(min(100%,10rem),1fr))] gap-(--eg-space-5) rounded-(--eg-radius-md) bg-(--eg-surface-raised) p-(--eg-space-4) [&>div]:min-w-0 [&_dt]:text-xs [&_dt]:leading-(--eg-leading-xs) [&_dt]:text-muted-foreground [&_dd]:m-0 [&_dd]:mt-(--eg-space-3)"
         data-decision-summary
       >
-        <div>
-          <dt>{{ copy.completeness }}</dt>
-          <dd><app-evidence-badge [completeness]="decision.completeness" [compact]="true" /></dd>
-        </div>
+        @if (revisionMismatch()) {
+          <div>
+            <dt>{{ copy.completeness }}</dt>
+            <dd><app-evidence-badge [completeness]="decision.completeness" [compact]="true" /></dd>
+          </div>
+        }
         <div>
           <dt>{{ copy.outcome }}</dt>
           <dd><app-outcome-pill [outcome]="decision.outcome" [compact]="true" /></dd>
@@ -169,7 +171,11 @@
             <code
               ><bdi>{{ decision.policyHash }}</bdi></code
             >
-            <app-copy-value-button [value]="decision.policyHash" [label]="copy.policyHash" />
+            <app-copy-value-button
+              [value]="decision.policyHash"
+              [label]="copy.policyHash"
+              [iconOnly]="true"
+            />
           </dd>
         </div>
         <div class="col-span-full" data-decision-manifest>
@@ -178,7 +184,11 @@
             <code
               ><bdi>{{ decision.manifestHash }}</bdi></code
             >
-            <app-copy-value-button [value]="decision.manifestHash" [label]="copy.manifestHash" />
+            <app-copy-value-button
+              [value]="decision.manifestHash"
+              [label]="copy.manifestHash"
+              [iconOnly]="true"
+            />
           </dd>
         </div>
         <div class="col-span-full" data-decision-evaluator>
@@ -195,7 +205,11 @@
             <code
               ><bdi>{{ decision.evaluationId }}</bdi></code
             >
-            <app-copy-value-button [value]="decision.evaluationId" [label]="copy.evaluationId" />
+            <app-copy-value-button
+              [value]="decision.evaluationId"
+              [label]="copy.evaluationId"
+              [iconOnly]="true"
+            />
           </dd>
         </div>
       </dl>

@@ -47,6 +47,34 @@ async function expectSingleLineActions(page: Page, buttons: Locator): Promise<vo
       .toEqual([]);
   }
 }
+function actionContainmentFailures(elements: Element[]) {
+  if (elements.length === 0) return ['no visible actions'];
+  return elements.flatMap((element) => {
+    element.scrollIntoView({ behavior: 'instant', block: 'nearest', inline: 'nearest' });
+    const bounds = element.getBoundingClientRect();
+    const cell = element.closest('td, dd')?.getBoundingClientRect();
+    const scroller = element.closest('.spartan-table-container')?.getBoundingClientRect();
+    const left = Math.max(cell?.left ?? 0, scroller?.left ?? 0, 0);
+    const right = Math.min(cell?.right ?? innerWidth, scroller?.right ?? innerWidth, innerWidth);
+    const inside = bounds.left >= left - 1 && bounds.right <= right + 1;
+    return inside
+      ? []
+      : [{ label: element.textContent?.trim(), left: bounds.left, right: bounds.right }];
+  });
+}
+
+async function expectContainedAction(page: Page, button: Locator): Promise<void> {
+  await expect(button).toBeVisible();
+  await page.evaluate(() => document.fonts.ready);
+  for (const width of [390, 768, 900, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    await expect
+      .poll(() => button.evaluateAll(actionContainmentFailures), {
+        message: `icon-only action outside its cell at ${width}px`,
+      })
+      .toEqual([]);
+  }
+}
 
 for (const locale of LOCALES) {
   for (const theme of THEMES) {
@@ -89,7 +117,7 @@ for (const locale of LOCALES) {
         await id.evaluate((node, value) => {
           node.textContent = value;
         }, longId);
-        await expectSingleLineActions(page, copy);
+        await expectContainedAction(page, copy);
         await page.setViewportSize({ width: 390, height: 900 });
         await expect(id).toHaveText(longId);
         await expect

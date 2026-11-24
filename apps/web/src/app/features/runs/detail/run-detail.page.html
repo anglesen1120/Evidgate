@@ -54,15 +54,13 @@
           [run]="run"
           [runCompleteness]="store.latestRevisionCompleteness()"
           [latestSnapshot]="latestSnapshot()"
+          [selectedEvidence]="selectedEvidence()"
+          [evidenceQualifier]="evidenceQualifier()"
           [decision]="summaryDecision()"
           [decisionLoading]="store.decisionStatus() === 'loading' && store.decision() === null"
           (viewEvidence)="showEvidence()"
         />
-        <app-run-header
-          [run]="run"
-          [runCompleteness]="store.latestRevisionCompleteness()"
-          [view]="'context'"
-        />
+        <app-run-header [run]="run" [view]="'context'" />
       </div>
       <div class="grid min-w-0 gap-(--eg-space-5)">
         <app-attempts-table

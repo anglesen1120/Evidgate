@@ -17,9 +17,15 @@
           <hlm-icon [name]="'lucideInfo'" />
           {{ copy.completeness }}
         </dt>
-        <dd>
-          <app-evidence-badge [completeness]="runCompleteness()" [compact]="true" />
-          @if (latestSnapshot()?.missing?.length; as count) {
+        <dd data-evidence-completeness>
+          <app-evidence-badge [completeness]="selectedEvidence()?.completeness" [compact]="true" />
+          @if (evidenceQualifier(); as qualifier) {
+            <span
+              class="eg-type-caption mt-(--eg-space-2) block font-normal text-muted-foreground"
+              >{{ qualifier }}</span
+            >
+          }
+          @if (selectedEvidence()?.missing?.length; as count) {
             <span class="eg-type-caption mt-(--eg-space-2) block font-normal text-muted-foreground">
               {{ copy.missing }}: <app-number-value [value]="count" />
             </span>
@@ -76,7 +82,12 @@
             </span>
           }
           @if (run().current_evidence_revision_id; as revision) {
-            <app-copyable-identifier [value]="revision" [label]="copy.evidence" [compact]="true" />
+            <app-copyable-identifier
+              [value]="revision"
+              [label]="copy.evidence"
+              [compact]="true"
+              [iconOnlyCopy]="true"
+            />
           } @else if (!latestSnapshot()) {
             <span class="text-muted-foreground">{{ copy.none }}</span>
           }
@@ -118,7 +129,7 @@
         <dt>{{ copy.id }}</dt>
         <dd data-run-id class="min-w-0 flex-nowrap!">
           <bdi class="min-w-0 font-mono wrap-anywhere">{{ display(run().run_id) }}</bdi>
-          <app-copy-value-button class="short-action" [value]="run().run_id" [label]="copy.id" />
+          <app-copy-value-button [value]="run().run_id" [label]="copy.id" [iconOnly]="true" />
         </dd>
       </div>
       <div>
@@ -141,7 +152,7 @@
           @let ref = run().ref.name;
           @if (ref !== null) {
             <bdi>{{ display(ref) }}</bdi>
-            <app-copy-value-button [value]="ref" [label]="copy.ref" />
+            <app-copy-value-button [value]="ref" [label]="copy.ref" [iconOnly]="true" />
           } @else {
             <span class="text-muted-foreground">{{ copy.notProvided }}</span>
           }
@@ -162,10 +173,14 @@
           <app-copy-value-button
             [value]="run().environment.environment_key"
             [label]="copy.environment"
+            [iconOnly]="true"
           />
-          <span data-run-environment-revision
-            >{{ copy.revision }} <app-number-value [value]="run().environment.revision_no"
-          /></span>
+        </dd>
+      </div>
+      <div>
+        <dt>{{ copy.revision }}</dt>
+        <dd data-run-environment-revision>
+          <app-number-value [value]="run().environment.revision_no" />
         </dd>
       </div>
     </dl>
@@ -206,7 +221,7 @@
             @let head = run().ref.head_sha;
             @if (head !== null) {
               <bdi class="font-mono">{{ display(head) }}</bdi>
-              <app-copy-value-button [value]="head" [label]="copy.head" />
+              <app-copy-value-button [value]="head" [label]="copy.head" [iconOnly]="true" />
             } @else {
               <span class="text-muted-foreground">{{ copy.notProvided }}</span>
             }
@@ -218,7 +233,7 @@
             @let base = run().ref.base_sha;
             @if (base !== null) {
               <bdi class="font-mono">{{ display(base) }}</bdi>
-              <app-copy-value-button [value]="base" [label]="copy.base" />
+              <app-copy-value-button [value]="base" [label]="copy.base" [iconOnly]="true" />
             } @else {
               <span class="text-muted-foreground">{{ copy.notProvided }}</span>
             }
@@ -251,7 +266,7 @@
             @let revision = run().current_evidence_revision_id;
             @if (revision !== null) {
               <bdi class="font-mono">{{ display(revision) }}</bdi>
-              <app-copy-value-button [value]="revision" [label]="copy.evidence" />
+              <app-copy-value-button [value]="revision" [label]="copy.evidence" [iconOnly]="true" />
             } @else {
               <span>{{ copy.none }}</span>
             }
@@ -259,8 +274,5 @@
         </div>
       </dl>
     </details>
-    <div class="border-t border-(--eg-border) px-(--eg-space-5) py-(--eg-space-4)">
-      <app-evidence-badge [completeness]="runCompleteness()" />
-    </div>
   </section>
 }

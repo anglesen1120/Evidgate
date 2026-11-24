@@ -14,6 +14,8 @@ import { RouterLink } from '@angular/router';
 import type { RunSummary } from '@evidgate/sdk';
 import { HlmButton } from '@evidgate/ui/button';
 import { HlmDialogImports } from '@evidgate/ui/dialog';
+import { HlmIcon } from '@evidgate/ui/icon';
+import { HlmTooltip } from '@evidgate/ui/tooltip';
 import { AbsoluteTimeComponent } from '../../../shared/time/absolute-time.component';
 import { RunStatePillComponent } from '../../../shared/ui/chips/run-state-pill.component';
 import { StatusPillComponent } from '../../../shared/ui/chips/status-pill.component';
@@ -37,6 +39,8 @@ type RunCell = TemplateRef<DataTableCellContext<RunSummary>>;
     RouterLink,
     HlmButton,
     HlmDialogImports,
+    HlmIcon,
+    HlmTooltip,
     AbsoluteTimeComponent,
     RunStatePillComponent,
     StatusPillComponent,

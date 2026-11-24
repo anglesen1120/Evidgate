@@ -89,10 +89,10 @@ describe('DecisionViewComponent', () => {
     const { root } = render({ decision: EVALUATED });
     expect(text(root, '[data-decision-summary] app-decision-chip')).toContain('FAIL');
     expect(text(root, '[data-decision-summary] app-outcome-pill')).toContain('Has failures');
-    expect(text(root, '[data-decision-summary] app-evidence-badge')).toContain('Incomplete');
+    expect(root.querySelector('[data-decision-summary] app-evidence-badge')).toBeNull();
     expect(
       [...root.querySelectorAll('[data-decision-summary] dt')].map((dt) => dt.textContent),
-    ).toEqual(['Evidence completeness', 'Test outcome', 'Stored run decision']);
+    ).toEqual(['Test outcome', 'Stored run decision']);
     expect(
       Array.from(root.querySelectorAll('.decision-reason-list li > bdi')).map(
         (it) => it.textContent,
@@ -279,6 +279,7 @@ describe('DecisionViewComponent', () => {
   it('raises a revision mismatch with an action that asks for the decision evidence', () => {
     const { fixture, root } = render({ decision: EVALUATED, pinnedRevision: 3 });
     const notice = root.querySelector('[data-decision-mismatch]')!;
+    expect(text(root, '[data-decision-summary] app-evidence-badge')).toContain('Incomplete');
     expect(notice.getAttribute('role')).toBe('status');
     const action = notice.querySelector<HTMLButtonElement>('button');
     expect(action?.hasAttribute('hlmBtn')).toBe(true);

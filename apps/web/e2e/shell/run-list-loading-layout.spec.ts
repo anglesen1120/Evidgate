@@ -60,7 +60,7 @@ for (const locale of LOCALES) {
 
   for (const theme of THEMES) {
     for (const width of [390, 768, 1440]) {
-      test(`runs ${locale} ${theme} ${width}px: size refetch preserves subtitle, first row and pager geometry`, async ({
+      test(`runs ${locale} ${theme} ${width}px: size refetch preserves metrics, first row and pager geometry`, async ({
         page,
       }) => {
         await seedStoredTheme(page, theme);
@@ -80,21 +80,23 @@ for (const locale of LOCALES) {
         await expect(host).toHaveAttribute('data-run-list-status', 'ready', { timeout: 20_000 });
         await expect(rows).toHaveCount(20);
         await page.evaluate(() => document.fonts.ready);
-        const subtitle = host.locator('app-page-header .header-description');
+        const metrics = host.locator('[data-run-metrics]');
+        const values = metrics.locator('dd');
+        await expect(values).toHaveCount(4);
         const pager = host.locator('app-data-table-pager');
         const size = pager.getByRole('combobox');
         await size.scrollIntoViewIfNeeded();
         await expect(size).toContainText('20');
-        const targets = [subtitle, rows.first(), pager];
+        const targets = [metrics, rows.first(), pager];
         const before = await Promise.all(targets.map(documentBox));
-        const text = await subtitle.textContent();
+        const previousValues = await values.allTextContents();
         const firstId = await rows.first().getAttribute('data-row-id');
 
         await size.click();
         await page.getByRole('option', { name: '50', exact: true }).click();
         await expect(host).toHaveAttribute('data-run-list-status', 'loading');
         await expect(pager.getByRole('progressbar')).toBeVisible();
-        await expect(subtitle).toHaveText(text ?? '');
+        await expect(values).toHaveText(previousValues);
         await expect(rows).toHaveCount(20);
         await expect(rows.first()).toHaveAttribute('data-row-id', firstId ?? '');
         const pending = await Promise.all(targets.map(documentBox));

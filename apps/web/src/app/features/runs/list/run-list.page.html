@@ -4,7 +4,7 @@
   >
     <app-shell-icon class="size-(--eg-space-6)" [name]="'run'" />
   </span>
-  <app-page-header class="min-w-0 flex-1" [title]="copy.title" [description]="subtitle()">
+  <app-page-header class="min-w-0 flex-1" [title]="copy.title">
     <div
       appPageHeaderActions
       class="grid min-w-0 justify-items-start gap-(--eg-space-2) md:justify-items-end"
@@ -37,18 +37,13 @@
     hlmCard
     [attr.aria-label]="copy.loadedRuns"
     data-run-metrics
-    class="mb-(--eg-space-4) grid min-w-0 grid-cols-2 gap-px overflow-hidden bg-border p-0 sm:grid-cols-4"
+    class="mb-(--eg-space-5) grid min-w-0 grid-cols-2 gap-x-0 gap-y-(--eg-space-4) px-0 py-(--eg-space-4) sm:grid-cols-4"
   >
-    @for (metric of loadedMetrics(); track metric.icon) {
-      <div class="grid min-w-0 content-between gap-(--eg-space-4) bg-card p-(--eg-space-5)">
-        <dt class="flex min-w-0 items-center gap-(--eg-space-3) font-semibold">
-          <span
-            class="grid size-(--eg-control-sm) shrink-0 place-items-center rounded-(--eg-radius-md) bg-(--eg-accent-soft) text-(--eg-accent-fg)"
-          >
-            <app-shell-icon class="size-(--eg-space-5)" [name]="metric.icon" />
-          </span>
-          {{ metric.label }}
-        </dt>
+    @for (metric of loadedMetrics(); track metric.label) {
+      <div
+        class="min-w-0 px-(--eg-space-5) even:border-s even:border-border sm:not-first:border-s sm:not-first:border-border"
+      >
+        <dt class="eg-type-caption text-muted-foreground">{{ metric.label }}</dt>
         <dd
           class="m-0 font-(family-name:--eg-font-display) text-(length:--eg-text-2xl) leading-(--eg-leading-2xl) font-bold tabular-nums"
         >
@@ -56,7 +51,7 @@
           <span
             class="eg-type-caption block font-(family-name:--eg-font-body) text-muted-foreground font-normal"
           >
-            {{ metric.icon === 'run' ? showing() : ofLoaded() }}
+            {{ $first ? showing() : ofLoaded() }}
           </span>
         </dd>
       </div>

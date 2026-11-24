@@ -11,7 +11,6 @@ import {
   inject,
   Injector,
   LOCALE_ID,
-  linkedSignal,
   signal,
   viewChild,
 } from '@angular/core';
@@ -106,7 +105,6 @@ export class RunListPage {
   protected readonly canCreate = computed(() => this.session.has('run:create'));
   protected readonly createCopy = CREATE_RUN_COPY;
   protected projectId: string | null = null;
-  private readonly subtitleProject = signal<string | null>(null);
   private readonly pagingRetryButton =
     viewChild<ElementRef<HTMLButtonElement>>('pagingRetryControl');
   private readonly pagingSection = viewChild<ElementRef<HTMLElement>>('paging');
@@ -114,7 +112,6 @@ export class RunListPage {
   protected readonly focusCreateFallback = (): void => this.pageHeader()?.focusTitle();
   protected readonly copy = {
     title: $localize`:@@runs.list.title:Runs`,
-    description: $localize`:@@runs.list.description:Review collection state and the latest stored decision. Open a run for evidence completeness.`,
     loadedRuns: $localize`:@@runs.list.page-runs:Runs on this page`,
     failedDecisions: $localize`:@@runs.list.failed-decisions:Stored FAIL decisions`,
     reruns: $localize`:@@runs.list.labeled-reruns:Labeled reruns`,
@@ -176,10 +173,10 @@ export class RunListPage {
       if (row.rerun_label) reruns++;
     }
     return [
-      { label: this.copy.loadedRuns, value: rows.length, icon: 'run' },
-      { label: this.copy.collecting, value: collecting, icon: 'queue' },
-      { label: this.copy.failedDecisions, value: failed, icon: 'shield' },
-      { label: this.copy.reruns, value: reruns, icon: 'layers' },
+      { label: this.copy.loadedRuns, value: rows.length },
+      { label: this.copy.collecting, value: collecting },
+      { label: this.copy.failedDecisions, value: failed },
+      { label: this.copy.reruns, value: reruns },
     ] as const;
   });
   protected readonly showing = computed(() => {
@@ -189,21 +186,6 @@ export class RunListPage {
   protected readonly ofLoaded = computed(() => {
     const count = formatNumber(this.store.loadedCount(), this.locale);
     return $localize`:@@runs.list.of-page:Of ${count}:count: runs on this page`;
-  });
-  protected readonly subtitle = linkedSignal({
-    source: () => ({
-      project: this.subtitleProject(),
-      status: this.status(),
-      text: `${this.copy.loadedRuns}: ${formatNumber(this.store.loadedCount(), this.locale)} · ${this.activeFilterLabel()}`,
-    }),
-    computation: (source, previous): string => {
-      if (source.status === 'ready') return source.text;
-      // Retained rows keep their committed summary until this project's replacement arrives;
-      // subtitleProject changes in the same tick as the store's loading patch, so no stale project leaks.
-      if (previous && source.status === 'loading' && source.project === previous.source.project)
-        return previous.value;
-      return this.copy.description;
-    },
   });
   protected readonly stateOptions = [
     { value: '', label: this.copy.any },
@@ -272,7 +254,6 @@ export class RunListPage {
           Object.keys(raw).some((key) => (raw[key] ?? '') !== (current[key] ?? ''))
         ) {
           this.projectId = projectId;
-          this.subtitleProject.set(projectId);
           void this.store.init(projectId, raw);
           // The URL is the form's source only when it actually changed. A refused ref name is never
           // written to the URL, so re-syncing on an unchanged query would wipe the very value the
