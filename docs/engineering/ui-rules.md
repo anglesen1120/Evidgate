@@ -60,6 +60,7 @@ Legend: ✅ verified with a source link · ⚠️ unverified evidence · `[INFER
 
 ### Advisory field hints
 Use `app-field-hint` beside the label for optional instructions, examples and format guidance. Keep the control’s `aria-describedby` linked to the note even when closed and append, rather than replace, error IDs. The info button must work on click, touch, Enter and Space; Escape and an outside click dismiss its anchored popover. Keep validation, blocked reasons, destructive consequences, required markers, and current scope/count status visible.
+In a field grid, reserve the same label-row height with and without a hint so neighboring controls align. Keep the info button’s full pointer or touch target clear of the input below it.
 
 ## Detail facts
 **UI39** — Group key-value facts with semantic `dl/dt/dd`, aligned wide labels/values and stacked narrow labels, preserving distinct Not set/Not available/Not applicable plus real zero/false; **check:** inspect semantics and missing-data fixtures rather than an unexplained dash or retrieval-failure zero.
