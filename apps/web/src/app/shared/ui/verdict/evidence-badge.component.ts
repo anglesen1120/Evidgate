@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, input } from '@angular/co
 import { HlmBadge } from '@evidgate/ui/badge';
 import { HlmIcon } from '@evidgate/ui/icon';
 
-import { BADGE_CLASSES, BADGE_ICON_NAMES, BADGE_TONE_CLASSES } from '../chips/badge-classes';
+import { BADGE_ICON_NAMES, QUIET_BADGE_CLASSES } from '../chips/badge-classes';
 
 import type { Completeness } from './verdict-values';
 
@@ -20,9 +20,9 @@ import type { Completeness } from './verdict-values';
     </span>
     <span
       hlmBadge
-      [variant]="'secondary'"
+      [variant]="'ghost'"
       class="verdict"
-      [class]="badgeClasses()"
+      [class]="badgeClasses"
       [attr.data-tone]="tone()"
     >
       <hlm-icon [name]="icons[tone()]" />
@@ -51,9 +51,7 @@ export class EvidenceBadgeComponent {
         return 'neutral';
     }
   });
-  protected readonly badgeClasses = computed(
-    () => `${BADGE_CLASSES} ${BADGE_TONE_CLASSES[this.tone()]}`,
-  );
+  protected readonly badgeClasses = QUIET_BADGE_CLASSES;
 
   readonly label = computed(() => {
     switch (this.completeness()) {

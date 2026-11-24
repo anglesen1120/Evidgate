@@ -83,7 +83,21 @@ for (const locale of LOCALES) {
         await page.setViewportSize({ width, height: 800 });
         const columns = width === 320 ? 1 : 2;
         await expectFieldColumns(summary, columns);
-        await expectFieldColumns(provenance, columns);
+        await expect(provenance).toHaveCSS(
+          'grid-template-columns',
+          columns === 1 ? /^[\d.]+px$/ : /^[\d.]+px [\d.]+px$/,
+        );
+        const identifiers = provenance.locator(':scope > div:has(app-copyable-identifier)');
+        await expect(identifiers).toHaveCount(3);
+        const widths = await identifiers.evaluateAll((fields) =>
+          fields.map((field) => ({
+            field: field.getBoundingClientRect().width,
+            grid: field.parentElement?.getBoundingClientRect().width ?? 0,
+          })),
+        );
+        for (const { field, grid } of widths) {
+          expect(Math.abs(field - grid)).toBeLessThanOrEqual(1);
+        }
         for (const field of [
           summary.locator(':scope > div').filter({ hasText: reason }),
           dialog.locator('app-ai-settings-snapshot-fields dl > div').first(),

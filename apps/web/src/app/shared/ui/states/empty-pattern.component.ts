@@ -19,20 +19,24 @@ import { HlmCard, HlmCardDescription, HlmCardTitle } from '@evidgate/ui/card';
     } @else {
       <section
         hlmCard
-        class="state-panel state-panel--empty min-w-0 items-start gap-(--eg-space-3) rounded-(--eg-radius-md) p-(--eg-space-5) text-start wrap-anywhere bg-(--eg-surface-raised) text-(--eg-text)"
+        class="state-panel state-panel--empty min-w-0 items-start gap-(--eg-space-3) p-(--eg-space-7) text-start wrap-anywhere"
       >
         <ng-container [ngTemplateOutlet]="content" />
       </section>
     }
     <ng-template #content>
-      <hlm-icon [name]="icon()" class="size-(--eg-control-sm) text-(--eg-neutral-fg)" />
+      <hlm-icon [name]="icon()" class="size-(--eg-space-7) text-(--eg-accent)" />
       <h2
         hlmCardTitle
         class="state-panel__title m-0 font-(family-name:--eg-font-display) text-lg"
         [textContent]="title()"
       ></h2>
       @if (description(); as description) {
-        <p hlmCardDescription class="state-panel__description m-0 max-w-full">{{ description }}</p>
+        <p
+          hlmCardDescription
+          class="state-panel__description m-0 max-w-prose text-sm"
+          [textContent]="description"
+        ></p>
       }
       @if (actionLabel(); as actionLabel) {
         @if (actionHref(); as actionHref) {

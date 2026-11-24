@@ -264,3 +264,7 @@ Search here before writing UI. Paths are under `apps/web/src/app/`; test hosts a
 - ✅ Tabs API: [list variant input](../../apps/web/src/app/ui/tabs/lib/hlm-tabs-list.ts), [line/default recipe](../../apps/web/src/styles/helm/tabs.css); ⚠️ UI9 records the dark-default contrast failure measured by the redesign's browser suite (2.66:1), not re-measured for this revision.
 - ✅ Verification wiring: [CI browser suites](../../.github/workflows/ci.yml), [web commands](../../apps/web/package.json), [verify stages](../../scripts/verify.sh); the formatter stage uses root `format:check`, but [`.prettierignore`](../../.prettierignore) excludes `docs/**`, including this rule file.
 - **[OPEN] UI22 evidence:** [Runs rich cell templates](../../apps/web/src/app/features/runs/list/run-list-table.component.ts) use the shared table's 200-row loaded pages; [ADR-0011, line 75](../adr/0011-spartan-tailwind-foundation.md) still requires virtualization above 200 rows. This is an owner decision, not a waiver.
+
+## Record decisions and feedback
+
+In record rows, only the stored release decision gets a colored badge. Show lifecycle, evidence completeness and test outcome as independent, muted labels with their own icons; neither a completed run nor passing tests implies a PASS decision. Keep a missing decision neutral with a clock, and distinguish it from a failed decision read. A failed collection read has an unknown count, not zero: show retry when eligible, and reserve the empty state and its filter-reset action for a successful read.

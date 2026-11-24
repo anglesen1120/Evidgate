@@ -71,6 +71,9 @@ import { patternForError } from './state-pattern';
                 (retry)="retry.emit()"
               />
             }
+            @if (tableLoading() && emptyTitle()) {
+              <p class="mt-(--eg-space-3) text-sm text-muted-foreground">{{ unknownCount }}</p>
+            }
           }
         }
       }
@@ -115,6 +118,7 @@ export class RequestStateComponent {
   readonly retry = output<void>();
   readonly emptyAction = output<void>();
 
+  protected readonly unknownCount = $localize`:@@shared.states.error.unknown-count:The record count is unknown.`;
   protected readonly pattern = computed(() => patternForError(this.error()));
   protected readonly retryAfterError = computed(() => {
     const failure = this.error();
