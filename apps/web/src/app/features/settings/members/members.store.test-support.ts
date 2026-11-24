@@ -299,9 +299,9 @@ export class FakeMembersDataService {
     this.membershipOrgs.push(orgId);
     this.membershipLimits.push(limit);
     if (this.manual) {
-      const { promise, resolve, reject } = Promise.withResolvers<MembershipListResponse>();
-      this.pending.push({ orgId, resolve, reject });
-      return promise;
+      return new Promise<MembershipListResponse>((resolve, reject) => {
+        this.pending.push({ orgId, resolve, reject });
+      });
     }
     if (this.membersFailure !== null && (!this.failCursorPagesOnly || cursor !== undefined)) {
       return Promise.reject(this.membersFailure);

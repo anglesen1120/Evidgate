@@ -1,6 +1,7 @@
 import { ComponentHarness } from '@angular/cdk/testing';
 import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { TestBed } from '@angular/core/testing';
+import { convertToParamMap } from '@angular/router';
 import { mount, refusal, ROW } from './api-tokens.test-support';
 
 class TokenPagingHarness extends ComponentHarness {
@@ -39,7 +40,7 @@ describe('API tokens shared pager', () => {
     const h = mount(undefined, { query: { project: 'project-1', marker: 'keep' } });
     h.list.mockResolvedValueOnce({ items: [ROW], next_cursor: 'middle' });
     await h.settle();
-    const pager = await TestbedHarnessEnvironment.loader(h.fixture).getHarness(TokenPagingHarness);
+    const pager = await TestbedHarnessEnvironment.harnessForFixture(h.fixture, TokenPagingHarness);
     expect(await pager.text()).toBe('Page 1');
     await pager.next();
     await h.settle();
@@ -52,6 +53,8 @@ describe('API tokens shared pager', () => {
         replaceUrl: false,
       }),
     );
+    h.query.next(convertToParamMap({ project: 'project-1', cursor: 'middle', marker: 'keep' }));
+    await h.settle();
     await pager.previous();
     await h.settle();
     expect(await pager.text()).toBe('Page 1');
@@ -68,7 +71,7 @@ describe('API tokens shared pager', () => {
     const h = mount();
     h.list.mockResolvedValueOnce({ items: [ROW], next_cursor: 'middle' });
     await h.settle();
-    const pager = await TestbedHarnessEnvironment.loader(h.fixture).getHarness(TokenPagingHarness);
+    const pager = await TestbedHarnessEnvironment.harnessForFixture(h.fixture, TokenPagingHarness);
     await pager.next();
     await h.settle();
     await pager.chooseSize(50);
@@ -81,7 +84,7 @@ describe('API tokens shared pager', () => {
     const h = mount();
     h.list.mockResolvedValueOnce({ items: [ROW], next_cursor: 'middle' });
     await h.settle();
-    const pager = await TestbedHarnessEnvironment.loader(h.fixture).getHarness(TokenPagingHarness);
+    const pager = await TestbedHarnessEnvironment.harnessForFixture(h.fixture, TokenPagingHarness);
     h.list.mockRejectedValueOnce(refusal('network'));
     await pager.next();
     await h.settle();

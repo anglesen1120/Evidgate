@@ -113,7 +113,7 @@ describe('RevisionListComponent', () => {
     await action.click();
     expect(selected).toHaveBeenCalledExactlyOnceWith({
       id: row.id,
-      trigger: expect.any(HTMLButtonElement),
+      trigger: expect.any(HTMLButtonElement) as unknown,
     });
     fixture.componentRef.setInput('busy', true);
     await action.click();
