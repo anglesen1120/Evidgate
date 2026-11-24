@@ -4,6 +4,7 @@ export const API_TOKENS_COPY = {
   project: $localize`:@@settings.api-tokens.project:Project`,
   create: $localize`:@@settings.api-tokens.create:Create token`,
   directory: $localize`:@@settings.api-tokens.directory:Project API tokens`,
+  order: $localize`:@@settings.api-tokens.order:Oldest created first`,
   name: $localize`:@@settings.api-tokens.name:Name`,
   prefix: $localize`:@@settings.api-tokens.prefix:Token prefix`,
   permissions: $localize`:@@settings.api-tokens.permissions:Permission subset`,
@@ -17,7 +18,5 @@ export const API_TOKENS_COPY = {
   emptyTitle: $localize`:@@settings.api-tokens.empty-title:No API tokens yet`,
   emptyDescription: $localize`:@@settings.api-tokens.empty-description:Create a token with an expiry and only the permissions your script needs.`,
   noProjects: $localize`:@@settings.api-tokens.no-projects:Select a project to manage its API tokens.`,
-  next: $localize`:@@settings.api-tokens.next:Next tokens`,
   first: $localize`:@@settings.api-tokens.first:First tokens`,
-  pages: $localize`:@@settings.api-tokens.pages:API token pages`,
 };

@@ -1,66 +1,60 @@
-// QA (09.7.1-T2 independent gate): the Members page with the REAL MembersStore; only the data
-// service and session are replaced. The existing page spec replaces the store, so the paging path
-// (`next()` -> `store.loadMore()`) and what the user sees after a refused page had no test.
-
+import { ComponentHarness, TestKey } from '@angular/cdk/testing';
+import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { provideZonelessChangeDetection, signal } from '@angular/core';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
-import type { MembershipView, RoleView } from '@evidgate/sdk';
+import type { MembershipListResponse, MembershipView } from '@evidgate/sdk';
 import { MembersDataService } from '../../../core/data/members-data.service';
 import { ApiRequestError } from '../../../core/http/api-error';
 import { SessionStore } from '../../../core/session/session.store';
 import { provideLayoutTestStubs } from '../../../shared/testing/layout.testing';
 import { MembersPage } from './members.page';
 import { MembersStore } from './members.store';
+import { pageMember, ROLES } from './members.store.test-support';
 
-const ROLE: RoleView = {
-  id: 'role-a',
-  code: 'tenant_admin',
-  name: 'Organization administrator',
-  is_builtin: true,
-  created_at: '2026-10-25T00:00:00Z',
-  version: 1,
-};
-const MEMBER: MembershipView = {
-  id: 'm1',
-  org_id: 'org1',
-  invited_email: 'first@example.test',
-  status: 'active',
-  roles: [],
-  created_at: '2026-10-25T00:00:00Z',
-  updated_at: '2026-10-25T00:00:00Z',
-  version: 1,
-};
-const PAGE_TWO_REFUSAL = 'The membership list is unavailable right now.';
+const MEMBER = pageMember(0);
+const SECOND: MembershipView = { ...MEMBER, id: 'second', invited_email: 'second@example.test' };
+const REFUSAL = 'The membership list is unavailable right now.';
 
-/** Page 1 has one row and a second cursor; page 2 answers whatever the test installs. */
 class PagedData {
-  page2: (cursor: string) => Promise<unknown> = () =>
-    Promise.resolve({ items: [], next_cursor: null });
-  readonly cursors: Array<string | null> = [];
-  listMemberships(_orgId: string, cursor: string | null) {
-    this.cursors.push(cursor);
-    if (!cursor) return Promise.resolve({ items: [MEMBER], next_cursor: 'c2' });
-    return this.page2(cursor);
+  next: () => Promise<MembershipListResponse> = () =>
+    Promise.resolve({ items: [SECOND], next_cursor: null });
+  readonly limits: number[] = [];
+  listMemberships(_org: string, cursor?: string, limit = 20): Promise<MembershipListResponse> {
+    this.limits.push(limit);
+    return cursor === undefined
+      ? Promise.resolve({ items: [MEMBER], next_cursor: 'next' })
+      : this.next();
   }
-  listRoles() {
-    return Promise.resolve([ROLE]);
-  }
-  listPermissions() {
-    return Promise.resolve([]);
-  }
+  listRoles() { return Promise.resolve(ROLES); }
+  listPermissions() { return Promise.resolve([]); }
 }
 
-/** The page's own state, read through its component injector (the store is a component provider). */
-type PageSurface = {
-  next(): Promise<void>;
-  more(): boolean;
-};
+class MembersHarness extends ComponentHarness {
+  static hostSelector = 'app-members-page';
+  readonly next = this.locatorFor('app-data-table-pager [data-page="next"]');
+  readonly previous = this.locatorFor('app-data-table-pager [data-page="previous"]');
+  readonly summary = this.locatorFor('app-data-table-pager [role="status"]');
+  readonly list = this.locatorFor('app-member-list');
+  readonly alert = this.locatorForOptional('[data-members-load-error]');
+  readonly alertMessage = this.locatorForOptional('[data-members-load-error] p');
+  readonly alertCode = this.locatorForOptional('[data-members-load-error] code');
+  readonly counts = this.locatorForAll('[data-members-page-count] app-number-value');
+  readonly size = this.locatorFor('app-data-table-pager hlm-select-trigger button');
+  readonly view = this.locatorFor('app-member-list [data-member-row-view]');
+}
 
-describe('MembersPage paging through the real MembersStore (09.7.1-T2 QA)', () => {
+class OptionHarness extends ComponentHarness {
+  static hostSelector = '[role="option"]';
+}
+
+class DialogHarness extends ComponentHarness {
+  static hostSelector = '[role="dialog"]';
+}
+
+describe('MembersPage cursor pagination', () => {
   provideLayoutTestStubs();
   let data: PagedData;
   let fixture: ComponentFixture<MembersPage>;
-  let root: HTMLElement;
   let store: MembersStore;
 
   beforeEach(() => {
@@ -70,163 +64,100 @@ describe('MembersPage paging through the real MembersStore (09.7.1-T2 QA)', () =
       providers: [
         provideZonelessChangeDetection(),
         { provide: MembersDataService, useValue: data },
-        {
-          provide: SessionStore,
-          useValue: {
-            currentOrg: signal({ id: 'org1' }),
-            has: () => true,
-          },
-        },
+        { provide: SessionStore, useValue: { currentOrg: signal({ id: 'org' }), has: () => false } },
       ],
     });
   });
-  afterEach(() => {
-    TestBed.resetTestingModule();
-  });
-
-  // Zoneless: whenStable() does not wait for the fake's promises, so drain the timer queue
-  // until the store's first load has settled.
-  const settle = async () => {
-    for (let i = 0; i < 5; i++) {
-      await new Promise<void>((resolve) => setTimeout(resolve, 0));
-      fixture.detectChanges();
-    }
-    await fixture.whenStable();
-  };
+  afterEach(() => TestBed.resetTestingModule());
 
   async function render() {
     fixture = TestBed.createComponent(MembersPage);
     fixture.detectChanges();
-    await settle();
-    root = fixture.nativeElement as HTMLElement;
+    await fixture.whenStable();
     store = fixture.debugElement.injector.get(MembersStore);
-    return fixture.componentInstance as unknown as PageSurface;
+    return TestbedHarnessEnvironment.harnessForFixture(fixture, MembersHarness);
   }
 
-  it('counts active and pending memberships on the visible page, never across unvisited pages', async () => {
-    TestBed.overrideProvider(SessionStore, {
-      useValue: { currentOrg: signal({ id: 'org1' }), has: () => false },
-    });
-    data.page2 = () =>
-      Promise.resolve({
-        items: [
-          { ...MEMBER, id: 'm2', status: 'removed', roles: [ROLE] },
-          { ...MEMBER, id: 'm3', status: 'pending', roles: [ROLE] },
-          { ...MEMBER, id: 'm4', roles: [ROLE] },
-        ],
-        next_cursor: null,
-      });
-    await render();
-    expect(root.textContent).toContain('Read-only');
-    const counts = root.querySelector('[data-members-page-count]');
-    expect(counts?.textContent).toContain('On this page');
-    expect(counts?.querySelector('app-number-value')?.textContent?.trim()).toBe('1');
-    await store.loadMore();
-    await fixture.whenStable();
-    const values = root.querySelectorAll('[data-members-page-count] app-number-value');
-    expect(Array.from(values, (el) => el.textContent?.trim())).toEqual(['2', '1', '1']);
+  function unavailable(): Promise<MembershipListResponse> {
+    return Promise.reject(new ApiRequestError({
+      kind: 'unavailable', status: 503, code: 'unavailable', message: REFUSAL,
+      requestId: 'request', retryable: true, details: [], retryAfterSeconds: null,
+    }));
+  }
+
+  it('replaces rows and page counts, keeps all role columns, and supports Previous after Next', async () => {
+    const page = await render();
+    expect(await (await page.summary()).text()).toBe('Page 1');
+    expect(await (await page.previous()).getAttribute('aria-disabled')).toBe('true');
+    await (await page.next()).click();
+    expect(await (await page.summary()).text()).toBe('Page 2');
+    expect(await (await page.list()).text()).toContain(SECOND.invited_email);
+    expect(await (await page.list()).text()).not.toContain(MEMBER.invited_email);
+    expect(await (await page.next()).getAttribute('aria-disabled')).toBe('true');
+    expect(store.matrix().columns).toEqual(ROLES);
+    expect(store.members()).toEqual([SECOND]);
+    const counts = await page.counts();
+    expect(await counts[0]?.text()).toBe('1');
+    await (await page.previous()).click();
+    expect(await (await page.summary()).text()).toBe('Page 1');
+    expect(store.members()).toEqual([MEMBER]);
   });
 
-  it('a refused second page keeps the first page on screen and records the refusal, with Next still offered', async () => {
-    data.page2 = () =>
-      Promise.reject(
-        new ApiRequestError({
-          kind: 'unavailable',
-          status: 503,
-          code: 'unavailable',
-          message: PAGE_TWO_REFUSAL,
-          requestId: 'req-qa',
-          retryable: true,
-          details: [],
-          retryAfterSeconds: null,
-        }),
-      );
+  it('retains the prior page and announces a transient failure until Next retries successfully', async () => {
+    data.next = unavailable;
     const page = await render();
-    await page.next();
-    await settle();
+    await (await page.next()).click();
+    expect(await (await page.summary()).text()).toBe('Page 1');
+    expect(await (await page.alert())?.getAttribute('role')).toBe('alert');
+    expect(await (await page.alertMessage())?.text()).toBe(REFUSAL);
+    expect(await (await page.alertCode())?.text()).toBe('unavailable');
+    expect(await (await page.list()).text()).toContain(MEMBER.invited_email);
+    expect(await (await page.next()).getAttribute('aria-disabled')).toBe('false');
+    data.next = () => Promise.resolve({ items: [SECOND], next_cursor: null });
+    await (await page.next()).click();
+    expect(await page.alert()).toBeNull();
+    expect(await (await page.summary()).text()).toBe('Page 2');
+    expect(await (await page.list()).text()).toContain(SECOND.invited_email);
+  });
 
+  it('handles a contract violation generically without leaking thrown text or stealing focus', async () => {
+    data.next = () => Promise.reject(new Error('private malformed envelope'));
+    const page = await render();
+    const next = await page.next();
+    await next.focus();
+    await next.click();
+    expect(await (await page.alert())?.text()).toContain('The members page could not be loaded.');
+    expect(await (await page.alert())?.text()).not.toContain('private malformed envelope');
+    expect(await page.alertCode()).toBeNull();
+    expect(await next.isFocused()).toBe(true);
     expect(store.phase()).toBe('ready');
-    expect(store.members().map((m) => m.id)).toEqual(['m1']);
-    expect(store.loadError()?.message).toBe(PAGE_TWO_REFUSAL);
-    expect(page.more()).toBe(true);
-    expect(root.textContent).toContain(MEMBER.invited_email);
+    expect(store.members()).toEqual([MEMBER]);
   });
 
-  // 09.7.1-T2 fix round F1: members.store.ts records a paging refusal in `loadError` while `phase`
-  // stays `ready`, and <app-request-state>'s `ready` branch renders only the content slot, so the
-  // page now renders `loadError` itself as the `data-members-load-error` alert above the nav.
-  it('a refused second page is announced to the user, not silently dropped', async () => {
-    data.page2 = () =>
-      Promise.reject(
-        new ApiRequestError({
-          kind: 'unavailable',
-          status: 503,
-          code: 'unavailable',
-          message: PAGE_TWO_REFUSAL,
-          requestId: 'req-qa',
-          retryable: true,
-          details: [],
-          retryAfterSeconds: null,
-        }),
-      );
+  it('resets page one and sends the selected size through the shared selector', async () => {
     const page = await render();
-    await page.next();
-    await settle();
-
-    const alert = root.querySelector('[data-members-load-error]');
-    expect(alert?.getAttribute('role')).toBe('alert');
-    expect(alert?.textContent).toContain(PAGE_TWO_REFUSAL);
-    expect(alert?.textContent).toContain('unavailable');
-    expect(alert?.querySelector('p')?.textContent?.trim()).toBe(PAGE_TWO_REFUSAL);
+    await (await page.next()).click();
+    await (await page.size()).click();
+    const options = await TestbedHarnessEnvironment.documentRootLoader(fixture).getAllHarnesses(OptionHarness);
+    const texts = await Promise.all(options.map(async (option) => (await option.host()).text()));
+    expect(texts).toEqual(['20', '50', '100']);
+    const fifty = options[texts.indexOf('50')];
+    if (fifty === undefined) throw new Error('50-row option missing');
+    await (await fifty.host()).click();
+    expect(await (await page.summary()).text()).toBe('Page 1');
+    expect(data.limits).toEqual([20, 20, 50]);
   });
 
-  // 09.7.1-T2 fix round F1: the store never clears `loadError`, so the page hides its own copy once
-  // a page arrives; the block must not outlive the failure it describes.
-  it('a refused second page stops being announced once a retry loads a page', async () => {
-    data.page2 = () =>
-      Promise.reject(
-        new ApiRequestError({
-          kind: 'unavailable',
-          status: 503,
-          code: 'unavailable',
-          message: PAGE_TWO_REFUSAL,
-          requestId: 'req-qa',
-          retryable: true,
-          details: [],
-          retryAfterSeconds: null,
-        }),
-      );
+  it('keeps page two when View is opened and dismissed', async () => {
     const page = await render();
-    await page.next();
-    await settle();
-    expect(root.querySelector('[data-members-load-error]')).not.toBeNull();
-
-    data.page2 = () =>
-      Promise.resolve({
-        items: [{ ...MEMBER, id: 'm2', invited_email: 'second@example.test' }],
-        next_cursor: null,
-      });
-    await page.next();
-    await settle();
-
-    expect(root.querySelector('[data-members-load-error]')).toBeNull();
-    expect(root.textContent).toContain('second@example.test');
-  });
-
-  // 09.7.1-T2 fix round F4: next() had try/finally and no catch, so a contract violation the store
-  // re-throws escaped the click handler as an unhandled rejection. The page now catches it and says
-  // so generically — never echoing the thrown value.
-  it('a contract violation while paging is handled by the page, not left as an unhandled rejection', async () => {
-    data.page2 = () => Promise.reject(new Error('the membership list envelope was malformed'));
-    const page = await render();
-    await expect(page.next()).resolves.toBeUndefined();
-    await settle();
-
-    const alert = root.querySelector('[data-members-load-error]');
-    expect(alert?.getAttribute('role')).toBe('alert');
-    expect(alert?.textContent).toContain('The next members page could not be loaded.');
-    expect(root.textContent).not.toContain('envelope was malformed');
-    expect(store.phase()).toBe('ready');
-    expect(store.members().map((m) => m.id)).toEqual(['m1']);
+    await (await page.next()).click();
+    await (await page.view()).click();
+    const overlay = TestbedHarnessEnvironment.documentRootLoader(fixture);
+    const dialog = await overlay.getHarness(DialogHarness);
+    expect(await (await dialog.host()).text()).toContain(SECOND.invited_email);
+    await (await dialog.host()).sendKeys(TestKey.ESCAPE);
+    expect(await overlay.hasHarness(DialogHarness)).toBe(false);
+    expect(await (await page.summary()).text()).toBe('Page 2');
+    expect(data.limits).toEqual([20, 20]);
   });
 });

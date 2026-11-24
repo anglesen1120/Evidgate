@@ -197,10 +197,10 @@
     [variant]="'outline'"
     class="min-h-[var(--eg-control-touch)] whitespace-normal"
     type="button"
-    [disabled]="store.publishing() || store.phase() === 'loading'"
-    (click)="reload()"
+    [disabled]="store.publishing() || store.paging() || store.phase() === 'loading'"
+    (click)="retryPage()"
   >
-    {{ copy.reload }}
+    {{ copy.loadRetry }}
   </button>
 }
 @if (store.phase() === 'error' && store.loadError() === null) {
@@ -225,10 +225,14 @@
       [rows]="store.revisions()"
       [headId]="store.headRevisionId()"
       [hasMore]="store.hasMore()"
+      [page]="store.page()"
+      [pageSize]="store.pageSize()"
       [selectedId]="selectedRevisionId()"
       (selected)="viewRevision($event)"
-      [busy]="paging() || store.phase() === 'loading' || store.publishing()"
-      (loadMore)="loadMore()"
+      [busy]="paging() || store.paging() || store.phase() === 'loading' || store.publishing()"
+      (previous)="loadMore(true)"
+      (next)="loadMore()"
+      (pageSizeChange)="setPageSize($event)"
     />
     @if (viewed(); as selection) {
       <hlm-dialog

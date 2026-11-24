@@ -24,6 +24,7 @@ import { HlmButton } from '@evidgate/ui/button';
 import { HlmSelectImports } from '@evidgate/ui/select';
 import { HlmLabel } from '@evidgate/ui/label';
 import { NotFoundPatternComponent } from '../../../shared/ui/states/not-found-pattern.component';
+import { DataTablePagerComponent } from '../../../shared/ui/data-table/data-table-pager.component';
 import { RequestStateComponent } from '../../../shared/ui/states/request-state.component';
 import { ApiTokenListComponent } from './api-token-list.component';
 import { API_TOKENS_COPY } from './api-tokens.copy';
@@ -52,6 +53,7 @@ import { escapeFormatChars } from '../../../shared/ui/values/ref-name-display';
     HlmLabel,
     RequestStateComponent,
     NotFoundPatternComponent,
+    DataTablePagerComponent,
     ApiTokenListComponent,
     ApiTokenCreateDialogComponent,
     ApiTokenRevokeDialogComponent,
@@ -155,37 +157,32 @@ import { escapeFormatChars } from '../../../shared/ui/values/ref-name-display';
           [canWrite]="store.canWrite()"
           [busy]="store.creating() || store.revoking()"
           (revoke)="revokeSelection.set($event)"
-        >
-          @if (store.cursor() || store.hasNext()) {
-            <nav class="ms-auto flex flex-wrap justify-end gap-2" [attr.aria-label]="copy.pages">
-              @if (store.cursor()) {
-                <button
-                  hlmBtn
-                  [variant]="'outline'"
-                  type="button"
-                  class="pointer-coarse:min-h-(--eg-control-touch)"
-                  data-api-first
-                  (click)="first()"
-                >
-                  {{ copy.first }}
-                </button>
-              }
-              @if (store.hasNext()) {
-                <button
-                  hlmBtn
-                  [variant]="'outline'"
-                  type="button"
-                  class="pointer-coarse:min-h-(--eg-control-touch)"
-                  data-api-next
-                  (click)="next()"
-                >
-                  {{ copy.next }}
-                </button>
-              }
-            </nav>
-          }
-        </app-api-token-list>
+        />
       </app-request-state>
+      @if (store.visiblePage() && store.loadError()) {
+        <app-request-state
+          [status]="'error'"
+          [error]="store.loadError()"
+          [retryEligible]="retryReady() && (store.loadError()?.retryable ?? false)"
+          (retry)="reload()"
+        />
+      }
+      @if (store.scope()) {
+        <app-data-table-pager
+          [page]="store.page()"
+          [pageSize]="store.pageSize()"
+          [count]="store.rows().length"
+          [hasNext]="store.hasNext()"
+          [busy]="store.pageResource.isLoading() || !retryReady()"
+          (previous)="previous()"
+          (next)="next()"
+          (pageSizeChange)="changePageSize($event)"
+        />
+        @if (store.cursor() && store.page() === 1) {
+          <button hlmBtn [variant]="'outline'" type="button" data-api-first
+            [disabled]="store.pageResource.isLoading()" (click)="first()">{{ copy.first }}</button>
+        }
+      }
     }
     <p role="status">{{ revoked() ? writeCopy.revoked : '' }}</p>
     @if (store.createOpen()) {
@@ -258,6 +255,7 @@ export class ApiTokensPage {
       escapeFormatChars(this.projectLabel(this.store.selectedProject())),
       `${this.copy.directory}: ${formatNumber(this.store.rows().length, this.locale)}`,
       $localize`:@@settings.count-on-page:On this page`,
+      this.copy.order,
     ]
       .filter(Boolean)
       .join(' · ');
@@ -354,6 +352,19 @@ export class ApiTokensPage {
     if (this.store.cursor() === before) this.historyIntent = null;
   }
 
+  protected previous(): void {
+    const before = this.store.cursor();
+    this.historyIntent = 'page';
+    this.store.previous();
+    if (this.store.cursor() === before) this.historyIntent = null;
+  }
+
+  protected changePageSize(size: number): void {
+    const before = this.store.pageSize();
+    this.historyIntent = 'page';
+    this.store.setPageSize(size);
+    if (this.store.pageSize() === before) this.historyIntent = null;
+  }
   protected first(): void {
     const before = this.store.cursor();
     this.historyIntent = 'page';

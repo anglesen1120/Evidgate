@@ -46,10 +46,10 @@ describe('ApiTokensService generated operations', () => {
     return found;
   }
 
-  it('calls the generated list with a bounded page size and opaque cursor', async () => {
-    const pending = service.list('p-1', 'opaque-next');
+  it.each([20, 50, 100])('calls the generated list with selected size %i and opaque cursor', async (limit) => {
+    const pending = service.list('p-1', 'opaque-next', undefined, limit);
     const request = await take('GET', '/projects/p-1/api-tokens');
-    expect(new URL(request.request.urlWithParams).searchParams.get('limit')).toBe('50');
+    expect(new URL(request.request.urlWithParams).searchParams.get('limit')).toBe(String(limit));
     expect(new URL(request.request.urlWithParams).searchParams.get('cursor')).toBe('opaque-next');
     request.flush(JSON.stringify({ items: [], next_cursor: null }), {
       headers: { 'Content-Type': 'application/json' },

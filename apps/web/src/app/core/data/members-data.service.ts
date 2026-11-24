@@ -54,15 +54,13 @@ export class MembersDataService {
   private readonly identity = inject(IdentityDataService);
 
   /**
-   * One page of the org's memberships (`GET /v1/orgs/{o}/memberships`, 00 §9.1 cursor page).
-   * The page is returned as served, so the caller owns the cursor loop — the Members store keeps
-   * the rows it already renders while the next page is on its way, and a broken cursor costs the
-   * page it was following rather than the list on screen.
+   * One page of the org's memberships. The caller owns opaque cursor history and the selected
+   * request size; this read never walks or accumulates membership pages.
    */
   listMemberships(
     orgId: string,
     cursor?: string,
-    limit?: number,
+    limit = 20,
     signal?: AbortSignal,
   ): Promise<MembershipListResponse> {
     return this.gateway.call((client) =>
@@ -72,7 +70,7 @@ export class MembersDataService {
         ...(signal === undefined ? {} : { signal }),
         query: {
           ...(cursor === undefined ? {} : { cursor }),
-          ...(limit === undefined ? {} : { limit }),
+          limit,
         },
       }),
     );

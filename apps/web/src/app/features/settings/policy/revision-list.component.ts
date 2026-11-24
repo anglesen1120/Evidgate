@@ -1,8 +1,8 @@
-import { DecimalPipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
 import type { PolicyRevisionSummaryDto } from '@evidgate/sdk';
 import { AbsoluteTimeComponent } from '../../../shared/time/absolute-time.component';
 import { StatusPillComponent } from '../../../shared/ui/chips/status-pill.component';
+import { DataTablePagerComponent } from '../../../shared/ui/data-table/data-table-pager.component';
 import { CopyableIdentifierComponent } from '../../../shared/ui/values/copyable-identifier.component';
 import { PolicyRevisionStateComponent } from './policy-revision-state.component';
 import { HlmButton } from '@evidgate/ui/button';
@@ -15,7 +15,7 @@ import { HlmTableImports } from '@evidgate/ui/table';
   imports: [
     HlmButton,
     HlmTableImports,
-    DecimalPipe,
+    DataTablePagerComponent,
     HlmCardImports,
     AbsoluteTimeComponent,
     StatusPillComponent,
@@ -32,6 +32,7 @@ import { HlmTableImports } from '@evidgate/ui/table';
     >
       <header hlmCardHeader class="border-0 border-b border-solid border-border p-(--eg-space-5)">
         <h3 hlmCardTitle [size]="subsectionSize" id="policy-revisions-title">{{ copy.title }}</h3>
+        <p hlmCardDescription>{{ copy.order }}</p>
       </header>
       <div hlmTableContainer>
         <table
@@ -123,33 +124,22 @@ import { HlmTableImports } from '@evidgate/ui/table';
           </tbody>
         </table>
       </div>
-      @if (rows().length || hasMore()) {
-        <footer
-          hlmCardFooter
-          class="flex min-w-0 flex-wrap items-center justify-between gap-(--eg-space-3) border-0 border-t border-solid border-border p-(--eg-space-5)"
-        >
-          @if (rows().length) {
-            <span
-              class="text-xs tabular-nums text-muted-foreground"
-              i18n="@@settings.policy.history-range"
-              >Showing 1–{{ rows().length | number }} loaded revisions</span
-            >
-          }
-          @if (hasMore()) {
-            <button
-              hlmBtn
-              [variant]="'outline'"
-              class="min-h-(--eg-control-touch) whitespace-normal"
-              type="button"
-              data-policy-more
-              [disabled]="busy()"
-              (click)="loadMore.emit()"
-            >
-              {{ copy.more }}
-            </button>
-          }
-        </footer>
-      }
+      <footer
+        hlmCardFooter
+        class="block min-w-0 border-0 border-t border-solid border-border p-(--eg-space-5)"
+      >
+        <app-data-table-pager
+          [page]="page()"
+          [pageSize]="pageSize()"
+          [count]="rows().length"
+          [total]="null"
+          [hasNext]="hasMore()"
+          [busy]="busy()"
+          (previous)="previous.emit()"
+          (next)="next.emit()"
+          (pageSizeChange)="pageSizeChange.emit($event)"
+        />
+      </footer>
     </section>
   `,
 })
@@ -162,13 +152,18 @@ export class RevisionListComponent {
   protected readonly headTone = 'info' as const;
   readonly hasMore = input(false);
   readonly busy = input(false);
-  readonly loadMore = output<void>();
+  readonly page = input(1);
+  readonly pageSize = input(20);
+  readonly previous = output<void>();
+  readonly next = output<void>();
+  readonly pageSizeChange = output<number>();
   protected select(id: string, trigger: HTMLButtonElement): void {
     if (!this.busy() && this.rows().some((row) => row.id === id))
       this.selected.emit({ id, trigger });
   }
   protected readonly copy = {
     title: $localize`:@@settings.policy.revision-history:Revision history`,
+    order: $localize`:@@settings.policy.history-order:Oldest first`,
     view: $localize`:@@settings.row.view:View`,
     actions: $localize`:@@settings.row.actions:Actions`,
     empty: $localize`:@@settings.policy.revisions-empty:No revisions available.`,
@@ -177,6 +172,5 @@ export class RevisionListComponent {
     head: $localize`:@@settings.policy.head:Head`,
     hash: $localize`:@@settings.policy.hash:Hash`,
     created: $localize`:@@settings.policy.created:Created`,
-    more: $localize`:@@settings.policy.more:Load more`,
   };
 }

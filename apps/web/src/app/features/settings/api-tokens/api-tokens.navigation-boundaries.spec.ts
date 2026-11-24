@@ -20,7 +20,7 @@ import {
 const PAGE_URL = '/orgs/org-1/settings/api-tokens';
 
 function clickNext(): void {
-  const button = document.querySelector<HTMLButtonElement>('[data-api-next]');
+  const button = document.querySelector<HTMLButtonElement>('app-data-table-pager [data-page="next"][aria-disabled="false"]');
   if (!button) throw new Error('Missing next-page control');
   button.click();
 }
@@ -52,7 +52,7 @@ async function boot(guard?: CanActivateFn) {
   );
   const router = TestBed.inject(Router);
   await harness.navigateByUrl(`${PAGE_URL}?project=project-a&cursor=a-page-2`);
-  await until(harness, () => document.querySelector('[data-api-next]') !== null);
+  await until(harness, () => document.querySelector('app-data-table-pager [data-page="next"][aria-disabled="false"]') !== null);
   const store = harness.routeDebugElement?.injector.get(ApiTokensStore);
   if (!store) throw new Error('Missing mounted token store');
   const navigate = vi.spyOn(router, 'navigate');

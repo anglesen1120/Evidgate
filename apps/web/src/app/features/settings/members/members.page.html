@@ -84,6 +84,11 @@
       } @else {
         <h3 hlmCardTitle [size]="'subsection'" class="m-0">{{ copy.directory }}</h3>
       }
+      <p
+        class="m-0 mt-1 text-xs text-muted-foreground"
+        data-members-order
+        i18n="@@settings.members.order"
+      >Oldest first · creation date</p>
       <div hlmCardAction class="flex items-center gap-2 text-xs text-muted-foreground">
         <span i18n="@@settings.count-on-page">On this page</span>
         <span class="font-semibold tabular-nums">{{ visibleMembers().length | number }}</span>
@@ -112,58 +117,29 @@
         }
       </div>
     }
-    <nav
-      class="pagination flex flex-wrap items-center justify-end gap-2 border-t border-border px-4 py-3"
-      [attr.aria-label]="copy.directory"
-    >
-      @if (store.hasMore()) {
-        <span
-          class="me-auto text-xs text-muted-foreground tabular-nums"
-          i18n="@@settings.members.visible-range"
-          >Showing {{ offset() + 1 | number }}–{{
-            offset() + visibleMembers().length | number
-          }}</span
-        >
-      } @else {
-        <span
-          class="me-auto text-xs text-muted-foreground tabular-nums"
-          i18n="@@settings.members.complete-range"
-          >Showing {{ offset() + 1 | number }}–{{ offset() + visibleMembers().length | number }} of
-          {{ store.members().length | number }}</span
-        >
-      }
-      <div class="ms-auto flex max-w-full flex-wrap justify-end gap-2">
-        <button
-          hlmBtn
-          [variant]="'outline'"
-          [size]="'sm'"
-          class="pointer-coarse:min-h-(--eg-control-touch)"
-          type="button"
-          [disabled]="offset() === 0 || paging()"
-          (click)="previous()"
-        >
-          {{ copy.previous }}
-        </button>
-        <button
-          hlmBtn
-          [variant]="'outline'"
-          [size]="'sm'"
-          class="pointer-coarse:min-h-(--eg-control-touch)"
-          type="button"
-          [disabled]="!more() || paging()"
-          (click)="next()"
-        >
-          {{ copy.next }}
-        </button>
-      </div>
-    </nav>
   </section>
-  <app-role-matrix
-    class="mt-6"
-    [headingLevel]="ownsPageHeading ? 2 : 3"
-    [matrix]="visibleMatrix()"
-  />
 </app-request-state>
+@if (store.phase() === 'ready') {
+    <app-data-table-pager
+      class="pagination border-t border-border px-4 py-3"
+      [page]="store.page()"
+      [pageSize]="store.pageSize()"
+      [count]="visibleMembers().length"
+      [total]="null"
+      [hasNext]="store.hasMore()"
+      [busy]="paging() || store.busy() || !retryReady()"
+      (previous)="previous()"
+      (next)="next()"
+      (pageSizeChange)="changePageSize($event)"
+    />
+  @if (store.members().length > 0) {
+    <app-role-matrix
+      class="mt-6"
+      [headingLevel]="ownsPageHeading ? 2 : 3"
+      [matrix]="visibleMatrix()"
+    />
+  }
+}
 @if (canWrite()) {
   <app-invite-dialog (completed)="completed()" />
   <app-remove-dialog (completed)="completed(true)" />

@@ -55,18 +55,23 @@ class PolicyOverviewHarness extends ComponentHarness {
   readonly mode = this.locatorForOptional('[data-overview-mode] dd');
   readonly head = this.locatorForOptional('[data-overview-head] dd');
   readonly activeNumber = this.locatorForOptional('[data-overview-active] app-number-value');
-  readonly more = this.locatorFor('[data-policy-more]');
+  readonly more = this.locatorFor('[data-page="next"]');
   readonly viewRevision = this.locatorFor('[data-policy-view]');
   readonly viewDialog = this.documentRootLocatorFactory().locatorFor('[data-policy-view-dialog]');
+  readonly comparison = this.locatorFor('#policy-diff-target');
 }
 
 class FakePolicyStore {
   readonly phase = signal<'idle' | 'ready' | 'loading' | 'not_found' | 'error'>('ready');
   readonly projectId = signal<string | null>('project');
+  readonly openedRevision = signal<PolicyRevisionSummaryDto | null>(null);
   readonly revisions = signal<readonly PolicyRevisionSummaryDto[]>([revision]);
   readonly headRevisionId = signal<string | null>(revision.id);
   readonly mode = signal<string | null>(null);
   readonly hasMore = signal(false);
+  readonly page = signal(1);
+  readonly pageSize = signal(20);
+  readonly paging = signal(false);
   readonly publishing = signal(false);
   readonly loadError = signal<ApiError | null>(null);
   readonly reads = {
@@ -91,6 +96,9 @@ class FakePolicyStore {
   );
   readonly reload = vi.fn(() => Promise.resolve());
   readonly loadMore = vi.fn(() => Promise.resolve());
+  readonly previousPage = vi.fn(() => Promise.resolve());
+  readonly setPageSize = vi.fn(() => Promise.resolve());
+  readonly retryPage = vi.fn(() => Promise.resolve());
   readonly reset = vi.fn();
 }
 describe('PolicyPage', () => {
@@ -384,12 +392,20 @@ describe('PolicyPage', () => {
       expect(store.publish).not.toHaveBeenCalled();
     },
   );
-  it('requests only one additional page per load-more activation', async () => {
+  it('requests one next page and keeps View/detail on the selected history page', async () => {
     store.hasMore.set(true);
-    const { fixture, root } = await render();
-    root.querySelector<HTMLButtonElement>('[data-policy-more]')?.click();
-    await fixture.whenStable();
+    const { fixture } = await render();
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, PolicyOverviewHarness);
+    await (await harness.more()).click();
     expect(store.loadMore).toHaveBeenCalledTimes(1);
+    store.page.set(2);
+    await (await harness.viewRevision()).click();
+    store.revisions.set([{ ...revision, id: 'later', revision_no: 3 }]);
+    expect(await (await harness.comparison()).text()).toContain('Revision 2');
+    expect(await (await harness.viewDialog()).text()).toContain(revision.id);
+    expect(store.page()).toBe(2);
+    expect(store.open).not.toHaveBeenCalled();
+    expect(store.reload).not.toHaveBeenCalled();
     fixture.destroy();
     expect(store.reset).toHaveBeenCalledTimes(1);
   });

@@ -1,3 +1,5 @@
+import { ComponentHarness } from '@angular/cdk/testing';
+import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { signal } from '@angular/core';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import type { PolicyRevisionDto, PolicyRevisionSummaryDto } from '@evidgate/sdk';
@@ -39,11 +41,19 @@ const failure: ApiError = {
   retryAfterSeconds: null,
 };
 class FakePolicyStore {
+  readonly projectId = signal<string | null>('project');
+  readonly openedRevision = signal<PolicyRevisionSummaryDto | null>(null);
   readonly revisions = signal<readonly PolicyRevisionSummaryDto[]>([previous, head]);
   readonly headRevisionId = signal<string | null>('b');
   readonly loadBody = vi.fn<(id: string) => Promise<PolicyRevisionDto>>((id) =>
     Promise.resolve(id === 'a' ? previous : head),
   );
+}
+class DiffSelectionHarness extends ComponentHarness {
+  static hostSelector = 'app-revision-diff';
+  readonly base = this.locatorFor('#policy-diff-base');
+  readonly target = this.locatorFor('#policy-diff-target');
+  readonly changes = this.locatorForAll('[data-diff-path]');
 }
 // Applies to every test in this file. Idle wall of the slowest is 330 ms; the smoke run hit the
 // 5000 ms default here after the fuzz stage (CPU contention), so 15 s keeps a ~1.3x margin only (11.3 s of 15 s under smoke load).
@@ -95,6 +105,32 @@ describe('RevisionDiffComponent', { timeout: 15_000 }, () => {
     option.click();
     await settle(fixture);
   }
+  it('can compare the opened revision even when it is outside the current history page', async () => {
+    store.revisions.set([previous]);
+    store.openedRevision.set(head);
+    const { fixture } = await render();
+    fixture.componentRef.setInput('selectedRevisionId', head.id);
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, DiffSelectionHarness);
+    expect(await (await harness.target()).text()).toContain('Revision 2');
+    expect(await (await harness.base()).text()).toContain('Revision 1');
+    expect(await harness.changes()).not.toHaveLength(0);
+  });
+  it('retains selected base, target and comparison when history moves off their page', async () => {
+    const { fixture } = await render();
+    fixture.componentRef.setInput('selectedRevisionId', head.id);
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, DiffSelectionHarness);
+    const before = await Promise.all((await harness.changes()).map((row) => row.text()));
+    store.loadBody.mockClear();
+    store.revisions.set([{ ...head, id: 'later', revision_no: 3 }]);
+    await settle(fixture);
+    expect(await (await harness.base()).text()).toContain('Revision 1');
+    expect(await (await harness.target()).text()).toContain('Revision 2');
+    expect(await Promise.all((await harness.changes()).map((row) => row.text()))).toEqual(before);
+    expect(store.loadBody).not.toHaveBeenCalled();
+    store.revisions.set([previous, head]);
+    await settle(fixture);
+    expect(await (await harness.target()).text()).toContain('Revision 2');
+  });
   it('labels its keyboard picker and dismisses it with Escape without changing the comparison', async () => {
     const { fixture, root } = await render();
     const trigger = root.querySelector<HTMLButtonElement>('#policy-diff-target');

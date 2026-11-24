@@ -5,10 +5,12 @@ import {
   effect,
   inject,
   input,
+  linkedSignal,
   output,
   signal,
   untracked,
 } from '@angular/core';
+import type { PolicyRevisionSummaryDto } from '@evidgate/sdk';
 import { HlmAlertImports } from '@evidgate/ui/alert';
 import {
   StatusPillComponent,
@@ -49,7 +51,7 @@ import { PolicyStore } from './policy.store';
           <hlm-select
             [value]="baseId()"
             [itemToString]="revisionLabel"
-            [disabled]="store.revisions().length < 2"
+            [disabled]="choices().length < 2"
             (valueChange)="selectBase($event)"
           >
             <hlm-select-trigger
@@ -59,7 +61,7 @@ import { PolicyStore } from './policy.store';
               <hlm-select-value [placeholder]="copy.choose" />
             </hlm-select-trigger>
             <hlm-select-content *hlmSelectPortal [aria-label]="copy.base">
-              @for (revision of store.revisions(); track revision.id) {
+              @for (revision of choices(); track revision.id) {
                 <hlm-select-item [value]="revision.id"
                   >{{ copy.revision }} {{ revision.revision_no }}</hlm-select-item
                 >
@@ -72,7 +74,7 @@ import { PolicyStore } from './policy.store';
           <hlm-select
             [value]="targetId()"
             [itemToString]="revisionLabel"
-            [disabled]="store.revisions().length === 0"
+            [disabled]="choices().length === 0"
             (valueChange)="selectTarget($event)"
           >
             <hlm-select-trigger
@@ -82,7 +84,7 @@ import { PolicyStore } from './policy.store';
               <hlm-select-value [placeholder]="copy.choose" />
             </hlm-select-trigger>
             <hlm-select-content *hlmSelectPortal [aria-label]="copy.target">
-              @for (revision of store.revisions(); track revision.id) {
+              @for (revision of choices(); track revision.id) {
                 <hlm-select-item [value]="revision.id"
                   >{{ copy.revision }} {{ revision.revision_no }}</hlm-select-item
                 >
@@ -189,11 +191,32 @@ export class RevisionDiffComponent {
   readonly selectedRevisionId = input<string | null>(null);
   protected readonly subsectionSize = 'subsection' as const;
   protected readonly revisionLabel = (value: unknown): string => {
-    const revision = this.store.revisions().find((row) => row.id === value);
+    const revision = this.choices().find((row) => row.id === value);
     return revision ? `${this.copy.revision} ${revision.revision_no}` : this.copy.choose;
   };
   protected readonly baseId = signal('');
   protected readonly targetId = signal('');
+  protected readonly choices = linkedSignal({
+    source: () => ({
+      rows: this.store.revisions(),
+      opened: this.store.openedRevision(),
+      project: this.store.projectId(),
+      base: this.baseId(),
+      target: this.targetId(),
+    }),
+    computation: (source, previous): readonly PolicyRevisionSummaryDto[] => {
+      const rows = source.opened && !source.rows.some((row) => row.id === source.opened?.id)
+        ? [...source.rows, source.opened]
+        : source.rows;
+      const pinned = previous?.source.project === source.project
+        ? previous?.value.filter((row) => row.id === source.base || row.id === source.target) ?? []
+        : [];
+      return [
+        ...rows,
+        ...pinned.filter((row) => !rows.some((current) => current.id === row.id)),
+      ];
+    },
+  });
   protected readonly phase = signal<'empty' | 'loading' | 'ready' | 'error'>('empty');
   protected readonly error = signal<ApiError | null>(null);
   protected readonly diff = signal<PolicyDiff>({ rows: [], truncated: false });
@@ -220,7 +243,7 @@ export class RevisionDiffComponent {
   };
   constructor() {
     effect(() => {
-      const rows = this.store.revisions();
+      const rows = this.choices();
       const head = this.store.headRevisionId();
       const selected = this.selectedRevisionId();
       untracked(() => {
@@ -261,12 +284,12 @@ export class RevisionDiffComponent {
     return clipDiffText(path);
   }
   protected selectBase(value: unknown): void {
-    if (typeof value === 'string' && this.store.revisions().some((row) => row.id === value)) {
+    if (typeof value === 'string' && this.choices().some((row) => row.id === value)) {
       this.baseId.set(value);
     }
   }
   protected selectTarget(value: unknown): void {
-    if (typeof value === 'string' && this.store.revisions().some((row) => row.id === value)) {
+    if (typeof value === 'string' && this.choices().some((row) => row.id === value)) {
       this.targetId.set(value);
     }
   }

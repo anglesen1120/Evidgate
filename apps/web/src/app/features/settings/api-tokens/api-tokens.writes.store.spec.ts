@@ -72,7 +72,7 @@ describe('API token mutations without credential state', () => {
     h.store.next();
     h.list.mockResolvedValueOnce({ items: [{ ...ROW, id: 'row-2' }], next_cursor: null });
     await h.settle();
-    expect(h.list).toHaveBeenLastCalledWith('project-1', 'next-page', expect.any(AbortSignal));
+    expect(h.list).toHaveBeenLastCalledWith('project-1', 'next-page', expect.any(AbortSignal), 20);
     h.list.mockResolvedValueOnce({
       items: [{ ...ROW, id: 'created-row' }, ROW],
       next_cursor: null,
@@ -80,7 +80,7 @@ describe('API token mutations without credential state', () => {
     await expect(h.store.create(BODY, createIntent())).resolves.toEqual(CREATED);
     await h.settle();
     expect(h.store.cursor()).toBeUndefined();
-    expect(h.list).toHaveBeenLastCalledWith('project-1', undefined, expect.any(AbortSignal));
+    expect(h.list).toHaveBeenLastCalledWith('project-1', undefined, expect.any(AbortSignal), 20);
     expect(h.store.rows().map((row) => row.id)).toEqual(['created-row', 'row-1']);
   });
 
@@ -108,7 +108,7 @@ describe('API token mutations without credential state', () => {
     expect(h.store.phase()).toBe('error');
     await expect(h.store.revoke(ROW.id, createIntent())).resolves.toBe(true);
     await h.settle();
-    expect(h.list).toHaveBeenLastCalledWith('project-1', undefined, expect.any(AbortSignal));
+    expect(h.list).toHaveBeenLastCalledWith('project-1', undefined, expect.any(AbortSignal), 20);
     expect(h.store.phase()).toBe('success');
   });
 
