@@ -511,7 +511,7 @@
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/secret-reference-list.component.html</context>
-          <context context-type="linenumber">165,167</context>
+          <context context-type="linenumber">166,168</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/studio/gallery/studio-gallery.copy.ts</context>
@@ -5231,7 +5231,7 @@
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/security/security-events.page.ts</context>
-          <context context-type="linenumber">113</context>
+          <context context-type="linenumber">117</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/settings-shell.page.html</context>
@@ -13200,7 +13200,7 @@
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/quota-retention/quota-panel.component.ts</context>
-          <context context-type="linenumber">128</context>
+          <context context-type="linenumber">136</context>
         </context-group>
       </trans-unit>
       <trans-unit id="quota.panel.limit" datatype="html">
@@ -13211,7 +13211,7 @@
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/quota-retention/quota-panel.component.ts</context>
-          <context context-type="linenumber">129</context>
+          <context context-type="linenumber">137</context>
         </context-group>
       </trans-unit>
       <trans-unit id="quota.panel.unavailable" datatype="html">
@@ -13222,7 +13222,7 @@
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/quota-retention/quota-panel.component.ts</context>
-          <context context-type="linenumber">130</context>
+          <context context-type="linenumber">138</context>
         </context-group>
       </trans-unit>
       <trans-unit id="orgoverview.latest-unavailable" datatype="html">
@@ -22710,7 +22710,7 @@
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/security/security-events.page.ts</context>
-          <context context-type="linenumber">121</context>
+          <context context-type="linenumber">125</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/settings-page-counts.component.ts</context>
@@ -22963,7 +22963,7 @@
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/quota-retention/quota-panel.component.ts</context>
-          <context context-type="linenumber">118</context>
+          <context context-type="linenumber">126</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/security/security-events-table.component.ts</context>
@@ -24639,7 +24639,7 @@
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/quota-retention/quota-panel.component.ts</context>
-          <context context-type="linenumber">119</context>
+          <context context-type="linenumber">127</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.policy.revisions-empty" datatype="html">
@@ -24712,186 +24712,207 @@
           <context context-type="linenumber">155,156</context>
         </context-group>
       </trans-unit>
+      <trans-unit id="quota.panel.project-order" datatype="html">
+        <source> Projects ordered oldest first </source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/settings/quota-retention/quota-panel.component.html</context>
+          <context context-type="linenumber">158,162</context>
+        </context-group>
+      </trans-unit>
       <trans-unit id="quota.panel.counter-details" datatype="html">
         <source>Quota counter</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/quota-retention/quota-panel.component.ts</context>
-          <context context-type="linenumber">120</context>
+          <context context-type="linenumber">128</context>
         </context-group>
       </trans-unit>
       <trans-unit id="quota.panel.retry-after-seconds" datatype="html">
         <source>Retry after (seconds)</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/quota-retention/quota-panel.component.ts</context>
-          <context context-type="linenumber">121</context>
+          <context context-type="linenumber">129</context>
         </context-group>
       </trans-unit>
       <trans-unit id="quota.panel.counters" datatype="html">
         <source>Usage counters</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/quota-retention/quota-panel.component.ts</context>
-          <context context-type="linenumber">122</context>
+          <context context-type="linenumber">130</context>
         </context-group>
       </trans-unit>
       <trans-unit id="quota.panel.title" datatype="html">
         <source>Usage and AI credits</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/quota-retention/quota-panel.component.ts</context>
-          <context context-type="linenumber">123</context>
+          <context context-type="linenumber">131</context>
         </context-group>
       </trans-unit>
       <trans-unit id="quota.panel.description" datatype="html">
         <source>Review organization usage, quota limits and project retention windows.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/quota-retention/quota-panel.component.ts</context>
-          <context context-type="linenumber">124</context>
+          <context context-type="linenumber">132</context>
         </context-group>
       </trans-unit>
       <trans-unit id="quota.panel.loading" datatype="html">
         <source>Loading usage summary…</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/quota-retention/quota-panel.component.ts</context>
-          <context context-type="linenumber">125</context>
+          <context context-type="linenumber">133</context>
         </context-group>
       </trans-unit>
       <trans-unit id="quota.panel.period" datatype="html">
         <source>Billing period</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/quota-retention/quota-panel.component.ts</context>
-          <context context-type="linenumber">126</context>
+          <context context-type="linenumber">134</context>
         </context-group>
       </trans-unit>
       <trans-unit id="quota.panel.empty" datatype="html">
         <source>No usage counters were supplied for this period.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/quota-retention/quota-panel.component.ts</context>
-          <context context-type="linenumber">127</context>
+          <context context-type="linenumber">135</context>
         </context-group>
       </trans-unit>
       <trans-unit id="quota.panel.not-measured" datatype="html">
         <source>Not measured yet.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/quota-retention/quota-panel.component.ts</context>
-          <context context-type="linenumber">131</context>
+          <context context-type="linenumber">139</context>
         </context-group>
       </trans-unit>
       <trans-unit id="quota.panel.blocked" datatype="html">
         <source>Limit reached</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/quota-retention/quota-panel.component.ts</context>
-          <context context-type="linenumber">132</context>
+          <context context-type="linenumber">140</context>
         </context-group>
       </trans-unit>
       <trans-unit id="quota.panel.warned-short" datatype="html">
         <source>Near limit</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/quota-retention/quota-panel.component.ts</context>
-          <context context-type="linenumber">133</context>
+          <context context-type="linenumber">141</context>
         </context-group>
       </trans-unit>
       <trans-unit id="quota.panel.warned-at" datatype="html">
         <source>Warning recorded</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/quota-retention/quota-panel.component.ts</context>
-          <context context-type="linenumber">134</context>
+          <context context-type="linenumber">142</context>
         </context-group>
       </trans-unit>
       <trans-unit id="quota.panel.blocked-at" datatype="html">
         <source>Block recorded</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/quota-retention/quota-panel.component.ts</context>
-          <context context-type="linenumber">135</context>
+          <context context-type="linenumber">143</context>
         </context-group>
       </trans-unit>
       <trans-unit id="quota.panel.project" datatype="html">
         <source>Project</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/quota-retention/quota-panel.component.ts</context>
-          <context context-type="linenumber">136</context>
+          <context context-type="linenumber">144</context>
         </context-group>
       </trans-unit>
       <trans-unit id="quota.panel.project-caption" datatype="html">
         <source>Returned project counters. Organization totals are supplied separately, not calculated from these rows.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/quota-retention/quota-panel.component.ts</context>
-          <context context-type="linenumber">137</context>
+          <context context-type="linenumber">145</context>
         </context-group>
       </trans-unit>
       <trans-unit id="quota.panel.recorded-state" datatype="html">
         <source>Recorded quota state</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/quota-retention/quota-panel.component.ts</context>
-          <context context-type="linenumber">138</context>
+          <context context-type="linenumber">146</context>
         </context-group>
       </trans-unit>
       <trans-unit id="quota.panel.metric" datatype="html">
         <source>Metric</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/quota-retention/quota-panel.component.ts</context>
-          <context context-type="linenumber">139</context>
+          <context context-type="linenumber">147</context>
         </context-group>
       </trans-unit>
       <trans-unit id="quota.panel.state-description" datatype="html">
         <source>Warnings and blocks are reported by the service, not inferred from usage.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/quota-retention/quota-panel.component.ts</context>
-          <context context-type="linenumber">140</context>
+          <context context-type="linenumber">148</context>
         </context-group>
       </trans-unit>
       <trans-unit id="quota.panel.no-alert" datatype="html">
         <source>No alert recorded</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/quota-retention/quota-panel.component.ts</context>
-          <context context-type="linenumber">141</context>
+          <context context-type="linenumber">149</context>
         </context-group>
       </trans-unit>
       <trans-unit id="quota.panel.incomplete" datatype="html">
         <source>More project counters exist on the service. All counters returned in this response are available below; this is not the complete organization breakdown.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/quota-retention/quota-panel.component.ts</context>
-          <context context-type="linenumber">142</context>
+          <context context-type="linenumber">150</context>
         </context-group>
       </trans-unit>
       <trans-unit id="quota.panel.summary-unavailable" datatype="html">
         <source>Usage summary unavailable. Try loading it again.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/quota-retention/quota-panel.component.ts</context>
-          <context context-type="linenumber">143</context>
+          <context context-type="linenumber">151</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="quota.panel.project-page-failed" datatype="html">
+        <source>Project page unavailable. The previous page is still shown.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/settings/quota-retention/quota-panel.component.ts</context>
+          <context context-type="linenumber">152</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="quota.panel.retry-project-page" datatype="html">
+        <source>Retry project page</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/settings/quota-retention/quota-panel.component.ts</context>
+          <context context-type="linenumber">153</context>
         </context-group>
       </trans-unit>
       <trans-unit id="quota.panel.retry" datatype="html">
         <source>Reload usage</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/quota-retention/quota-panel.component.ts</context>
-          <context context-type="linenumber">144</context>
+          <context context-type="linenumber">154</context>
         </context-group>
       </trans-unit>
       <trans-unit id="quota.panel.storage-title" datatype="html">
         <source>Daily storage counters</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/quota-retention/quota-panel.component.ts</context>
-          <context context-type="linenumber">145</context>
+          <context context-type="linenumber">155</context>
         </context-group>
       </trans-unit>
       <trans-unit id="quota.panel.storage-reason" datatype="html">
         <source>Daily storage and egress counters are unavailable because the service does not expose a read for them.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/quota-retention/quota-panel.component.ts</context>
-          <context context-type="linenumber">146</context>
+          <context context-type="linenumber">156</context>
         </context-group>
       </trans-unit>
       <trans-unit id="quota.panel.storage-bytes" datatype="html">
         <source>Stored bytes</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/quota-retention/quota-panel.component.ts</context>
-          <context context-type="linenumber">147</context>
+          <context context-type="linenumber">157</context>
         </context-group>
       </trans-unit>
       <trans-unit id="quota.panel.egress-bytes" datatype="html">
         <source>Egress bytes</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/quota-retention/quota-panel.component.ts</context>
-          <context context-type="linenumber">148</context>
+          <context context-type="linenumber">158</context>
         </context-group>
       </trans-unit>
       <trans-unit id="retention.title" datatype="html">
@@ -27241,168 +27262,179 @@
         <source>CI bindings</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/ci-binding-list.component.ts</context>
-          <context context-type="linenumber">27</context>
+          <context context-type="linenumber">28</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="settings.secrets.order" datatype="html">
+        <source>Oldest first</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/settings/secrets/ci-binding-list.component.ts</context>
+          <context context-type="linenumber">29</context>
+        </context-group>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/settings/secrets/secrets.copy.ts</context>
+          <context context-type="linenumber">37</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.ci.description" datatype="html">
         <source>Repository bindings and allowed CI references. Metadata only; bindings are managed during onboarding.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/ci-binding-list.component.ts</context>
-          <context context-type="linenumber">28</context>
+          <context context-type="linenumber">30</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.ci.provider" datatype="html">
         <source>Provider</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/ci-binding-list.component.ts</context>
-          <context context-type="linenumber">29</context>
+          <context context-type="linenumber">31</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.ci.status" datatype="html">
         <source>Verification state</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/ci-binding-list.component.ts</context>
-          <context context-type="linenumber">30</context>
+          <context context-type="linenumber">32</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.ci.active" datatype="html">
         <source>Active</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/ci-binding-list.component.ts</context>
-          <context context-type="linenumber">31</context>
+          <context context-type="linenumber">33</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.ci.pending" datatype="html">
         <source>Pending verification</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/ci-binding-list.component.ts</context>
-          <context context-type="linenumber">32</context>
+          <context context-type="linenumber">34</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.ci.disabled" datatype="html">
         <source>Disabled</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/ci-binding-list.component.ts</context>
-          <context context-type="linenumber">33</context>
+          <context context-type="linenumber">35</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.ci.pending-hint" datatype="html">
         <source>Waiting for the first CI exchange.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/ci-binding-list.component.ts</context>
-          <context context-type="linenumber">34</context>
+          <context context-type="linenumber">36</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.ci.refs" datatype="html">
         <source>Allowed ref patterns</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/ci-binding-list.component.ts</context>
-          <context context-type="linenumber">35</context>
+          <context context-type="linenumber">37</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.ci.workflows" datatype="html">
         <source>Allowed workflow references</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/ci-binding-list.component.ts</context>
-          <context context-type="linenumber">36</context>
+          <context context-type="linenumber">38</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.ci.activated" datatype="html">
         <source>Activated · UTC</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/ci-binding-list.component.ts</context>
-          <context context-type="linenumber">37</context>
+          <context context-type="linenumber">39</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.ci.created" datatype="html">
         <source>Created · UTC</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/ci-binding-list.component.ts</context>
-          <context context-type="linenumber">38</context>
+          <context context-type="linenumber">40</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.ci.not-activated" datatype="html">
         <source>Not activated</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/ci-binding-list.component.ts</context>
-          <context context-type="linenumber">39</context>
+          <context context-type="linenumber">41</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.ci.none" datatype="html">
         <source>None configured</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/ci-binding-list.component.ts</context>
-          <context context-type="linenumber">40</context>
+          <context context-type="linenumber">42</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.ci.show-all" datatype="html">
         <source>Show all</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/ci-binding-list.component.ts</context>
-          <context context-type="linenumber">41</context>
+          <context context-type="linenumber">43</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.ci.show-fewer" datatype="html">
         <source>Show fewer</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/ci-binding-list.component.ts</context>
-          <context context-type="linenumber">42</context>
+          <context context-type="linenumber">44</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.ci.loading" datatype="html">
         <source>Loading CI bindings…</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/ci-binding-list.component.ts</context>
-          <context context-type="linenumber">43</context>
+          <context context-type="linenumber">45</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.ci.empty" datatype="html">
         <source>No CI bindings for this project. Bindings are created during onboarding.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/ci-binding-list.component.ts</context>
-          <context context-type="linenumber">44</context>
+          <context context-type="linenumber">46</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.ci.forbidden" datatype="html">
         <source>You are not permitted to view CI bindings for this project.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/ci-binding-list.component.ts</context>
-          <context context-type="linenumber">45</context>
+          <context context-type="linenumber">47</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.ci.unavailable" datatype="html">
         <source>CI bindings are unavailable. Check your connection and try again.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/ci-binding-list.component.ts</context>
-          <context context-type="linenumber">46</context>
+          <context context-type="linenumber">48</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.ci.retry" datatype="html">
         <source>Retry CI bindings</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/ci-binding-list.component.ts</context>
-          <context context-type="linenumber">47</context>
+          <context context-type="linenumber">49</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.ci.more" datatype="html">
         <source>Load more CI bindings</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/ci-binding-list.component.ts</context>
-          <context context-type="linenumber">48</context>
+          <context context-type="linenumber">50</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.ci.loading-more" datatype="html">
         <source>Loading more CI bindings…</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/ci-binding-list.component.ts</context>
-          <context context-type="linenumber">49</context>
+          <context context-type="linenumber">51</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.ci.records" datatype="html">
         <source>CI binding records</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/ci-binding-list.component.ts</context>
-          <context context-type="linenumber">143,147</context>
+          <context context-type="linenumber">147,151</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.confirm-title" datatype="html">
@@ -27497,7 +27529,7 @@
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/secrets.copy.ts</context>
-          <context context-type="linenumber">42</context>
+          <context context-type="linenumber">39</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.expired" datatype="html">
@@ -27508,28 +27540,28 @@
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/secrets.copy.ts</context>
-          <context context-type="linenumber">43</context>
+          <context context-type="linenumber">40</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.page-shown" datatype="html">
         <source> Showing <x id="INTERPOLATION" equiv-text="{{ filtered().length | number }}"/> of <x id="INTERPOLATION_1" equiv-text="{{ rows().length | number }}"/> on this page </source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/secret-reference-list.component.html</context>
-          <context context-type="linenumber">211,213</context>
+          <context context-type="linenumber">212,214</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.inspect-named" datatype="html">
         <source>Inspect reference <x id="name" equiv-text="name"/></source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/secret-reference-list.component.ts</context>
-          <context context-type="linenumber">146</context>
+          <context context-type="linenumber">155</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.rotate-named" datatype="html">
         <source>Rotate credential <x id="name" equiv-text="name"/></source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/secret-reference-list.component.ts</context>
-          <context context-type="linenumber">149</context>
+          <context context-type="linenumber">158</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.title" datatype="html">
@@ -27665,207 +27697,179 @@
           <context context-type="linenumber">22</context>
         </context-group>
       </trans-unit>
-      <trans-unit id="settings.secrets.more" datatype="html">
-        <source>Load more references</source>
+      <trans-unit id="settings.secrets.paging-failure" datatype="html">
+        <source>The requested page could not be loaded. References already shown are unchanged.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/secrets.copy.ts</context>
           <context context-type="linenumber">23</context>
-        </context-group>
-      </trans-unit>
-      <trans-unit id="settings.secrets.previous" datatype="html">
-        <source>Previous references</source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/settings/secrets/secrets.copy.ts</context>
-          <context context-type="linenumber">24</context>
-        </context-group>
-      </trans-unit>
-      <trans-unit id="settings.secrets.next" datatype="html">
-        <source>Next references</source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/settings/secrets/secrets.copy.ts</context>
-          <context context-type="linenumber">25</context>
-        </context-group>
-      </trans-unit>
-      <trans-unit id="settings.secrets.paging-failure" datatype="html">
-        <source>The next page could not be loaded. References already shown are unchanged.</source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/settings/secrets/secrets.copy.ts</context>
-          <context context-type="linenumber">26</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.saved" datatype="html">
         <source>Rotation recorded. Update your downstream CI with the new credential and verify it there.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/secrets.copy.ts</context>
-          <context context-type="linenumber">27</context>
-        </context-group>
-      </trans-unit>
-      <trans-unit id="settings.secrets.pages-label" datatype="html">
-        <source>Secret references pages</source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/settings/secrets/secrets.copy.ts</context>
-          <context context-type="linenumber">28</context>
+          <context context-type="linenumber">24</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.rotate-unavailable-hint" datatype="html">
         <source>The rotation may have been applied. Reload the list and check the status before rotating again.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/secrets.copy.ts</context>
-          <context context-type="linenumber">29</context>
+          <context context-type="linenumber">25</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.reload" datatype="html">
         <source>Reload</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/secrets.copy.ts</context>
-          <context context-type="linenumber">30</context>
+          <context context-type="linenumber">26</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.search" datatype="html">
         <source>Search name or prefix</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/secrets.copy.ts</context>
-          <context context-type="linenumber">31</context>
+          <context context-type="linenumber">27</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.loaded-only" datatype="html">
         <source>Search and state filters apply to this loaded page only. Complete project totals are not available.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/secrets.copy.ts</context>
-          <context context-type="linenumber">32</context>
+          <context context-type="linenumber">28</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.no-matches" datatype="html">
         <source>No references match these filters</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/secrets.copy.ts</context>
-          <context context-type="linenumber">33</context>
+          <context context-type="linenumber">29</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.clear" datatype="html">
         <source>Clear filters</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/secrets.copy.ts</context>
-          <context context-type="linenumber">34</context>
+          <context context-type="linenumber">30</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.inspect" datatype="html">
         <source>Inspect</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/secrets.copy.ts</context>
-          <context context-type="linenumber">35</context>
+          <context context-type="linenumber">31</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.metadata" datatype="html">
         <source>Metadata only. A prefix identifies a reference; it does not authenticate.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/secrets.copy.ts</context>
-          <context context-type="linenumber">36</context>
+          <context context-type="linenumber">32</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.all-states" datatype="html">
         <source>All states</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/secrets.copy.ts</context>
-          <context context-type="linenumber">37</context>
+          <context context-type="linenumber">33</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.count-hint" datatype="html">
         <source>Counts use this page before filtering. An active reference can be past its expiry date.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/secrets.copy.ts</context>
-          <context context-type="linenumber">38</context>
+          <context context-type="linenumber">34</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.page-summary" datatype="html">
         <source>References on this page</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/secrets.copy.ts</context>
-          <context context-type="linenumber">39</context>
+          <context context-type="linenumber">35</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.directory" datatype="html">
         <source>Reference directory</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/secrets.copy.ts</context>
-          <context context-type="linenumber">40</context>
+          <context context-type="linenumber">36</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.reference-column" datatype="html">
         <source>Reference</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/secrets.copy.ts</context>
-          <context context-type="linenumber">41</context>
+          <context context-type="linenumber">38</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.references" datatype="html">
         <source>References</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/secrets.copy.ts</context>
-          <context context-type="linenumber">44</context>
+          <context context-type="linenumber">41</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.read-only" datatype="html">
         <source>Read-only access</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/secrets.copy.ts</context>
-          <context context-type="linenumber">45</context>
+          <context context-type="linenumber">42</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.active-hint" datatype="html">
         <source>Source-reported state</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/secrets.copy.ts</context>
-          <context context-type="linenumber">46</context>
+          <context context-type="linenumber">43</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.soon-hint" datatype="html">
         <source>Within 14 days</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/secrets.copy.ts</context>
-          <context context-type="linenumber">47</context>
+          <context context-type="linenumber">44</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.expired-hint" datatype="html">
         <source>Expired state or past expiry</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/secrets.copy.ts</context>
-          <context context-type="linenumber">48</context>
+          <context context-type="linenumber">45</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.actions" datatype="html">
         <source>Actions</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/secrets.copy.ts</context>
-          <context context-type="linenumber">49</context>
+          <context context-type="linenumber">46</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.status-active" datatype="html">
         <source>Active</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/secrets.copy.ts</context>
-          <context context-type="linenumber">55</context>
+          <context context-type="linenumber">52</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.status-rotated" datatype="html">
         <source>Rotated</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/secrets.copy.ts</context>
-          <context context-type="linenumber">57</context>
+          <context context-type="linenumber">54</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.status-revoked" datatype="html">
         <source>Revoked</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/secrets.copy.ts</context>
-          <context context-type="linenumber">59</context>
+          <context context-type="linenumber">56</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.status-expired" datatype="html">
         <source>Expired</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/secrets.copy.ts</context>
-          <context context-type="linenumber">61</context>
+          <context context-type="linenumber">58</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.security.caption" datatype="html">
@@ -27883,7 +27887,7 @@
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/security/security-events.page.ts</context>
-          <context context-type="linenumber">117</context>
+          <context context-type="linenumber">121</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.security.severity" datatype="html">
@@ -27894,7 +27898,7 @@
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/security/security-events.page.ts</context>
-          <context context-type="linenumber">118</context>
+          <context context-type="linenumber">122</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.security.time" datatype="html">
@@ -27933,7 +27937,7 @@
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/security/security-events.page.ts</context>
-          <context context-type="linenumber">115</context>
+          <context context-type="linenumber">119</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.security.request" datatype="html">
@@ -28034,190 +28038,169 @@
           <context context-type="linenumber">21</context>
         </context-group>
       </trans-unit>
+      <trans-unit id="settings.security.filter-scope" datatype="html">
+        <source> Filters apply to all matching security events on the server. </source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/settings/security/security-events.page.html</context>
+          <context context-type="linenumber">61,63</context>
+        </context-group>
+      </trans-unit>
       <trans-unit id="settings.security.page-summary" datatype="html">
         <source>Page <x id="page" equiv-text="formatNumber(this.store.pageIndex() + 1, this.locale)"/> · <x id="rows" equiv-text="formatNumber(this.store.rows().length, this.locale)"/> visible events on this page.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/security/security-events.page.ts</context>
-          <context context-type="linenumber">103</context>
+          <context context-type="linenumber">107</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.security.title" datatype="html">
         <source>Security events</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/security/security-events.page.ts</context>
-          <context context-type="linenumber">106</context>
+          <context context-type="linenumber">110</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.security.intro" datatype="html">
         <source>Inspect authorized event metadata without exposing request bodies or foreign targets.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/security/security-events.page.ts</context>
-          <context context-type="linenumber">107</context>
+          <context context-type="linenumber">111</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.security.boundary" datatype="html">
         <source>Metadata only. Severity is supplied by the server, not a security certification. Cross-tenant targets and attempted secrets are not disclosed.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/security/security-events.page.ts</context>
-          <context context-type="linenumber">108</context>
+          <context context-type="linenumber">112</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.security-activity" datatype="html">
         <source>Recent activity</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/security/security-events.page.ts</context>
-          <context context-type="linenumber">109</context>
+          <context context-type="linenumber">113</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.security-safe-data" datatype="html">
         <source>Safe event data</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/security/security-events.page.ts</context>
-          <context context-type="linenumber">110</context>
+          <context context-type="linenumber">114</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.security.newest-first" datatype="html">
         <source>Newest first</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/security/security-events.page.ts</context>
-          <context context-type="linenumber">111</context>
+          <context context-type="linenumber">115</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.security.read-only" datatype="html">
         <source>Read only</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/security/security-events.page.ts</context>
-          <context context-type="linenumber">112</context>
+          <context context-type="linenumber">116</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.security.filters" datatype="html">
         <source>Filter activity</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/security/security-events.page.ts</context>
-          <context context-type="linenumber">114</context>
+          <context context-type="linenumber">118</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.security.project-hint" datatype="html">
         <source>Optional exact project UUID. Leave blank for all projects.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/security/security-events.page.ts</context>
-          <context context-type="linenumber">116</context>
+          <context context-type="linenumber">120</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.security.all-types" datatype="html">
         <source>All V1 event types</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/security/security-events.page.ts</context>
-          <context context-type="linenumber">119</context>
+          <context context-type="linenumber">123</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.security.all-severities" datatype="html">
         <source>All severities</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/security/security-events.page.ts</context>
-          <context context-type="linenumber">120</context>
+          <context context-type="linenumber">124</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.security.from" datatype="html">
         <source>From (inclusive)</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/security/security-events.page.ts</context>
-          <context context-type="linenumber">122</context>
+          <context context-type="linenumber">126</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.security.to" datatype="html">
         <source>To (exclusive)</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/security/security-events.page.ts</context>
-          <context context-type="linenumber">123</context>
+          <context context-type="linenumber">127</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.security.time-hint" datatype="html">
         <source>Enter local times; results use UTC. The upper bound is exclusive.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/security/security-events.page.ts</context>
-          <context context-type="linenumber">124</context>
+          <context context-type="linenumber">128</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.security.invalid" datatype="html">
         <source>Enter valid dates with From earlier than To.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/security/security-events.page.ts</context>
-          <context context-type="linenumber">125</context>
+          <context context-type="linenumber">129</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.security.apply" datatype="html">
         <source>Apply filters</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/security/security-events.page.ts</context>
-          <context context-type="linenumber">126</context>
+          <context context-type="linenumber">130</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.security.clear" datatype="html">
         <source>Clear filters</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/security/security-events.page.ts</context>
-          <context context-type="linenumber">127</context>
+          <context context-type="linenumber">131</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.security.loading" datatype="html">
         <source>Loading security events…</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/security/security-events.page.ts</context>
-          <context context-type="linenumber">128</context>
+          <context context-type="linenumber">132</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.security.empty" datatype="html">
         <source>No security events recorded</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/security/security-events.page.ts</context>
-          <context context-type="linenumber">129</context>
+          <context context-type="linenumber">133</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.security.empty-description" datatype="html">
         <source>Recorded V1 security events will appear here.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/security/security-events.page.ts</context>
-          <context context-type="linenumber">130</context>
+          <context context-type="linenumber">134</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.security.no-match" datatype="html">
         <source>No results match these filters</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/security/security-events.page.ts</context>
-          <context context-type="linenumber">131</context>
+          <context context-type="linenumber">135</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.security.no-match-description" datatype="html">
         <source>Clear or change the filters to inspect another scope or time range.</source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/settings/security/security-events.page.ts</context>
-          <context context-type="linenumber">132</context>
-        </context-group>
-      </trans-unit>
-      <trans-unit id="settings.security.previous" datatype="html">
-        <source>Previous page</source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/settings/security/security-events.page.ts</context>
-          <context context-type="linenumber">133</context>
-        </context-group>
-      </trans-unit>
-      <trans-unit id="settings.security.next" datatype="html">
-        <source>Next page</source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/settings/security/security-events.page.ts</context>
-          <context context-type="linenumber">134</context>
-        </context-group>
-      </trans-unit>
-      <trans-unit id="settings.security.page-size" datatype="html">
-        <source>Rows per page</source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/settings/security/security-events.page.ts</context>
-          <context context-type="linenumber">135</context>
-        </context-group>
-      </trans-unit>
-      <trans-unit id="settings.security.pagination" datatype="html">
-        <source>Security activity pages</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/security/security-events.page.ts</context>
           <context context-type="linenumber">136</context>
