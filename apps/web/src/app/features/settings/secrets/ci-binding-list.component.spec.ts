@@ -185,7 +185,7 @@ describe('CiBindingListComponent (09.7.1-F15)', () => {
     expect(more).toHaveBeenCalledTimes(1);
     fixture.componentRef.setInput('loadingMore', true);
     expect(await next.getAttribute('aria-disabled')).toBe('true');
-    expect(await next.getAttribute('aria-busy')).toBe('true');
+    expect(await next.getAttribute('aria-busy')).toBeNull();
     expect(await (await pager.table()).getAttribute('aria-busy')).toBe('true');
     expect(await next.isFocused()).toBe(true);
     await next.click();

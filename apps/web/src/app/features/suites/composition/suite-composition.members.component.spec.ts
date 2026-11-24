@@ -230,7 +230,7 @@ describe('SuiteCompositionComponent members', { timeout: 15_000 }, () => {
     );
     await (await page.next()).click();
     await page.chooseSize(size);
-    expect(await (await page.summary()).text()).toContain(`1–${size} of 123`);
+    expect(await (await page.summary()).text()).toBe(`Showing 1–${size} of 123`);
     expect(await page.flatRows()).toHaveLength(size);
     expect((await page.ids())[0]).toBe('member-0');
   });
@@ -242,10 +242,10 @@ describe('SuiteCompositionComponent members', { timeout: 15_000 }, () => {
       SuiteCompositionHarness,
     );
     const seen = await page.ids();
-    expect(await (await page.summary()).text()).toContain('1–20 of 61');
+    expect(await (await page.summary()).text()).toBe('Showing 1–20 of 61');
     for (const range of ['21–40 of 61', '41–60 of 61', '61–61 of 61']) {
       await (await page.next()).click();
-      expect(await (await page.summary()).text()).toContain(range);
+      expect(await (await page.summary()).text()).toBe(`Showing ${range}`);
       seen.push(...(await page.ids()));
     }
     expect(seen).toHaveLength(61);
@@ -255,7 +255,7 @@ describe('SuiteCompositionComponent members', { timeout: 15_000 }, () => {
     await next.focus();
     expect(await next.isFocused()).toBe(true);
     await next.click();
-    expect(await (await page.summary()).text()).toContain('61–61 of 61');
+    expect(await (await page.summary()).text()).toBe('Showing 61–61 of 61');
     expect(await page.ids()).toEqual(['member-60']);
   });
 
@@ -277,7 +277,7 @@ describe('SuiteCompositionComponent members', { timeout: 15_000 }, () => {
     );
     expect(root.querySelector('[data-testid="suite-matrix"]')).toBeNull();
     expect(await page.flatRows()).toHaveLength(20);
-    expect(await (await page.summary()).text()).toContain('1–20 of 51');
+    expect(await (await page.summary()).text()).toBe('Showing 1–20 of 51');
   });
 
   it('resets replaced, reordered, filtered and shrinking revision data to the first page', async () => {
@@ -297,11 +297,11 @@ describe('SuiteCompositionComponent members', { timeout: 15_000 }, () => {
       await (await page.next()).click();
       getRevision.mockResolvedValue(changed);
       await store.load(changed.id);
-      expect(await (await page.summary()).text()).toContain(`1–20 of ${changed.members.length}`);
+      expect(await (await page.summary()).text()).toBe(`Showing 1–20 of ${changed.members.length}`);
       const previous = await page.previous();
       expect(await previous.getAttribute('aria-disabled')).toBe('true');
       await previous.click();
-      expect(await (await page.summary()).text()).toContain(`1–20 of ${changed.members.length}`);
+      expect(await (await page.summary()).text()).toBe(`Showing 1–20 of ${changed.members.length}`);
       expect((await page.ids())[0]).toBe(changed.members[0]?.id);
     }
   });

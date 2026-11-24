@@ -1,11 +1,5 @@
-@let knownTotal = total() !== null;
 <nav class="eg-table-pagination" [attr.aria-label]="landmark()" [attr.aria-busy]="pending()">
-  <span
-    class="page-range"
-    [attr.role]="knownTotal ? 'status' : null"
-    [attr.aria-live]="knownTotal ? 'polite' : null"
-    >{{ summary() }}</span
-  >
+  <span class="page-range">{{ summary() }}</span>
   <!-- Reserve feedback beside the controls, using the actual translated label width. -->
   <span
     data-page-feedback
@@ -13,7 +7,6 @@
     [class.invisible]="!pending()"
     [attr.role]="pending() ? 'progressbar' : null"
     [attr.aria-label]="pending() ? loadingLabel : null"
-    [attr.aria-hidden]="pending() ? null : true"
   >
     <span class="page-spinner" aria-hidden="true"></span>
     {{ loadingLabel }}
@@ -42,12 +35,7 @@
     </div>
   }
   <div class="page-actions">
-    <span
-      aria-current="page"
-      [attr.role]="knownTotal ? null : 'status'"
-      [attr.aria-live]="knownTotal ? null : 'polite'"
-      >{{ pageLabel() }}</span
-    >
+    <span role="status">{{ pageLabel() }}</span>
     <button
       hlmBtn
       type="button"
@@ -57,7 +45,6 @@
       [hlmTooltip]="previousLabel"
       [attr.aria-label]="previousLabel"
       [class.page-boundary]="page() <= 1"
-      [attr.aria-busy]="pending()"
       [attr.aria-disabled]="busy() || page() <= 1"
       (click)="move(false)"
     >
@@ -72,7 +59,6 @@
       [hlmTooltip]="nextLabel"
       [attr.aria-label]="nextLabel"
       [class.page-boundary]="!canNext()"
-      [attr.aria-busy]="pending()"
       [attr.aria-disabled]="busy() || !canNext()"
       (click)="move(true)"
     >

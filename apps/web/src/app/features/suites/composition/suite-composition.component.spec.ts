@@ -239,7 +239,7 @@ describe('SuiteCompositionComponent', () => {
     );
     expect(flat?.querySelectorAll('thead th')).toHaveLength(5);
     expect(await page.flatRows()).toHaveLength(20);
-    expect(await (await page.summary()).text()).toContain('1–20 of 3,600');
+    expect(await (await page.summary()).text()).toBe('Showing 1–20 of 3,600');
     const first = flat?.querySelector('tbody tr');
     expect(first?.textContent).toContain('case-000');
     expect(first?.textContent).toContain('column=0');
@@ -247,7 +247,7 @@ describe('SuiteCompositionComponent', () => {
     expect((await page.ids())[0]).toBe('member-0-0');
     await (await page.next()).click();
     expect(await page.flatRows()).toHaveLength(20);
-    expect(await (await page.summary()).text()).toContain('21–40 of 3,600');
+    expect(await (await page.summary()).text()).toBe('Showing 21–40 of 3,600');
     expect((await page.ids())[0]).toBe('member-0-20');
   });
 
@@ -295,13 +295,13 @@ describe('SuiteCompositionComponent', () => {
     await page.chooseSize(100);
     expect(root.querySelector('[data-testid="suite-flat-note"]')).not.toBeNull();
     expect(await page.flatRows()).toHaveLength(61);
-    expect(await (await page.summary()).text()).toContain('1–61 of 61');
+    expect(await (await page.summary()).text()).toBe('Showing 1–61 of 61');
     for (const boundary of [await page.previous(), await page.next()]) {
       expect(await boundary.getAttribute('aria-disabled')).toBe('true');
       await boundary.focus();
       expect(await boundary.isFocused()).toBe(true);
       await boundary.click();
-      expect(await (await page.summary()).text()).toContain('1–61 of 61');
+      expect(await (await page.summary()).text()).toBe('Showing 1–61 of 61');
       expect(await page.flatRows()).toHaveLength(61);
     }
     expect(root.querySelector('[data-testid="suite-matrix"]')).toBeNull();
@@ -324,7 +324,7 @@ describe('SuiteCompositionComponent', () => {
     const dependencyRows = () => root.querySelectorAll('.dependencies li');
     expect(await page.flatRows()).toHaveLength(20);
     await (await page.next()).click();
-    expect(await (await page.summary()).text()).toContain('21–40 of 3,600');
+    expect(await (await page.summary()).text()).toBe('Showing 21–40 of 3,600');
 
     getRevision.mockResolvedValue(next);
     await harness.navigateByUrl(
@@ -335,7 +335,7 @@ describe('SuiteCompositionComponent', () => {
     harness.fixture.detectChanges();
 
     expect(await page.flatRows()).toHaveLength(20);
-    expect(await (await page.summary()).text()).toContain('1–20 of 3,600');
+    expect(await (await page.summary()).text()).toBe('Showing 1–20 of 3,600');
     expect(dependencyRows()).toHaveLength(200);
   });
 
@@ -348,12 +348,12 @@ describe('SuiteCompositionComponent', () => {
     await page.chooseSize(50);
     await (await page.next()).click();
     expect(await page.flatRows()).toHaveLength(11);
-    expect(await (await page.summary()).text()).toContain('51–61 of 61');
+    expect(await (await page.summary()).text()).toBe('Showing 51–61 of 61');
     expect(await (await page.next()).getAttribute('aria-disabled')).toBe('true');
     await (await page.next()).click();
     expect(await page.flatRows()).toHaveLength(11);
     await (await page.previous()).click();
-    expect(await (await page.summary()).text()).toContain('1–50 of 61');
+    expect(await (await page.summary()).text()).toBe('Showing 1–50 of 61');
   });
 
   it('reports an address naming no revision as not found instead of loading forever', async () => {

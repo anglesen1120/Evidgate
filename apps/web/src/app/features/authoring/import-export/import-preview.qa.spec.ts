@@ -8,7 +8,7 @@ import type { LocalPreview } from './local-file-preview';
 class PreviewQaHarness extends ComponentHarness {
   static hostSelector = 'app-import-preview';
   async summary() {
-    return (await this.locatorFor('app-data-table-pager [role="status"]')()).text();
+    return (await this.locatorFor('app-data-table-pager .page-range')()).text();
   }
   async focused(index: number) {
     return (await this.locatorFor(`#import-row-${index}-title`)()).isFocused();
@@ -44,14 +44,14 @@ describe('Import preview error-index page boundaries', () => {
       fixture.componentInstance.reveal(index, '/title');
       fixture.detectChanges();
       await fixture.whenStable();
-      expect(await harness.summary()).toContain(range);
+      expect(await harness.summary()).toBe(`Showing ${range}`);
       expect(await harness.focused(index)).toBe(true);
     }
     expect(fixture.componentInstance.local()).toBe(local);
     expect(JSON.stringify(local)).toBe(before);
     fixture.componentRef.setInput('details', []);
     await fixture.whenStable();
-    expect(await harness.summary()).toContain('1–20 of 41');
+    expect(await harness.summary()).toBe('Showing 1–20 of 41');
     expect(local.rows).toHaveLength(41);
   });
 });

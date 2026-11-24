@@ -200,7 +200,8 @@ export class RunListPage {
     }),
     computation: (source, previous): string => {
       if (source.status === 'ready') return source.text;
-      // Retained rows keep their committed summary until this project's replacement arrives.
+      // Retained rows keep their committed summary until this project's replacement arrives;
+      // subtitleProject changes in the same tick as the store's loading patch, so no stale project leaks.
       if (previous && source.status === 'loading' && source.project === previous.source.project)
         return previous.value;
       return this.copy.description;

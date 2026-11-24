@@ -293,9 +293,10 @@ for (const surface of ['runs', 'audit'] as const) {
     const filtered = (await requests(page, surface)).at(-1);
     expect(filtered?.searchParams.has('cursor')).toBe(false);
     expect(filtered?.searchParams.get(surface === 'runs' ? 'ref_name' : 'action')).toBeTruthy();
-    await expect(
-      pager.getByRole('button', { name: 'Previous page', exact: true }),
-    ).toHaveAttribute('aria-disabled', 'true');
+    await expect(pager.getByRole('button', { name: 'Previous page', exact: true })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
     await page.locator(`[data-${surface === 'runs' ? 'run' : 'audit'}-clear]`).click();
     await expect(rows).toHaveCount(20);
     await expect.poll(async () => (await requests(page, surface)).length).toBe(before + 2);

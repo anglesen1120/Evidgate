@@ -56,6 +56,8 @@ async function tableWrapperOverflows(producers: Locator): Promise<boolean> {
 }
 
 for (const locale of LOCALES) {
+  const range = (span: string, total: number) =>
+    locale === 'vi' ? `Hiển thị ${span} trên ${total}` : `Showing ${span} of ${total}`;
   test(`names one row per declared producer with its served facts (${locale})`, async ({
     page,
   }) => {
@@ -125,7 +127,7 @@ for (const locale of LOCALES) {
     await expect(producers.getByRole('alert')).toHaveCount(0);
     await expect(producers.locator('button[data-page="previous"]')).toBeDisabled();
     await expect(producers.locator('button[data-page="next"]')).toBeDisabled();
-    await expect(producers.locator('app-data-table-pager [role="status"]')).toHaveText(/0–0/);
+    await expect(producers.locator('app-data-table-pager .page-range')).toHaveText(range('0–0', 0));
     await expectNoA11yViolations(page, 'run detail, producers empty state');
   });
 
@@ -252,23 +254,23 @@ for (const locale of LOCALES) {
   }) => {
     const producers = await producersOf(page, 'many-producers', locale);
     const pager = producers.locator('app-data-table-pager');
-    const summary = pager.locator('[role="status"]');
+    const summary = pager.locator('.page-range');
     await expect(producers.locator('[data-row-id]')).toHaveCount(20);
-    await expect(summary).toHaveText(/1–20.*50/);
+    await expect(summary).toHaveText(range('1–20', 50));
     await expect(pager.locator('button[data-page="previous"]')).toBeDisabled();
     const seen = await slotIds(producers);
     await pager.locator('button[data-page="next"]').click();
-    await expect(summary).toHaveText(/21–40.*50/);
+    await expect(summary).toHaveText(range('21–40', 50));
     seen.push(...(await slotIds(producers)));
     await pager.locator('button[data-page="next"]').click();
-    await expect(summary).toHaveText(/41–50.*50/);
+    await expect(summary).toHaveText(range('41–50', 50));
     await expect(producers.locator('[data-row-id]')).toHaveCount(10);
     seen.push(...(await slotIds(producers)));
     expect(seen).toEqual(Array.from({ length: 50 }, (_, index) => `shard-${index + 1}`));
     await expect(pager.locator('button[data-page="next"]')).toBeDisabled();
     await pager.locator('hlm-select-trigger button').click();
     await page.getByRole('option', { name: '50', exact: true }).click();
-    await expect(summary).toHaveText(/1–50.*50/);
+    await expect(summary).toHaveText(range('1–50', 50));
     await expect(producers.locator('[data-row-id]')).toHaveCount(50);
     await expect(pager.locator('button[data-page="previous"]')).toBeDisabled();
     await expect(pager.locator('button[data-page="next"]')).toBeDisabled();

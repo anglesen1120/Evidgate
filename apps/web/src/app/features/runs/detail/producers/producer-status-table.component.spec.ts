@@ -344,7 +344,7 @@ describe('ProducerStatusTableComponent', () => {
     expect(root.querySelector('button[data-page="next"]')?.getAttribute('aria-label')).toBe(
       'Trang sau',
     );
-    expect(root.querySelector('nav [role="status"]')?.textContent).toBe('Hiển thị 1–20 trên 201');
+    expect(root.querySelector('nav .page-range')?.textContent).toBe('Hiển thị 1–20 trên 201');
   });
 
   it('uses the evidence-link anchor helper even for reserved characters', async () => {
