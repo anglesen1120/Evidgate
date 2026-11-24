@@ -1,9 +1,8 @@
 import { expect, type Locator, type Page } from '@playwright/test';
 
 /**
- * The run list and the run detail page a row opens, as the core-flow specs drive them. Every
- * locator is the page's own `data-*` hook, id or role, so both locale bundles answer the same; the
- * tab strip is addressed by index because the page always renders Evidence before Decision.
+ * Locale-independent locators for the run list and the detail page opened by its subject link.
+ * The tab strip always renders Evidence before Decision.
  */
 export class RunDetailPage {
   constructor(private readonly page: Page) {}
@@ -20,7 +19,7 @@ export class RunDetailPage {
     return this.page.locator(`[data-run-row][data-run-id="${runId}"]`);
   }
 
-  /** The one link a row carries: the id cell, which opens the detail child route. */
+  /** The run's subject link in its list row. */
   runLink(runId: string): Locator {
     return this.row(runId).getByRole('link');
   }

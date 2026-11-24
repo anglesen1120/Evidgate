@@ -1,54 +1,34 @@
 @if (view() === 'summary') {
-  <section class="run-summary grid min-w-0 gap-(--eg-space-4)" aria-labelledby="run-summary-title">
-    <div class="flex min-w-0 flex-wrap items-center gap-x-(--eg-space-5) gap-y-(--eg-space-2)">
-      <div class="flex min-w-0 items-center gap-(--eg-space-2)">
-        <h2 id="run-summary-title" class="m-0 min-w-0 text-sm font-medium">
-          {{ copy.id }} <bdi class="font-mono wrap-anywhere">{{ display(run().run_id) }}</bdi>
-        </h2>
-        <app-copy-value-button class="short-action" [value]="run().run_id" [label]="copy.id" />
-      </div>
-      <div class="flex items-center gap-(--eg-space-2)">
-        <span class="eg-type-caption text-muted-foreground">{{ copy.state }}</span>
-        <app-run-state-pill [state]="run().state" [compact]="true" />
-      </div>
-      <div class="flex min-w-0 flex-wrap items-center gap-(--eg-space-2)">
-        <span class="eg-type-caption text-muted-foreground">{{ copy.ref }}</span>
-        @if (run().ref.name; as ref) {
-          <bdi class="min-w-0 font-mono">{{ display(ref) }}</bdi>
-          <app-copy-value-button [value]="ref" [label]="copy.ref" />
-        } @else {
-          <span class="text-muted-foreground">{{ copy.notProvided }}</span>
-        }
-        @if (run().unverified_ref) {
-          <app-status-pill
-            class="[&_.spartan-badge]:max-w-full"
-            [tone]="'warning'"
-            [label]="copy.unverified"
-          />
-        }
-      </div>
-    </div>
+  <section hlmCard class="run-summary min-w-0 gap-0 py-0" aria-labelledby="run-summary-title">
+    <h2
+      hlmCardTitle
+      [size]="sectionSize"
+      id="run-summary-title"
+      class="m-0 border-b border-border px-(--eg-space-5) py-(--eg-space-4)"
+    >
+      {{ copy.decision }}
+    </h2>
     @let live = decision();
     <dl
-      class="m-0 grid min-w-0 gap-(--eg-space-4) sm:grid-cols-2 lg:grid-cols-4 [&>div]:min-w-0 [&>div]:justify-between [&>div]:gap-(--eg-space-5) [&>div]:p-(--eg-space-5) [&_dt]:flex [&_dt]:items-center [&_dt]:gap-(--eg-space-3) [&_dt]:font-semibold [&_dd]:m-0 [&_dd]:min-w-0 [&_dd]:font-(family-name:--eg-font-display) [&_dd]:text-(length:--eg-space-7) [&_dd]:leading-(--eg-leading-xl) [&_dd]:font-semibold [&_.verdict]:h-auto [&_.verdict]:max-w-full [&_.verdict]:text-(length:--eg-text-lg) [&_.verdict]:leading-(--eg-leading-lg) [&_dt>hlm-icon]:size-(--eg-control-sm) [&_dt>hlm-icon]:rounded-(--eg-radius-md) [&_dt>hlm-icon]:p-(--eg-space-3)"
+      class="hlm-field-grid p-(--eg-space-5) sm:[--hlm-field-columns:2] [&_dt]:flex [&_dt]:items-center [&_dt]:gap-(--eg-space-2) [&_dd]:font-semibold [&_dt>hlm-icon]:size-(--eg-space-5)"
     >
-      <div hlmCard [size]="'sm'">
+      <div>
         <dt>
-          <hlm-icon [name]="'lucideInfo'" class="bg-(--eg-info-bg) text-(--eg-info-fg)" />
+          <hlm-icon [name]="'lucideInfo'" />
           {{ copy.completeness }}
         </dt>
         <dd>
           <app-evidence-badge [completeness]="runCompleteness()" [compact]="true" />
-          @if (latestSnapshot(); as snapshot) {
+          @if (latestSnapshot()?.missing?.length; as count) {
             <span class="eg-type-caption mt-(--eg-space-2) block font-normal text-muted-foreground">
-              {{ copy.missing }}: <app-number-value [value]="snapshot.missing.length" />
+              {{ copy.missing }}: <app-number-value [value]="count" />
             </span>
           }
         </dd>
       </div>
-      <div hlmCard [size]="'sm'">
+      <div>
         <dt>
-          <hlm-icon [name]="'lucideActivity'" class="bg-(--eg-neutral-bg) text-(--eg-neutral-fg)" />
+          <hlm-icon [name]="'lucideActivity'" />
           {{ copy.outcome }}
         </dt>
         <dd>
@@ -61,12 +41,9 @@
           }
         </dd>
       </div>
-      <div hlmCard [size]="'sm'">
+      <div>
         <dt>
-          <hlm-icon
-            [name]="live?.kind === 'pending' ? 'lucideClock' : 'lucideCircle'"
-            class="bg-(--eg-neutral-bg) text-(--eg-neutral-fg)"
-          />
+          <hlm-icon [name]="live?.kind === 'pending' ? 'lucideClock' : 'lucideCircle'" />
           {{ copy.decision }}
         </dt>
         <dd>
@@ -84,26 +61,23 @@
           }
         </dd>
       </div>
-      <div hlmCard [size]="'sm'">
+      <div>
         <dt>
-          <hlm-icon [name]="'lucideCopy'" class="bg-(--eg-accent-soft) text-(--eg-accent-fg)" />
+          <hlm-icon [name]="'lucideCopy'" />
           {{ copy.evidence }}
         </dt>
         <dd
           class="flex min-w-0 flex-wrap items-center gap-(--eg-space-2) [&_app-copyable-identifier]:text-sm"
         >
+          @if (latestSnapshot(); as snapshot) {
+            <span class="block w-full" data-run-latest-freeze>
+              {{ copy.latestFreeze }}: <app-number-value [value]="snapshot.revision_no" /> ·
+              <app-absolute-time [value]="snapshot.created_at" />
+            </span>
+          }
           @if (run().current_evidence_revision_id; as revision) {
             <app-copyable-identifier [value]="revision" [label]="copy.evidence" [compact]="true" />
-            @if (latestSnapshot(); as snapshot) {
-              <span
-                class="eg-type-caption block w-full font-normal text-muted-foreground"
-                data-run-latest-freeze
-              >
-                {{ copy.latestFreeze }}: <app-number-value [value]="snapshot.revision_no" /> ·
-                <app-absolute-time [value]="snapshot.created_at" />
-              </span>
-            }
-          } @else {
+          } @else if (!latestSnapshot()) {
             <span class="text-muted-foreground">{{ copy.none }}</span>
           }
         </dd>
@@ -138,13 +112,13 @@
       [textContent]="copy.context"
     ></h2>
     <dl
-      class="m-0 grid min-w-0 grid-cols-[repeat(auto-fit,minmax(min(100%,10rem),1fr))] gap-(--eg-space-5) p-(--eg-space-5) [&>div]:min-w-0 [&_dt]:text-xs [&_dt]:leading-(--eg-leading-xs) [&_dt]:text-muted-foreground [&_dd]:m-0 [&_dd]:mt-(--eg-space-1) [&_dd]:flex [&_dd]:min-w-0 [&_dd]:flex-wrap [&_dd]:items-center [&_dd]:gap-(--eg-space-2) [&_bdi]:max-w-full"
+      class="hlm-field-grid p-(--eg-space-5) sm:[--hlm-field-columns:2] [&_dd]:flex [&_dd]:flex-wrap [&_dd]:items-center [&_dd]:gap-(--eg-space-2) [&_bdi]:max-w-full"
     >
-      <div>
+      <div class="hlm-field-wide">
         <dt>{{ copy.id }}</dt>
-        <dd data-run-id>
-          <bdi class="font-mono">{{ display(run().run_id) }}</bdi>
-          <app-copy-value-button [value]="run().run_id" [label]="copy.id" />
+        <dd data-run-id class="min-w-0 flex-nowrap!">
+          <bdi class="min-w-0 font-mono wrap-anywhere">{{ display(run().run_id) }}</bdi>
+          <app-copy-value-button class="short-action" [value]="run().run_id" [label]="copy.id" />
         </dd>
       </div>
       <div>
@@ -182,84 +156,6 @@
         </dd>
       </div>
       <div>
-        <dt>{{ copy.refKind }}</dt>
-        <dd data-run-ref-kind>
-          @let kind = run().ref.kind;
-          @if (kind !== null) {
-            <bdi>{{ display(kind) }}</bdi>
-          } @else {
-            <span class="text-muted-foreground">{{ copy.notProvided }}</span>
-          }
-        </dd>
-      </div>
-      <div>
-        <dt>{{ copy.pr }}</dt>
-        <dd>
-          @if (run().ref.pr_number !== null) {
-            <app-number-value [value]="run().ref.pr_number" />
-          } @else {
-            <span class="text-muted-foreground">{{ copy.notProvided }}</span>
-          }
-        </dd>
-      </div>
-      <div>
-        <dt>{{ copy.head }}</dt>
-        <dd>
-          @let head = run().ref.head_sha;
-          @if (head !== null) {
-            <bdi class="font-mono">{{ display(head) }}</bdi>
-            <app-copy-value-button [value]="head" [label]="copy.head" />
-          } @else {
-            <span class="text-muted-foreground">{{ copy.notProvided }}</span>
-          }
-        </dd>
-      </div>
-      <div>
-        <dt>{{ copy.base }}</dt>
-        <dd>
-          @let base = run().ref.base_sha;
-          @if (base !== null) {
-            <bdi class="font-mono">{{ display(base) }}</bdi>
-            <app-copy-value-button [value]="base" [label]="copy.base" />
-          } @else {
-            <span class="text-muted-foreground">{{ copy.notProvided }}</span>
-          }
-        </dd>
-      </div>
-      <div>
-        <dt>{{ copy.trigger }}</dt>
-        <dd>
-          @let trigger = run().ref.trigger_event;
-          @if (trigger !== null) {
-            <bdi>{{ display(trigger) }}</bdi>
-          } @else {
-            <span class="text-muted-foreground">{{ copy.notProvided }}</span>
-          }
-        </dd>
-      </div>
-      <div>
-        <dt>{{ copy.fork }}</dt>
-        <dd data-run-fork>
-          @if (run().ref.is_fork !== null) {
-            {{ run().ref.is_fork ? copy.yes : copy.no }}
-          } @else {
-            <span class="text-muted-foreground">{{ copy.notProvided }}</span>
-          }
-        </dd>
-      </div>
-      <div>
-        <dt>{{ copy.evidence }}</dt>
-        <dd data-run-evidence-revision>
-          @let revision = run().current_evidence_revision_id;
-          @if (revision !== null) {
-            <bdi class="font-mono">{{ display(revision) }}</bdi>
-            <app-copy-value-button [value]="revision" [label]="copy.evidence" />
-          } @else {
-            <span>{{ copy.none }}</span>
-          }
-        </dd>
-      </div>
-      <div>
         <dt>{{ copy.environment }}</dt>
         <dd data-run-environment>
           <bdi class="font-mono">{{ display(run().environment.environment_key) }}</bdi>
@@ -273,6 +169,96 @@
         </dd>
       </div>
     </dl>
+    <details class="border-t border-border px-(--eg-space-5) py-(--eg-space-3)">
+      <summary
+        class="min-h-(--eg-control-touch) cursor-pointer content-center font-semibold"
+        i18n="@@runs.detail.context-details"
+      >
+        Additional execution context
+      </summary>
+      <dl
+        class="hlm-field-grid py-(--eg-space-3) sm:[--hlm-field-columns:2] [&_dd]:flex [&_dd]:flex-wrap [&_dd]:items-center [&_dd]:gap-(--eg-space-2)"
+      >
+        <div>
+          <dt>{{ copy.refKind }}</dt>
+          <dd data-run-ref-kind>
+            @let kind = run().ref.kind;
+            @if (kind !== null) {
+              <bdi>{{ display(kind) }}</bdi>
+            } @else {
+              <span class="text-muted-foreground">{{ copy.notProvided }}</span>
+            }
+          </dd>
+        </div>
+        <div>
+          <dt>{{ copy.pr }}</dt>
+          <dd>
+            @if (run().ref.pr_number !== null) {
+              <app-number-value [value]="run().ref.pr_number" />
+            } @else {
+              <span class="text-muted-foreground">{{ copy.notProvided }}</span>
+            }
+          </dd>
+        </div>
+        <div>
+          <dt>{{ copy.head }}</dt>
+          <dd>
+            @let head = run().ref.head_sha;
+            @if (head !== null) {
+              <bdi class="font-mono">{{ display(head) }}</bdi>
+              <app-copy-value-button [value]="head" [label]="copy.head" />
+            } @else {
+              <span class="text-muted-foreground">{{ copy.notProvided }}</span>
+            }
+          </dd>
+        </div>
+        <div>
+          <dt>{{ copy.base }}</dt>
+          <dd>
+            @let base = run().ref.base_sha;
+            @if (base !== null) {
+              <bdi class="font-mono">{{ display(base) }}</bdi>
+              <app-copy-value-button [value]="base" [label]="copy.base" />
+            } @else {
+              <span class="text-muted-foreground">{{ copy.notProvided }}</span>
+            }
+          </dd>
+        </div>
+        <div>
+          <dt>{{ copy.trigger }}</dt>
+          <dd>
+            @let trigger = run().ref.trigger_event;
+            @if (trigger !== null) {
+              <bdi>{{ display(trigger) }}</bdi>
+            } @else {
+              <span class="text-muted-foreground">{{ copy.notProvided }}</span>
+            }
+          </dd>
+        </div>
+        <div>
+          <dt>{{ copy.fork }}</dt>
+          <dd data-run-fork>
+            @if (run().ref.is_fork !== null) {
+              {{ run().ref.is_fork ? copy.yes : copy.no }}
+            } @else {
+              <span class="text-muted-foreground">{{ copy.notProvided }}</span>
+            }
+          </dd>
+        </div>
+        <div>
+          <dt>{{ copy.evidence }}</dt>
+          <dd data-run-evidence-revision>
+            @let revision = run().current_evidence_revision_id;
+            @if (revision !== null) {
+              <bdi class="font-mono">{{ display(revision) }}</bdi>
+              <app-copy-value-button [value]="revision" [label]="copy.evidence" />
+            } @else {
+              <span>{{ copy.none }}</span>
+            }
+          </dd>
+        </div>
+      </dl>
+    </details>
     <div class="border-t border-(--eg-border) px-(--eg-space-5) py-(--eg-space-4)">
       <app-evidence-badge [completeness]="runCompleteness()" />
     </div>

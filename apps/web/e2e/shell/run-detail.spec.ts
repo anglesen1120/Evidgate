@@ -2,6 +2,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import attemptsFixture from '../../../../fixtures/web-api/run-attempts/input.json';
 import readyFixture from '../../../../fixtures/web-api/run-detail/input.json';
+import collecting from '../../../../fixtures/web-api/run-detail-collecting/input.json';
 import runList from '../../../../fixtures/web-api/run-list/input.json';
 import { expectNoA11yViolations } from '../a11y/axe-scan';
 import {
@@ -43,6 +44,20 @@ async function ready(page: Page) {
     'ready',
   );
 }
+function cancelPath(locale: ShellLocale, variant: string, runId: string) {
+  return withVariants(
+    localePath(
+      locale,
+      `/dev/run-detail/orgs/${ORG_ACME}/projects/${PROJECT_STOREFRONT}/runs/${runId}`,
+    ),
+    ['?fixture.variant.listPermissions=run-actions', `?fixture.variant.getRun=${variant}`],
+  );
+}
+async function openDisclosure(page: Page, details: string) {
+  const disclosure = page.locator(details);
+  await disclosure.locator(':scope > summary').click();
+  await expect(disclosure).toHaveJSProperty('open', true);
+}
 for (const locale of LOCALES) {
   test(`deep link reload retains stored identity, manifest and attempts (${locale})`, async ({
     page,
@@ -54,6 +69,7 @@ for (const locale of LOCALES) {
     await expect(page.locator('[data-run-purpose]')).toHaveText(
       locale === 'vi' ? 'Chạy lại từ dữ liệu' : 'Replay',
     );
+    await openDisclosure(page, 'app-run-header details');
     await expect(page.locator('[data-run-evidence-revision] > bdi')).toHaveText(
       RUN.current_evidence_revision_id,
     );
@@ -63,6 +79,7 @@ for (const locale of LOCALES) {
     await expect(page.locator('[data-run-environment]')).toHaveJSProperty('tagName', 'DD');
     await expect(page.locator('app-run-header [data-run-policy]')).toHaveCount(0);
     await expect(page.locator('[data-run-fork]')).toHaveText(locale === 'vi' ? 'Không' : 'No');
+    await openDisclosure(page, 'app-manifest-panel details');
     await expect(page.locator('app-manifest-panel [data-manifest-hash] bdi')).toHaveText(
       RUN.manifest_hash,
     );
@@ -86,9 +103,27 @@ for (const locale of LOCALES) {
     await page.reload();
     await ready(page);
     await expect(page.locator('[data-run-id] > bdi')).toHaveText(RUN.run_id);
+    await openDisclosure(page, 'app-run-header details');
     await expect(page.locator('[data-run-evidence-revision] > bdi')).toHaveText(
       RUN.current_evidence_revision_id,
     );
+  });
+  test(`terminal runs hide cancel and say why; active runs keep it (${locale})`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(cancelPath(locale, 'detail-ready', RUN.run_id));
+    await ready(page);
+    await expect(page.locator('[data-run-cancel-trigger]')).toHaveCount(0);
+    await expect(page.locator('#run-cancel-disabled-reason')).toContainText(
+      locale === 'vi' ? 'đã ở trạng thái kết thúc' : 'already terminal',
+    );
+    await page.goto(cancelPath(locale, 'detail-cancel-poll', collecting.body.run_id));
+    await ready(page);
+    const trigger = page.locator('[data-run-cancel-trigger]');
+    await expect(trigger).toBeVisible();
+    await expect(trigger).not.toHaveAttribute('aria-disabled', 'true');
+    await expect(page.locator('#run-cancel-disabled-reason')).toHaveCount(0);
   });
   test(`attempts server pages replace rows, go back and reset selected size (${locale})`, async ({
     page,

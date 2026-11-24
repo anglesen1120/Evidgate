@@ -54,10 +54,14 @@ describe('ManifestPanelComponent', () => {
   });
   it('labels its Helm card and keeps the full hash selectable with polite copy feedback', async () => {
     const { root, fixture } = await render(manifest);
-    const panel = root.querySelector('section');
+    const panel = root.querySelector('details');
+    expect(panel?.open).toBe(false);
+    panel?.querySelector('summary')?.click();
+    expect(panel?.open).toBe(true);
+    expect(panel?.querySelectorAll('.hlm-field-grid > .hlm-field-wide')).toHaveLength(3);
     expect(panel?.getAttribute('data-slot')).toBe('card');
     expect(panel?.getAttribute('aria-labelledby')).toBe('manifest-title');
-    expect(root.querySelector('#manifest-title')?.textContent).toBe('Manifest summary');
+    expect(root.querySelector('#manifest-title')?.textContent?.trim()).toBe('Manifest summary');
     expect(root.querySelector('[data-manifest-hash] bdi')?.textContent).toBe(manifest.manifestHash);
     expect(root.querySelector('[role="status"]')?.getAttribute('aria-live')).toBe('polite');
     expect(root.querySelector('app-copy-value-button')).not.toBeNull();
@@ -141,6 +145,7 @@ describe('ManifestPanelComponent', () => {
     vi.stubGlobal('navigator', { clipboard: { writeText } });
     const { root, fixture } = await render(manifest);
     const button = root.querySelector('button')!;
+    root.querySelector('summary')?.click();
     button.focus();
     expect(document.activeElement).toBe(button);
 

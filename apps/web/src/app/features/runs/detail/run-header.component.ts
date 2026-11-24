@@ -61,7 +61,7 @@ export class RunHeaderComponent {
   protected readonly copy = {
     id: $localize`:@@runs.detail.id:Run id`,
     state: $localize`:@@runs.detail.state:Collection state`,
-    version: $localize`:@@runs.detail.version:Version`,
+    version: $localize`:@@runs.detail.run-version:Run version`,
     purpose: $localize`:@@runs.detail.purpose:Purpose`,
     notProvided: RUN_DETAIL_NOT_PROVIDED,
     missing: $localize`:@@runs.evidence.missing-title:Missing evidence reasons`,

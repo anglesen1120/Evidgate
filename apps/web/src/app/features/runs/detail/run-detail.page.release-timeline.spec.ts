@@ -260,25 +260,24 @@ describe('RunDetailPage release and timeline regions', () => {
     expect([...current].map((step) => step.dataset['step'])).toEqual(['complete']);
     expect(timeline.querySelector('[data-after-cancel-note]')).toBeNull();
   });
-  it('uses one shared page heading and places the timeline, execution context and manifest beside the workbench', async () => {
+  it('places four facts beside context, before full-width attempts, producers and evidence', async () => {
     const { root } = await open();
     const titles = root.querySelectorAll('h1');
     expect(titles).toHaveLength(1);
     expect(titles[0]?.getAttribute('data-title-size')).toBe('page');
     expect(titles[0]?.textContent?.trim()).toBe('Run detail');
-    const pair = root.querySelector('[data-run-history-context]');
-    expect([...(pair?.children ?? [])].map((node) => node.tagName.toLowerCase())).toEqual([
-      'app-run-timeline',
-      'app-run-header',
-      'app-manifest-panel',
-    ]);
-    expect(
-      pair?.parentElement?.classList.contains(
-        'min-[1280px]:grid-cols-[minmax(0,5fr)_minmax(0,2fr)]',
-      ),
-    ).toBe(true);
-    expect(pair?.previousElementSibling?.querySelector('app-evidence-panel')).not.toBeNull();
-    expect(pair?.previousElementSibling?.querySelector('app-attempts-table')).not.toBeNull();
+    const pair = region(root, '[data-run-facts-context]');
+    expect(pair.querySelectorAll(':scope > app-run-header')).toHaveLength(2);
+    expect(pair.querySelector('.run-summary dl')?.children).toHaveLength(4);
+    expect(pair.querySelector('#run-environment-title')).not.toBeNull();
+    expect(pair.classList.contains('xl:grid-cols-2')).toBe(true);
+    const workbench = pair.nextElementSibling!;
+    expect(workbench.children[0]?.tagName.toLowerCase()).toBe('app-attempts-table');
+    expect(workbench.children[1]?.tagName.toLowerCase()).toBe('app-producer-status-table');
+    const inspection = region(workbench as HTMLElement, '[data-run-inspection]');
+    expect(inspection.querySelector('app-evidence-panel')).not.toBeNull();
+    expect(inspection.lastElementChild?.tagName.toLowerCase()).toBe('app-run-timeline');
+    expect(workbench.nextElementSibling?.tagName.toLowerCase()).toBe('app-manifest-panel');
     for (const heading of root.querySelectorAll('h2[hlmCardTitle]')) {
       expect(heading.getAttribute('data-title-size')).toBe('section');
     }

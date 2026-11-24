@@ -2,34 +2,52 @@ import { expect, type Locator, type Page } from '@playwright/test';
 
 /** Both approved table presentations carry the same served row identity. */
 export const RUN_RECORDS = 'app-run-list-table [data-row-id]';
-export const RUN_FILTER_SUMMARY = '[data-run-filter-disclosure] > summary';
+export const RUN_FILTER_BUTTON = 'button[data-run-filter-disclosure]';
 
-/** A narrow filter disclosure is opened through its native keyboard interaction. */
+/** The same keyboard disclosure exposes the filter form at every width. */
 export async function openRunFilters(page: Page): Promise<void> {
-  const disclosure = page.locator('[data-run-filter-disclosure]');
-  const summary = page.locator(RUN_FILTER_SUMMARY);
-  await summary.focus();
-  if ((await disclosure.getAttribute('open')) === null) {
-    await page.keyboard.press('Enter');
-  }
-  await expect(disclosure).toHaveAttribute('open', '');
+  const button = page.locator(RUN_FILTER_BUTTON);
+  await expect(button).toHaveAttribute('aria-controls', 'run-filter-panel');
+  if ((await button.getAttribute('aria-expanded')) === 'false') await button.press('Enter');
+  await expect(button).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.locator('#run-filter-panel')).toBeVisible();
 }
 
 export async function expectCenteredRunIdentity(row: Locator): Promise<void> {
-  const offsets = await row.locator('[data-run-row]').evaluate((block) => {
-    const cell = block.closest('td');
-    const label = block.querySelector('a > span');
-    const time = block.querySelector('time');
-    if (!cell || !label || !time) throw new Error('Missing run identity or timestamp');
-    const bounds = cell.getBoundingClientRect();
-    const center = (bounds.top + bounds.bottom) / 2;
+  const geometry = await row.evaluate((element) => {
+    const block = element.querySelector('[data-run-row]');
+    const cell = block?.closest('td');
+    const link = block?.querySelector('a');
+    const subject = link?.querySelector('bdi, time');
+    const time = block?.querySelector('time');
+    const headings = element.closest('table')?.querySelectorAll('thead th');
+    if (!block || !cell || !link || !subject || !time || !headings)
+      throw new Error('Missing desktop run subject, time or headers');
     const wrapper = block.getBoundingClientRect();
-    return [
-      (wrapper.top + wrapper.bottom) / 2 - center,
-      (label.getBoundingClientRect().top + time.getBoundingClientRect().bottom) / 2 - center,
-    ];
+    const bounds = cell.getBoundingClientRect();
+    const range = document.createRange();
+    range.selectNodeContents(subject);
+    // A clipped ref paints inside its preview; its underlying text range can extend past it.
+    const text = subject.getBoundingClientRect();
+    return {
+      centerOffset: (wrapper.top + wrapper.bottom - bounds.top - bounds.bottom) / 2,
+      // Chromium reports both the original text and the ellipsis fragment at the same y.
+      lines: new Set([...range.getClientRects()].map((rect) => rect.top)).size,
+      fits:
+        text.left >= wrapper.left - 1 && text.right <= Math.min(wrapper.right, bounds.right) + 1,
+      alignment: [...element.children].map((entry, index) => {
+        const body = entry.getBoundingClientRect();
+        const header = headings[index]?.getBoundingClientRect();
+        if (!header) return Number.POSITIVE_INFINITY;
+        return Math.max(Math.abs(body.x - header.x), Math.abs(body.width - header.width));
+      }),
+    };
   });
-  for (const offset of offsets) expect(Math.abs(offset)).toBeLessThanOrEqual(2);
+  expect(Math.abs(geometry.centerOffset)).toBeLessThanOrEqual(2);
+  expect(geometry.lines).toBe(1);
+  expect(geometry.fits).toBe(true);
+  expect(geometry.alignment).toHaveLength(6);
+  for (const difference of geometry.alignment) expect(difference).toBeLessThanOrEqual(1);
 }
 
 export async function expectSingleLineScope(page: Page): Promise<void> {

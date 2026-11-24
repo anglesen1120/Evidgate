@@ -142,7 +142,7 @@ describe('attempt row host', () => {
     await fixture.whenStable();
     const root = fixture.nativeElement as HTMLElement;
 
-    const header = root.querySelector('th[scope="row"]');
+    const header = root.querySelector('[data-row-id] [data-attempt-row]');
     expect(header?.id).toBe('attempt-exec_42-2');
     expect(header?.getAttribute('tabindex')).toBe('-1');
     const href = evidenceHref({ kind: 'attempt', executionKey: 'exec_42', attemptNo: 2 });

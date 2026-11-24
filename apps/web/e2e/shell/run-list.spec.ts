@@ -50,6 +50,7 @@ const FILTER_LABEL = {
 
 /** A combobox commits on an option click; it exposes no form value to read back. */
 async function chooseFilter(page: Page, trigger: string, label: string): Promise<void> {
+  await openRunFilters(page);
   await page.locator(trigger).click();
   await page.getByRole('option', { name: label, exact: true }).click();
 }
@@ -75,7 +76,7 @@ for (const locale of LOCALES) {
     await ready(page);
     await expect(page.locator(ROWS)).toHaveCount(runList.body.items.length);
     await expect(page.locator('app-run-list-page h1')).toHaveCount(1);
-    await expect(page.locator('app-run-list-table [role="columnheader"]')).toHaveCount(7);
+    await expect(page.locator('app-run-list-table [role="columnheader"]')).toHaveCount(6);
     await expect(page.locator(`${ROWS} td`).first()).toHaveCSS('vertical-align', 'middle');
     await expectSingleLineScope(page);
     await expect(page.locator(`${ROWS} [data-run-evidence] .status-pill--neutral`)).toHaveCount(
@@ -110,12 +111,9 @@ for (const locale of LOCALES) {
         scopeCount,
       );
       if (row.ref.name?.includes('\u202e')) {
-        await expect(rendered.locator('.ref-cell > bdi')).toHaveCount(1);
-        await expect(rendered.locator('.ref-cell > bdi')).toContainText('⟨U+202E⟩');
-        expect(await rendered.locator('.ref-cell > bdi').textContent()).not.toContain('\u202e');
-        await expect(rendered.locator('.ref-cell app-data-table-value > .value > bdi')).toHaveCount(
-          1,
-        );
+        await expect(rendered.locator('a > bdi')).toHaveCount(1);
+        await expect(rendered.locator('a > bdi')).toContainText('⟨U+202E⟩');
+        expect(await rendered.locator('a > bdi').textContent()).not.toContain('\u202e');
       }
     }
     // Nothing is filtered here, so the pager range is the only count in the footer.
@@ -146,6 +144,7 @@ for (const locale of LOCALES) {
     await ready(page);
     await expect(page.locator('#run-decision')).toContainText(FILTER_LABEL.pending[locale]);
     await expect(page.locator(ROWS)).toHaveCount(expected.length);
+    await openRunFilters(page);
     await page.locator('[data-run-clear]').click();
     await expect(page.locator(ROWS)).toHaveCount(runList.body.items.length);
     expect(new URL(page.url()).searchParams.has('decision')).toBe(false);
@@ -223,6 +222,7 @@ for (const locale of LOCALES) {
       'true',
     );
     await expect(page.locator(ROWS)).toHaveCount(0);
+    await openRunFilters(page);
     await page.locator('[data-run-clear]').click();
     await expect(page.locator(ROWS)).toHaveCount(2);
   });
@@ -292,14 +292,19 @@ for (const locale of LOCALES) {
       const row = page.locator(ROWS).first();
       await expect(row).toBeVisible();
       await page.evaluate(() => document.fonts.ready);
-      for (const width of [768, 800, 900, 1280, 1440]) {
+      const host = page.locator('app-run-list-table app-data-table');
+      for (const width of [320, 390, 768, 800, 900, 1280, 1440]) {
         await page.setViewportSize({ width, height: 800 });
-        const host = page.locator('app-run-list-table app-data-table');
-        const narrow = width < 1280;
-        await expect(
-          host.locator('.eg-table-narrow'),
-          `${width}px uses ${narrow ? 'readable records' : 'desktop columns'}`,
-        ).toHaveCount(narrow ? 1 : 0);
+        // ResizeObserver measures the container; the two languages need not fit at the same width.
+        await page.evaluate(
+          () =>
+            new Promise<void>((resolve) =>
+              requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+            ),
+        );
+        const narrow = await host.locator('.eg-table-narrow').isVisible();
+        if (width === 320 || width === 390) expect(narrow).toBe(true);
+        if (width >= 1280) expect(narrow).toBe(false);
         await expect(row).toHaveJSProperty('tagName', narrow ? 'LI' : 'TR');
         if (width >= 1280) {
           await expect(
@@ -313,8 +318,8 @@ for (const locale of LOCALES) {
           `${width}px table has no hidden horizontal facts`,
         ).toBeLessThanOrEqual(1);
         if (narrow) {
-          await expect(row.locator('dt')).toHaveCount(7);
-          await expect(row.locator('dd')).toHaveCount(7);
+          await expect(row.locator('dt')).toHaveCount(6);
+          await expect(row.locator('dd')).toHaveCount(6);
           const fields = await row.locator('dd').evaluateAll((entries) =>
             entries.map((entry) => ({
               x: entry.getBoundingClientRect().x,
@@ -323,50 +328,30 @@ for (const locale of LOCALES) {
           );
           expect(new Set(fields.map((field) => Math.round(field.x))).size).toBe(1);
           for (const field of fields) expect(field.overflow).toBeLessThanOrEqual(1);
-          await expect(row.locator('[data-run-row] a')).toHaveText(
-            (await row.getAttribute('data-row-id')) ?? '',
-          );
         } else {
           await expectCenteredRunIdentity(row);
-          const geometry = await row.evaluate((element) => {
-            const cell = element.querySelector<HTMLElement>('.identifier');
-            const id = cell?.querySelector('a > span');
-            const header = element.closest('[role="table"]')?.querySelector('thead tr');
-            if (!cell || !id || !header) throw new Error('Run table geometry is unavailable');
-            const tableCell = cell.closest('td');
-            if (!tableCell) throw new Error('The identifier has no containing table cell');
-            const range = document.createRange();
-            range.selectNodeContents(id);
-            const text = range.getBoundingClientRect();
-            const bounds = cell.getBoundingClientRect();
-            const cellBounds = tableCell.getBoundingClientRect();
-            const headings = [...header.children].map((entry) => entry.getBoundingClientRect());
-            return {
-              lines: range.getClientRects().length,
-              fits:
-                text.left >= bounds.left - 1 &&
-                text.right <= bounds.right + 1 &&
-                text.left >= cellBounds.left - 1 &&
-                text.right <= cellBounds.right + 1,
-              alignment: [...element.children].map((entry, index) => {
-                const body = entry.getBoundingClientRect();
-                const heading = headings[index];
-                if (!heading) throw new Error('Run column heading is missing');
-                return Math.max(Math.abs(body.x - heading.x), Math.abs(body.width - heading.width));
-              }),
-            };
-          });
-          expect(geometry.lines, `${width}px identifier line count`).toBe(1);
-          expect(geometry.fits, `${width}px identifier fits inside its cell`).toBe(true);
-          expect(geometry.alignment).toHaveLength(7);
-          for (const difference of geometry.alignment) expect(difference).toBeLessThanOrEqual(1);
+          await expect(host.getByRole('columnheader')).toHaveCount(6);
+          await expect(row.locator('td')).toHaveCount(6);
         }
+        const id = await row.getAttribute('data-row-id');
+        if (!id) throw new Error('Missing run identity');
+        const link = row.getByRole('link');
+        await expect(link).toHaveAccessibleName(new RegExp(`\\(${id}\\)$`));
+        expect(await link.getAttribute('href')).toContain(id);
+        const overflowingFacts = await host
+          .locator('[data-row-id] :is(td, dd)')
+          .evaluateAll((facts) =>
+            facts
+              .filter((fact) => fact.scrollWidth > fact.clientWidth + 1)
+              .map((fact) => fact.textContent?.trim()),
+          );
+        expect(overflowingFacts, `${width}px visible facts stay within their cells`).toEqual([]);
         expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
           width,
         );
       }
       await page.setViewportSize({ width: 767, height: 800 });
-      await expect(row.locator('dt')).toHaveCount(7);
+      await expect(row.locator('dt')).toHaveCount(6);
       expect(await row.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(
         true,
       );
@@ -465,7 +450,7 @@ for (const locale of LOCALES) {
         '0px',
       );
       const firstRow = page.locator(ROWS).first();
-      await expect(firstRow.locator('dt')).toHaveCount(7);
+      await expect(firstRow.locator('dt')).toHaveCount(6);
       expect(await firstRow.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(
         true,
       );

@@ -1,4 +1,3 @@
-import { BreakpointObserver } from '@angular/cdk/layout';
 import { ComponentHarness } from '@angular/cdk/testing';
 import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { computed, provideZonelessChangeDetection, signal } from '@angular/core';
@@ -52,9 +51,7 @@ describe('RunListPage', () => {
   let query: BehaviorSubject<ParamMap>;
   let project: BehaviorSubject<ParamMap>;
   let navigate = vi.fn<Router['navigate']>().mockResolvedValue(true);
-  const desktop = new BehaviorSubject({ matches: true, breakpoints: {} });
   beforeEach(() => {
-    desktop.next({ matches: true, breakpoints: {} });
     store = pageStore();
     query = new BehaviorSubject(convertToParamMap({}));
     project = new BehaviorSubject(convertToParamMap({ projectId: 'project-1' }));
@@ -74,7 +71,6 @@ describe('RunListPage', () => {
         provideRouter([]),
         ...runCreatePageProviders().providers,
         { provide: ActivatedRoute, useValue: route },
-        { provide: BreakpointObserver, useValue: { observe: () => desktop.asObservable() } },
       ],
     });
     TestBed.overrideComponent(RunListPage, {
@@ -90,10 +86,15 @@ describe('RunListPage', () => {
     TestBed.resetTestingModule();
     vi.useRealTimers();
   });
-  async function render() {
+  async function render(showFilters = false) {
     const fixture = TestBed.createComponent(RunListPage);
     await fixture.whenStable();
-    return { fixture, root: fixture.nativeElement as HTMLElement };
+    const root = fixture.nativeElement as HTMLElement;
+    if (showFilters) {
+      root.querySelector<HTMLButtonElement>('[data-run-filter-disclosure]')!.click();
+      await fixture.whenStable();
+    }
+    return { fixture, root };
   }
   function change(root: HTMLElement, name: string, value: string) {
     const field = root.querySelector<HTMLInputElement>(`input[name="${name}"]`);
@@ -114,22 +115,6 @@ describe('RunListPage', () => {
     option.click();
     await fixture.whenStable();
   }
-  it('collapses mobile filters, counts applied filters and expands at the desktop breakpoint', async () => {
-    desktop.next({ matches: false, breakpoints: {} });
-    const { fixture, root } = await render();
-    const disclosure = root.querySelector<HTMLDetailsElement>('[data-run-filter-disclosure]');
-    expect(disclosure?.open).toBe(false);
-    expect(root.querySelector('summary')?.textContent).toContain('Active filters: 0');
-    root.querySelector('summary')?.click();
-    expect(disclosure?.open).toBe(true);
-    query.next(convertToParamMap({ decision: 'PASS', ref: 'main' }));
-    await fixture.whenStable();
-    expect(root.querySelector('summary')?.textContent).toContain('Active filters: 2');
-    root.querySelector('summary')?.click();
-    desktop.next({ matches: true, breakpoints: {} });
-    await fixture.whenStable();
-    expect(disclosure?.open).toBe(true);
-  });
   it('initializes from ancestor project context and URL filters with one page h1', async () => {
     query.next(
       convertToParamMap({
@@ -187,7 +172,7 @@ describe('RunListPage', () => {
     expect(await header.getDescription()).not.toContain('Runs on this page:');
   });
   it('offers not evaluated separately from verdicts and explains server filtering', async () => {
-    const { fixture, root } = await render();
+    const { fixture, root } = await render(true);
     root.querySelector<HTMLButtonElement>('#run-decision')?.click();
     await fixture.whenStable();
     expect(
@@ -240,7 +225,7 @@ describe('RunListPage', () => {
     },
   );
   it('marks a refused ref name as invalid and explains it inline', async () => {
-    const { fixture, root } = await render();
+    const { fixture, root } = await render(true);
     const refInput = root.querySelector<HTMLInputElement>('#run-ref')!;
     expect(refInput.getAttribute('aria-invalid')).toBeNull();
     expect(root.querySelector('#run-ref-error')).toBeNull();
@@ -279,7 +264,7 @@ describe('RunListPage', () => {
   });
   it('applies filters to the store and merges URL state while clearing obsolete filter keys', async () => {
     query.next(convertToParamMap({ decision: 'pending' }));
-    const { fixture, root } = await render();
+    const { fixture, root } = await render(true);
     await choose(fixture, root, 'state', 'running');
     await choose(fixture, root, 'scope', 'original');
     await choose(fixture, root, 'decision', 'PASS');
@@ -295,7 +280,9 @@ describe('RunListPage', () => {
       scope: 'original',
       refName: 'main',
     });
-    expect(root.querySelector('summary')?.textContent).toContain('Active filters: 4');
+    expect(root.querySelector('[data-run-filter-disclosure]')?.textContent).toContain(
+      'Active filters: 4',
+    );
     expect(navigate).toHaveBeenLastCalledWith(
       [],
       expect.objectContaining({
@@ -331,7 +318,9 @@ describe('RunListPage', () => {
         },
       }),
     );
-    expect(root.querySelector('summary')?.textContent).toContain('Active filters: 0');
+    expect(root.querySelector('[data-run-filter-disclosure]')?.textContent).toContain(
+      'Active filters: 0',
+    );
   });
   it('restores cursor and page size from the URL without walking earlier pages', async () => {
     query.next(convertToParamMap({ cursor: 'opaque+/=', pageSize: '100', decision: 'FAIL' }));
@@ -419,11 +408,13 @@ describe('RunListPage', () => {
 
   it('does not steal focus from another control after navigation', async () => {
     store.hasNext.set(true);
-    const { fixture, root } = await render();
+    const { fixture, root } = await render(true);
     const clear = root.querySelector<HTMLButtonElement>('[data-run-clear]');
     clear?.focus();
+    expect(document.activeElement).toBe(clear);
     const pager = await TestbedHarnessEnvironment.loader(fixture).getHarness(RunPagerHarness);
     await (await pager.next()).click();
+    expect(store.next).toHaveBeenCalledTimes(1);
     expect(document.activeElement).toBe(clear);
   });
 

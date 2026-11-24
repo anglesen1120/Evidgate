@@ -14,6 +14,7 @@ import {
 // including the neighbouring viewport widths that exposed the old boundary gap.
 const WIDTHS = [320, 766, 767, 768, 1280, 1440] as const;
 const STACKED_MAX = 767;
+const RUN_FACTS = ['Run (oldest first)', 'Decision', 'State', 'Evidence'] as const;
 const GRANT = '?fixture.variant.listPermissions=settings-policy-readonly';
 
 function listPath(variant: 'runs' | '250-rows'): string {
@@ -142,26 +143,31 @@ for (const theme of THEMES) {
         );
         const layout = await tableGeometry(page);
         if (width === 1440) expect(layout.narrow).toBe(false);
-        expect(layout.cells).toHaveLength(7);
+        const columns = [...RUN_FACTS, 'Run scope', 'Actions'];
+        expect(layout.cells).toHaveLength(columns.length);
         expect(layout.documentWidth).toBeLessThanOrEqual(width);
         expect(layout.rowOverflow).toBeLessThanOrEqual(1);
         if (layout.narrow) {
           expect.soft(layout.header).toBeNull();
           expect.soft(layout.headerCells).toHaveLength(0);
-          expect.soft(layout.labels).toHaveLength(7);
-          expect.soft(layout.labels.every((label) => label.length > 0)).toBe(true);
+          expect.soft(layout.labels).toEqual([...RUN_FACTS, 'Actions', 'Run scope']);
           expect.soft(layout.labelDisplays.every((display) => display !== 'none')).toBe(true);
           expect.soft(new Set(layout.cells.map((cell) => Math.round(cell.x))).size).toBe(1);
           for (const overflow of layout.fieldOverflow) expect(overflow).toBeLessThanOrEqual(1);
         } else {
           expect.soft(layout.header?.width ?? 0, JSON.stringify(layout)).toBeGreaterThan(1);
-          expect.soft(layout.headerCells).toHaveLength(7);
-          expect.soft(new Set(layout.cells.map((cell) => Math.round(cell.x))).size).toBe(7);
+          await expect(page.locator('app-run-list-table').getByRole('columnheader')).toHaveText(
+            columns,
+          );
+          expect.soft(layout.headerCells).toHaveLength(columns.length);
+          expect
+            .soft(new Set(layout.cells.map((cell) => Math.round(cell.x))).size)
+            .toBe(columns.length);
           expect.soft(layout.row.height, JSON.stringify(layout)).toBeLessThanOrEqual(200);
           for (let column = 0; column < layout.headerCells.length; column++) {
             const header = layout.headerCells[column];
             const body = layout.cells[column];
-            if (!header || !body) throw new Error('Seven paired cells are required');
+            if (!header || !body) throw new Error('A paired header and body cell is required');
             expect(Math.abs(header.x - body.x)).toBeLessThanOrEqual(1);
             expect(Math.abs(header.width - body.width)).toBeLessThanOrEqual(1);
           }
@@ -249,17 +255,19 @@ for (const theme of THEMES) {
     await expect(page.locator('app-run-list-table [data-row-id]')).toHaveCount(20);
     await expect(next).toBeFocused();
     const pageId = await first.getAttribute('data-row-id');
-    const copy = first.locator('app-copy-value-button button').first();
-    await copy.focus();
+    expect(pageId).toBeTruthy();
+    expect(pageId).not.toBe(id);
+    const view = first.getByRole('button', { name: `View ${pageId}`, exact: true });
+    await view.focus();
     await page.setViewportSize({ width: STACKED_MAX, height: 900 });
     expect((await tableGeometry(page)).narrow).toBe(true);
     expect((await tableGeometry(page)).rowCount).toBe(20);
     await expect(first).toHaveAttribute('data-row-id', pageId ?? '');
     expect((await tableGeometry(page)).rowOverflow).toBeLessThanOrEqual(1);
-    await expect(first.locator('app-copy-value-button button').first()).toBeFocused();
+    await expect(view).toBeFocused();
     await page.setViewportSize({ width: 1280, height: 900 });
     await expect(first).toHaveAttribute('data-row-id', pageId ?? '');
-    await expect(first.locator('app-copy-value-button button').first()).toBeFocused();
+    await expect(view).toBeFocused();
   });
 
   for (const revisions of ['empty', 'unavailable'] as const) {
@@ -403,7 +411,7 @@ for (const theme of THEMES) {
 }
 
 test('a loading reference filter keeps the fitted run records mounted', async ({ page }) => {
-  await page.setViewportSize({ width: 1024, height: 900 });
+  await page.setViewportSize({ width: 768, height: 900 });
   await page.goto(listPath('250-rows'));
   const list = page.locator('app-run-list-page');
   await expect(list).toHaveAttribute('data-run-list-status', 'ready');

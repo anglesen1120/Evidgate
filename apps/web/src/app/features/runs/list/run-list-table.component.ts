@@ -12,7 +12,6 @@ import {
 } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import type { RunSummary } from '@evidgate/sdk';
-import { HlmBadge } from '@evidgate/ui/badge';
 import { HlmButton } from '@evidgate/ui/button';
 import { HlmDialogImports } from '@evidgate/ui/dialog';
 import { AbsoluteTimeComponent } from '../../../shared/time/absolute-time.component';
@@ -26,7 +25,6 @@ import type {
 import { DataTableValueComponent } from '../../../shared/ui/data-table/data-table-value.component';
 import { RowActionComponent } from '../../../shared/ui/data-table/row-action.component';
 import { CopyValueButtonComponent } from '../../../shared/ui/values/copy-value-button.component';
-import { middleTruncate } from '../../../shared/ui/values/middle-truncate';
 import { DecisionChipComponent } from '../../../shared/ui/verdict/decision-chip.component';
 import { escapeFormatChars, escapeFormatLabel } from '../../../shared/ui/values/ref-name-display';
 
@@ -37,7 +35,6 @@ type RunCell = TemplateRef<DataTableCellContext<RunSummary>>;
   imports: [
     NgTemplateOutlet,
     RouterLink,
-    HlmBadge,
     HlmButton,
     HlmDialogImports,
     AbsoluteTimeComponent,
@@ -77,13 +74,10 @@ export class RunListTableComponent {
   protected readonly rowId = (row: RunSummary) => row.run_id;
   protected readonly displayRef = escapeFormatChars;
   protected readonly displayLabel = escapeFormatLabel;
-  protected readonly preview = middleTruncate;
-  protected readonly identifierPreviewLength = 17;
   private readonly identityCell = viewChild.required<RunCell>('identityCell');
   private readonly stateCell = viewChild.required<RunCell>('stateCell');
   private readonly evidenceCell = viewChild.required<RunCell>('evidenceCell');
   private readonly decisionCell = viewChild.required<RunCell>('decisionCell');
-  private readonly refCell = viewChild.required<RunCell>('refCell');
   private readonly scopeCell = viewChild.required<RunCell>('scopeCell');
   private readonly viewCell = viewChild.required<RunCell>('viewCell');
   protected viewLabel(id: string): string {
@@ -126,14 +120,21 @@ export class RunListTableComponent {
       header: this.copy.orderedRun,
       cell: this.rowId,
       role: 'identity',
-      kind: 'identifier',
+      kind: 'branch',
       priority: 'primary',
       overflow: 'truncate',
-      width: {
-        min: `calc(${this.identifierPreviewLength}ch + var(--eg-control-touch) + var(--eg-space-4) * 2 + var(--eg-space-2))`,
-        preferred: '1%',
-      },
+      width: { min: 'calc(16ch + var(--eg-space-4) * 2)', preferred: 'auto' },
       cellTemplate: this.identityCell(),
+    },
+    {
+      id: 'decision',
+      header: this.copy.decision,
+      cell: (row) => row.decision ?? '',
+      role: 'status',
+      priority: 'primary',
+      overflow: 'wrap',
+      width: { min: 'calc(15ch + var(--eg-space-4) * 2)' },
+      cellTemplate: this.decisionCell(),
     },
     {
       id: 'state',
@@ -155,27 +156,6 @@ export class RunListTableComponent {
       // The badge label never wraps: keep the fit floor, but ask for its natural width when the row has room.
       width: { min: 'calc(14ch + var(--eg-space-4) * 2)', preferred: 'max-content' },
       cellTemplate: this.evidenceCell(),
-    },
-    {
-      id: 'decision',
-      header: this.copy.decision,
-      cell: (row) => row.decision ?? '',
-      role: 'status',
-      priority: 'primary',
-      overflow: 'wrap',
-      width: { min: 'calc(15ch + var(--eg-space-4) * 2)' },
-      cellTemplate: this.decisionCell(),
-    },
-    {
-      id: 'ref',
-      header: this.copy.ref,
-      cell: (row) => this.displayRef(row.ref.name ?? this.copy.unavailableRef),
-      role: 'identity',
-      kind: 'branch',
-      priority: 'secondary',
-      overflow: 'truncate',
-      width: { preferred: 'auto' },
-      cellTemplate: this.refCell(),
     },
     {
       id: 'scope',

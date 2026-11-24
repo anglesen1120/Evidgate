@@ -22,7 +22,7 @@ export async function render(attempts: AttemptRow[] | null) {
 }
 
 export function rows(root: HTMLElement): HTMLElement[] {
-  return [...root.querySelectorAll<HTMLElement>('[data-attempt-row]')];
+  return [...root.querySelectorAll<HTMLElement>('[data-row-id]')];
 }
 
 export function requiredElement<T extends HTMLElement>(root: HTMLElement, selector: string): T {

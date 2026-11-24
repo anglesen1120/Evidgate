@@ -80,10 +80,10 @@ for (const locale of LOCALES) {
 
       test('run ID yields space to its one-line Copy label', async ({ page }) => {
         await page.goto(runDetailPath({ locale }));
-        const copy = page.locator('#run-summary-title + app-copy-value-button button');
+        const copy = page.locator('dd[data-run-id] app-copy-value-button button');
         await expect(copy).toHaveText(locale === 'vi' ? 'Sao chép' : 'Copy');
         await expect(copy).toHaveCSS('white-space', 'nowrap');
-        const id = page.locator('#run-summary-title bdi');
+        const id = page.locator('dd[data-run-id] bdi');
         // Stress only the display: the fixture service's real run ID must remain a valid UUID.
         const longId = 'a'.repeat(128);
         await id.evaluate((node, value) => {

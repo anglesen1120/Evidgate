@@ -71,7 +71,8 @@ for (const locale of LOCALES) {
     await ready(page);
     const copy = COPY[locale];
     const timeline = page.getByRole('region', { name: copy.timeline });
-    await expect(timeline.locator('[data-timeline-steps] > li')).toHaveCount(6);
+    // No state history is recorded for this run, so the timeline shows no inferred historical step.
+    await expect(timeline.locator('[data-timeline-steps] > li')).toHaveCount(5);
     await expect(timeline.locator('[aria-current="step"]')).toHaveCount(1);
     await expect(timeline.locator('[aria-current="step"]')).toHaveAttribute(
       'data-step',
@@ -166,6 +167,8 @@ test('the unbound regions add no keyboard stops', async ({ page }) => {
   await ready(page);
   await expect(page.locator('app-run-timeline button, app-release-panel button')).toHaveCount(0);
   const manifest = page.locator('app-manifest-panel');
+  // The manifest is a collapsed disclosure; its copy controls are reachable only once open.
+  await manifest.locator('summary').click();
   const copies = manifest.locator('app-copy-value-button button');
   await expect(copies).toHaveCount(3);
   await copies.first().focus();
@@ -199,6 +202,8 @@ test('the compact release chooser and both identifier actions preserve keyboard 
   const release = page.locator('app-release-panel');
   const selector = release.getByRole('combobox');
   await expect(release.locator('[data-release-digest]')).toBeVisible();
+  // The manifest is a collapsed disclosure; its copy controls are reachable only once open.
+  await page.locator('app-manifest-panel details > summary').click();
   const manifestCopies = page.locator('app-manifest-panel app-copy-value-button button');
   await expect(manifestCopies).toHaveCount(3);
   await manifestCopies.first().focus();

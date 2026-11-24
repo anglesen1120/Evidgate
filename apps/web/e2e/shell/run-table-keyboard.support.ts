@@ -1,5 +1,17 @@
 import { expect, type Locator, type Page } from '@playwright/test';
 
+/** Open a collapsed native disclosure in sequence, without moving focus programmatically. */
+export async function enterRunDetails(page: Page, details: Locator): Promise<void> {
+  const summary = details.locator(':scope > summary');
+  await page.keyboard.press('Tab');
+  await expect(summary).toBeFocused();
+  await expect(summary).toHaveAccessibleName(/\S/);
+  await expect(details).not.toHaveAttribute('open');
+  await page.keyboard.press('Enter');
+  await expect(details).toHaveAttribute('open', '');
+  await expect(summary).toBeFocused();
+}
+
 /** Only an actually overflowing shared table adds a named scroll-region stop. */
 export async function tabThroughTableScroller(page: Page, table: Locator): Promise<void> {
   const scroller = table.locator('.scroll');
@@ -84,12 +96,7 @@ export async function tabThroughNarrowRunRecords(
   await expect(records.locator('li[data-row-id]')).toHaveCount(count);
   await expect(records.locator('a[href]')).toHaveCount(count);
   await expect(records.locator('button[aria-haspopup="dialog"]')).toHaveCount(count);
-  const copies = records.locator('app-copy-value-button button');
-  await expect(copies).toHaveCount(count);
-  const names = await copies.evaluateAll((buttons) =>
-    buttons.map((button) => button.getAttribute('aria-label')),
-  );
-  expect(names.every((name) => name !== null && /^(Copy|Sao chép) \S/.test(name))).toBe(true);
+  await expect(records.locator('app-copy-value-button button')).toHaveCount(0);
   await expect(records.locator('[role="button"]')).toHaveCount(0);
   const walk = await records.evaluateHandle((root) => {
     const expected = [...root.querySelectorAll('a[href], button, [tabindex="0"]')];
@@ -102,7 +109,7 @@ export async function tabThroughNarrowRunRecords(
   });
   try {
     const total = await walk.evaluate((state) => state.expected.length);
-    expect(total).toBe(count * 3);
+    expect(total).toBe(count * 2);
     for (let step = 0; step < total; step++) await page.keyboard.press('Tab');
     const result = await walk.evaluate((state) => ({
       count: state.actual.length,

@@ -46,20 +46,20 @@ for (const locale of LOCALES) {
         ]),
       );
       const hint = page.getByText(copy.hint, { exact: true });
-      for (const width of [1440, 900, 390]) {
+      for (const width of [390, 900, 1440]) {
         await page.setViewportSize({ width, height: 900 });
         if (width === 390) await expect(page.locator('#run-scope')).toBeHidden();
-        await expect(hint).toBeVisible();
         await openRunFilters(page);
+        await expect(hint).toBeVisible();
         for (const name of [copy.scope, copy.state, copy.decision]) {
           await expect(page.getByRole('combobox', { name, exact: true })).toBeVisible();
         }
         await expect(page.getByRole('textbox', { name: copy.ref, exact: true })).toBeVisible();
         await expect(page.locator('label[for="run-scope"]')).toHaveText(copy.scope);
-        const heading =
-          width === 1440
-            ? page.getByRole('columnheader', { name: copy.order, exact: true })
-            : page.locator(RUN_RECORDS).first().locator('dt').filter({ hasText: copy.order });
+        // The available width and translated headers determine which presentation fits.
+        const heading = page
+          .getByRole('columnheader', { name: copy.order, exact: true })
+          .or(page.locator(RUN_RECORDS).first().getByText(copy.order, { exact: true }));
         await expect(heading).toBeVisible();
         const overflow = await heading.evaluate((el) => el.scrollWidth - el.clientWidth);
         expect(overflow).toBeLessThanOrEqual(1);

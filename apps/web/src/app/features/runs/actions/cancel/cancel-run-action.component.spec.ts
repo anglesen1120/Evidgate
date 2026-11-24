@@ -16,6 +16,8 @@ import { cancelReasonError } from './cancel-run-state';
 class CancelActionHarness extends ComponentHarness {
   static hostSelector = 'app-cancel-run-action';
   private readonly trigger = this.locatorFor('[data-run-cancel-trigger]');
+  readonly visibleTrigger = this.locatorForOptional('[data-run-cancel-trigger]');
+  readonly reason = this.locatorFor('#run-cancel-disabled-reason');
   readonly status = this.locatorForOptional('[data-run-cancel-status]');
   async open(): Promise<void> {
     const trigger = await this.trigger();
@@ -127,8 +129,8 @@ describe('CancelRunActionComponent', () => {
     'does not open a cancellation dialog for %s',
     async (state) => {
       const h = await setup(true, state);
-      expect(await h.action.disabled()).toBe('true');
-      await h.action.open();
+      expect(await h.action.visibleTrigger()).toBeNull();
+      expect(await (await h.action.reason()).text()).toContain('This run is already terminal');
       expect(await h.loader.hasHarness(CancelDialogHarness)).toBe(false);
       expect(h.cancelRun).not.toHaveBeenCalled();
     },
@@ -169,6 +171,46 @@ describe('CancelRunActionComponent', () => {
     expect(await status?.text()).toContain('202 · Cancel request recorded');
     expect(await status?.text()).toContain('does not mean execution has stopped');
     expect(await h.action.focused()).toBe(true);
+  });
+
+  it('focuses the status on close when the first refresh has already removed the opener', async () => {
+    const h = await setup();
+    h.refreshRun.mockImplementationOnce(() => {
+      h.run.update((run) => run && { ...run, state: 'canceled' });
+      return Promise.resolve();
+    });
+    await h.action.open();
+    await (await h.loader.getHarness(CancelDialogHarness)).submit();
+    expect(await h.loader.hasHarness(CancelDialogHarness)).toBe(false);
+    expect(await h.action.visibleTrigger()).toBeNull();
+    expect(await (await h.action.status())?.isFocused()).toBe(true);
+  });
+
+  it('hands focus from the restored opener to the status when a later refresh removes it', async () => {
+    const h = await setup();
+    await h.action.open();
+    await (await h.loader.getHarness(CancelDialogHarness)).submit();
+    expect(await h.action.focused()).toBe(true);
+    h.run.update((run) => run && { ...run, state: 'canceled' });
+    expect(await h.action.visibleTrigger()).toBeNull();
+    expect(await (await h.action.status())?.isFocused()).toBe(true);
+  });
+
+  it('leaves focus on another control when a later refresh removes the opener', async () => {
+    const h = await setup();
+    await h.action.open();
+    await (await h.loader.getHarness(CancelDialogHarness)).submit();
+    expect(await h.action.focused()).toBe(true);
+    const other = document.createElement('button');
+    document.body.append(other);
+    try {
+      other.focus();
+      h.run.update((run) => run && { ...run, state: 'canceled' });
+      expect(await h.action.visibleTrigger()).toBeNull();
+      expect(document.activeElement).toBe(other);
+    } finally {
+      other.remove();
+    }
   });
 
   it('keeps the entered reason and typed refusal visible without another POST', async () => {

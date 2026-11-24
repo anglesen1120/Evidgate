@@ -17,45 +17,32 @@
 </p>
 
 <ng-template #identityCell let-row let-stacked="stacked">
-  @let visibleId = stacked ? row.run_id : preview(row.run_id, identifierPreviewLength);
-  <ng-template #created>
-    <span class="eg-type-caption min-w-0 text-muted-foreground tabular-nums" data-run-created>
-      @if (stacked) {
-        <span class="sr-only">{{ copy.created }}: </span>
-      }
-      <app-absolute-time [value]="row.created_at" />
-    </span>
-  </ng-template>
   <div
-    class="identifier grid justify-items-start"
-    [class.min-w-max]="!stacked"
-    [class.min-w-0]="stacked"
+    class="identifier grid min-w-0 justify-items-start"
     data-run-row
     [attr.data-run-id]="row.run_id"
   >
-    <div class="flex min-w-0 max-w-full items-center gap-(--eg-space-2)">
-      <a
-        class="inline-flex min-h-(--eg-control-touch) min-w-0 flex-col items-start justify-center font-mono text-primary font-(weight:--eg-weight-semibold) hover:text-foreground active:text-foreground focus-visible:outline-solid focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-ring focus-visible:outline-offset-(--eg-focus-offset)"
-        [routerLink]="[row.run_id]"
-        [queryParamsHandling]="'preserve'"
-        [class.whitespace-nowrap]="!stacked"
-        [attr.aria-label]="stacked ? visibleId : null"
-      >
-        <span class="underline underline-offset-(--eg-space-1)">{{ visibleId }}</span>
-        @if (!stacked) {
-          <ng-container [ngTemplateOutlet]="created" />
-          <span class="sr-only">({{ row.run_id }})</span>
-        }
-      </a>
-      <app-copy-value-button
-        [class.mb-(--eg-leading-xs)]="!stacked"
-        [value]="row.run_id"
-        [label]="copy.id"
-        [iconOnly]="true"
-      />
-    </div>
-    @if (stacked) {
-      <ng-container [ngTemplateOutlet]="created" />
+    <a
+      class="grid min-h-(--eg-control-touch) min-w-0 max-w-full content-center font-semibold text-primary underline underline-offset-(--eg-space-1) focus-visible:outline-solid focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-ring focus-visible:outline-offset-(--eg-focus-offset)"
+      [routerLink]="[row.run_id]"
+      [queryParamsHandling]="'preserve'"
+    >
+      @if (row.ref.name; as ref) {
+        <bdi class="min-w-0 font-mono" [class.truncate]="!stacked">{{ displayRef(ref) }}</bdi>
+      } @else {
+        <span data-run-created class="tabular-nums"
+          ><app-absolute-time [value]="row.created_at"
+        /></span>
+      }
+      <span class="sr-only">({{ displayRef(row.run_id) }})</span>
+    </a>
+    @if (row.ref.name) {
+      <span class="eg-type-caption text-muted-foreground tabular-nums" data-run-created>
+        <app-absolute-time [value]="row.created_at" />
+      </span>
+    }
+    @if (row.unverified_ref) {
+      <app-status-pill [tone]="'warning'" [label]="copy.unverified" data-run-unverified />
     }
   </div>
 </ng-template>
@@ -67,28 +54,16 @@
     <app-status-pill [tone]="'neutral'" [label]="copy.evidenceUnavailable" />
   </div>
 </ng-template>
-<ng-template #decisionCell let-row>
+<ng-template #decisionCell let-row let-inspecting="inspecting">
   <div data-run-decision>
     <app-decision-chip
+      #chip
       [decision]="row.decision === null ? 'pending' : (row.decision ?? 'unavailable')"
       [compact]="true"
+      [showDetail]="inspecting ? undefined : false"
     />
-  </div>
-</ng-template>
-<ng-template #refCell let-row let-stacked="stacked">
-  <div class="ref-cell grid min-w-0 justify-items-start gap-(--eg-space-2)">
-    <bdi class="block min-w-0 w-full" [class.font-mono]="row.ref.name !== null"
-      ><app-data-table-value
-        [value]="row.ref.name === null ? copy.unavailableRef : displayRef(row.ref.name)"
-        [truncate]="!stacked"
-    /></bdi>
-    @if (row.unverified_ref) {
-      <app-status-pill
-        class="[&_.spartan-badge]:max-w-full"
-        [tone]="'warning'"
-        [label]="copy.unverified"
-        data-run-unverified
-      />
+    @if (!inspecting && chip.explanation(); as reason) {
+      <span class="sr-only">{{ reason }}</span>
     }
   </div>
 </ng-template>
@@ -96,7 +71,7 @@
   <div class="scope-cell grid min-w-0 justify-items-start gap-(--eg-space-2)">
     @if (row.rerun_label) {
       <span class="scope-rerun block min-w-0 max-w-full" data-run-rerun>
-        <strong hlmBadge [variant]="'secondary'">{{ copy.rerun }}</strong>
+        <strong>{{ copy.rerun }}</strong>
         <bdi class="block min-w-0 w-full">
           <app-data-table-value [value]="value" [attr.title]="value" />
         </bdi>
@@ -105,7 +80,7 @@
     @if (row.reprocess_label) {
       @let label = displayLabel(row.reprocess_label);
       <span class="scope-reprocess block min-w-0 max-w-full" data-run-reprocess>
-        <strong hlmBadge [variant]="'secondary'">{{ copy.reprocess }}</strong>
+        <strong>{{ copy.reprocess }}</strong>
         <bdi class="block min-w-0 w-full">
           <app-data-table-value [value]="label" [attr.title]="label" />
         </bdi>
@@ -139,10 +114,30 @@
       <header hlmDialogHeader>
         <h2 hlmDialogTitle>{{ copy.details }}</h2>
         <p hlmDialogDescription hlmDialogSubject>
-          {{ copy.id }}: <bdi class="font-mono">{{ row.run_id }}</bdi>
+          @if (row.ref.name; as ref) {
+            <bdi>{{ displayRef(ref) }}</bdi>
+          } @else {
+            <app-absolute-time [value]="row.created_at" />
+          }
         </p>
       </header>
       <dl class="hlm-field-grid">
+        <div class="hlm-field-wide">
+          <dt>{{ copy.id }}</dt>
+          <dd class="flex flex-wrap items-center gap-(--eg-space-2)">
+            <bdi class="font-mono">{{ displayRef(row.run_id) }}</bdi>
+            <app-copy-value-button [value]="row.run_id" [label]="copy.id" [iconOnly]="true" />
+          </dd>
+        </div>
+        <div>
+          <dt>{{ copy.ref }}</dt>
+          <dd>
+            <bdi>{{ row.ref.name ? displayRef(row.ref.name) : copy.unavailableRef }}</bdi>
+            @if (row.unverified_ref) {
+              <app-status-pill [tone]="'warning'" [label]="copy.unverified" />
+            }
+          </dd>
+        </div>
         <div>
           <dt>{{ copy.created }}</dt>
           <dd><app-absolute-time [value]="row.created_at" /></dd>
@@ -156,13 +151,16 @@
             >
               <dt>{{ column.header }}</dt>
               <dd>
-                <ng-container
-                  [ngTemplateOutlet]="column.cellTemplate ?? null"
-                  [ngTemplateOutletContext]="{
+                @let inspectionContext =
+                  {
                     $implicit: row,
                     value: column.cell(row),
                     stacked: true,
-                  }"
+                    inspecting: true,
+                  };
+                <ng-container
+                  [ngTemplateOutlet]="column.cellTemplate ?? null"
+                  [ngTemplateOutletContext]="inspectionContext"
                 />
               </dd>
             </div>

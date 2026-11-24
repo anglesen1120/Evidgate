@@ -1,4 +1,13 @@
-import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
+import { DOCUMENT } from '@angular/common';
+import {
+  afterRenderEffect,
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  effect,
+  ElementRef,
+  inject,
+} from '@angular/core';
 import { HlmButton } from '@evidgate/ui/button';
 import { InlineFeedbackComponent } from '../../../../shared/ui/states/inline-feedback.component';
 import { RequestStateComponent } from '../../../../shared/ui/states/request-state.component';
@@ -14,30 +23,33 @@ import { CancelRunStore } from './cancel-run.store';
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'grid min-w-0 max-w-prose justify-items-start gap-(--eg-space-3)' },
   template: `
-    <button
-      hlmBtn
-      type="button"
-      [variant]="'outline'"
-      data-run-cancel-trigger
-      class="min-h-(--eg-control-touch)"
-      [attr.aria-disabled]="!store.canCancel() ? 'true' : null"
-      [tabIndex]="store.canCancel() ? 0 : -1"
-      [attr.aria-describedby]="
-        disabledReason()
-          ? 'run-cancel-disabled-reason'
-          : !store.opened() && announcement()
-            ? 'run-cancel-status'
-            : null
-      "
-      (click)="store.open()"
-    >
-      {{ copy.action }}
-    </button>
+    @if (!terminal()) {
+      <button
+        hlmBtn
+        type="button"
+        [variant]="'outline'"
+        data-run-cancel-trigger
+        class="min-h-(--eg-control-touch)"
+        [attr.aria-disabled]="!store.canCancel() ? 'true' : null"
+        [tabIndex]="store.canCancel() ? 0 : -1"
+        [attr.aria-describedby]="
+          disabledReason()
+            ? 'run-cancel-disabled-reason'
+            : !store.opened() && announcement()
+              ? 'run-cancel-status'
+              : null
+        "
+        (click)="store.open()"
+      >
+        {{ copy.action }}
+      </button>
+    }
     @if (disabledReason(); as reason) {
       <p id="run-cancel-disabled-reason" class="m-0 text-muted-foreground">{{ reason }}</p>
     }
     @if (!store.opened() && announcement(); as announcement) {
       <app-inline-feedback
+        tabindex="-1"
         id="run-cancel-status"
         [title]="announcement"
         data-run-cancel-status
@@ -60,7 +72,36 @@ import { CancelRunStore } from './cancel-run.store';
 })
 export class CancelRunActionComponent {
   protected readonly store = inject(CancelRunStore);
+  private readonly document = inject(DOCUMENT);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef).nativeElement;
   protected readonly copy = CANCEL_RUN_COPY;
+  private focusBefore: Element | null = null;
+
+  constructor() {
+    // Captured before the render that may remove the trigger or the dialog, while focus is there.
+    effect(() => {
+      this.store.opened();
+      this.terminal();
+      this.focusBefore = this.document.activeElement;
+    });
+    // Focus lost with a removed control falls to <body>; the status is the stable target.
+    // A connected trigger is left to the dialog, which restores focus to it.
+    afterRenderEffect(() => {
+      this.store.opened();
+      this.terminal();
+      const before = this.focusBefore;
+      this.focusBefore = null;
+      // A captured <body> means focus was already lost, so it is not a live control.
+      if (
+        this.host.querySelector('[data-run-cancel-trigger]') ||
+        (before !== null && before !== this.document.body && before.isConnected)
+      )
+        return;
+      const active = this.document.activeElement;
+      if (active === null || active === this.document.body)
+        this.host.querySelector<HTMLElement>('[data-run-cancel-status]')?.focus();
+    });
+  }
   protected readonly announcement = computed(() => {
     switch (this.store.phase()) {
       case 'polling':
@@ -77,10 +118,13 @@ export class CancelRunActionComponent {
         return '';
     }
   });
+  protected readonly terminal = computed(() => {
+    const state = this.store.detail.run()?.state;
+    return state !== undefined && isTerminalRun(state);
+  });
   protected readonly disabledReason = computed(() => {
     if (this.store.scope() === null) return this.copy.noPermission;
-    const state = this.store.detail.run()?.state;
-    if (state && isTerminalRun(state)) return this.copy.terminal;
+    if (this.terminal()) return this.copy.terminal;
     if (!this.store.viewport.canMutate()) return this.copy.desktop;
     return this.store.phase() === 'submitting' ? this.copy.submitting : '';
   });

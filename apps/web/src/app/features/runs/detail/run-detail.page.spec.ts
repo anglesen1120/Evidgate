@@ -67,7 +67,7 @@ describe('RunDetailPage', () => {
     expect(slotRows).toHaveLength(run.declared_producers.length);
     expect(root.querySelectorAll('#producers [data-fact][data-unavailable]')).toHaveLength(0);
   });
-  it('places compact run facts before attempts and evidence, with full provenance last', async () => {
+  it('places summary beside execution context before attempts and evidence, with manifest last', async () => {
     const { root } = await open();
     const regions = [
       ...root.querySelectorAll(
@@ -76,14 +76,14 @@ describe('RunDetailPage', () => {
     ];
     expect(regions.map((region) => region.tagName.toLowerCase())).toEqual([
       'app-run-header',
+      'app-run-header',
       'app-attempts-table',
       'app-evidence-panel',
       'app-decision-view',
-      'app-run-header',
       'app-manifest-panel',
     ]);
     expect(regions[0]?.querySelector('[data-run-environment]')).toBeNull();
-    expect(regions[4]?.querySelector('[data-run-environment]')).not.toBeNull();
+    expect(regions[1]?.querySelector('[data-run-environment]')).not.toBeNull();
     expect(regions[0]?.querySelector('app-decision-chip')).toBeNull();
   });
   it('explains incomplete collection before attempts without inventing a missing reason', async () => {
@@ -118,9 +118,11 @@ describe('RunDetailPage', () => {
     const { root } = await open();
     expect(listAttempts).toHaveBeenCalledExactlyOnceWith(run.run_id, { limit: 20 });
     const attempts = root.querySelector('app-attempts-table')!;
-    const rows = [...attempts.querySelectorAll('[data-attempt-row]')];
+    const rows = [...attempts.querySelectorAll('[data-row-id]')];
     expect(rows).toHaveLength(attemptPage.items.length);
-    const chain = rows.filter((r) => r.querySelector('th')?.textContent?.includes('Attempt 2'));
+    const chain = rows.filter((r) =>
+      r.querySelector('.attempt-number')?.textContent?.includes('Attempt 2'),
+    );
     expect(chain).toHaveLength(1);
     expect(chain[0]!.querySelector('[data-attempt-normalised]')?.textContent).toContain('Passed');
     const blocked = rows.find((r) => r.textContent?.includes('BLOCKED_BY_ENV'))!;

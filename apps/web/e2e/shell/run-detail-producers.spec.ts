@@ -170,6 +170,10 @@ for (const locale of LOCALES) {
     const producers = await producersOf(page, 'many-producers', locale);
     await producers.locator('app-data-table-pager hlm-select-trigger button').click();
     await page.getByRole('option', { name: '50', exact: true }).click();
+    // The manifest is a collapsed disclosure; its copy controls are reachable only once open.
+    const manifest = page.locator('app-manifest-panel details').first();
+    await manifest.locator('summary').click();
+    await expect(manifest).toHaveJSProperty('open', true);
     const manifestCopies = page.locator('app-manifest-panel app-copy-value-button button');
     await expect(manifestCopies).toHaveCount(3);
     await manifestCopies.first().focus();

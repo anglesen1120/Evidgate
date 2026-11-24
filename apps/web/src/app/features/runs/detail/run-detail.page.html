@@ -5,7 +5,7 @@
     <app-shell-icon class="size-(--eg-space-6)" [name]="'run'" />
   </span>
   <app-page-header
-    class="min-w-0 flex-1 [&_h1]:text-(length:--eg-space-7) [&_.header-description]:text-sm md:[&_.header-actions]:grid! md:[&_.header-actions]:items-start"
+    class="min-w-0 flex-1 md:[&_.header-actions]:grid! md:[&_.header-actions]:items-start"
     [title]="copy.title"
     [description]="subtitle()"
   >
@@ -46,45 +46,56 @@
 >
   @if (store.run(); as run) {
     <div class="grid min-w-0 gap-(--eg-space-5)">
-      <app-run-header
-        [run]="run"
-        [runCompleteness]="store.latestRevisionCompleteness()"
-        [latestSnapshot]="latestSnapshot()"
-        [decision]="summaryDecision()"
-        [decisionLoading]="store.decisionStatus() === 'loading' && store.decision() === null"
-        (viewEvidence)="showEvidence()"
-      />
       <div
-        class="grid min-w-0 items-start gap-(--eg-space-5) min-[1280px]:grid-cols-[minmax(0,5fr)_minmax(0,2fr)]"
+        class="grid min-w-0 items-start gap-(--eg-space-5) xl:grid-cols-2"
+        data-run-facts-context
       >
-        <div class="grid min-w-0 gap-(--eg-space-5)">
-          <app-attempts-table
-            [attempts]="store.attempts()"
-            [status]="attemptsStatus()"
-            [error]="store.attemptsError()"
-            [hasMore]="store.hasMoreAttempts()"
-            [loadingMore]="store.attemptsLoadingMore()"
-            [page]="store.attemptsPage()"
-            [pageSize]="store.attemptsPageSize()"
-            (retry)="retryAttempts()"
-            (next)="nextAttempts()"
-            (previous)="previousAttempts()"
-            (pageSizeChange)="setAttemptsPageSize($event)"
-          />
-          <app-producer-status-table
-            [slots]="producerSlots()"
-            [status]="'ready'"
-            [runAfterCancelEvents]="run.after_cancel_events"
-            [targetAnchor]="producerTargetAnchor()"
-          />
-          <!-- A live region inside the inactive tab would not announce revision changes. -->
-          <p
-            class="sr-only"
-            role="status"
-            [attr.aria-live]="'polite'"
-            data-evidence-announcement
-            [textContent]="evidenceAnnouncement()"
-          ></p>
+        <app-run-header
+          [run]="run"
+          [runCompleteness]="store.latestRevisionCompleteness()"
+          [latestSnapshot]="latestSnapshot()"
+          [decision]="summaryDecision()"
+          [decisionLoading]="store.decisionStatus() === 'loading' && store.decision() === null"
+          (viewEvidence)="showEvidence()"
+        />
+        <app-run-header
+          [run]="run"
+          [runCompleteness]="store.latestRevisionCompleteness()"
+          [view]="'context'"
+        />
+      </div>
+      <div class="grid min-w-0 gap-(--eg-space-5)">
+        <app-attempts-table
+          [attempts]="store.attempts()"
+          [status]="attemptsStatus()"
+          [error]="store.attemptsError()"
+          [hasMore]="store.hasMoreAttempts()"
+          [loadingMore]="store.attemptsLoadingMore()"
+          [page]="store.attemptsPage()"
+          [pageSize]="store.attemptsPageSize()"
+          (retry)="retryAttempts()"
+          (next)="nextAttempts()"
+          (previous)="previousAttempts()"
+          (pageSizeChange)="setAttemptsPageSize($event)"
+        />
+        <app-producer-status-table
+          [slots]="producerSlots()"
+          [status]="'ready'"
+          [runAfterCancelEvents]="run.after_cancel_events"
+          [targetAnchor]="producerTargetAnchor()"
+        />
+        <!-- A live region inside the inactive tab would not announce revision changes. -->
+        <p
+          class="sr-only"
+          role="status"
+          [attr.aria-live]="'polite'"
+          data-evidence-announcement
+          [textContent]="evidenceAnnouncement()"
+        ></p>
+        <div
+          class="grid min-w-0 items-start gap-(--eg-space-5) xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]"
+          data-run-inspection
+        >
           <div
             hlmTabs
             [tab]="detailTab()"
@@ -157,21 +168,14 @@
               />
             </div>
           </div>
-        </div>
-        <div class="grid min-w-0 gap-(--eg-space-5)" data-run-history-context>
           <app-run-timeline
             [state]="run.state"
             [stateHistory]="run.state_history"
             [afterCancelEvents]="run.after_cancel_events"
           />
-          <app-run-header
-            [run]="run"
-            [runCompleteness]="store.latestRevisionCompleteness()"
-            [view]="'context'"
-          />
-          <app-manifest-panel [summary]="store.manifest()" />
         </div>
       </div>
+      <app-manifest-panel [summary]="store.manifest()" />
       <!-- Release reads have their own status and retry window, independent of the run read. -->
       <app-release-panel
         [runId]="run.run_id"
