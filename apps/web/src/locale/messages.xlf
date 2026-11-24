@@ -31476,28 +31476,28 @@
         <source> View as table </source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/dashboard/decision-trend.component.ts</context>
-          <context context-type="linenumber">121,125</context>
+          <context context-type="linenumber">123,127</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.dashboard.trend-days" datatype="html">
         <source>Daily decision counts</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/dashboard/decision-trend.component.ts</context>
-          <context context-type="linenumber">264</context>
+          <context context-type="linenumber">267</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.dashboard.trend-date" datatype="html">
         <source>Date (UTC)</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/dashboard/decision-trend.component.ts</context>
-          <context context-type="linenumber">265</context>
+          <context context-type="linenumber">268</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.dashboard.trend-total" datatype="html">
         <source>Total</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/dashboard/decision-trend.component.ts</context>
-          <context context-type="linenumber">266</context>
+          <context context-type="linenumber">269</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.data-table.rows-per-page" datatype="html">

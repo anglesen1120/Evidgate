@@ -1,4 +1,5 @@
 import { FocusKeyManager, type FocusableOption } from '@angular/cdk/a11y';
+import { Directionality } from '@angular/cdk/bidi';
 import { DecimalPipe, formatNumber } from '@angular/common';
 import {
   afterRenderEffect,
@@ -59,13 +60,13 @@ export interface DashboardTrendPoint {
                   class="trend-trigger"
                   [tabIndex]="tabStop() === point.id ? 0 : -1"
                   [attr.aria-label]="point.summary"
-                  [attr.aria-controls]="panelId"
-                  [attr.aria-expanded]="inspection()?.trigger === bar"
                   (focus)="focusDay(point.id, bar, point.summary)"
                   (blur)="blurDay(bar)"
                   (pointerenter)="hoverDay($event, bar, point.summary)"
                   (pointerleave)="leave($event, bar)"
-                  (click)="inspect(bar, point.summary)"
+                  (pointerdown)="beginTap($event, bar)"
+                  (pointercancel)="closingTap = null"
+                  (click)="activate(bar, point.summary)"
                   (keydown)="navigate($event, $index)"
                 >
                   <span class="trend-segments" aria-hidden="true" [style.height.%]="point.height">
@@ -95,7 +96,6 @@ export interface DashboardTrendPoint {
         #panel
         popover="manual"
         class="spartan-tooltip-content overflow-auto whitespace-pre-line tabular-nums"
-        [id]="panelId"
         [attr.role]="inspection() ? 'tooltip' : null"
         (pointerleave)="leave($event)"
         >{{ inspection()?.summary }}</span
@@ -261,12 +261,12 @@ export class DecisionTrendComponent {
   private readonly injector = inject(Injector);
   private readonly destroyRef = inject(DestroyRef);
   private readonly renderer = inject(Renderer2);
+  private readonly directionality = inject(Directionality);
   readonly label = input.required<string>();
   readonly points = input<readonly DashboardTrendPoint[]>([]);
   protected readonly daysLabel = $localize`:@@shared.dashboard.trend-days:Daily decision counts`;
   protected readonly dateLabel = $localize`:@@shared.dashboard.trend-date:Date (UTC)`;
   private readonly totalLabel = $localize`:@@shared.dashboard.trend-total:Total`;
-  protected readonly panelId = `trend-values-${crypto.randomUUID()}`;
   private readonly panel = viewChild.required<ElementRef<HTMLElement>>('panel');
   private readonly buttons = viewChildren<ElementRef<HTMLButtonElement>>('bar');
   private readonly navigation = new FocusKeyManager<FocusableOption>(
@@ -275,9 +275,9 @@ export class DecisionTrendComponent {
     ),
     this.injector,
   )
-    .withHorizontalOrientation('ltr')
     .withVerticalOrientation(false)
     .withHomeAndEnd();
+  protected closingTap: HTMLButtonElement | null = null;
   private readonly focusedDay = signal<string | null>(null);
   protected readonly tabStop = computed(() => {
     const focused = this.focusedDay();
@@ -331,7 +331,9 @@ export class DecisionTrendComponent {
       const current = this.inspection();
       if (!current) return;
       const panel = this.panel().nativeElement;
-      const dismiss = () => this.inspection.set(null);
+      const dismiss = () => {
+        if (this.inspection() === current) this.inspection.set(null);
+      };
       const close = openFullValuePopover(current.trigger, panel, dismiss);
       const unlisten = this.renderer.listen(
         'document',
@@ -348,7 +350,19 @@ export class DecisionTrendComponent {
     });
   }
 
-  protected inspect(trigger: HTMLButtonElement, summary: string): void {
+  protected beginTap(event: PointerEvent, trigger: HTMLButtonElement): void {
+    // Touch can focus the button before click. Toggle from the state at finger-down.
+    this.closingTap =
+      event.pointerType === 'touch' && this.inspection()?.trigger === trigger ? trigger : null;
+  }
+
+  protected activate(trigger: HTMLButtonElement, summary: string): void {
+    if (this.closingTap === trigger) this.blurDay(trigger);
+    else this.inspect(trigger, summary);
+    this.closingTap = null;
+  }
+
+  private inspect(trigger: HTMLButtonElement, summary: string): void {
     if (this.inspection()?.trigger !== trigger) this.inspection.set({ trigger, summary });
   }
 
@@ -369,6 +383,7 @@ export class DecisionTrendComponent {
   protected leave(event: PointerEvent, from?: HTMLButtonElement): void {
     const current = this.inspection();
     if (!current || event.pointerType === 'touch' || (from && from !== current.trigger)) return;
+    if (current.trigger.ownerDocument.activeElement === current.trigger) return;
     if (!this.inside(event.relatedTarget, current.trigger, this.panel().nativeElement)) {
       this.inspection.set(null);
     }
@@ -381,7 +396,7 @@ export class DecisionTrendComponent {
       return;
     }
     this.navigation.updateActiveItem(index);
-    this.navigation.onKeydown(event);
+    this.navigation.withHorizontalOrientation(this.directionality.value).onKeydown(event);
   }
 
   private inside(target: EventTarget | null, trigger: HTMLElement, panel: HTMLElement): boolean {
