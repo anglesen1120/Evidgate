@@ -65,7 +65,6 @@ interface LedgerRow {
         @if (progress(); as resources) {
           @if (resources.project; as createdProject) {
             <app-loading-pattern
-              #tableFetch
               [layout]="'table'"
               [busy]="fetching()"
               [hasRows]="ledgerRows().length > 0"
@@ -88,7 +87,7 @@ interface LedgerRow {
                     <th hlmTh scope="col">{{ copy.actions }}</th>
                   </tr>
                 </thead>
-                <tbody [class.opacity-80]="tableFetch.visible()" hlmTBody>
+                <tbody hlmTBody>
                   @for (row of ledgerRows(); track row.key) {
                     <tr hlmTr class="h-(--eg-space-11)">
                       <th hlmTh scope="row" class="font-semibold text-foreground">

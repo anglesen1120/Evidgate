@@ -150,10 +150,21 @@ describe('AuthoringPage', () => {
     expect(await (await harness.table()).getAttribute('aria-busy')).not.toBe('true');
     expect(await harness.path()).toEqual(['Project roots', 'Module', 'Selected feature']);
     expect(await (await harness.table()).text()).toContain('Selected feature');
-    expect(await (await harness.selectedId())?.text()).toContain(selected.node_id);
+    expect(await harness.inlineIdentifier()).toBeNull();
     expect(host(fixture).querySelector('[data-authoring-metrics]')?.textContent).toContain(
       'Direct checklist items',
     );
+  });
+
+  it('opens details from the current breadcrumb even when the deep-linked node is collapsed', async () => {
+    const { harness } = await render();
+    const tree = await harness.tree();
+    expect(await tree?.visibleIds()).toEqual([root.node_id]);
+    const opener = await harness.selectedDetails();
+    expect(await opener?.getAttribute('aria-label')).toContain(selected.title);
+    await opener?.click();
+    expect(await (await harness.dialogId()).text()).toBe(selected.node_id);
+    expect(selectNode).not.toHaveBeenCalled();
   });
 
   it('labels counts for the selected category and never treats a filtered count as its inventory', async () => {
@@ -275,7 +286,7 @@ describe('AuthoringPage', () => {
     await fixture.whenStable();
     expect(await harness.forbidden()).not.toBeNull();
     expect(await harness.tree()).toBeNull();
-    expect(await harness.selectedId()).toBeNull();
+    expect(await harness.selectedDetails()).toBeNull();
     error.set({ ...failure, kind: 'not_found', status: 404, retryable: false });
     fixture.detectChanges();
     await fixture.whenStable();
@@ -307,7 +318,7 @@ describe('AuthoringPage', () => {
     const { harness } = await render();
     expect(await harness.forbidden()).not.toBeNull();
     expect(await harness.tree()).toBeNull();
-    expect(await harness.selectedId()).toBeNull();
+    expect(await harness.selectedDetails()).toBeNull();
     expect(await harness.path()).toEqual([]);
     expect(await harness.text()).not.toContain(selected.title);
   });

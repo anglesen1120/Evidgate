@@ -125,20 +125,37 @@ describe('AttemptsTableComponent server pagination', () => {
     },
   );
 
-  it('announces loading outside the busy table and no false completion after failure', async () => {
+  it('keeps retained rows busy without an extra loading announcement or false completion', async () => {
     const { fixture, root } = await render([row()]);
     const table = await TestbedHarnessEnvironment.harnessForFixture(fixture, AttemptsHarness);
     fixture.componentRef.setInput('loadingMore', true);
     expect(await (await table.region())?.getAttribute('aria-busy')).toBe('true');
     await vi.waitFor(() => {
       fixture.detectChanges();
-      expect(root.querySelector('app-live-status')?.textContent).toContain('Loading attempts page');
+      expect(root.querySelector('[data-table-progress]')).not.toBeNull();
     });
+    expect(root.querySelector('app-live-status')?.textContent?.trim()).toBe('');
     expect(root.querySelector('.table-scroll [data-attempts-status]')).toBeNull();
     fixture.componentRef.setInput('error', networkFailure);
     fixture.componentRef.setInput('loadingMore', false);
     expect(await (await table.announcement()).text()).toBe('');
     expect(await table.rows()).toHaveLength(1);
+  });
+
+  it('announces Previous while replacing an empty attempts page', async () => {
+    const { fixture, root } = await render([]);
+    fixture.componentRef.setInput('page', 2);
+    const table = await TestbedHarnessEnvironment.harnessForFixture(fixture, AttemptsHarness);
+    const previous = vi.fn(() => fixture.componentRef.setInput('loadingMore', true));
+    fixture.componentInstance.previous.subscribe(previous);
+    await (await table.previous()).click();
+    expect(previous).toHaveBeenCalledOnce();
+    await vi.waitFor(() => {
+      fixture.detectChanges();
+      expect(root.querySelector('[data-table-progress]')).not.toBeNull();
+      expect(root.querySelector('app-live-status')?.textContent).toContain('Loading attempts page');
+    });
+    expect(root.querySelector('app-empty-pattern')).toBeNull();
   });
 
   it('announces a successfully replaced page', async () => {

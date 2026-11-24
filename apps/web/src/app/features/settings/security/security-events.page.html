@@ -10,7 +10,7 @@
     <app-section-header class="min-w-0" [title]="copy.title" [description]="subtitle()" />
   }
 </header>
-@if (store.phase() === 'ready') {
+@if (tableStatus() === 'ready') {
   <dl
     data-security-summary
     class="m-0 grid min-w-0 grid-cols-1 gap-3 @xs:grid-cols-2 @2xl:grid-cols-4"
@@ -61,7 +61,7 @@
       Filters apply to all matching security events on the server.
     </p>
     <app-form-error-summary [summaryId]="'security-filter-errors'" [feedback]="feedback()" />
-    @let counted = store.phase() === 'ready' && !store.filters().severity;
+    @let counted = tableStatus() === 'ready' && !store.filters().severity;
     <fieldset class="m-0 min-w-0 border-0 p-0">
       <legend class="mb-1 text-xs font-semibold">
         {{ copy.severity }}

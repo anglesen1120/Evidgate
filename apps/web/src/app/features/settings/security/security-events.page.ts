@@ -138,7 +138,7 @@ export class SecurityEventsPage {
     hidden: $localize`:@@settings.security.hidden:Injection-attempt events are not displayed in this V1 view. A page may contain no visible V1 events; continue to the next page when available.`,
   };
   protected readonly subtitle = computed(() => {
-    if (this.store.phase() !== 'ready') return this.copy.description;
+    if (this.tableStatus() !== 'ready') return this.copy.description;
     const org = this.session.currentOrg()?.name;
     return [
       org ? escapeFormatChars(org) : this.copy.scope,

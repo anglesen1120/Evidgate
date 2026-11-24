@@ -70,12 +70,7 @@ import type {
         <app-status-pill [tone]="tones[health().state]" [label]="stateLabels[health().state]" />
       </header>
       <p>{{ reasonLabels[health().reason] }}</p>
-      <app-loading-pattern
-        #tableFetch
-        [layout]="'table'"
-        [busy]="fetching()"
-        [hasRows]="rows().length > 0"
-      />
+      <app-loading-pattern [layout]="'table'" [busy]="fetching()" [hasRows]="rows().length > 0" />
       <div hlmTableContainer class="min-w-0 max-w-full">
         <table
           [attr.aria-busy]="fetching()"
@@ -94,7 +89,7 @@ import type {
               <th hlmTh scope="col">{{ copy.actions }}</th>
             </tr>
           </thead>
-          <tbody [class.opacity-80]="tableFetch.visible()" hlmTBody>
+          <tbody hlmTBody>
             @for (row of rows(); track row.credential.kind + ':' + row.credential.id) {
               <tr hlmTr class="h-(--eg-space-11)" data-testid="connection-health-credential">
                 <th hlmTh scope="row">

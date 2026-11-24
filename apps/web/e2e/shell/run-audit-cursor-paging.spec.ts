@@ -44,6 +44,63 @@ async function rowIds(page: Page, surface: Surface): Promise<string[]> {
     .evaluateAll((rows) => rows.map((row) => row.getAttribute('data-row-id') ?? ''));
 }
 
+const retainedTables = [
+  {
+    name: 'catalog',
+    path: `/dev/catalog-list/orgs/${ORG_ACME}/projects/${PROJECT_STOREFRONT}`,
+    grant: 'settings-policy-readonly',
+    rows: 'app-case-list-table [data-row-id]',
+  },
+  {
+    name: 'security events',
+    path: `/dev/settings-security-events/orgs/${ORG_ACME}`,
+    grant: 'settings-admin',
+    rows: 'app-security-events-table [data-row-id]',
+  },
+  {
+    name: 'api tokens',
+    path: `/dev/settings-api-tokens/orgs/${ORG_ACME}`,
+    grant: 'settings-api-tokens-read',
+    rows: 'app-api-token-list [data-api-token-row]',
+  },
+] as const;
+
+for (const locale of ['en', 'vi'] as const) {
+  for (const surface of retainedTables) {
+    test(`${surface.name} ${locale}: retained row stays in place during a delayed read`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width: 1440, height: 1050 });
+      await page.goto(
+        withVariants(localePath(locale, surface.path), [
+          `?fixture.variant.listPermissions=${surface.grant}`,
+          '?fixture.latency=1000',
+        ]),
+      );
+      const first = page.locator(surface.rows).first();
+      await expect(first).toBeVisible({ timeout: 15000 });
+      const position = () =>
+        first.evaluate((el) => el.getBoundingClientRect().top + window.scrollY);
+      const initialY = await position();
+      const content = await first.textContent();
+      const pager = page.locator('app-data-table-pager').first();
+      if (surface.name === 'security events') {
+        await pager.locator('[data-page="next"]').click();
+      } else {
+        await pager.getByRole('combobox').click();
+        await page.getByRole('option', { name: '50', exact: true }).click();
+      }
+      const feedback = page.locator('[data-table-progress]');
+      await expect(feedback).toBeVisible();
+      expect(await first.textContent()).toBe(content);
+      expect(Math.abs((await position()) - initialY)).toBeLessThanOrEqual(1);
+      if (surface.name === 'catalog')
+        await expect(page.locator('[data-catalog-summary]')).toHaveText('');
+      await expect(feedback).toHaveCount(0);
+    });
+  }
+}
+
 for (const surface of ['runs', 'audit'] as const) {
   test(`${surface}: twenty then thirteen records, Previous and View preserve the committed page`, async ({
     page,
@@ -106,7 +163,7 @@ for (const surface of ['runs', 'audit'] as const) {
       await bar.evaluate((element) => getComputedStyle(element, '::after').animationName),
     ).toBe('none');
     expect(await rowIds(page, surface)).toEqual(first);
-    await expect(table.locator('app-loading-pattern').getByRole('status')).toHaveText('Loading…');
+    await expect(table.locator('app-loading-pattern').getByRole('status')).toHaveText('');
     await expect(page.locator(ROWS[surface])).toHaveCount(13);
     await expect(bar).toHaveCount(0);
     expect(await requests(page, surface)).toHaveLength(2);

@@ -380,7 +380,6 @@
         </button>
       </form>
       <app-loading-pattern
-        #tableFetch
         [layout]="'table'"
         [busy]="store.refreshing()"
         [hasRows]="store.tokens().length > 0"
@@ -398,7 +397,7 @@
               <th hlmTh scope="col" class="w-px whitespace-nowrap">{{ recordCopy.actions }}</th>
             </tr>
           </thead>
-          <tbody [class.opacity-80]="tableFetch.visible()" hlmTBody>
+          <tbody hlmTBody>
             @for (token of store.tokens(); track token.id) {
               <tr
                 hlmTr

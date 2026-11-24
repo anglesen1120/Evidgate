@@ -448,6 +448,10 @@
           <context context-type="linenumber">172,177</context>
         </context-group>
         <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/authoring-node-details.component.ts</context>
+          <context context-type="linenumber">75,78</context>
+        </context-group>
+        <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/import-export/import-history-table.component.html</context>
           <context context-type="linenumber">138,143</context>
         </context-group>
@@ -477,7 +481,7 @@
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/api-tokens/api-token-list.component.ts</context>
-          <context context-type="linenumber">157,159</context>
+          <context context-type="linenumber">156,158</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/members/member-list.component.ts</context>
@@ -497,7 +501,7 @@
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/secret-reference-list.component.html</context>
-          <context context-type="linenumber">178,180</context>
+          <context context-type="linenumber">168,170</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/studio/gallery/studio-gallery.copy.ts</context>
@@ -1753,144 +1757,151 @@
           <context context-type="linenumber">15</context>
         </context-group>
       </trans-unit>
-      <trans-unit id="authoring.tree.selected-id" datatype="html">
-        <source>Selected node ID</source>
+      <trans-unit id="authoring.tree.details" datatype="html">
+        <source>Node details</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-tree.copy.ts</context>
           <context context-type="linenumber">16</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.tree.node-id" datatype="html">
+        <source>Node ID</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/authoring-tree.copy.ts</context>
+          <context context-type="linenumber">17</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.tree.loading" datatype="html">
         <source>Loading project hierarchy…</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-tree.copy.ts</context>
-          <context context-type="linenumber">17</context>
+          <context context-type="linenumber">18</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.tree.loading-children" datatype="html">
         <source>Loading child nodes…</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-tree.copy.ts</context>
-          <context context-type="linenumber">18</context>
+          <context context-type="linenumber">19</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.tree.empty" datatype="html">
         <source>This project has no authoring content yet</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-tree.copy.ts</context>
-          <context context-type="linenumber">19</context>
+          <context context-type="linenumber">20</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.tree.no-roots" datatype="html">
         <source>No hierarchy nodes in this project</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-tree.copy.ts</context>
-          <context context-type="linenumber">20</context>
+          <context context-type="linenumber">21</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.tree.empty-description" datatype="html">
         <source>Import a checklist and its manual cases to build the first branch of this tree.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-tree.copy.ts</context>
-          <context context-type="linenumber">21</context>
+          <context context-type="linenumber">22</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.tree.empty-children" datatype="html">
         <source>No child nodes in this scope</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-tree.copy.ts</context>
-          <context context-type="linenumber">22</context>
+          <context context-type="linenumber">23</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.tree.refresh" datatype="html">
         <source>Refresh hierarchy</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-tree.copy.ts</context>
-          <context context-type="linenumber">23</context>
+          <context context-type="linenumber">24</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.tree.stale" datatype="html">
         <source>Hierarchy may be stale</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-tree.copy.ts</context>
-          <context context-type="linenumber">24</context>
+          <context context-type="linenumber">25</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.tree.stale-description" datatype="html">
         <source>Refresh failed; previously loaded hierarchy data is still shown. Retry to refresh this region only.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-tree.copy.ts</context>
-          <context context-type="linenumber">25</context>
+          <context context-type="linenumber">26</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.tree.more-roots" datatype="html">
         <source>Load more root nodes</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-tree.copy.ts</context>
-          <context context-type="linenumber">26</context>
+          <context context-type="linenumber">27</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.tree.more-children" datatype="html">
         <source>Load more child nodes</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-tree.copy.ts</context>
-          <context context-type="linenumber">27</context>
+          <context context-type="linenumber">28</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.tree.browse-capped" datatype="html">
         <source>Hierarchy list is at its load limit</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-tree.copy.ts</context>
-          <context context-type="linenumber">28</context>
+          <context context-type="linenumber">29</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.tree.table" datatype="html">
         <source>Manual cases</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-tree.copy.ts</context>
-          <context context-type="linenumber">29</context>
+          <context context-type="linenumber">30</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.tree.import-export" datatype="html">
         <source>Import and export</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-tree.copy.ts</context>
-          <context context-type="linenumber">30</context>
+          <context context-type="linenumber">31</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.tree.category-cases" datatype="html">
         <source>Category cases</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-tree.copy.ts</context>
-          <context context-type="linenumber">31</context>
+          <context context-type="linenumber">32</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.tree.direct-items" datatype="html">
         <source>Direct checklist items</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-tree.copy.ts</context>
-          <context context-type="linenumber">32</context>
+          <context context-type="linenumber">33</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.tree.loaded-cases" datatype="html">
         <source>Loaded cases</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-tree.copy.ts</context>
-          <context context-type="linenumber">33</context>
+          <context context-type="linenumber">34</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.tree.loaded-scope" datatype="html">
         <source>Loaded in this scope</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-tree.copy.ts</context>
-          <context context-type="linenumber">34</context>
+          <context context-type="linenumber">35</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.tree.browse-capped-help" datatype="html">
         <source>Showing the first <x id="cap" equiv-text="formatNumber(cap, locale)"/> nodes in this list. Open a known node link to inspect a scope outside these results.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-tree.copy.ts</context>
-          <context context-type="linenumber">39</context>
+          <context context-type="linenumber">40</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.tree.announce-selection-failed" datatype="html">
@@ -5478,28 +5489,28 @@
         <source>Count unavailable with the current filter</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/catalog/case-list.page.html</context>
-          <context context-type="linenumber">43,48</context>
+          <context context-type="linenumber">44,49</context>
         </context-group>
       </trans-unit>
       <trans-unit id="catalog.loaded-count-live" datatype="html">
         <source><x id="INTERPOLATION" equiv-text="{{ store.rows().length | number }}"/> loaded</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/catalog/case-list.page.html</context>
-          <context context-type="linenumber">152,153</context>
+          <context context-type="linenumber">153,154</context>
         </context-group>
       </trans-unit>
       <trans-unit id="catalog.loaded-search-no-results" datatype="html">
         <source>No matching identities in loaded results.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/catalog/case-list.page.html</context>
-          <context context-type="linenumber">155,159</context>
+          <context context-type="linenumber">156,160</context>
         </context-group>
       </trans-unit>
       <trans-unit id="catalog.loaded-search-results" datatype="html">
         <source><x id="INTERPOLATION" equiv-text="{{ store.visibleRows().length | number }}"/> matching identities in loaded results.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/catalog/case-list.page.html</context>
-          <context context-type="linenumber">159,161</context>
+          <context context-type="linenumber">160,162</context>
         </context-group>
       </trans-unit>
       <trans-unit id="catalog.title" datatype="html">
@@ -5695,7 +5706,7 @@
         <source>Loaded identities: <x id="count" equiv-text="formatNumber(this.store.rows().length, this.locale)"/></source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/catalog/case-list.page.ts</context>
-          <context context-type="linenumber">206</context>
+          <context context-type="linenumber">213</context>
         </context-group>
       </trans-unit>
       <trans-unit id="catalog.case-view.name" datatype="html">
@@ -11253,14 +11264,14 @@
         <source>Credential health</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/health/connection-health.component.ts</context>
-          <context context-type="linenumber">212</context>
+          <context context-type="linenumber">207</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.connect.token-title" datatype="html">
         <source>Ingest token</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/health/connection-health.component.ts</context>
-          <context context-type="linenumber">213</context>
+          <context context-type="linenumber">208</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/steps/connect-ci-rotate-confirm.component.ts</context>
@@ -11275,224 +11286,224 @@
         <source>CI binding</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/health/connection-health.component.ts</context>
-          <context context-type="linenumber">214</context>
+          <context context-type="linenumber">209</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.health.title" datatype="html">
         <source>Connection health</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/health/connection-health.component.ts</context>
-          <context context-type="linenumber">229</context>
+          <context context-type="linenumber">224</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.health.expires" datatype="html">
         <source>Expires (UTC):</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/health/connection-health.component.ts</context>
-          <context context-type="linenumber">230</context>
+          <context context-type="linenumber">225</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.health.overlap" datatype="html">
         <source>Rotation overlap ends (UTC):</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/health/connection-health.component.ts</context>
-          <context context-type="linenumber">231</context>
+          <context context-type="linenumber">226</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.health.last-use" datatype="html">
         <source>Last successful token use (UTC)</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/health/connection-health.component.ts</context>
-          <context context-type="linenumber">232</context>
+          <context context-type="linenumber">227</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.health.not-recorded" datatype="html">
         <source>Not recorded</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/health/connection-health.component.ts</context>
-          <context context-type="linenumber">233</context>
+          <context context-type="linenumber">228</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.health.last-use-hint" datatype="html">
         <source>Token use is not a project-wide ingest timestamp. OIDC-only activity is not shown, and token-use timestamps are updated at most once every 60 seconds.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/health/connection-health.component.ts</context>
-          <context context-type="linenumber">234</context>
+          <context context-type="linenumber">229</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.health.lower-bound" datatype="html">
         <source>The token list is incomplete. The latest token use shown may be older than the newest use; an unlisted token may have been used more recently.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/health/connection-health.component.ts</context>
-          <context context-type="linenumber">235</context>
+          <context context-type="linenumber">230</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.health.truncated" datatype="html">
         <source>Only part of the credential list is shown. Health reflects the listed credentials; an unlisted credential may still be usable.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/health/connection-health.component.ts</context>
-          <context context-type="linenumber">236</context>
+          <context context-type="linenumber">231</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.health.state-healthy" datatype="html">
         <source>Healthy</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/health/connection-health.component.ts</context>
-          <context context-type="linenumber">238</context>
+          <context context-type="linenumber">233</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.health.state-pending" datatype="html">
         <source>Pending</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/health/connection-health.component.ts</context>
-          <context context-type="linenumber">239</context>
+          <context context-type="linenumber">234</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.health.state-unhealthy" datatype="html">
         <source>Unhealthy</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/health/connection-health.component.ts</context>
-          <context context-type="linenumber">240</context>
+          <context context-type="linenumber">235</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.health.state-unknown" datatype="html">
         <source>Unknown</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/health/connection-health.component.ts</context>
-          <context context-type="linenumber">241</context>
+          <context context-type="linenumber">236</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.health.reason-usable" datatype="html">
         <source>At least one listed credential is usable. This does not confirm a successful ingest.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/health/connection-health.component.ts</context>
-          <context context-type="linenumber">250</context>
+          <context context-type="linenumber">245</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.health.reason-rotating" datatype="html">
         <source>Only tokens in their rotation overlap are usable. Update CI to use the replacement before the overlap ends.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/health/connection-health.component.ts</context>
-          <context context-type="linenumber">251</context>
+          <context context-type="linenumber">246</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.health.reason-pending" datatype="html">
         <source>No listed credential is usable yet. Run the first CI exchange to verify the pending binding.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/health/connection-health.component.ts</context>
-          <context context-type="linenumber">252</context>
+          <context context-type="linenumber">247</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.health.reason-truncated" datatype="html">
         <source>No usable credential is shown, but the list is incomplete. Connection health cannot be determined from this list.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/health/connection-health.component.ts</context>
-          <context context-type="linenumber">253</context>
+          <context context-type="linenumber">248</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.health.reason-unusable" datatype="html">
         <source>None of the listed credentials is usable. Create an ingest token or enable a CI binding.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/health/connection-health.component.ts</context>
-          <context context-type="linenumber">254</context>
+          <context context-type="linenumber">249</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.health.reason-empty" datatype="html">
         <source>No connection credentials are recorded. Create a CI binding or an ingest token.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/health/connection-health.component.ts</context>
-          <context context-type="linenumber">255</context>
+          <context context-type="linenumber">250</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.health.status-active" datatype="html">
         <source>Active</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/health/connection-health.component.ts</context>
-          <context context-type="linenumber">261</context>
+          <context context-type="linenumber">256</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.health.status-awaiting" datatype="html">
         <source>Awaiting CI</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/health/connection-health.component.ts</context>
-          <context context-type="linenumber">262</context>
+          <context context-type="linenumber">257</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.health.status-disabled" datatype="html">
         <source>Disabled</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/health/connection-health.component.ts</context>
-          <context context-type="linenumber">263</context>
+          <context context-type="linenumber">258</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.health.status-rotated" datatype="html">
         <source>Rotated</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/health/connection-health.component.ts</context>
-          <context context-type="linenumber">264</context>
+          <context context-type="linenumber">259</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.health.status-expired" datatype="html">
         <source>Expired</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/health/connection-health.component.ts</context>
-          <context context-type="linenumber">265</context>
+          <context context-type="linenumber">260</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.health.status-revoked" datatype="html">
         <source>Revoked</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/health/connection-health.component.ts</context>
-          <context context-type="linenumber">266</context>
+          <context context-type="linenumber">261</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.health.detail-active" datatype="html">
         <source>Usable.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/health/connection-health.component.ts</context>
-          <context context-type="linenumber">269</context>
+          <context context-type="linenumber">264</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.health.detail-rotating" datatype="html">
         <source>Usable during the rotation overlap. Switch CI to the replacement token before it ends.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/health/connection-health.component.ts</context>
-          <context context-type="linenumber">270</context>
+          <context context-type="linenumber">265</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.health.detail-pending" datatype="html">
         <source>Not usable until the first CI exchange verifies this binding.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/health/connection-health.component.ts</context>
-          <context context-type="linenumber">271</context>
+          <context context-type="linenumber">266</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.health.detail-expired" datatype="html">
         <source>Not usable: the token has expired.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/health/connection-health.component.ts</context>
-          <context context-type="linenumber">272</context>
+          <context context-type="linenumber">267</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.health.detail-revoked" datatype="html">
         <source>Not usable: the token has been revoked.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/health/connection-health.component.ts</context>
-          <context context-type="linenumber">273</context>
+          <context context-type="linenumber">268</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.health.detail-disabled" datatype="html">
         <source>Not usable: the binding is disabled.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/health/connection-health.component.ts</context>
-          <context context-type="linenumber">274</context>
+          <context context-type="linenumber">269</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.health.detail-rotated-ended" datatype="html">
         <source>Not usable: the rotation overlap has ended. Use the replacement token.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/health/connection-health.component.ts</context>
-          <context context-type="linenumber">275</context>
+          <context context-type="linenumber">270</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.record.actions" datatype="html">
@@ -11622,28 +11633,28 @@
         <source>Resource</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/shell/evidence-panel.component.ts</context>
-          <context context-type="linenumber">222</context>
+          <context context-type="linenumber">221</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.record.confirmed-value" datatype="html">
         <source>Confirmed value</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/shell/evidence-panel.component.ts</context>
-          <context context-type="linenumber">223</context>
+          <context context-type="linenumber">222</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.evidence.source" datatype="html">
         <source>Read from server-confirmed resources, not browser completion flags.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/shell/evidence-panel.component.ts</context>
-          <context context-type="linenumber">268</context>
+          <context context-type="linenumber">267</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.evidence.title" datatype="html">
         <source>Created resources</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/shell/evidence-panel.component.ts</context>
-          <context context-type="linenumber">276</context>
+          <context context-type="linenumber">275</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/shell/onboarding-shell.component.ts</context>
@@ -11654,42 +11665,42 @@
         <source>Project</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/shell/evidence-panel.component.ts</context>
-          <context context-type="linenumber">277</context>
+          <context context-type="linenumber">276</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.evidence.identifier" datatype="html">
         <source>Project ID</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/shell/evidence-panel.component.ts</context>
-          <context context-type="linenumber">278</context>
+          <context context-type="linenumber">277</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.evidence.no-resources" datatype="html">
         <source>No setup resources have been created yet.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/shell/evidence-panel.component.ts</context>
-          <context context-type="linenumber">279</context>
+          <context context-type="linenumber">278</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.evidence.unavailable" datatype="html">
         <source>Created resources are unavailable.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/shell/evidence-panel.component.ts</context>
-          <context context-type="linenumber">280</context>
+          <context context-type="linenumber">279</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.evidence.stale" datatype="html">
         <source>Resources could not be refreshed. Showing the last confirmed resources.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/shell/evidence-panel.component.ts</context>
-          <context context-type="linenumber">281</context>
+          <context context-type="linenumber">280</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.evidence.bindings" datatype="html">
         <source>CI bindings</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/shell/evidence-panel.component.ts</context>
-          <context context-type="linenumber">282</context>
+          <context context-type="linenumber">281</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/shell/onboarding-shell.component.ts</context>
@@ -11700,7 +11711,7 @@
         <source>Ingest tokens</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/shell/evidence-panel.component.ts</context>
-          <context context-type="linenumber">283</context>
+          <context context-type="linenumber">282</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/shell/onboarding-shell.component.ts</context>
@@ -11711,7 +11722,7 @@
         <source>Sample run ID</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/shell/evidence-panel.component.ts</context>
-          <context context-type="linenumber">284</context>
+          <context context-type="linenumber">283</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/shell/step-pending.component.ts</context>
@@ -11722,7 +11733,7 @@
         <source>Evidence revision ID</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/shell/evidence-panel.component.ts</context>
-          <context context-type="linenumber">285</context>
+          <context context-type="linenumber">284</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/shell/step-pending.component.ts</context>
@@ -11733,21 +11744,21 @@
         <source>Activated policy revision</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/shell/evidence-panel.component.ts</context>
-          <context context-type="linenumber">286</context>
+          <context context-type="linenumber">285</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.evidence.activated-at" datatype="html">
         <source>Activated at (UTC)</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/shell/evidence-panel.component.ts</context>
-          <context context-type="linenumber">287</context>
+          <context context-type="linenumber">286</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.evidence.activation-unavailable" datatype="html">
         <source>Activation details are unavailable with your current access.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/shell/evidence-panel.component.ts</context>
-          <context context-type="linenumber">288</context>
+          <context context-type="linenumber">287</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.shell.loading" datatype="html">
@@ -12013,14 +12024,14 @@
         <source>CI bindings</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/steps/connect-ci-binding-table.component.ts</context>
-          <context context-type="linenumber">128</context>
+          <context context-type="linenumber">123</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.connect.repo-name" datatype="html">
         <source>Repository (owner/repo)</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/steps/connect-ci-binding-table.component.ts</context>
-          <context context-type="linenumber">129</context>
+          <context context-type="linenumber">124</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/steps/connect-ci.form-feedback.ts</context>
@@ -12039,7 +12050,7 @@
         <source>Created (UTC)</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/steps/connect-ci-binding-table.component.ts</context>
-          <context context-type="linenumber">130</context>
+          <context context-type="linenumber">125</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/steps/credential-record.component.ts</context>
@@ -12050,7 +12061,7 @@
         <source>No CI bindings yet.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/steps/connect-ci-binding-table.component.ts</context>
-          <context context-type="linenumber">131</context>
+          <context context-type="linenumber">126</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.connect.rotate-confirm-title" datatype="html">
@@ -22151,77 +22162,77 @@
         <source>Prefixes on this page</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/api-tokens/api-token-list.component.ts</context>
-          <context context-type="linenumber">269</context>
+          <context context-type="linenumber">268</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.api-tokens.served-state" datatype="html">
         <source>Server-reported state</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/api-tokens/api-token-list.component.ts</context>
-          <context context-type="linenumber">275</context>
+          <context context-type="linenumber">274</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.api-tokens.not-usable" datatype="html">
         <source>Not usable</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/api-tokens/api-token-list.component.ts</context>
-          <context context-type="linenumber">281</context>
+          <context context-type="linenumber">280</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.api-tokens.revocation-recorded" datatype="html">
         <source>Revocation recorded</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/api-tokens/api-token-list.component.ts</context>
-          <context context-type="linenumber">287</context>
+          <context context-type="linenumber">286</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.api-tokens.showing-page" datatype="html">
         <source>Showing <x id="range" equiv-text="range"/> of <x id="count" equiv-text="formatNumber(this.rows().length, this.locale)"/> tokens on this page.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/api-tokens/api-token-list.component.ts</context>
-          <context context-type="linenumber">307</context>
+          <context context-type="linenumber">306</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.api-tokens.search" datatype="html">
         <source>Search name or prefix</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/api-tokens/api-token-list.component.ts</context>
-          <context context-type="linenumber">310</context>
+          <context context-type="linenumber">309</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.api-tokens.loaded-only" datatype="html">
         <source>Search applies to this loaded page only. Complete project totals are not available.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/api-tokens/api-token-list.component.ts</context>
-          <context context-type="linenumber">311</context>
+          <context context-type="linenumber">310</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.api-tokens.metadata-only" datatype="html">
         <source>Metadata only. Existing token values cannot be retrieved.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/api-tokens/api-token-list.component.ts</context>
-          <context context-type="linenumber">312</context>
+          <context context-type="linenumber">311</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.api-tokens.no-matches" datatype="html">
         <source>No tokens match this search</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/api-tokens/api-token-list.component.ts</context>
-          <context context-type="linenumber">313</context>
+          <context context-type="linenumber">312</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.api-tokens.clear-search" datatype="html">
         <source>Clear search</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/api-tokens/api-token-list.component.ts</context>
-          <context context-type="linenumber">314</context>
+          <context context-type="linenumber">313</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.api-tokens.inspect-named" datatype="html">
         <source>Inspect token <x id="name" equiv-text="name"/></source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/api-tokens/api-token-list.component.ts</context>
-          <context context-type="linenumber">319</context>
+          <context context-type="linenumber">318</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.api-tokens.permissions-close" datatype="html">
@@ -22533,7 +22544,7 @@
         <source> Read-only. You don’t have permission to make changes here. </source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/api-tokens/api-tokens.page.ts</context>
-          <context context-type="linenumber">140,144</context>
+          <context context-type="linenumber">136,140</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/members/members.page.html</context>
@@ -22544,7 +22555,7 @@
         <source>On this page</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/api-tokens/api-tokens.page.ts</context>
-          <context context-type="linenumber">268</context>
+          <context context-type="linenumber">274</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/members/members.page.html</context>
@@ -22809,7 +22820,7 @@
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/policy/revision-list.component.ts</context>
-          <context context-type="linenumber">178</context>
+          <context context-type="linenumber">168</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/quota-retention/quota-panel.component.ts</context>
@@ -23699,14 +23710,14 @@
         <source>Show all roles</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/members/role-matrix.component.ts</context>
-          <context context-type="linenumber">204</context>
+          <context context-type="linenumber">203</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.members.show-granted-only" datatype="html">
         <source>Show granted roles only</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/members/role-matrix.component.ts</context>
-          <context context-type="linenumber">205</context>
+          <context context-type="linenumber">204</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.members.preview-choose-role" datatype="html">
@@ -23863,7 +23874,7 @@
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/policy/revision-list.component.ts</context>
-          <context context-type="linenumber">181</context>
+          <context context-type="linenumber">171</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.policy.activated-at" datatype="html">
@@ -24026,7 +24037,7 @@
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/policy/revision-list.component.ts</context>
-          <context context-type="linenumber">183</context>
+          <context context-type="linenumber">173</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.policy.diff-title" datatype="html">
@@ -24146,7 +24157,7 @@
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/policy/revision-list.component.ts</context>
-          <context context-type="linenumber">184</context>
+          <context context-type="linenumber">174</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.policy.state" datatype="html">
@@ -24157,7 +24168,7 @@
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/policy/revision-list.component.ts</context>
-          <context context-type="linenumber">182</context>
+          <context context-type="linenumber">172</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.policy.raw-state" datatype="html">
@@ -24175,7 +24186,7 @@
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/policy/revision-list.component.ts</context>
-          <context context-type="linenumber">185</context>
+          <context context-type="linenumber">175</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.policy.created-by" datatype="html">
@@ -24448,21 +24459,21 @@
         <source>Revision history</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/policy/revision-list.component.ts</context>
-          <context context-type="linenumber">176</context>
+          <context context-type="linenumber">166</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.policy.history-order" datatype="html">
         <source>Oldest first</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/policy/revision-list.component.ts</context>
-          <context context-type="linenumber">177</context>
+          <context context-type="linenumber">167</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.row.actions" datatype="html">
         <source>Actions</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/policy/revision-list.component.ts</context>
-          <context context-type="linenumber">179</context>
+          <context context-type="linenumber">169</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/quota-retention/quota-panel.component.ts</context>
@@ -24473,7 +24484,7 @@
         <source>No revisions available.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/policy/revision-list.component.ts</context>
-          <context context-type="linenumber">180</context>
+          <context context-type="linenumber">170</context>
         </context-group>
       </trans-unit>
       <trans-unit id="quota.metric.results" datatype="html">
@@ -27254,7 +27265,7 @@
         <source>CI binding records</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/ci-binding-list.component.ts</context>
-          <context context-type="linenumber">148,152</context>
+          <context context-type="linenumber">147,151</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.confirm-title" datatype="html">
@@ -27367,7 +27378,7 @@
         <source> Showing <x id="INTERPOLATION" equiv-text="{{ filtered().length | number }}"/> of <x id="INTERPOLATION_1" equiv-text="{{ rows().length | number }}"/> on this page </source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/secret-reference-list.component.html</context>
-          <context context-type="linenumber">224,226</context>
+          <context context-type="linenumber">214,216</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.inspect-named" datatype="html">
@@ -33783,11 +33794,11 @@
         <source>Loading…</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/states/loading-pattern.component.ts</context>
-          <context context-type="linenumber">70,74</context>
+          <context context-type="linenumber">84,88</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/states/loading-pattern.component.ts</context>
-          <context context-type="linenumber">104</context>
+          <context context-type="linenumber">120</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.states.not-found.description" datatype="html">

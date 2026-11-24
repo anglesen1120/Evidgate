@@ -31,7 +31,7 @@ describe('Data table fetch feedback', () => {
     };
   }
 
-  it('keeps served rows throughout a page read, announcing only a slow request', async () => {
+  it('keeps served rows throughout a page read, showing slow progress without repeating the loading announcement', async () => {
     const { fixture, harness } = setup(2);
     const table = await harness;
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
@@ -43,7 +43,7 @@ describe('Data table fetch feedback', () => {
     fixture.detectChanges();
     expect(await table.rows()).toHaveLength(2);
     expect(await table.indicator()).not.toBeNull();
-    expect(await (await table.announcement()).text()).toBe('Loading…');
+    expect(await (await table.announcement()).text()).toBe('');
     fixture.componentRef.setInput('busy', false);
     fixture.detectChanges();
     expect(await table.indicator()).toBeNull();
@@ -65,6 +65,7 @@ describe('Data table fetch feedback', () => {
     fixture.detectChanges();
     vi.advanceTimersByTime(200);
     fixture.detectChanges();
+    expect(await (await table.announcement()).text()).toBe('Loading…');
     expect(await table.skeletons()).toHaveLength(3);
     for (const row of await table.skeletons())
       expect(await row.getAttribute('aria-hidden')).toBe('true');

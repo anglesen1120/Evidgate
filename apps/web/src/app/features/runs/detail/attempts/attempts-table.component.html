@@ -14,15 +14,19 @@
     {{ copy.title }}
   </h2>
   <p class="text-xs text-muted-foreground" data-attempts-order>{{ copy.serverOrder }}</p>
-  @if (status() === 'loading') {
-    <app-loading-pattern [layout]="'table'" [busy]="true" />
-  } @else if (status() === 'error') {
+  <app-loading-pattern
+    [layout]="'table'"
+    [busy]="status() === 'loading' || loadingMore()"
+    [hasRows]="status() === 'ready' && !!attempts()?.length"
+    [label]="loadingMore() ? copy.loadingMore : undefined"
+  />
+  @if (status() === 'error') {
     <app-error-pattern [error]="error()" [headingLevel]="3" (retry)="requestFirstPageRetry()" />
-  } @else if (attempts() === null) {
+  } @else if (status() === 'ready' && attempts() === null) {
     <p data-attempts-unavailable class="text-muted-foreground">{{ copy.notProvided }}</p>
-  } @else if (attempts()?.length === 0) {
+  } @else if (status() === 'ready' && attempts()?.length === 0 && !loadingMore()) {
     <app-empty-pattern [icon]="'navRun'" [title]="copy.empty" />
-  } @else {
+  } @else if (status() === 'ready' && attempts()?.length) {
     @if (healingUnavailable()) {
       <p
         class="flex flex-wrap items-baseline gap-(--eg-space-3) rounded-(--eg-radius-md) bg-(--eg-surface-raised) p-(--eg-space-4) text-xs text-muted-foreground"
@@ -35,13 +39,6 @@
     <!-- Tailwind's strict max-width variant on the 767 px boundary compiles to `width < 767px`,
          which left a 767 px viewport with the column layout while the per-cell field labels
          stayed visible. The explicit media queries below keep one layout per width. -->
-    <app-loading-pattern
-      #tableFetch
-      [label]="copy.loadingMore"
-      [layout]="'table'"
-      [busy]="loadingMore()"
-      [hasRows]="(attempts()?.length ?? 0) > 0"
-    />
     <div
       hlmTableContainer
       #tableRegion
@@ -102,7 +99,6 @@
         </thead>
         @for (group of visibleGroups(); track group.executionKey) {
           <tbody
-            [class.opacity-80]="tableFetch.visible()"
             hlmTBody
             role="rowgroup"
             class="[@media(max-width:767px)]:block [&+tbody]:border-t [&+tbody]:border-border"

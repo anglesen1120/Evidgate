@@ -92,7 +92,6 @@ export const CI_BINDINGS_COPY = {
         <p class="text-xs text-muted-foreground">{{ copy.order }}</p>
       </header>
       <app-loading-pattern
-        #tableFetch
         [layout]="'table'"
         [busy]="!forbidden() && (loading() || loadingMore())"
         [hasRows]="rows().length > 0"
@@ -169,12 +168,7 @@ export const CI_BINDINGS_COPY = {
                   <th hlmTh [attr.role]="'columnheader'" scope="col">{{ copy.workflows }}</th>
                 </tr>
               </thead>
-              <tbody
-                [class.opacity-80]="tableFetch.visible()"
-                hlmTBody
-                [attr.role]="'rowgroup'"
-                class="max-md:block"
-              >
+              <tbody hlmTBody [attr.role]="'rowgroup'" class="max-md:block">
                 @for (row of rows(); track row.id) {
                   <tr
                     hlmTr

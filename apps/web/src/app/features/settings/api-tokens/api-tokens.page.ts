@@ -128,11 +128,7 @@ import { escapeFormatChars } from '../../../shared/ui/values/ref-name-display';
     }
     @if (store.canWrite() && store.scope() && store.phase() !== 'forbidden') {
       <app-desktop-required-notice />
-    } @else if (
-      !store.canWrite() &&
-      store.scope() &&
-      (store.phase() === 'success' || store.phase() === 'empty')
-    ) {
+    } @else if (!store.canWrite() && store.scope() && showServedPage()) {
       <p
         class="my-4 border-b border-border pb-3 text-xs text-muted-foreground"
         i18n="@@settings.read-only"
@@ -259,23 +255,28 @@ export class ApiTokensPage {
     return activated !== null && resolved !== activated;
   });
   protected readonly copy = API_TOKENS_COPY;
+  protected readonly displayRows = rowsDuringFetch(
+    this.store.scope,
+    this.store.pageResource.isLoading,
+    this.store.rows,
+  );
+  protected readonly showServedPage = computed(
+    () =>
+      this.store.phase() === 'success' ||
+      this.store.phase() === 'empty' ||
+      (this.store.pageResource.isLoading() && this.displayRows().length > 0),
+  );
   protected readonly subtitle = computed(() => {
-    if (this.store.phase() !== 'success' && this.store.phase() !== 'empty')
-      return this.copy.description;
+    if (!this.showServedPage()) return this.copy.description;
     return [
       escapeFormatChars(this.projectLabel(this.store.selectedProject())),
-      `${this.copy.directory}: ${formatNumber(this.store.rows().length, this.locale)}`,
+      `${this.copy.directory}: ${formatNumber(this.displayRows().length, this.locale)}`,
       $localize`:@@settings.count-on-page:On this page`,
       this.copy.order,
     ]
       .filter(Boolean)
       .join(' · ');
   });
-  protected readonly displayRows = rowsDuringFetch(
-    this.store.scope,
-    this.store.pageResource.isLoading,
-    this.store.rows,
-  );
   protected readonly status = computed<'loading' | 'ready' | 'error'>(() => {
     const phase = this.store.phase();
     return phase === 'loading' ? 'loading' : phase === 'error' ? 'error' : 'ready';

@@ -220,7 +220,6 @@
             <p class="m-0 text-sm text-muted-foreground">{{ copy.stateDescription }}</p>
           </header>
           <app-loading-pattern
-            #tableFetch
             [layout]="'table'"
             [busy]="quota.projectPaging()"
             [hasRows]="summary.metrics.length > 0"
@@ -238,7 +237,7 @@
                   <th hlmTh scope="col" class="text-end">{{ copy.actions }}</th>
                 </tr>
               </thead>
-              <tbody [class.opacity-80]="tableFetch.visible()" hlmTBody>
+              <tbody hlmTBody>
                 @for (metric of summary.metrics; track metric.metric) {
                   <tr hlmTr class="h-14">
                     <th hlmTh scope="row" class="min-w-0 font-semibold text-foreground">

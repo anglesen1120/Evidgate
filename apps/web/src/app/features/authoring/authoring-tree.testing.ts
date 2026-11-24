@@ -12,9 +12,18 @@ export class AuthoringTreeHarness extends ComponentHarness {
     '[data-tree-browse-capped] [role="status"], [data-tree-browse-capped] [aria-live]',
   );
   readonly moreControls = this.locatorForAll('[data-more]');
+  readonly dialog = this.documentRootLocatorFactory().locatorFor('[role="dialog"]');
+  readonly dialogTerms = this.documentRootLocatorFactory().locatorForAll('[role="dialog"] dt');
+  readonly dialogValues = this.documentRootLocatorFactory().locatorForAll('[role="dialog"] dd');
+  readonly dialogCopy = this.documentRootLocatorFactory().locatorFor(
+    '[role="dialog"] app-copy-value-button button',
+  );
   nodeRows = this.locatorForAll('[data-node-id]');
   /** Matches the attribute value itself, so a node id carrying CSS syntax still finds its row. */
-  private async control(kind: 'data-disclosure' | 'data-scope' | 'data-more', id: string) {
+  private async control(
+    kind: 'data-disclosure' | 'data-scope' | 'data-more' | 'data-node-details',
+    id: string,
+  ) {
     for (const element of await this.locatorForAll(`[${kind}]`)()) {
       if ((await element.getAttribute(kind)) === id) return element;
     }
@@ -25,6 +34,9 @@ export class AuthoringTreeHarness extends ComponentHarness {
   }
   scope(id: string) {
     return this.control('data-scope', id);
+  }
+  details(id: string) {
+    return this.control('data-node-details', id);
   }
   more(id: string) {
     return this.control('data-more', id);
@@ -52,14 +64,24 @@ export class AuthoringPageHarness extends ComponentHarness {
   readonly stale = this.locatorForOptional('[data-authoring-stale]');
   readonly breadcrumbs = this.locatorForAll('[data-authoring-breadcrumb] li');
   readonly refresh = this.locatorFor('[data-authoring-refresh]');
-  readonly selectedId = this.locatorForOptional('app-copyable-identifier');
+  readonly selectedDetails = this.locatorForOptional(
+    '[data-authoring-breadcrumb] [data-node-details]',
+  );
+  readonly inlineIdentifier = this.locatorForOptional(
+    '[data-authoring-cases] app-copyable-identifier',
+  );
+  readonly dialogId = this.documentRootLocatorFactory().locatorFor(
+    '[role="dialog"] app-copyable-identifier code',
+  );
   readonly announcement = this.locatorFor('[data-authoring-announcement]');
   async text() {
     return (await this.host()).text();
   }
   async path() {
     return Promise.all(
-      (await this.breadcrumbs()).map((crumb) => crumb.text({ exclude: '[aria-hidden="true"]' })),
+      (await this.breadcrumbs()).map((crumb) =>
+        crumb.text({ exclude: '[aria-hidden="true"], app-authoring-node-details' }),
+      ),
     );
   }
 }

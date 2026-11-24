@@ -198,12 +198,19 @@ export class CaseListPage {
       archived: status === 'archived' ? counts.archived : null,
     };
   });
+  protected readonly showLoadedSummary = computed(
+    () =>
+      this.store.status() === 'ready' ||
+      (this.store.status() === 'loading' && this.store.rows().length > 0),
+  );
   protected readonly subtitle = computed(() =>
-    this.store.status() !== 'ready'
-      ? this.copy.description
-      : this.copy.results +
-        ' · ' +
-        $localize`:@@catalog.case-view.loaded-count:Loaded identities: ${formatNumber(this.store.rows().length, this.locale)}:count:`,
+    this.store.status() === 'loading' && this.showLoadedSummary()
+      ? this.copy.results
+      : this.store.status() !== 'ready'
+        ? this.copy.description
+        : this.copy.results +
+          ' · ' +
+          $localize`:@@catalog.case-view.loaded-count:Loaded identities: ${formatNumber(this.store.rows().length, this.locale)}:count:`,
   );
   protected quickStatus(status: CaseListFilters['status']): void {
     const applied = this.store.filters();

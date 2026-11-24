@@ -86,14 +86,13 @@ import { API_TOKENS_COPY } from './api-tokens.copy';
           </p>
         </div>
       </header>
+      <app-loading-pattern
+        [layout]="'table'"
+        [busy]="fetching()"
+        [hasRows]="filtered().length > 0"
+      />
       @if (filtered().length) {
         @let narrow = viewport.narrow();
-        <app-loading-pattern
-          #tableFetch
-          [layout]="'table'"
-          [busy]="fetching()"
-          [hasRows]="rows().length > 0"
-        />
         <div hlmTableContainer>
           <table
             [attr.aria-busy]="fetching()"
@@ -112,7 +111,7 @@ import { API_TOKENS_COPY } from './api-tokens.copy';
                 }
               </tr>
             </thead>
-            <tbody [class.opacity-80]="tableFetch.visible()" hlmTBody class="md:[&_td]:py-1">
+            <tbody hlmTBody class="md:[&_td]:py-1">
               @for (row of filtered(); track row.id) {
                 <tr hlmTr data-api-token-row [attr.data-state]="row.status">
                   <td hlmTd class="whitespace-normal max-md:p-4">
@@ -217,7 +216,7 @@ import { API_TOKENS_COPY } from './api-tokens.copy';
             </tbody>
           </table>
         </div>
-      } @else {
+      } @else if (!fetching()) {
         <div class="grid justify-items-start gap-3 px-5 py-4">
           <app-empty-pattern
             [icon]="'navKey'"

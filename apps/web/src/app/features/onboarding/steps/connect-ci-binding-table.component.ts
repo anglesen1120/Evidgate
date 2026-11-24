@@ -34,12 +34,7 @@ import { CREDENTIAL_STATUS, CredentialRecordComponent } from './credential-recor
   host: { class: 'block min-w-0' },
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <app-loading-pattern
-      #tableFetch
-      [layout]="'table'"
-      [busy]="fetching()"
-      [hasRows]="bindings().length > 0"
-    />
+    <app-loading-pattern [layout]="'table'" [busy]="fetching()" [hasRows]="bindings().length > 0" />
     <div hlmTableContainer class="min-w-0 max-w-full">
       <table [attr.aria-busy]="fetching()" hlmTable class="wrap-normal">
         <caption hlmCaption class="caption-top text-start">
@@ -53,7 +48,7 @@ import { CREDENTIAL_STATUS, CredentialRecordComponent } from './credential-recor
             <th hlmTh scope="col" class="w-px whitespace-nowrap">{{ recordCopy.actions }}</th>
           </tr>
         </thead>
-        <tbody [class.opacity-80]="tableFetch.visible()" hlmTBody>
+        <tbody hlmTBody>
           @for (binding of bindings(); track binding.id) {
             <tr
               hlmTr

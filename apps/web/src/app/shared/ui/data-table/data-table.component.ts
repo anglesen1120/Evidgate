@@ -103,12 +103,6 @@ let nextTableId = 0;
     HlmTr,
   ],
   templateUrl: './data-table.component.html',
-  styles: `
-    app-loading-pattern.table-pending ~ .scroll [data-row-id],
-    app-loading-pattern.table-pending ~ .scroll app-data-table-records {
-      opacity: 0.8;
-    }
-  `,
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: {
     class:

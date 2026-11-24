@@ -70,7 +70,6 @@ const ROLE_VALUE_WIDTH: DataTableColumnWidth = { min: '0px', max: 'none' };
           </button>
         </div>
         <app-loading-pattern
-          #tableFetch
           [layout]="'table'"
           [busy]="fetching()"
           [hasRows]="matrix().rows.length > 0"
@@ -122,7 +121,7 @@ const ROLE_VALUE_WIDTH: DataTableColumnWidth = { min: '0px', max: 'none' };
                 }
               </tr>
             </thead>
-            <tbody [class.opacity-80]="tableFetch.visible()" hlmTBody role="rowgroup">
+            <tbody hlmTBody role="rowgroup">
               @for (row of matrix().rows; track row.membership.id) {
                 <tr hlmTr role="row">
                   <th

@@ -16,7 +16,7 @@
     [titleId]="'catalog-results-heading'"
     [title]="copy.results"
   />
-  @if (store.status() === 'ready') {
+  @if (showLoadedSummary()) {
     <p class="m-0 px-(--eg-space-5) pt-(--eg-space-3) text-xs font-semibold text-muted-foreground">
       {{ recordCopy.loadedStatus }}
     </p>
@@ -32,6 +32,7 @@
           type="button"
           class="h-auto min-h-(--eg-control-touch) shrink-0 flex-col items-start rounded-none border-e border-border px-(--eg-space-4) aria-pressed:bg-(--eg-accent-soft)"
           [attr.aria-pressed]="store.filters().status === option.value"
+          [disabled]="store.status() === 'loading' || store.loadingMore()"
           (click)="quickStatus(option.value)"
         >
           <span class="text-xs text-muted-foreground">{{ option.label }}</span>
@@ -148,7 +149,7 @@
     </form>
   </section>
   <p class="sr-only" role="status" data-catalog-summary>
-    @if (store.status() === 'ready') {
+    @if (store.status() === 'ready' && !store.loadingMore()) {
       <span i18n="@@catalog.loaded-count-live">{{ store.rows().length | number }} loaded</span>
       @if (store.isEmpty()) {
         <span i18n="@@catalog.loaded-search-no-results"
@@ -227,7 +228,7 @@
       data-catalog-browse-capped
     />
   }
-  @if (store.status() === 'ready' || (store.status() === 'loading' && store.rows().length)) {
+  @if (showLoadedSummary()) {
     <app-data-table-pager
       class="block border-t border-border px-(--eg-space-5) py-(--eg-space-4) md:px-(--eg-space-6)"
       [page]="store.page()"

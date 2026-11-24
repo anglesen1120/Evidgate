@@ -35,12 +35,7 @@ import { HlmTableImports } from '@evidgate/ui/table';
         <h3 hlmCardTitle [size]="subsectionSize" id="policy-revisions-title">{{ copy.title }}</h3>
         <p hlmCardDescription>{{ copy.order }}</p>
       </header>
-      <app-loading-pattern
-        #tableFetch
-        [layout]="'table'"
-        [busy]="fetching()"
-        [hasRows]="rows().length > 0"
-      />
+      <app-loading-pattern [layout]="'table'" [busy]="fetching()" [hasRows]="rows().length > 0" />
       <div hlmTableContainer>
         <table
           [attr.aria-busy]="fetching()"
@@ -65,12 +60,7 @@ import { HlmTableImports } from '@evidgate/ui/table';
               </th>
             </tr>
           </thead>
-          <tbody
-            [class.opacity-80]="tableFetch.visible()"
-            hlmTBody
-            [attr.role]="'rowgroup'"
-            class="max-md:block"
-          >
+          <tbody hlmTBody [attr.role]="'rowgroup'" class="max-md:block">
             @for (row of rows(); track row.id) {
               <tr
                 hlmTr

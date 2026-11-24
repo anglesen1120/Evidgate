@@ -461,9 +461,8 @@ describe('AuditPage', () => {
     expect(root.querySelector('[role="table"]')?.getAttribute('aria-busy')).toBe('true');
     await vi.waitFor(() => {
       fixture.detectChanges();
-      expect(root.querySelector('app-data-table [role="status"]')?.textContent).toContain(
-        'Loading…',
-      );
+      expect(root.querySelector('app-data-table [data-table-progress]')).not.toBeNull();
+      expect(root.querySelector('app-data-table app-live-status')?.textContent?.trim()).toBe('');
     });
     pending.resolve({ items: [entry('second')], next_cursor: null });
     await fixture.whenStable();

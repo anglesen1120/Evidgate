@@ -34,7 +34,6 @@
   </button>
 }
 <p id="authoring-tree-keyboard" class="tree-help">{{ copy.keyboard }}</p>
-<p id="authoring-pending-help" class="tree-help">{{ copy.pendingReason }}</p>
 
 <ng-template #branch let-items let-depth="depth" let-ancestors="ancestors">
   @for (node of items; track node.node_id) {
@@ -81,21 +80,8 @@
                 <span class="current-label">{{ copy.current }}</span>
               }
             </button>
+            <app-authoring-node-details [node]="node" />
           </div>
-          <dl class="counts">
-            <div>
-              <dt>{{ copy.children }}</dt>
-              <dd><app-number-value [value]="node.child_count" /></dd>
-            </div>
-            <div>
-              <dt>{{ copy.items }}</dt>
-              <dd><app-number-value [value]="node.item_count" /></dd>
-            </div>
-            <div>
-              <dt>{{ copy.pending }}</dt>
-              <dd [attr.aria-describedby]="'authoring-pending-help'">—</dd>
-            </div>
-          </dl>
         </div>
         @if (canExpand(node)) {
           <ul
