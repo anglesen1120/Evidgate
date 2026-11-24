@@ -1,4 +1,3 @@
-import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { provideZonelessChangeDetection, reflectComponentType } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { clearTranslations, loadTranslations } from '@angular/localize';
@@ -11,7 +10,6 @@ import { stubLayoutApis } from '../../../../shared/testing/layout.testing';
 import { evidenceHref, producerAnchorId } from '../evidence/run-evidence-anchors';
 import { producerSlotsFromRun, type ProducerSlot, type ProducerStatus } from './producer-slots';
 import { ProducerStatusTableComponent } from './producer-status-table.component';
-import { ProducerStatusTableHarness } from './producer-status-table.harness';
 
 const FINALIZED: ProducerSlot = {
   producerId: 'shard-3',
@@ -330,80 +328,6 @@ describe('ProducerStatusTableComponent', () => {
     );
     expect([...root.querySelectorAll('th[data-column-role="number"]')]).toHaveLength(2);
   });
-
-  it.each([200, 201])('bounds %i producers to supported 100-row pages', async (count) => {
-    useLightweightTablePresentation();
-    const slots = Array.from({ length: count }, (_, index) => ({
-      ...FINALIZED,
-      producerId: `shard-${index}`,
-    }));
-    const { fixture, root } = await render(slots);
-    const table = await TestbedHarnessEnvironment.harnessForFixture(
-      fixture,
-      ProducerStatusTableHarness,
-    );
-    await table.chooseSize(100);
-    expect(await table.rowIds()).toHaveLength(100);
-    await (await table.next()).click();
-    expect((await table.rowIds())[0]).toBe('shard-100');
-    if (count === 201) {
-      await (await table.next()).click();
-      expect(await table.rowIds()).toEqual(['shard-200']);
-      expect(root.querySelector('[data-producer-slot]')?.id).toBe('producer-shard-200');
-      expect(root.querySelectorAll('[data-fact]')).toHaveLength(4);
-    }
-    expect(await (await table.next()).getAttribute('aria-disabled')).toBe('true');
-    await (await table.previous()).click();
-    expect(await table.rowIds()).toHaveLength(100);
-  });
-
-  it('preserves the producer fragment page and refreshes cells for the same identities', async () => {
-    useLightweightTablePresentation();
-    const slots = Array.from({ length: 256 }, (_, index) => ({
-      ...FINALIZED,
-      producerId: `shard-${index}`,
-    }));
-    const { fixture, root } = await render(slots, 'ready', null, 'producer-shard-255');
-    expect(root.querySelector('#producer-shard-255')).not.toBeNull();
-    expect(root.querySelectorAll('tr[data-row-id]')).toHaveLength(16);
-    fixture.componentRef.setInput(
-      'slots',
-      slots.map((slot) => ({ ...slot, lastSequence: 13, count: 13, expected: 14 })),
-    );
-    await fixture.whenStable();
-    expect(root.querySelector('#producer-shard-255')).not.toBeNull();
-    expect(root.querySelector('#producer-shard-0')).toBeNull();
-    expect(root.querySelectorAll('tr[data-row-id]')).toHaveLength(16);
-    const target = root.querySelector('tr[data-row-id="shard-255"]');
-    expect(target?.querySelector('[data-fact="last-sequence"]')?.textContent).toContain('13');
-    expect(target?.querySelector('[data-fact="count"]')?.textContent).toContain('13 / 14');
-  });
-
-  it.each(['identity', 'order'] as const)(
-    'resets the selected producer page when the %s changes',
-    async (change) => {
-      useLightweightTablePresentation();
-      const slots = Array.from({ length: 256 }, (_, index) => ({
-        ...FINALIZED,
-        producerId: `shard-${index}`,
-      }));
-      const { fixture, root } = await render(slots, 'ready', null, 'producer-shard-255');
-      expect(root.querySelector('#producer-shard-255')).not.toBeNull();
-      const replacement = [...slots];
-      if (change === 'identity') {
-        replacement[0] = { ...FINALIZED, producerId: 'replacement' };
-      } else {
-        [replacement[0], replacement[1]] = [slots[1]!, slots[0]!];
-      }
-      fixture.componentRef.setInput('slots', replacement);
-      await fixture.whenStable();
-      expect(root.querySelectorAll('tr[data-row-id]')).toHaveLength(20);
-      expect(root.querySelector('tr[data-row-id]')?.getAttribute('data-row-id')).toBe(
-        change === 'identity' ? 'replacement' : 'shard-1',
-      );
-      expect(root.querySelector('#producer-shard-255')).toBeNull();
-    },
-  );
 
   it('localizes the run-level singular count and page controls into Vietnamese', async () => {
     useLightweightTablePresentation();

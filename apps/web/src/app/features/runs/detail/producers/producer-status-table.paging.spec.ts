@@ -31,15 +31,73 @@ describe('ProducerStatusTableComponent paging', () => {
   });
   afterEach(() => TestBed.resetTestingModule());
 
-  async function render(rows: readonly ProducerSlot[]) {
+  async function render(rows: readonly ProducerSlot[], anchor: string | null = null) {
     const fixture = TestBed.createComponent(ProducerStatusTableComponent);
     fixture.componentRef.setInput('slots', rows);
+    fixture.componentRef.setInput('targetAnchor', anchor);
     const table = await TestbedHarnessEnvironment.harnessForFixture(
       fixture,
       ProducerStatusTableHarness,
     );
-    return { fixture, table };
+    return { fixture, table, root: fixture.nativeElement as HTMLElement };
   }
+
+  it.each([200, 201])('bounds %i producers to supported 100-row pages', async (count) => {
+    const { root, table } = await render(slots(count));
+    await table.chooseSize(100);
+    expect(await table.rowIds()).toHaveLength(100);
+    await (await table.next()).click();
+    expect((await table.rowIds())[0]).toBe('shard-100');
+    if (count === 201) {
+      await (await table.next()).click();
+      expect(await table.rowIds()).toEqual(['shard-200']);
+      expect(root.querySelector('[data-producer-slot]')?.id).toBe('producer-shard-200');
+      expect(root.querySelectorAll('[data-fact]')).toHaveLength(4);
+    }
+    expect(await (await table.next()).getAttribute('aria-disabled')).toBe('true');
+    await (await table.previous()).click();
+    expect(await table.rowIds()).toHaveLength(100);
+  });
+
+  it('preserves the producer fragment page and refreshes cells for the same identities', async () => {
+    const rows = slots(256);
+    const { fixture, root } = await render(rows, 'producer-shard-255');
+    expect(root.querySelector('#producer-shard-255')).not.toBeNull();
+    expect(root.querySelectorAll('tr[data-row-id]')).toHaveLength(16);
+    fixture.componentRef.setInput(
+      'slots',
+      rows.map((slot) => ({ ...slot, lastSequence: 13, count: 13, expected: 14 })),
+    );
+    await fixture.whenStable();
+    expect(root.querySelector('#producer-shard-255')).not.toBeNull();
+    expect(root.querySelector('#producer-shard-0')).toBeNull();
+    expect(root.querySelectorAll('tr[data-row-id]')).toHaveLength(16);
+    const target = root.querySelector('tr[data-row-id="shard-255"]');
+    expect(target?.querySelector('[data-fact="last-sequence"]')?.textContent).toContain('13');
+    expect(target?.querySelector('[data-fact="count"]')?.textContent).toContain('13 / 14');
+  });
+
+  it.each(['identity', 'order'] as const)(
+    'resets the selected producer page when the %s changes',
+    async (change) => {
+      const rows = slots(256);
+      const { fixture, root } = await render(rows, 'producer-shard-255');
+      expect(root.querySelector('#producer-shard-255')).not.toBeNull();
+      const replacement = [...rows];
+      if (change === 'identity') {
+        replacement[0] = { ...rows[0]!, producerId: 'replacement' };
+      } else {
+        [replacement[0], replacement[1]] = [rows[1]!, rows[0]!];
+      }
+      fixture.componentRef.setInput('slots', replacement);
+      await fixture.whenStable();
+      expect(root.querySelectorAll('tr[data-row-id]')).toHaveLength(20);
+      expect(root.querySelector('tr[data-row-id]')?.getAttribute('data-row-id')).toBe(
+        change === 'identity' ? 'replacement' : 'shard-1',
+      );
+      expect(root.querySelector('#producer-shard-255')).toBeNull();
+    },
+  );
 
   it('shows exact first, middle and last ranges with bounded navigation', async () => {
     const { table } = await render(slots(53));
