@@ -217,4 +217,218 @@ describe('cursor paging', () => {
     expect(store.rows().map((row) => row.run_id)).toEqual(['run-2']);
     expect(store.page()).toBe(1);
   });
+
+  it.each(['current', 'earlier'] as const)(
+    'retains the successful page when a response repeats the %s request cursor',
+    async (repeated) => {
+      data.all = rows(80);
+      await store.init('p-1');
+      await store.next();
+      const earlier = data.calls.at(-1)?.request.cursor;
+      await store.next();
+      const current = data.calls.at(-1)?.request.cursor;
+      const retained = store.rows();
+      const query = store.toQuery();
+      const cursor = repeated === 'current' ? current : earlier;
+      if (!cursor) throw new Error('Expected a visited request cursor');
+      data.manual = true;
+      const next = store.next();
+      data.pending[0]?.resolve({ items: [run(999)], next_cursor: cursor });
+      await next;
+      expect(store.page()).toBe(3);
+      expect(store.rows()).toBe(retained);
+      expect(store.toQuery()).toEqual(query);
+      expect(store.pagingError()?.code).toBe('request_unresolved');
+      const retry = store.retryPage();
+      data.pending[1]?.resolve({ items: [run(60)], next_cursor: null });
+      await retry;
+      expect(store.page()).toBe(4);
+      expect(store.rows()).toEqual([run(60)]);
+      expect(store.pagingError()).toBeNull();
+    },
+  );
+
+  it('rejects a continuation equal to its own target and retries the exact request', async () => {
+    data.all = rows(60);
+    await store.init('p-1');
+    const retained = store.rows();
+    const query = store.toQuery();
+    data.manual = true;
+    const next = store.next();
+    const target = data.calls.at(-1)?.request;
+    if (!target?.cursor) throw new Error('Expected a next request cursor');
+    data.pending[0]?.resolve({ items: [run(999)], next_cursor: target.cursor });
+    await next;
+    expect(store.rows()).toBe(retained);
+    expect(store.page()).toBe(1);
+    expect(store.toQuery()).toEqual(query);
+    expect(store.pagingError()?.code).toBe('request_unresolved');
+    const retry = store.retryPage();
+    expect(data.calls.at(-1)?.request).toEqual(target);
+    data.pending[1]?.resolve({ items: [run(20)], next_cursor: null });
+    await retry;
+    expect(store.page()).toBe(2);
+    expect(store.rows()).toEqual([run(20)]);
+    expect(store.hasNext()).toBe(false);
+  });
+
+  it('rejects a restored first-page cursor loop without publishing its rows', async () => {
+    data.manual = true;
+    const request = store.init('p-1', { cursor: 'restored' });
+    data.pending[0]?.resolve({ items: [run(999)], next_cursor: 'restored' });
+    await request;
+    expect(store.status()).toBe('error');
+    expect(store.rows()).toEqual([]);
+    expect(store.loadError()?.code).toBe('request_unresolved');
+    const retry = store.retryPage();
+    expect(data.calls.at(-1)?.request.cursor).toBe('restored');
+    data.pending[1]?.resolve({ items: [run(1)], next_cursor: null });
+    await retry;
+    expect(store.status()).toBe('ready');
+    expect(store.rows()).toEqual([run(1)]);
+  });
+
+  it('allows Previous to return the cursor of a discarded later page', async () => {
+    data.all = rows(80);
+    await store.init('p-1');
+    await store.next();
+    await store.next();
+    const discardedCursor = data.calls.at(-1)?.request.cursor;
+    await store.previous();
+    expect(store.page()).toBe(2);
+    expect(store.nextCursor()).toBe(discardedCursor);
+    expect(store.pagingError()).toBeNull();
+    await store.next();
+    expect(store.page()).toBe(3);
+    expect(store.rows()[0]?.run_id).toBe('run-40');
+  });
+
+  it.each(['clear', 'reload'] as const)(
+    '%s recovers a failed restored first cursor without reusing it',
+    async (action) => {
+      data.failure = typedFailure();
+      await store.init('p-1', { cursor: 'expired', pageSize: '50' });
+      expect(store.toQuery()['cursor']).toBe('expired');
+      data.failure = null;
+      data.all = rows(60);
+      if (action === 'clear') {
+        await store.setFilters({ state: '', scope: '', decision: '', refName: '' });
+      } else {
+        await store.reload();
+      }
+      expect(data.calls.at(-1)?.request).toEqual({ limit: 50 });
+      expect(store.toQuery()).toEqual({ pageSize: '50' });
+      expect(store.status()).toBe('ready');
+      expect(store.rows()).toHaveLength(50);
+      expect(store.loadError()).toBeNull();
+    },
+  );
+
+  it('keeps the expired cursor dropped when recovery fails and retries the null request', async () => {
+    data.failure = typedFailure();
+    await store.init('p-1', { cursor: 'expired', pageSize: '100' });
+    await store.reload();
+    expect(store.status()).toBe('error');
+    expect(store.toQuery()).toEqual({ pageSize: '100' });
+    expect(data.calls.at(-1)?.request).toEqual({ limit: 100 });
+    data.failure = null;
+    data.all = [run(1)];
+    await store.retryPage();
+    expect(data.calls.at(-1)?.request).toEqual({ limit: 100 });
+    expect(store.rows()).toEqual([run(1)]);
+  });
+
+  it('reloads a successfully loaded current cursor rather than resetting to the first dataset page', async () => {
+    data.all = rows(60);
+    await store.init('p-1');
+    await store.next();
+    const current = data.calls.at(-1)?.request;
+    const retained = store.rows();
+    await store.reload();
+    expect(data.calls.at(-1)?.request).toEqual(current);
+    expect(store.rows()).toEqual(retained);
+    expect(store.toQuery()['cursor']).toBe(current?.cursor);
+  });
+
+  it.each(['state', 'scope'] as const)(
+    'retains first-page rows when only local %s changes and clears',
+    async (filter) => {
+      data.all = [run(0), run(1, { state: 'running', rerun_label: 'retry' })];
+      await store.init('p-1');
+      const retained = store.rows();
+      await store.setFilters(filter === 'state' ? { state: 'running' } : { scope: 'rerun' });
+      expect(store.rows()).toBe(retained);
+      expect(store.visibleRows()).toEqual([data.all[1]]);
+      expect(data.calls).toHaveLength(1);
+      await store.setFilters({ [filter]: '' });
+      expect(store.rows()).toBe(retained);
+      expect(store.visibleRows()).toEqual(data.all);
+      expect(data.calls).toHaveLength(1);
+    },
+  );
+
+  it.each(['state', 'scope'] as const)(
+    'restarts later pages when local %s changes',
+    async (filter) => {
+      data.all = rows(60);
+      await store.init('p-1');
+      await store.next();
+      await store.setFilters(filter === 'state' ? { state: 'running' } : { scope: 'rerun' });
+      expect(data.calls).toHaveLength(3);
+      expect(data.calls.at(-1)?.request.cursor).toBeUndefined();
+      expect(store.page()).toBe(1);
+      expect(store.rows()).toEqual(rows(20));
+    },
+  );
+
+  it('does not refetch or clear the cursor when a restored known first page changes local state', async () => {
+    data.manual = true;
+    const first = store.init('p-1', { cursor: 'restored' });
+    data.pending[0]?.resolve({ items: [run(1)], next_cursor: null });
+    await first;
+    const retained = store.rows();
+    await store.setFilters({ state: 'running' });
+    expect(data.calls).toHaveLength(1);
+    expect(store.rows()).toBe(retained);
+    expect(store.visibleRows()).toEqual([]);
+    expect(store.toQuery()).toEqual({ cursor: 'restored', state: 'running' });
+  });
+
+  it('refetches first-page rows when a local filter and a server filter both change', async () => {
+    data.all = rows(30);
+    await store.init('p-1');
+    await store.setFilters({ state: 'running', decision: 'PASS' });
+    expect(data.calls).toHaveLength(2);
+    expect(data.calls.at(-1)?.request).toEqual({ limit: 20, decision: 'PASS' });
+  });
+
+  it('restarts a failed first load when a local filter changes', async () => {
+    data.failure = typedFailure();
+    await store.init('p-1');
+    data.failure = null;
+    data.all = [run(1, { state: 'running' })];
+    await store.setFilters({ state: 'running' });
+    expect(data.calls).toHaveLength(2);
+    expect(store.visibleRows()).toEqual(data.all);
+    expect(store.status()).toBe('ready');
+  });
+
+  it('abandons a failed Next target after successful Previous and does not retry it', async () => {
+    data.all = rows(60);
+    await store.init('p-1');
+    await store.next();
+    data.failure = typedFailure();
+    await store.next();
+    expect(store.page()).toBe(2);
+    data.failure = null;
+    await store.previous();
+    expect(store.page()).toBe(1);
+    const calls = data.calls.length;
+    await store.retryPage();
+    expect(data.calls).toHaveLength(calls);
+    expect(store.rows()).toEqual(rows(20));
+    await store.next();
+    expect(store.page()).toBe(2);
+    expect(store.rows()[0]?.run_id).toBe('run-20');
+  });
 });

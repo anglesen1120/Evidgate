@@ -37,7 +37,7 @@ describe('Fixture cursor paging through the generated SDK', () => {
   for (const operation of ['listRuns', 'listAudit'] as const) {
     const list = (limit: number, cursor?: string) =>
       operation === 'listRuns'
-        ? TestBed.inject(RunsDataService).list('p-1', { limit, cursor })
+        ? TestBed.inject(RunsDataService).list('p-1', { limit, ...(cursor ? { cursor } : {}) })
         : TestBed.inject(AuditDataService).list('o-1', { limit }, cursor);
 
     it(`${operation} serves 20 then 13 rows and terminates`, async () => {
@@ -87,13 +87,37 @@ describe('Fixture cursor paging through the generated SDK', () => {
     });
   });
 
+  it('filters the SDK ref_name by exact equality before paging', async () => {
+    TestBed.inject(FixtureToggles).setVariant('listRuns', 'paging-33');
+    const service = TestBed.inject(RunsDataService);
+    const page = await service.list('p-1', { limit: 20, ref_name: 'feature/batch-000' });
+    expect(page.items.map((row) => row.run_id)).toEqual(['018f0000-0000-7000-8000-000000002000']);
+    expect(page.items[0]?.ref?.name).toBe('feature/batch-000');
+    expect(page.next_cursor).toBeNull();
+  });
+
+  it.each(['feature/batch-00', 'batch-000', 'FEATURE/batch-000', 'missing-reference'])(
+    'returns no runs for the nonmatching SDK ref_name %s',
+    async (ref_name) => {
+      TestBed.inject(FixtureToggles).setVariant('listRuns', 'paging-33');
+      const service = TestBed.inject(RunsDataService);
+      const matching = await service.list('p-1', { limit: 20, ref_name: 'feature/batch-000' });
+      expect(matching.items.map((row) => row.run_id)).toEqual([
+        '018f0000-0000-7000-8000-000000002000',
+      ]);
+      const nonmatching = await service.list('p-1', { limit: 20, ref_name });
+      expect(nonmatching.items).toEqual([]);
+      expect(nonmatching.next_cursor).toBeNull();
+    },
+  );
+
   it('continues from a split corpus page to its original opaque continuation', async () => {
     TestBed.inject(FixtureToggles).setVariant('listRuns', 'page-1-full');
     const service = TestBed.inject(RunsDataService);
     const ids: string[] = [];
     let cursor: string | undefined;
     for (let turn = 0; turn < 4; turn++) {
-      const page = await service.list('p-1', { limit: 20, cursor });
+      const page = await service.list('p-1', { limit: 20, ...(cursor ? { cursor } : {}) });
       expect(page.items.length).toBeLessThanOrEqual(20);
       ids.push(...page.items.map((row) => row.run_id));
       cursor = page.next_cursor ?? undefined;

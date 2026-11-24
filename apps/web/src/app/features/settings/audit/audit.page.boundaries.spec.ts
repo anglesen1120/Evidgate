@@ -1,4 +1,4 @@
-import { ComponentHarness } from '@angular/cdk/testing';
+import { ComponentHarness, TestKey } from '@angular/cdk/testing';
 import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { provideZonelessChangeDetection, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
@@ -83,7 +83,7 @@ describe('AuditPage boundary browsing and export scope', () => {
       );
       list.mockImplementation((_org, query, cursor) => {
         const start = Number(cursor ?? 0);
-        const end = start + (query.limit ?? 20);
+        const end = start + (query?.limit ?? 20);
         return Promise.resolve({
           items: entries.slice(start, end),
           next_cursor: end < count ? String(end) : null,
@@ -111,7 +111,14 @@ describe('AuditPage boundary browsing and export scope', () => {
         if (store.hasNext()) await (await harness.next()).click();
       }
       expect(seen).toEqual(entries.map((event) => event.created_at));
-      expect(await (await harness.next()).getProperty('disabled')).toBe(true);
+      const next = await harness.next();
+      expect(await next.getAttribute('aria-disabled')).toBe('true');
+      expect(await next.getProperty('disabled')).toBe(false);
+      await next.focus();
+      await next.click();
+      await next.sendKeys(TestKey.ENTER);
+      expect(await next.isFocused()).toBe(true);
+      expect(store.page()).toBe(Math.max(1, Math.ceil(count / 20)));
       expect(list).toHaveBeenCalledTimes(Math.max(1, Math.ceil(count / 20)));
     },
   );
@@ -120,7 +127,7 @@ describe('AuditPage boundary browsing and export scope', () => {
     const entries = Array.from({ length: 45 }, (_, index) => row(index));
     list.mockImplementation((_org, query, cursor) => {
       const start = Number(cursor ?? 0);
-      const end = start + (query.limit ?? 20);
+      const end = start + (query?.limit ?? 20);
       return Promise.resolve({
         items: entries.slice(start, end),
         next_cursor: end < entries.length ? String(end) : null,
@@ -150,7 +157,7 @@ describe('AuditPage boundary browsing and export scope', () => {
     const entries = Array.from({ length: 65 }, (_, index) => row(index));
     list.mockImplementation((_org, query, cursor) => {
       const start = Number(cursor ?? 0);
-      const end = start + (query.limit ?? 20);
+      const end = start + (query?.limit ?? 20);
       return Promise.resolve({
         items: entries.slice(start, end),
         next_cursor: end < entries.length ? String(end) : null,
@@ -161,9 +168,12 @@ describe('AuditPage boundary browsing and export scope', () => {
     const store = fixture.debugElement.injector.get(AuditStore);
     const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, AuditPagingHarness);
     await (await harness.next()).click();
-    await (await harness.action()).setInputValue('auth.login');
+    const action = await harness.action();
+    await action.setInputValue('auth.login');
+    await action.dispatchEvent('input');
     await (await harness.apply()).click();
     expect(store.page()).toBe(1);
+    expect(store.filters().action).toBe('auth.login');
     expect(list).toHaveBeenLastCalledWith('org-1', { limit: 20, action: 'auth.login' });
     await (await harness.next()).click();
     await (await harness.size()).click();
@@ -176,6 +186,7 @@ describe('AuditPage boundary browsing and export scope', () => {
     }
     expect(store.pageSize()).toBe(50);
     expect(store.page()).toBe(1);
+    expect(store.filters().action).toBe('auth.login');
     expect(list).toHaveBeenLastCalledWith('org-1', { limit: 50, action: 'auth.login' });
   });
 
@@ -202,7 +213,16 @@ describe('AuditPage boundary browsing and export scope', () => {
     expect(store.rows()).toEqual([row(1)]);
     expect(await (await harness.pagingError()).text()).toContain('Wait before retrying');
     expect(await (await harness.retry()).getProperty('disabled')).toBe(true);
-    expect(await (await harness.next()).getProperty('disabled')).toBe(true);
+    const next = await harness.next();
+    expect(await next.getAttribute('aria-disabled')).toBe('true');
+    expect(await next.getProperty('disabled')).toBe(false);
+    await next.focus();
+    await next.click();
+    await next.sendKeys(TestKey.ENTER);
+    expect(await next.isFocused()).toBe(true);
+    await (await harness.retry()).click();
+    expect(store.page()).toBe(1);
+    expect(store.rows()).toEqual([row(1)]);
     expect(list).toHaveBeenCalledTimes(2);
   });
 
@@ -244,6 +264,61 @@ describe('AuditPage boundary browsing and export scope', () => {
     await fixture.whenStable();
     expect(exportButton.disabled).toBe(false);
     expect(root.querySelector('#audit-export-draft-hint')).toBeNull();
+  });
+
+  it('applies a typed action before resetting page size through the shared control', async () => {
+    list.mockResolvedValue({ items: [row(1)], next_cursor: 'next' });
+    const fixture = TestBed.createComponent(AuditPage);
+    await fixture.whenStable();
+    const store = fixture.debugElement.injector.get(AuditStore);
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, AuditPagingHarness);
+    await (await harness.next()).click();
+    await (await harness.action()).sendKeys('auth.login');
+    await (await harness.apply()).click();
+    expect(store.filters().action).toBe('auth.login');
+    expect(store.page()).toBe(1);
+    expect(list).toHaveBeenLastCalledWith('org-1', { limit: 20, action: 'auth.login' });
+    await (await harness.size()).click();
+    const options = await TestbedHarnessEnvironment.documentRootLoader(fixture).getAllHarnesses(
+      AuditPageSizeOptionHarness,
+    );
+    const choices = await Promise.all(
+      options.map(async (option) => {
+        const host = await option.host();
+        return { host, text: await host.text() };
+      }),
+    );
+    const selected = choices.find((option) => option.text.trim() === '50');
+    if (!selected) throw new Error('Expected the supported 50-row option');
+    await selected.host.click();
+    expect(store.pageSize()).toBe(50);
+    expect(store.page()).toBe(1);
+    expect(store.filters().action).toBe('auth.login');
+    expect(list).toHaveBeenLastCalledWith('org-1', { limit: 50, action: 'auth.login' });
+  });
+
+  it('announces terminal navigation as unavailable and refuses mouse or keyboard activation', async () => {
+    list.mockResolvedValue({ items: [row(1)], next_cursor: null });
+    const fixture = TestBed.createComponent(AuditPage);
+    await fixture.whenStable();
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, AuditPagingHarness);
+    const next = await harness.next();
+    const previous = await harness.previous();
+    expect(await next.getProperty('disabled')).toBe(false);
+    expect(await previous.getProperty('disabled')).toBe(false);
+    expect(await next.getAttribute('aria-disabled')).toBe('true');
+    expect(await previous.getAttribute('aria-disabled')).toBe('true');
+    await next.focus();
+    expect(await next.isFocused()).toBe(true);
+    await next.click();
+    await next.sendKeys(TestKey.ENTER);
+    expect(await next.isFocused()).toBe(true);
+    await previous.click();
+    await previous.focus();
+    await previous.sendKeys(TestKey.ENTER);
+    expect(await previous.isFocused()).toBe(true);
+    expect(list).toHaveBeenCalledTimes(1);
+    expect(fixture.debugElement.injector.get(AuditStore).rows()).toEqual([row(1)]);
   });
 });
 

@@ -98,14 +98,14 @@ export class CursorPagingFixtureScenario {
             : typeof value !== 'string' || value.toLowerCase() !== decision)
         )
           return false;
-        if (!scenario || !query.has('ref')) return true;
+        if (!scenario || !query.has('ref_name')) return true;
         const ref = fields['ref'];
         return (
           typeof ref === 'object' &&
           ref !== null &&
           'name' in ref &&
           typeof ref.name === 'string' &&
-          ref.name.includes(query.get('ref') ?? '')
+          ref.name === query.get('ref_name')
         );
       }
       if (!scenario) return true;

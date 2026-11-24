@@ -131,7 +131,7 @@ for (const surface of ['runs', 'audit'] as const) {
     await expect(rows).toHaveCount(surface === 'runs' ? 1 : 6);
     const filtered = (await requests(page, surface)).at(-1);
     expect(filtered?.searchParams.has('cursor')).toBe(false);
-    expect(filtered?.searchParams.get(surface === 'runs' ? 'ref' : 'action')).toBeTruthy();
+    expect(filtered?.searchParams.get(surface === 'runs' ? 'ref_name' : 'action')).toBeTruthy();
     await expect(
       pager.getByRole('button', { name: 'Previous records', exact: true }),
     ).toHaveAttribute('aria-disabled', 'true');
@@ -140,7 +140,7 @@ for (const surface of ['runs', 'audit'] as const) {
     await expect.poll(async () => (await requests(page, surface)).length).toBe(before + 2);
     const cleared = (await requests(page, surface)).at(-1);
     expect(cleared?.searchParams.has('cursor')).toBe(false);
-    expect(cleared?.searchParams.has(surface === 'runs' ? 'ref' : 'action')).toBe(false);
+    expect(cleared?.searchParams.has(surface === 'runs' ? 'ref_name' : 'action')).toBe(false);
   });
 
   test(`${surface}: a later-page failure preserves successful rows and retries the failed cursor`, async ({

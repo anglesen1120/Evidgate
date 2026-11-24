@@ -225,12 +225,17 @@ export const RunListStore = signalStore(
       pendingTarget = target;
       const first = store.status() !== 'ready';
       patchState(store, { busy: true, pagingError: null, loadError: null });
+      const history = [...store.requestCursors().slice(0, target.page - 1), target.cursor];
       let page: RunPage;
       try {
         page = await data.listRuns(projectId, {
           ...pageQuery(store.filters(), store.pageSize()),
           ...(target.cursor === null ? {} : { cursor: target.cursor }),
         });
+        if (sequence !== newestRead) return;
+        if (page.next_cursor !== null && history.includes(page.next_cursor)) {
+          throw new Error('The run list repeated a forward cursor.');
+        }
       } catch (error) {
         if (sequence !== newestRead) return;
         const failure = isApiRequestError(error) ? error.error : UNRESOLVED_FAILURE;
@@ -244,8 +249,6 @@ export const RunListStore = signalStore(
       }
       if (sequence !== newestRead) return;
       pendingTarget = null;
-      const history = store.requestCursors().slice(0, target.page - 1);
-      history.push(target.cursor);
       patchState(store, {
         status: 'ready',
         rows: page.items,
@@ -304,8 +307,18 @@ export const RunListStore = signalStore(
         const changed = Object.entries(applied).some(
           ([key, value]) => store.filters()[key as keyof RunListFilters] !== value,
         );
+        const serverChanged =
+          applied.refName !== store.filters().refName ||
+          applied.decision !== store.filters().decision;
+        const recoverCursor = store.status() === 'error' && store.requestCursors()[0] !== null;
         patchState(store, { filters: applied, refRejected: ref.rejected });
-        if (changed) await restart();
+        if (
+          recoverCursor ||
+          (changed &&
+            (serverChanged || store.page() > 1 || store.busy() || store.status() !== 'ready'))
+        ) {
+          await restart();
+        }
       },
 
       async setPageSize(size: number): Promise<void> {
@@ -335,7 +348,8 @@ export const RunListStore = signalStore(
 
       async reload(): Promise<void> {
         if (store.busy()) return;
-        await restart(store.requestCursors()[store.page() - 1] ?? null);
+        const cursor = store.requestCursors()[store.page() - 1] ?? null;
+        await restart(store.status() === 'error' ? null : cursor);
       },
 
       /**

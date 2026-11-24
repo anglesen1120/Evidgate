@@ -5,6 +5,7 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
+  DestroyRef,
   effect,
   ElementRef,
   inject,
@@ -84,6 +85,7 @@ export class RunListPage {
   private readonly document = inject(DOCUMENT);
 
   private readonly injector = inject(Injector);
+  private readonly destroyRef = inject(DestroyRef);
 
   protected draft = { ...EMPTY_RUN_LIST_FILTERS };
   protected readonly activeFilterLabel = computed(() => {
@@ -272,12 +274,18 @@ export class RunListPage {
     this.apply();
   }
 
+  protected reload(): void {
+    void this.store.reload();
+    this.syncQuery();
+  }
+
   protected async navigatePage(direction: 'next' | 'previous' | 'retryPage'): Promise<void> {
     const failure = this.store.pagingError();
-    if (failure && (!failure.retryable || !this.retryReady())) return;
+    if (direction === 'retryPage' && failure && (!failure.retryable || !this.retryReady())) return;
     const active = this.document.activeElement;
     const ownedRetry = active === this.pagingRetryButton()?.nativeElement;
     await this.store[direction]();
+    if (this.destroyRef.destroyed) return;
     this.syncQuery();
     if (ownedRetry) {
       afterNextRender(() => this.restorePagingFocus(), { injector: this.injector });
@@ -290,12 +298,14 @@ export class RunListPage {
     const request = this.store.setPageSize(size);
     this.syncQuery();
     await request;
+    if (this.destroyRef.destroyed) return;
     if (owned) {
       afterNextRender(() => this.restorePagingFocus(), { injector: this.injector });
     }
   }
 
   private syncQuery(): void {
+    if (this.destroyRef.destroyed) return;
     void this.router.navigate([], {
       relativeTo: this.route,
       queryParams: {
@@ -312,6 +322,7 @@ export class RunListPage {
   }
 
   private restorePagingFocus(): void {
+    if (this.destroyRef.destroyed) return;
     const active = this.document.activeElement;
     if (active instanceof HTMLElement && active !== this.document.body && active.isConnected)
       return;

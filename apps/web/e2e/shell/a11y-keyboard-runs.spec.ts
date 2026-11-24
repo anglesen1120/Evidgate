@@ -49,6 +49,15 @@ function listAddress(variant: string): string {
   );
 }
 
+async function runRequestCount(page: Page): Promise<number> {
+  return page.evaluate(
+    () =>
+      (window.__evidgateFixtureRequests ?? []).filter((entry) =>
+        new URL(entry.url, location.origin).pathname.endsWith('/runs'),
+      ).length,
+  );
+}
+
 async function listIsReady(page: Page): Promise<void> {
   await expect(page.locator('app-run-list-page')).toHaveAttribute('data-run-list-status', 'ready');
 }
@@ -425,15 +434,26 @@ test('Next replaces the page and retains its keyboard focus while busy and at th
     await expect(control).toBeFocused();
     await expectFocusRing(control, '2px');
   }
+  const firstPageRequests = await runRequestCount(page);
   await page.keyboard.press('Enter');
   await expect(pager.getByRole('navigation')).toHaveAttribute('aria-busy', 'true');
-  await expect(next).toBeEnabled();
+  await expect(next).not.toHaveAttribute('disabled');
   await expect(next).toHaveAttribute('aria-disabled', 'true');
   await expect(next).toBeFocused();
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('Space');
   await expect(rows).toHaveCount(13);
   await expect(rows.first()).toHaveAttribute('data-row-id', LARGE_PAGE_SECOND);
   await expect(next).toBeFocused();
   await expect(next).toHaveAttribute('aria-disabled', 'true');
+  expect(await runRequestCount(page)).toBe(firstPageRequests + 1);
+  await expect(next).not.toHaveAttribute('disabled');
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('Space');
+  await expect(next).toBeFocused();
+  await expect(rows).toHaveCount(13);
+  await expect(rows.first()).toHaveAttribute('data-row-id', LARGE_PAGE_SECOND);
+  expect(await runRequestCount(page)).toBe(firstPageRequests + 1);
   await auditRunTabStops(page.locator('app-run-list-page'), 'cursor/last-page');
   await page.keyboard.press('Shift+Tab');
   await expect(previous).toBeFocused();

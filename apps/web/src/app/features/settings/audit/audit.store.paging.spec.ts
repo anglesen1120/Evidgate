@@ -47,7 +47,7 @@ describe('AuditStore cursor paging', () => {
     entries = Array.from({ length: 45 }, (_, index) => entry(index + 1));
     list.mockReset().mockImplementation((_org, query, cursor) => {
       const start = Number(cursor ?? 0);
-      const end = start + (query.limit ?? 20);
+      const end = start + (query?.limit ?? 20);
       return Promise.resolve({
         items: entries.slice(start, end),
         next_cursor: end < entries.length ? String(end) : null,
@@ -252,6 +252,81 @@ describe('AuditStore cursor paging', () => {
     pending.resolve({ items: entries, next_cursor: null });
     expect(await exporting).toBeNull();
     expect(store.exportState()).toEqual({ phase: 'idle' });
+  });
+
+  it('refuses a cursor from an earlier page and retries the refused target', async () => {
+    entries = Array.from({ length: 85 }, (_, index) => entry(index + 1));
+    await store.load('org');
+    await store.next('org');
+    await store.next('org');
+    const retained = store.rows();
+    list.mockResolvedValueOnce({ items: [entry(999)], next_cursor: '20' });
+    await store.next('org');
+    expect(store.page()).toBe(3);
+    expect(store.rows()).toBe(retained);
+    expect(store.pagingError()?.code).toBe('request_unresolved');
+    await store.retryPage('org');
+    expect(list).toHaveBeenLastCalledWith('org', { limit: 20 }, '60');
+    expect(store.page()).toBe(4);
+    expect(store.rows()).toEqual(entries.slice(60, 80));
+  });
+
+  it('abandons a failed Next after successful Previous without replaying it on retry', async () => {
+    await store.load('org');
+    await store.next('org');
+    list.mockRejectedValueOnce(refusal);
+    await store.next('org');
+    expect(store.page()).toBe(2);
+    await store.previous('org');
+    expect(store.page()).toBe(1);
+    expect(store.pagingError()).toBeNull();
+    const calls = list.mock.calls.length;
+    await store.retryPage('org');
+    expect(list).toHaveBeenCalledTimes(calls);
+    expect(store.rows()).toEqual(entries.slice(0, 20));
+    await store.next('org');
+    expect(store.rows()).toEqual(entries.slice(20, 40));
+  });
+
+  it.each(['filter', 'scope'] as const)(
+    'does not publish a stale export after a %s change',
+    async (reset) => {
+      await store.load('org');
+      const pending = deferred();
+      list.mockReturnValueOnce(pending.promise);
+      const exporting = store.exportCsv('org');
+      if (reset === 'filter')
+        await store.load('org', { ...EMPTY_AUDIT_FILTERS, action: 'run.create' });
+      else await store.load('other');
+      const retained = store.rows();
+      const calls = list.mock.calls.length;
+      pending.resolve({ items: [entry(999)], next_cursor: 'stale-export' });
+      expect(await exporting).toBeNull();
+      expect(list).toHaveBeenCalledTimes(calls);
+      expect(store.rows()).toBe(retained);
+      expect(store.exportState()).toEqual({ phase: 'idle' });
+    },
+  );
+
+  it('finishes an export without clearing a browse failure or its retry target', async () => {
+    await store.load('org');
+    await store.next('org');
+    const retained = store.rows();
+    const pending = deferred();
+    list.mockReturnValueOnce(pending.promise);
+    const exporting = store.exportCsv('org');
+    list.mockRejectedValueOnce(refusal);
+    await store.next('org');
+    expect(store.pagingError()).toBe(refusal.error);
+    pending.resolve({ items: entries, next_cursor: null });
+    expect(await exporting).toContain('\r\n45,2026-10-25T00:00:00Z,user,member,auth.login,');
+    expect(store.rows()).toBe(retained);
+    expect(store.page()).toBe(2);
+    expect(store.pagingError()).toBe(refusal.error);
+    await store.retryPage('org');
+    expect(list).toHaveBeenLastCalledWith('org', { limit: 20 }, '40');
+    expect(store.rows()).toEqual(entries.slice(40));
+    expect(store.exportState()).toEqual({ phase: 'done', rows: 45, capped: false });
   });
 });
 

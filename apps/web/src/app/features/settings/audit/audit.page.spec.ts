@@ -1,4 +1,4 @@
-import { ComponentHarness } from '@angular/cdk/testing';
+import { ComponentHarness, TestKey } from '@angular/cdk/testing';
 import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { provideZonelessChangeDetection, signal } from '@angular/core';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
@@ -18,6 +18,7 @@ class AuditSummaryHarness extends ComponentHarness {
   readonly values = this.locatorForAll('[data-audit-summary] [data-audit-value]');
   readonly next = this.locatorFor('[data-page="next"]');
   readonly previous = this.locatorFor('[data-page="previous"]');
+  readonly retry = this.locatorFor('[data-audit-paging-error] button');
 }
 
 function entry(id: string, changes: Partial<AuditEntryDto> = {}): AuditEntryDto {
@@ -402,20 +403,30 @@ describe('AuditPage', () => {
   });
   it('loads the next cursor only explicitly and preserves rows on partial failure with retry', async () => {
     data.list.mockResolvedValueOnce({ items: [entry('first')], next_cursor: 'page2' });
-    const { fixture, root } = await render();
+    const { fixture, root, store } = await render();
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, AuditSummaryHarness);
+    const next = await harness.next();
     data.list.mockRejectedValueOnce(new ApiRequestError(refused));
-    root.querySelector<HTMLButtonElement>('[data-page="next"]')!.click();
+    await next.click();
     await fixture.whenStable();
     expect(data.list).toHaveBeenLastCalledWith('org1', { limit: 20 }, 'page2');
     expect(root.querySelectorAll('[data-audit-row]')).toHaveLength(1);
     expect(root.querySelector('[data-audit-paging-error]')?.textContent).toContain(refused.message);
     expect(root.querySelector('[data-audit-paging-error]')?.textContent).toContain(refused.code);
     data.list.mockResolvedValueOnce({ items: [entry('second')], next_cursor: null });
-    root.querySelector<HTMLButtonElement>('[data-audit-paging-error] button')!.click();
+    await (await harness.retry()).click();
     await fixture.whenStable();
     expect(root.querySelectorAll('[data-audit-row]')).toHaveLength(1);
     expect(root.querySelector('[data-audit-paging-error]')).toBeNull();
-    expect(root.querySelector<HTMLButtonElement>('[data-page="next"]')?.disabled).toBe(true);
+    expect(await next.getAttribute('aria-disabled')).toBe('true');
+    expect(await next.getProperty('disabled')).toBe(false);
+    await next.focus();
+    await next.click();
+    await next.sendKeys(TestKey.ENTER);
+    expect(await next.isFocused()).toBe(true);
+    expect(data.list).toHaveBeenCalledTimes(3);
+    expect(store.page()).toBe(2);
+    expect(store.rows()).toEqual([entry('second')]);
   });
   it('keeps old activity out of the DOM while organization context is unavailable', async () => {
     const { fixture, root } = await render();
@@ -428,12 +439,21 @@ describe('AuditPage', () => {
   it('disables paging during a pending cursor and announces incremental loading', async () => {
     data.list.mockResolvedValueOnce({ items: [entry('first')], next_cursor: 'page2' });
     const { fixture, root, store } = await render();
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, AuditSummaryHarness);
+    const button = await harness.next();
+    await button.focus();
     const pending = deferred<AuditListResponse>();
     data.list.mockReturnValueOnce(pending.promise);
-    const button = root.querySelector<HTMLButtonElement>('[data-page="next"]')!;
-    button.click();
+    await button.click();
     fixture.detectChanges();
-    expect(button.disabled).toBe(true);
+    expect(await button.getAttribute('aria-disabled')).toBe('true');
+    expect(await button.getProperty('disabled')).toBe(false);
+    await button.click();
+    await button.sendKeys(TestKey.ENTER);
+    expect(await button.isFocused()).toBe(true);
+    expect(data.list).toHaveBeenCalledTimes(2);
+    expect(store.page()).toBe(1);
+    expect(store.rows()).toEqual([entry('first')]);
     expect(root.querySelector('section[aria-busy]')?.getAttribute('aria-busy')).toBe('true');
     expect(root.textContent).toContain('Loading activity page…');
     pending.resolve({ items: [entry('second')], next_cursor: null });

@@ -216,7 +216,7 @@ describe('RunListPage', () => {
     expect(title).not.toBeNull();
     if (title) {
       expect(title.getAttribute('data-title-size')).toBe('page');
-      expect(title.textContent).toBe('Runs');
+      expect(title.textContent?.replace(/\s+/g, ' ').trim()).toBe('Runs');
     }
   });
   it('restores a pending filter from the URL without rewriting its context', async () => {

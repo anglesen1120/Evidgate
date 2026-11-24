@@ -237,14 +237,14 @@ describe('RunListStore (09.3.1-T1)', () => {
       expect(store.visibleRows()).toHaveLength(5);
     });
 
-    it('restarts page one when a local filter changes', async () => {
+    it('retains page one when a local filter changes', async () => {
       data.all = rows(10, (index) => ({ state: index === 0 ? 'canceled' : 'complete' }));
       await store.init('p-1');
       expect(data.calls).toHaveLength(1);
 
       await store.setFilters({ state: 'canceled' });
 
-      expect(data.calls).toHaveLength(2);
+      expect(data.calls).toHaveLength(1);
       expect(store.loadedCount()).toBe(10);
       expect(store.visibleRows().map((row) => row.run_id)).toEqual(['run-0']);
       expect(store.isFiltered()).toBe(true);
@@ -255,12 +255,12 @@ describe('RunListStore (09.3.1-T1)', () => {
       data.all = rows(4);
       await store.init('p-1');
       await store.setFilters({ state: 'complete' });
-      expect(data.calls).toHaveLength(2);
+      expect(data.calls).toHaveLength(1);
 
       await store.setFilters({ refName: 'refs/heads/main' });
 
-      expect(data.calls).toHaveLength(3);
-      expect(data.calls[2]?.request).toEqual({
+      expect(data.calls).toHaveLength(2);
+      expect(data.calls[1]?.request).toEqual({
         limit: RUN_LIST_PAGE_LIMIT,
         refName: 'refs/heads/main',
       });

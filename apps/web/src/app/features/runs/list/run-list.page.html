@@ -254,7 +254,7 @@
     [emptyActionLabel]="store.isFiltered() ? copy.clear : undefined"
     (emptyAction)="clear()"
     [retryEligible]="retryReady() && (store.loadError()?.retryable ?? false)"
-    (retry)="store.reload()"
+    (retry)="reload()"
   >
     <app-run-list-table [rows]="store.visibleRows()" [projectId]="projectId" />
   </app-request-state>
