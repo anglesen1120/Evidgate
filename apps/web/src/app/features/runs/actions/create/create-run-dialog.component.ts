@@ -1,3 +1,4 @@
+import { FieldHintComponent } from '../../../../shared/ui/forms/field-hint.component';
 import { DOCUMENT } from '@angular/common';
 import {
   afterRenderEffect,
@@ -47,6 +48,7 @@ import { CreateRunStore } from './create-run.store';
 @Component({
   selector: 'app-create-run-dialog',
   imports: [
+    FieldHintComponent,
     HlmButton,
     HlmCheckbox,
     HlmDialogImports,

@@ -1,3 +1,4 @@
+import { FieldHintComponent } from '../../../shared/ui/forms/field-hint.component';
 import { DOCUMENT, NgTemplateOutlet } from '@angular/common';
 import {
   afterRenderEffect,
@@ -58,6 +59,7 @@ interface Consent {
   changeDetection: ChangeDetectionStrategy.OnPush,
   providers: [PendingChangesStore],
   imports: [
+    FieldHintComponent,
     RouterLink,
     FormsModule,
     HlmButton,

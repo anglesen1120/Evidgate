@@ -22774,6 +22774,7 @@
 <trans-unit id="authoring.editor.history-page-filter" datatype="html"><source>Filter this page by reason</source><target>Lọc lý do trên trang này</target></trans-unit>
 <trans-unit id="authoring.editor.history-page-no-match" datatype="html"><source>No versions on this page match this filter</source><target>Không có phiên bản nào trên trang này khớp với bộ lọc</target></trans-unit>
 <trans-unit id="authoring.pending-changes.ordered-caption" datatype="html"><source><x id="caption" equiv-text="caption"/> — Oldest first (server order)</source><target><x id="caption" equiv-text="caption"/> — Cũ nhất trước (thứ tự máy chủ)</target></trans-unit>
+<trans-unit id="shared.field-hint.name" datatype="html"><source>Hint: <x id="label" equiv-text="this.label()"/></source><target>Gợi ý: <x id="label" equiv-text="this.label()"/></target></trans-unit>
 </body>
   </file>
 </xliff>

@@ -1,3 +1,4 @@
+import { FieldHintComponent } from '../forms/field-hint.component';
 import { ChangeDetectionStrategy, Component, computed, signal } from '@angular/core';
 import { HlmButton } from '@evidgate/ui/button';
 import { HlmCard } from '@evidgate/ui/card';
@@ -27,6 +28,7 @@ import { LiveStatusComponent } from '../states/live-status.component';
 @Component({
   selector: 'app-gallery-states',
   imports: [
+    FieldHintComponent,
     HlmButton,
     HlmCard,
     HlmInput,
@@ -178,9 +180,11 @@ import { LiveStatusComponent } from '../states/live-status.component';
       >
         <app-form-error-summary [summaryId]="'gallery-form-errors'" [feedback]="feedback" />
         <div class="grid min-w-0 gap-(--eg-space-3)">
-          <label hlmLabel [for]="field.id">
-            {{ field.label }} <app-field-requirement [required]="true" />
-          </label>
+          <app-field-hint [descriptionId]="field.hintId" [label]="field.label" [text]="field.hint">
+            <label hlmLabel [for]="field.id">
+              {{ field.label }} <app-field-requirement [required]="true" />
+            </label>
+          </app-field-hint>
           <input
             hlmInput
             type="text"

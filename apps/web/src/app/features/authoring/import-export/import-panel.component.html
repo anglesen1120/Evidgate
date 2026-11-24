@@ -7,13 +7,19 @@
 >
   <div class="grid min-w-0 gap-(--eg-space-5)">
     <section hlmCard aria-labelledby="import-intake-title">
-      <app-section-header
-        hlmCardHeader
-        class="border-b border-border"
-        [titleId]="'import-intake-title'"
-        [title]="copy.file"
-        [size]="'subsection'"
-      />
+      <header hlmCardHeader class="border-b border-border">
+        <app-field-hint
+          [descriptionId]="'import-file-hint'"
+          [label]="copy.file"
+          [text]="copy.limits"
+        >
+          <app-section-header
+            [titleId]="'import-intake-title'"
+            [title]="copy.file"
+            [size]="'subsection'"
+          />
+        </app-field-hint>
+      </header>
       <div
         hlmCardContent
         class="grid min-w-0 items-start gap-(--eg-space-4) sm:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]"
@@ -67,7 +73,7 @@
                   type="file"
                   [accept]="'.csv,.json,.xlsx,text/csv,application/json,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'"
                   class="min-h-(--eg-control-touch) max-w-full"
-                  [attr.aria-describedby]="
+                  [aria-describedby]="
                     store.work().error ? 'import-file-hint import-file-refusal' : 'import-file-hint'
                   "
                   [attr.aria-invalid]="store.work().error ? 'true' : null"
@@ -141,12 +147,6 @@
         } @else {
           <app-inline-feedback [title]="copy.denied" [tone]="'warning'" />
         }
-        <p
-          id="import-file-hint"
-          class="col-span-full m-0 text-sm text-muted-foreground wrap-anywhere"
-        >
-          {{ copy.limits }}
-        </p>
       </div>
     </section>
     @if (store.work().error; as error) {

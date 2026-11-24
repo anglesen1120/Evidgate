@@ -55,8 +55,11 @@
             required
             [value]="name()"
             (input)="name.set(nm.value)"
-          /><label hlmLabel for="new-endpoint-url">{{ l.url }}</label
-          ><input
+          />
+          <app-field-hint [descriptionId]="'url-hint'" [label]="l.url" [text]="l.invalid">
+            <label hlmLabel for="new-endpoint-url">{{ l.url }}</label>
+          </app-field-hint>
+          <input
             hlmInput
             type="url"
             #destination
@@ -66,8 +69,7 @@
             [value]="url()"
             (input)="url.set(destination.value)"
           />
-          <p id="url-hint" class="m-0 text-sm text-muted-foreground">{{ l.invalid }}</p>
-          <fieldset>
+          <fieldset [attr.aria-describedby]="'url-hint'">
             <legend>{{ l.events }}</legend>
             <div class="flex min-h-11 items-center gap-2">
               <hlm-checkbox

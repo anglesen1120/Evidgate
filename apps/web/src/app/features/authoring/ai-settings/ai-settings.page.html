@@ -119,19 +119,15 @@
                           hlmCardHeader
                           class="gap-(--eg-space-1) border-b border-border py-(--eg-space-3)"
                         >
-                          <h2 hlmCardTitle [size]="'subsection'" [id]="'ai-group-' + group.key">
-                            {{ group.title }}
-                          </h2>
-                          @if (group.key === 'context') {
-                            <p hlmCardDescription i18n="@@authoring.ai-settings.context-help">
-                              Describe the project and its test environment.
-                            </p>
-                          }
-                          @if (group.key === 'guidance') {
-                            <p hlmCardDescription i18n="@@authoring.ai-settings.guidance-help">
-                              Define what cases cover, what to skip and how to write each step.
-                            </p>
-                          }
+                          <app-field-hint
+                            [descriptionId]="'ai-' + group.key + '-hint'"
+                            [label]="group.title"
+                            [text]="group.hint"
+                          >
+                            <h2 hlmCardTitle [size]="'subsection'" [id]="'ai-group-' + group.key">
+                              {{ group.title }}
+                            </h2>
+                          </app-field-hint>
                         </header>
                         <div hlmCardContent class="grid gap-(--eg-space-3) py-(--eg-space-3)">
                           <div

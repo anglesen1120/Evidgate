@@ -37,7 +37,13 @@
       @for (definition of basicFields; track definition.key) {
         @let feedbackField = field(definition.key);
         <div class="grid min-w-0 gap-(--eg-space-2)">
-          <label hlmLabel [for]="feedbackField.id">{{ definition.label }}</label>
+          <app-field-hint
+            [descriptionId]="feedbackField.hintId"
+            [label]="feedbackField.label"
+            [text]="feedbackField.hint"
+          >
+            <label hlmLabel [for]="feedbackField.id">{{ definition.label }}</label>
+          </app-field-hint>
           <input
             hlmInput
             #manifestControl
@@ -203,7 +209,13 @@
         </fieldset>
       </details>
       <div class="grid min-w-0 gap-(--eg-space-2)">
-        <label hlmLabel for="run-create-components">{{ copy.components }}</label>
+        <app-field-hint
+          [descriptionId]="field('components').hintId"
+          [label]="field('components').label"
+          [text]="field('components').hint"
+        >
+          <label hlmLabel for="run-create-components">{{ copy.components }}</label>
+        </app-field-hint>
         <textarea
           hlmInput
           id="run-create-components"

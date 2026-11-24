@@ -1,3 +1,4 @@
+import { FieldHintComponent } from '../forms/field-hint.component';
 import { DOCUMENT } from '@angular/common';
 import {
   afterNextRender,
@@ -24,7 +25,14 @@ type Mode = 'view' | 'edit';
 @Component({
   selector: 'app-gallery-member-dialog',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [HlmButton, HlmCheckbox, HlmDialogImports, HlmLabel, StatusPillComponent],
+  imports: [
+    FieldHintComponent,
+    HlmButton,
+    HlmCheckbox,
+    HlmDialogImports,
+    HlmLabel,
+    StatusPillComponent,
+  ],
   templateUrl: './gallery-member-dialog.component.html',
 })
 export class GalleryMemberDialogComponent {
@@ -32,6 +40,7 @@ export class GalleryMemberDialogComponent {
   private readonly injector = inject(Injector);
   protected readonly policy = inject(NarrowMutationPolicy);
   readonly rolesApplied = output<GalleryMember>();
+  protected readonly baseRole = $localize`:@@shared.gallery.members.base-role:Every sample member has the Viewer role.`;
   protected readonly copy = MEMBER_COPY;
   protected readonly member = signal<GalleryMember | null>(null);
   protected readonly mode = signal<Mode>('view');

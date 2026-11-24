@@ -1,3 +1,4 @@
+import { FieldHintComponent } from '../../shared/ui/forms/field-hint.component';
 import { DecimalPipe } from '@angular/common';
 import {
   ChangeDetectionStrategy,
@@ -39,6 +40,7 @@ import { AuthoringCaseTableStore } from './authoring-case-table.store';
 @Component({
   selector: 'app-authoring-case-table',
   imports: [
+    FieldHintComponent,
     DecimalPipe,
     DataTablePagerComponent,
     FormsModule,

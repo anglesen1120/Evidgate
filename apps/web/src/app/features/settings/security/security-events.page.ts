@@ -1,3 +1,4 @@
+import { FieldHintComponent } from '../../../shared/ui/forms/field-hint.component';
 import { formatNumber } from '@angular/common';
 import { ActivatedRoute } from '@angular/router';
 import {
@@ -47,6 +48,7 @@ import {
 @Component({
   selector: 'app-security-events-page',
   imports: [
+    FieldHintComponent,
     FormsModule,
     HlmBadge,
     HlmButton,
@@ -199,13 +201,13 @@ export class SecurityEventsPage {
       {
         id: 'security-from',
         label: this.copy.from,
-        describedBy: 'security-time-hint',
+        hint: this.copy.timeHint,
         error: () => (this.range().invalidFrom ? this.copy.invalid : null),
       },
       {
         id: 'security-to',
         label: this.copy.to,
-        describedBy: 'security-time-hint',
+        hint: this.copy.timeHint,
         error: () => (this.range().invalidTo ? this.copy.invalid : null),
       },
     ]);

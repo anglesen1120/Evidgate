@@ -1,3 +1,4 @@
+import { FieldHintComponent } from '../../../shared/ui/forms/field-hint.component';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -23,6 +24,7 @@ type Intent = 'create' | 'rotate' | 'redeliver';
   selector: 'app-webhook-intent-preview',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
+    FieldHintComponent,
     HlmButton,
     HlmCheckbox,
     ...HlmDialogImports,

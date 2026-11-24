@@ -1,3 +1,4 @@
+import { FieldHintComponent } from '../../../../shared/ui/forms/field-hint.component';
 import { DOCUMENT } from '@angular/common';
 import { ChangeDetectionStrategy, Component, DestroyRef, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
@@ -23,6 +24,7 @@ import { CancelRunStore } from './cancel-run.store';
 @Component({
   selector: 'app-cancel-run-dialog',
   imports: [
+    FieldHintComponent,
     FormsModule,
     HlmButton,
     HlmDialogImports,
@@ -69,7 +71,13 @@ import { CancelRunStore } from './cancel-run.store';
         >
           <app-form-error-summary [summaryId]="'run-cancel-errors'" [feedback]="feedback" />
           <div class="grid min-w-0 gap-(--eg-space-2)">
-            <label hlmLabel for="run-cancel-reason">{{ copy.reason }}</label>
+            <app-field-hint
+              [descriptionId]="field.hintId"
+              [label]="field.label"
+              [text]="field.hint"
+            >
+              <label hlmLabel for="run-cancel-reason">{{ copy.reason }}</label>
+            </app-field-hint>
             <textarea
               hlmInput
               id="run-cancel-reason"
