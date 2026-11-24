@@ -4,12 +4,14 @@ import {
   Component,
   computed,
   inject,
+  linkedSignal,
   type TemplateRef,
   viewChild,
 } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import type { AuditEntryDto } from '@evidgate/sdk';
 import { HlmButton } from '@evidgate/ui/button';
+import { HlmDialogImports } from '@evidgate/ui/dialog';
 import { isApiRequestError, type ApiError } from '../../core/http/api-error';
 import { mapNetworkError } from '../../core/http/error-mapper';
 import { AbsoluteTimeComponent } from '../../shared/time/absolute-time.component';
@@ -22,6 +24,8 @@ import {
   type DataTableColumn,
 } from '../../shared/ui/data-table/data-table.component';
 import type { DataTableCellContext } from '../../shared/ui/data-table/data-table-column';
+import { RowActionComponent } from '../../shared/ui/data-table/row-action.component';
+import { CopyableIdentifierComponent } from '../../shared/ui/values/copyable-identifier.component';
 import { PageHeaderComponent } from '../../shared/ui/page-header/page-header.component';
 import { DecisionChipComponent } from '../../shared/ui/verdict/decision-chip.component';
 import { DashboardActivityComponent } from '../../shared/ui/dashboard/dashboard-activity.component';
@@ -33,6 +37,9 @@ import { OrgOverviewStore, type DashboardProject } from './org-overview.store';
     DecimalPipe,
     RouterLink,
     HlmButton,
+    HlmDialogImports,
+    RowActionComponent,
+    CopyableIdentifierComponent,
     AbsoluteTimeComponent,
     DashboardKpiComponent,
     DashboardMeterComponent,
@@ -52,8 +59,13 @@ export class OrgOverviewPage {
   protected readonly store = inject(OrgOverviewStore);
   protected readonly title = $localize`:@@orgoverview.title:Organization overview`;
   protected readonly description = computed(() => this.store.session.currentOrg()?.name ?? '');
+  protected readonly inspectedProject = linkedSignal<
+    readonly DashboardProject[],
+    { row: DashboardProject; trigger: HTMLElement } | null
+  >({ source: () => this.store.projectRows(), computation: () => null });
   protected readonly copy = {
     projects: $localize`:@@orgoverview.projects:My projects`,
+    projectId: $localize`:@@orgoverview.project-id:Project ID`,
     projectsDescription: $localize`:@@orgoverview.projects-description:Projects you can access in this organization.`,
     emptyProjects: $localize`:@@orgoverview.empty-projects:No projects to show.`,
     members: $localize`:@@orgoverview.members:Members and invitations`,

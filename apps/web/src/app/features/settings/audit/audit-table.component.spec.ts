@@ -1,8 +1,9 @@
 import { ComponentHarness, TestKey } from '@angular/cdk/testing';
 import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { provideZonelessChangeDetection } from '@angular/core';
-import { TestBed } from '@angular/core/testing';
+import { type ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
+import { clearTranslations, loadTranslations } from '@angular/localize';
 import type { AuditEntryDto } from '@evidgate/sdk';
 import { provideLayoutTestStubs } from '../../../shared/testing/layout.testing';
 import { DataTableComponent } from '../../../shared/ui/data-table/data-table.component';
@@ -15,6 +16,25 @@ class AuditActionsHarness extends ComponentHarness {
   readonly view = this.locatorFor('button[data-audit-view]');
   readonly viewIcon = this.locatorFor('button[data-audit-view] hlm-icon');
   readonly dialog = this.documentRootLocatorFactory().locatorForOptional('[role="dialog"]');
+}
+
+class AuditActionHarness extends ComponentHarness {
+  static hostSelector = 'app-audit-table';
+  readonly action = this.locatorFor('td[data-column-priority="primary"] app-data-table-value');
+  readonly label = this.locatorFor(
+    'td[data-column-priority="primary"] app-data-table-value .value',
+  );
+  readonly isolatedLabel = this.locatorFor(
+    'td[data-column-priority="primary"] app-data-table-value .value bdi',
+  );
+  readonly fullLabel = this.locatorFor(
+    'td[data-column-priority="primary"] app-data-table-value [popover] bdi',
+  );
+  readonly view = this.locatorFor('[data-audit-view]');
+  readonly table = this.locatorFor('app-data-table');
+  readonly support = this.documentRootLocatorFactory().locatorFor(
+    '[role="dialog"] .support-access',
+  );
 }
 
 function row(id: string, changes: Partial<AuditEntryDto> = {}): AuditEntryDto {
@@ -45,8 +65,13 @@ async function openAuditView(root: Element): Promise<HTMLElement> {
     return dialog;
   });
 }
-async function supportTrigger(root: Element): Promise<HTMLButtonElement> {
+async function supportTrigger(
+  root: Element,
+  fixture: ComponentFixture<AuditTableComponent>,
+): Promise<HTMLButtonElement> {
   const dialog = await openAuditView(root);
+  const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, AuditActionHarness);
+  await (await harness.support()).blur();
   const chip = dialog.querySelector<HTMLButtonElement>('.support-access');
   if (!chip) throw new Error('Expected support trigger');
   return chip;
@@ -58,7 +83,10 @@ describe('AuditTableComponent', () => {
       providers: [provideZonelessChangeDetection()],
     }),
   );
-  afterEach(() => TestBed.resetTestingModule());
+  afterEach(() => {
+    clearTranslations();
+    TestBed.resetTestingModule();
+  });
   async function render(rows: AuditEntryDto[]) {
     const fixture = TestBed.createComponent(AuditTableComponent);
     fixture.componentRef.setInput('rows', rows);
@@ -81,6 +109,63 @@ describe('AuditTableComponent', () => {
     await dialog.sendKeys(TestKey.ESCAPE);
     expect(await harness.dialog()).toBeNull();
     expect(await trigger.isFocused()).toBe(true);
+  });
+  it.each([
+    ['en', 'Run state changed', 'View'],
+    ['vi', 'Thay đổi trạng thái lượt chạy', 'Xem'],
+  ])(
+    'uses the same localized action in visible and accessible labels: %s',
+    async (locale, label, view) => {
+      if (locale === 'vi') {
+        loadTranslations({
+          'shared.audit.action.run-state-changed': label,
+          'settings.row.view': view,
+        });
+      }
+      const { fixture } = await render([row('mapped', { action: 'run.state_changed' })]);
+      const harness = await TestbedHarnessEnvironment.harnessForFixture(
+        fixture,
+        AuditActionHarness,
+      );
+      expect(await (await harness.isolatedLabel()).text()).toBe(label);
+      expect(await (await harness.view()).getAttribute('aria-label')).toBe(`${view} · ${label}`);
+      expect(await (await harness.action()).getAttribute('title')).toBe('run.state_changed');
+      expect(await (await harness.label()).getAttribute('tabindex')).toBeNull();
+      const classes = await (await harness.table()).getAttribute('class');
+      expect(classes).not.toContain('font-mono');
+      expect(classes).not.toContain('font-semibold');
+    },
+  );
+  it('keeps a clipped Vietnamese action complete and keyboard-discoverable', async () => {
+    const label = 'Thay đổi trạng thái lượt chạy';
+    loadTranslations({ 'shared.audit.action.run-state-changed': label });
+    const width = vi.spyOn(Element.prototype, 'clientWidth', 'get').mockImplementation(function (
+      this: Element,
+    ) {
+      return this.classList.contains('value') ? 120 : 0;
+    });
+    const scroll = vi.spyOn(Element.prototype, 'scrollWidth', 'get').mockImplementation(function (
+      this: Element,
+    ) {
+      return this.classList.contains('value') ? 400 : 0;
+    });
+    try {
+      const { fixture } = await render([row('long-label', { action: 'run.state_changed' })]);
+      const harness = await TestbedHarnessEnvironment.harnessForFixture(
+        fixture,
+        AuditActionHarness,
+      );
+      const value = await harness.label();
+      expect(await value.hasClass('truncate')).toBe(true);
+      expect(await value.hasClass('clipped')).toBe(true);
+      expect(await value.getAttribute('tabindex')).toBe('0');
+      expect(await (await harness.isolatedLabel()).text()).toBe(label);
+      expect(await (await harness.action()).getAttribute('title')).toBe('run.state_changed');
+      expect(await (await harness.fullLabel()).text()).toBe(label);
+    } finally {
+      scroll.mockRestore();
+      width.mockRestore();
+    }
   });
   it.each([
     ['user', 'User'],
@@ -111,7 +196,7 @@ describe('AuditTableComponent', () => {
       row('operator', { actor_type: 'platform_operator' }),
       row('other', { metadata: { support_grant_id: 'grant-other' } }),
     ]);
-    const chip = await supportTrigger(root);
+    const chip = await supportTrigger(root, fixture);
     chip.focus();
     await vi.waitFor(() => {
       fixture.detectChanges();
@@ -135,7 +220,7 @@ describe('AuditTableComponent', () => {
   });
   it('shows the support description on hover without changing the audit row', async () => {
     const { fixture, root } = await render([row('operator', { actor_type: 'platform_operator' })]);
-    const chip = await supportTrigger(root);
+    const chip = await supportTrigger(root, fixture);
     chip.dispatchEvent(new PointerEvent('pointerenter', { pointerType: 'mouse' }));
     await vi.waitFor(() => {
       fixture.detectChanges();
@@ -172,7 +257,7 @@ describe('AuditTableComponent', () => {
     expect(second.querySelector('[data-audit-support="true"]')).not.toBeNull();
     expect(root.textContent).not.toContain('not for display');
     expect(root.textContent).not.toContain('expiry');
-    const chip = await supportTrigger(second);
+    const chip = await supportTrigger(second, fixture);
     expect(chip.textContent).toContain('Support access');
     expect(chip.tabIndex).toBe(0);
     const mobileDescription = chip.nextElementSibling;
@@ -193,7 +278,7 @@ describe('AuditTableComponent', () => {
   it('flags an operator without a grant key without inventing a grant or expiry', async () => {
     const { fixture, root } = await render([row('operator', { actor_type: 'platform_operator' })]);
     expect(root.querySelector('[data-audit-support="true"]')).not.toBeNull();
-    const chip = await supportTrigger(root);
+    const chip = await supportTrigger(root, fixture);
     expect(chip.nextElementSibling?.textContent).toContain(
       'Platform staff access (grant id not recorded on this row)',
     );

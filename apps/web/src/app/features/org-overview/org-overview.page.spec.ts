@@ -27,7 +27,8 @@ class OverviewHarness extends ComponentHarness {
   readonly errors = this.locatorForAll('app-error-pattern');
   readonly decisions = this.locatorForAll('app-decision-chip');
   readonly retryButtons = this.locatorForAll('button[data-run-summary-retry]');
-  readonly projectLinks = this.locatorForAll('a');
+  readonly projectActions = this.locatorForAll('.projects button[appRowAction]');
+  readonly aiUsage = this.locatorFor('[data-ai-usage]');
   readonly runSummary = this.locatorFor('[data-run-summary]');
   readonly titleIcon = this.locatorFor('app-page-header h1 hlm-icon');
   readonly projectTitles = this.locatorForAll('.projects h2');
@@ -38,6 +39,12 @@ class OverviewHarness extends ComponentHarness {
   readonly usageTerms = this.locatorForAll('.usage dl.hlm-field-grid > div.grid-cols-2 > dt');
   readonly usageValues = this.locatorForAll('.usage dl.hlm-field-grid > div.grid-cols-2 > dt + dd');
   readonly countNotice = this.locatorFor('.projects [data-project-count]');
+}
+
+class ProjectDialogHarness extends ComponentHarness {
+  static hostSelector = '[role="dialog"]';
+  readonly text = async () => (await this.host()).text();
+  readonly projectLink = this.locatorFor('a');
 }
 
 const project: ProjectDto = {
@@ -162,6 +169,28 @@ describe('OrgOverviewPage', () => {
     expect(text).toContain('Period: 2026-11');
     expect(text).toContain('Results');
     expect(text).toMatch(/AI tokens\s*0/);
+    expect(await (await harness.aiUsage()).hasClass('mt-(--eg-space-5)')).toBe(true);
+  });
+
+  it('opens project details from a named icon button without fetching extra data', async () => {
+    projects.listProjects.mockResolvedValue({ items: [project], next_cursor: null });
+    const fixture = TestBed.createComponent(OrgOverviewPage);
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, OverviewHarness);
+    const [action] = await harness.projectActions();
+    if (!action) throw new Error('Expected the loaded project action');
+    expect(await action.getAttribute('aria-label')).toBe('View project Shop');
+    expect(await action.getAttribute('type')).toBe('button');
+    await action.click();
+    const dialog =
+      await TestbedHarnessEnvironment.documentRootLoader(fixture).getHarness(ProjectDialogHarness);
+    expect(await dialog.text()).toContain('Shop');
+    expect(await dialog.text()).toContain('p1');
+    expect(await (await dialog.projectLink()).getAttribute('href')).toBe(
+      '/orgs/o1/projects/p1/overview',
+    );
+    expect(await (await dialog.projectLink()).text()).toBe('Open project');
+    expect(projects.listProjects).toHaveBeenCalledTimes(1);
+    expect(projects.listRuns).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -256,7 +285,7 @@ describe('OrgOverviewPage', () => {
     expect(await harness.text()).toContain('Latest decision');
   });
 
-  it('keeps the project name and View link but hides forbidden run facts and retry', async () => {
+  it('keeps the project name and View button but hides forbidden run facts and retry', async () => {
     grants.set(new Set(['project:read', 'run:read', 'decision:read']));
     projects.listProjects.mockResolvedValue({ items: [project], next_cursor: null });
     projects.listRuns.mockRejectedValue(
@@ -265,7 +294,7 @@ describe('OrgOverviewPage', () => {
     const fixture = TestBed.createComponent(OrgOverviewPage);
     const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, OverviewHarness);
     expect(await harness.text()).toContain('Shop');
-    expect(await harness.projectLinks()).toHaveLength(1);
+    expect(await harness.projectActions()).toHaveLength(1);
     expect(await harness.decisions()).toHaveLength(0);
     expect(await harness.retryButtons()).toHaveLength(0);
     expect(await harness.text()).not.toContain('Latest run (UTC)');
