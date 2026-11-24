@@ -24,13 +24,13 @@ for (const locale of LOCALES) {
 
   test(`catalog filters survive reload and browser back/forward (${locale})`, async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 900 });
-    await page.goto(withVariants(base, ['?cursor=opaque-catalog&limit=25']));
+    await page.goto(withVariants(base, ['?cursor=opaque-catalog&limit=50']));
     await expect(page.locator(ROWS)).toHaveCount(2);
     await page.locator('#catalog-search').fill('checkout');
     await page.locator('[data-catalog-apply]').click();
     await expect(page).toHaveURL(/q=checkout/);
     expect(new URL(page.url()).searchParams.get('cursor')).toBe('opaque-catalog');
-    expect(new URL(page.url()).searchParams.get('limit')).toBe('25');
+    expect(new URL(page.url()).searchParams.get('limit')).toBe('50');
     await expect(page.locator(ROWS)).toHaveCount(1);
     await page.locator('#catalog-status').click();
     await page.getByRole('option', { name: labels.active, exact: true }).click();
@@ -41,7 +41,7 @@ for (const locale of LOCALES) {
     expect(new URL(page.url()).searchParams.get('framework')).toBe('playwright');
     expect(new URL(page.url()).searchParams.get('q')).toBe('checkout');
     expect(new URL(page.url()).searchParams.has('cursor')).toBe(false);
-    expect(new URL(page.url()).searchParams.get('limit')).toBe('25');
+    expect(new URL(page.url()).searchParams.get('limit')).toBe('50');
     await expect(page.locator(ROWS)).toHaveCount(1);
     await page.reload();
     await expect(page.locator('#catalog-status')).toContainText(labels.active);
@@ -133,10 +133,20 @@ for (const locale of LOCALES) {
   }) => {
     await page.goto(withVariants(base, ['?fixture.variant.listCases=empty']));
     await expect(page.locator('app-empty-pattern')).toBeVisible();
-    await expect(page.locator('[data-catalog-load-more]')).toHaveCount(0);
+    await expect(page.locator('app-data-table-pager [data-page="next"]')).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+    await expect(page.locator('app-data-table-pager [data-page="previous"]')).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
     await page.goto(withVariants(base, ['?q=no-such-identity']));
     await expect(page.locator('app-empty-pattern')).toBeVisible();
-    await expect(page.locator('[data-catalog-load-more]')).toBeVisible();
+    await expect(page.locator('app-data-table-pager [data-page="next"]')).toHaveAttribute(
+      'aria-disabled',
+      'false',
+    );
     await page.goto(withVariants(base, ['?fixture.variant.listCases=unavailable']));
     await expect(page.locator('app-retry-after')).toBeVisible();
     await expect(page.locator('app-case-list-table')).toHaveCount(0);

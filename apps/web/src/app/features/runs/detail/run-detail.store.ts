@@ -3,7 +3,7 @@ import { patchState, signalStore, withComputed, withMethods, withState } from '@
 import type { EvidenceRevision, RunStateDto } from '@evidgate/sdk';
 import { RunsDataService } from '../../../core/data/runs-data.service';
 import { ApiRequestError, isApiRequestError, type ApiError } from '../../../core/http/api-error';
-import { takeKeysetPage, type KeysetRefusals } from '../../../shared/keyset-walk';
+import { takeKeysetPage } from '../../../shared/keyset-walk';
 import { RunDataService } from '../data/run-data.service';
 import { withRunRefresh } from '../actions/cancel/with-run-refresh.feature';
 import { toDecisionCandidate } from './decision/decision-mapper';
@@ -21,8 +21,8 @@ import {
   type RevisionsStatus,
 } from './revision-walk';
 
-/** Rows per attempts request: the contract's maximum, so a normal run is one read. */
-export const ATTEMPTS_PAGE_LIMIT = 200;
+/** Attempts use the shared pager's default server page size. */
+export const ATTEMPTS_PAGE_LIMIT = 20;
 
 export type AttemptsStatus = 'idle' | 'loading' | 'ready' | 'error';
 export type RunDetailStatus = 'idle' | 'loading' | 'ready' | 'not-found' | 'forbidden' | 'error';
@@ -44,9 +44,11 @@ interface RunDetailState {
   attempts: AttemptRow[] | null;
   attemptsStatus: AttemptsStatus;
   attemptsError: ApiError | null;
-  /** The opaque `next_cursor` of the last page; `null` once the walk is complete or refused. */
+  /** Opaque next cursor for the currently accepted attempts page. */
   attemptsCursor: string | null;
   attemptsLoadingMore: boolean;
+  attemptsPage: number;
+  attemptsPageSize: number;
   /** Loaded revision pages in server order (newest first), or `null` before the first answer. */
   revisions: EvidenceRevision[] | null;
   revisionsStatus: RevisionsStatus;
@@ -78,11 +80,7 @@ function toApiError(failure: unknown): ApiError {
 /** The decision region with no acceptable live answer; its copy is neutral and carries no data. */
 const UNAVAILABLE: DecisionViewModel = { kind: 'unavailable', cause: 'error' };
 
-/**
- * The two ways the attempts walk reads itself into a loop, refused typed rather than as a plain
- * `Error`: `toApiError` would reduce that to the blank `UNRESOLVED_FAILURE`, and neither shape is
- * retryable. The cursor is dropped with the failure, so Load more cannot re-request it.
- */
+/** A repeated forward cursor must not leave an endless Next action. */
 const ATTEMPTS_CURSOR_REPEATED: ApiError = {
   kind: 'unexpected',
   status: 0,
@@ -93,25 +91,6 @@ const ATTEMPTS_CURSOR_REPEATED: ApiError = {
   details: [],
   retryAfterSeconds: null,
 };
-const ATTEMPTS_PAGE_WITHOUT_NEW_ROWS: ApiError = {
-  kind: 'unexpected',
-  status: 0,
-  code: 'attempts_page_without_new_rows',
-  message: 'The attempts list returned a follow-up page with no new attempts.',
-  requestId: null,
-  retryable: false,
-  details: [],
-  retryAfterSeconds: null,
-};
-/** The pair one walk step refuses with, so a code and its copy are only ever authored here. */
-const ATTEMPTS_REFUSALS: KeysetRefusals = {
-  cursorRepeated: ATTEMPTS_CURSOR_REPEATED,
-  pageWithoutNewRows: ATTEMPTS_PAGE_WITHOUT_NEW_ROWS,
-};
-const ATTEMPTS_WALK_REFUSALS: ReadonlySet<string> = new Set([
-  ATTEMPTS_REFUSALS.cursorRepeated.code,
-  ATTEMPTS_REFUSALS.pageWithoutNewRows.code,
-]);
 
 /** Page-local, newest-read-wins. Neither a failed read nor route reuse retains old run data. */
 export const RunDetailStore = signalStore(
@@ -129,6 +108,8 @@ export const RunDetailStore = signalStore(
     attemptsError: null,
     attemptsCursor: null,
     attemptsLoadingMore: false,
+    attemptsPage: 1,
+    attemptsPageSize: ATTEMPTS_PAGE_LIMIT,
     revisions: null,
     revisionsStatus: 'idle',
     revisionsError: null,
@@ -172,8 +153,8 @@ export const RunDetailStore = signalStore(
     let attemptsGeneration = 0;
     let decisionGeneration = 0;
     let revisionsGeneration = 0;
-    /** `attempt_id`s already shown; only an accepted page updates it, `load()` clears it. */
-    let loadedAttemptIds = new Set<string>();
+    let attemptCursors: (string | null)[] = [null];
+    let pendingAttempt: { page: number; cursor: string | null } | null = null;
     /** `revision_no`s already shown; only an accepted page updates it, `load()` clears it. */
     let loadedRevisionNumbers = new Set<number>();
     /**
@@ -223,37 +204,37 @@ export const RunDetailStore = signalStore(
         settleDefaultPin();
       }
     }
-    /** One read of the attempts keyset: the first page replaces, a later page appends. */
-    async function readAttempts(runId: string, cursor: string | null): Promise<void> {
+    /** Commit the page only on success; a failed navigation keeps the previous rows and intent. */
+    async function readAttempts(
+      runId: string,
+      target: { page: number; cursor: string | null },
+    ): Promise<void> {
+      if (store.attemptsLoadingMore()) return;
       const read = ++attemptsGeneration;
-      const first = cursor === null;
-      patchState(
-        store,
-        first
-          ? { attempts: null, attemptsStatus: 'loading', attemptsError: null, attemptsCursor: null }
-          : { attemptsLoadingMore: true, attemptsError: null },
-      );
+      pendingAttempt = target;
+      const first = store.attempts() === null;
+      const history = [...attemptCursors.slice(0, target.page - 1), target.cursor];
+      patchState(store, {
+        attemptsStatus: first ? 'loading' : 'ready',
+        attemptsLoadingMore: true,
+        attemptsError: null,
+      });
       try {
         const page = await data.listAttempts(runId, {
-          limit: ATTEMPTS_PAGE_LIMIT,
-          ...(cursor === null ? {} : { cursor }),
+          limit: store.attemptsPageSize(),
+          ...(target.cursor === null ? {} : { cursor: target.cursor }),
         });
         if (read !== attemptsGeneration) return;
-        const step = takeKeysetPage({
-          cursor,
-          items: page.items,
-          nextCursor: page.next_cursor,
-          seen: loadedAttemptIds,
-          keyOf: (attempt) => attempt.attempt_id,
-          refusals: ATTEMPTS_REFUSALS,
-        });
-        if (step.outcome === 'refused') throw new ApiRequestError(step.error);
-        loadedAttemptIds = step.seen;
-        const rows = step.fresh.map(toAttemptRow);
+        if (page.next_cursor !== null && history.includes(page.next_cursor)) {
+          throw new ApiRequestError(ATTEMPTS_CURSOR_REPEATED);
+        }
+        attemptCursors = history;
+        pendingAttempt = null;
         patchState(store, {
-          attempts: first ? rows : [...(store.attempts() ?? []), ...rows],
+          attempts: page.items.map(toAttemptRow),
           attemptsStatus: 'ready',
-          attemptsCursor: step.nextCursor,
+          attemptsPage: target.page,
+          attemptsCursor: page.next_cursor,
           attemptsLoadingMore: false,
         });
       } catch (failure: unknown) {
@@ -263,8 +244,7 @@ export const RunDetailStore = signalStore(
           attemptsStatus: first ? 'error' : 'ready',
           attemptsError: error,
           attemptsLoadingMore: false,
-          // A refused walk ends here: the rows stay, and Load more goes away with the cursor.
-          ...(ATTEMPTS_WALK_REFUSALS.has(error.code) ? { attemptsCursor: null } : {}),
+          ...(error.code === ATTEMPTS_CURSOR_REPEATED.code ? { attemptsCursor: null } : {}),
         });
       }
     }
@@ -358,7 +338,8 @@ export const RunDetailStore = signalStore(
         ++decisionGeneration;
         ++revisionsGeneration;
         store.resetRelease();
-        loadedAttemptIds = new Set<string>();
+        attemptCursors = [null];
+        pendingAttempt = null;
         loadedRevisionNumbers = new Set<number>();
         explicitPin = null;
         pinSource = null;
@@ -376,6 +357,8 @@ export const RunDetailStore = signalStore(
           attemptsError: null,
           attemptsCursor: null,
           attemptsLoadingMore: false,
+          attemptsPage: 1,
+          attemptsPageSize: ATTEMPTS_PAGE_LIMIT,
           revisions: null,
           revisionsStatus: 'idle',
           revisionsError: null,
@@ -393,7 +376,7 @@ export const RunDetailStore = signalStore(
           patchState(store, { run, manifest: manifestFromRun(run), status: 'ready' });
           const firstRelease = run.releases?.[0];
           if (firstRelease) void store.selectRelease(firstRelease.release_id);
-          void readAttempts(runId, null);
+          void readAttempts(runId, { page: 1, cursor: null });
         } catch (failure: unknown) {
           if (read !== generation) return;
           const error = toApiError(failure);
@@ -421,17 +404,32 @@ export const RunDetailStore = signalStore(
         const run = store.run();
         if (run !== null) await readDecision(run.run_id);
       },
-      /** Re-read the first attempts page after a failure; the run itself is not re-read. */
       async retryAttempts(): Promise<void> {
         const run = store.run();
-        if (run !== null) await readAttempts(run.run_id, null);
+        if (run !== null && pendingAttempt !== null) await readAttempts(run.run_id, pendingAttempt);
       },
-      /** Follow `next_cursor` once; never loops, and refuses while a read is in flight. */
-      async loadMoreAttempts(): Promise<void> {
+      async nextAttempts(): Promise<void> {
         const run = store.run();
         const cursor = store.attemptsCursor();
-        if (run === null || cursor === null || store.attemptsLoadingMore()) return;
-        await readAttempts(run.run_id, cursor);
+        if (run === null || cursor === null) return;
+        await readAttempts(run.run_id, { page: store.attemptsPage() + 1, cursor });
+      },
+      async previousAttempts(): Promise<void> {
+        const run = store.run();
+        const page = store.attemptsPage() - 1;
+        if (run === null || page < 1) return;
+        await readAttempts(run.run_id, { page, cursor: attemptCursors[page - 1] ?? null });
+      },
+      async setAttemptsPageSize(size: number): Promise<void> {
+        const run = store.run();
+        if (run === null || ![20, 50, 100].includes(size) || size === store.attemptsPageSize()) return;
+        ++attemptsGeneration;
+        attemptCursors = [null];
+        patchState(store, {
+          attempts: null, attemptsPage: 1, attemptsPageSize: size,
+          attemptsCursor: null, attemptsLoadingMore: false,
+        });
+        await readAttempts(run.run_id, { page: 1, cursor: null });
       },
       /**
        * Apply the URL's pin. An explicit positive revision always wins; its removal re-derives the

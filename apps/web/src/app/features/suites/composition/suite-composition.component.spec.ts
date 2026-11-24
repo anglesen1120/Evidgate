@@ -15,6 +15,7 @@ import { mapApiError } from '../../../core/http/error-mapper';
 import { CopyableIdentifierHarness } from '../../../shared/ui/values/values.harness';
 import { routes } from '../suites.routes';
 import { SuiteCompositionComponent } from './suite-composition.component';
+import { SuiteCompositionHarness } from './suite-composition.harness';
 import {
   gridRevision,
   readyRevision as revision,
@@ -222,35 +223,27 @@ describe('SuiteCompositionComponent', () => {
     expect(root.querySelector('[data-testid="suite-members-more"]')).toBeNull();
   });
 
-  it('lists an oversized grid flat in chunks of 200 and keeps focus on Show more', async () => {
+  it('pages an oversized grid flat without changing its member facts or layout decision', async () => {
     getRevision.mockResolvedValue(gridRevision(60, 60));
     const { root, harness } = await open();
-    const flat = root.querySelector('[data-testid="suite-members-flat"]');
-
-    expect(root.querySelector('[data-testid="suite-matrix"]')).toBeNull();
-    expect(root.querySelector('[data-testid="suite-flat-note"]')?.textContent).toContain(
-      'flat table',
+    const page = await TestbedHarnessEnvironment.loader(harness.fixture).getHarness(
+      SuiteCompositionHarness,
     );
+    const flat = root.querySelector('[data-testid="suite-members-flat"]');
+    expect(root.querySelector('[data-testid="suite-matrix"]')).toBeNull();
+    expect(root.querySelector('[data-testid="suite-flat-note"]')?.textContent).toContain('flat table');
     expect(flat?.querySelectorAll('thead th')).toHaveLength(5);
-    expect(flat?.querySelectorAll('tbody tr')).toHaveLength(200);
-    const shown = root.querySelector('[data-testid="suite-members-shown"]');
-    expect(shown?.getAttribute('role')).toBe('status');
-    expect(shown?.textContent).toContain('Showing 200 of 3600 members');
+    expect(await page.flatRows()).toHaveLength(20);
+    expect(await (await page.summary()).text()).toBe('1–20 of 3,600');
     const first = flat?.querySelector('tbody tr');
     expect(first?.textContent).toContain('case-000');
     expect(first?.textContent).toContain('column=0');
     expect(first?.textContent).toContain('Required');
-    expect(first?.querySelector('[data-suite-flat-member-id]')?.textContent).toBe('member-0-0');
-
-    const more = root.querySelector<HTMLButtonElement>('[data-testid="suite-members-more"]');
-    expect(more?.tagName).toBe('BUTTON');
-    more?.focus();
-    more?.click();
-    harness.fixture.detectChanges();
-
-    expect(flat?.querySelectorAll('tbody tr')).toHaveLength(400);
-    expect(shown?.textContent).toContain('Showing 400 of 3600 members');
-    expect(document.activeElement).toBe(more);
+    expect((await page.ids())[0]).toBe('member-0-0');
+    await (await page.next()).click();
+    expect(await page.flatRows()).toHaveLength(20);
+    expect(await (await page.summary()).text()).toBe('21–40 of 3,600');
+    expect((await page.ids())[0]).toBe('member-0-20');
   });
 
   it('chunks a long dependency list and tracks each row by both member ids', async () => {
@@ -288,20 +281,22 @@ describe('SuiteCompositionComponent', () => {
     ).toEqual(['parent-200', 'child-200']);
   });
 
-  it('lists every member of an oversized sparse grid that fits one chunk, with no control', async () => {
-    getRevision.mockResolvedValue(sparseGridRevision(61, 41, 200));
-    const { root } = await open();
-    const flat = root.querySelector('[data-testid="suite-members-flat"]');
-
-    // The grid is too large for a matrix, yet the member list is not chunked: the table must still
-    // render every member, because the layout decision is about cells, not about the member count.
+  it('keeps the flat layout for a sparse oversized grid even when one supported page fits it', async () => {
+    getRevision.mockResolvedValue(sparseGridRevision(61, 41, 61));
+    const { root, harness } = await open();
+    const page = await TestbedHarnessEnvironment.loader(harness.fixture).getHarness(
+      SuiteCompositionHarness,
+    );
+    await page.chooseSize(100);
     expect(root.querySelector('[data-testid="suite-flat-note"]')).not.toBeNull();
-    expect(flat?.querySelectorAll('tbody tr')).toHaveLength(200);
-    expect(root.querySelector('[data-testid="suite-members-shown"]')).toBeNull();
-    expect(root.querySelector('[data-testid="suite-members-more"]')).toBeNull();
+    expect(await page.flatRows()).toHaveLength(61);
+    expect(await (await page.summary()).text()).toBe('1–61 of 61');
+    expect(await (await page.previous()).getProperty('disabled')).toBe(true);
+    expect(await (await page.next()).getProperty('disabled')).toBe(true);
+    expect(root.querySelector('[data-testid="suite-matrix"]')).toBeNull();
   });
 
-  it('restarts both chunk windows when another oversized revision opens', async () => {
+  it('restarts the member page and dependency chunk when another oversized revision opens', async () => {
     const next = {
       ...gridRevision(60, 60),
       id: '018f0000-0000-7000-8000-00000000c901',
@@ -312,13 +307,13 @@ describe('SuiteCompositionComponent', () => {
     };
     getRevision.mockResolvedValue(gridRevision(60, 60));
     const { harness, root } = await open();
-    const memberRows = () => root.querySelectorAll('[data-testid="suite-members-flat"] tbody tr');
+    const page = await TestbedHarnessEnvironment.loader(harness.fixture).getHarness(
+      SuiteCompositionHarness,
+    );
     const dependencyRows = () => root.querySelectorAll('.dependencies li');
-    expect(memberRows()).toHaveLength(200);
-
-    root.querySelector<HTMLButtonElement>('[data-testid="suite-members-more"]')?.click();
-    harness.fixture.detectChanges();
-    expect(memberRows()).toHaveLength(400);
+    expect(await page.flatRows()).toHaveLength(20);
+    await (await page.next()).click();
+    expect(await (await page.summary()).text()).toBe('21–40 of 3,600');
 
     getRevision.mockResolvedValue(next);
     await harness.navigateByUrl(
@@ -328,36 +323,26 @@ describe('SuiteCompositionComponent', () => {
     await harness.fixture.whenStable();
     harness.fixture.detectChanges();
 
-    // A new revision starts at one chunk again instead of inheriting how far the last one was
-    // opened; the dependency list, chunked for the first time here, does the same.
-    expect(memberRows()).toHaveLength(200);
+    expect(await page.flatRows()).toHaveLength(20);
+    expect(await (await page.summary()).text()).toBe('1–20 of 3,600');
     expect(dependencyRows()).toHaveLength(200);
   });
 
-  it('keeps the exhausted member control in place and makes its last press a no-op', async () => {
-    getRevision.mockResolvedValue(sparseGridRevision(61, 41, 201));
-    const { root, harness } = await open();
-    const rows = () => root.querySelectorAll('[data-testid="suite-members-flat"] tbody tr');
-
-    expect(rows()).toHaveLength(200);
-    const shown = root.querySelector('[data-testid="suite-members-shown"]');
-    expect(shown?.textContent).toContain('Showing 200 of 201 members');
-    const more = root.querySelector<HTMLButtonElement>('[data-testid="suite-members-more"]');
-    expect(more?.getAttribute('aria-disabled')).toBe('false');
-    more?.focus();
-    more?.click();
-    harness.fixture.detectChanges();
-
-    expect(rows()).toHaveLength(201);
-    expect(shown?.textContent).toContain('Showing 201 of 201 members');
-    expect(more?.isConnected).toBe(true);
-    expect(more?.getAttribute('aria-disabled')).toBe('true');
-    expect(document.activeElement).toBe(more);
-
-    more?.click();
-    harness.fixture.detectChanges();
-    expect(rows()).toHaveLength(201);
-    expect(document.activeElement).toBe(more);
+  it('bounds the last page and supports backward movement without accumulating rows', async () => {
+    getRevision.mockResolvedValue(sparseGridRevision(61, 41, 61));
+    const { harness } = await open();
+    const page = await TestbedHarnessEnvironment.loader(harness.fixture).getHarness(
+      SuiteCompositionHarness,
+    );
+    await page.chooseSize(50);
+    await (await page.next()).click();
+    expect(await page.flatRows()).toHaveLength(11);
+    expect(await (await page.summary()).text()).toBe('51–61 of 61');
+    expect(await (await page.next()).getProperty('disabled')).toBe(true);
+    await (await page.next()).click();
+    expect(await page.flatRows()).toHaveLength(11);
+    await (await page.previous()).click();
+    expect(await (await page.summary()).text()).toBe('1–50 of 61');
   });
 
   it('reports an address naming no revision as not found instead of loading forever', async () => {

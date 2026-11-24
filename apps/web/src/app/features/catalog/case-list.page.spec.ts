@@ -126,8 +126,10 @@ describe('CaseListPage', () => {
       expect(text).toContain(row.framework);
     }
     expect(text).toContain('current.owner@example.test');
-    expect(await (await harness.loaded()).text()).toContain('2 loaded');
-    expect(await harness.more()).not.toBeNull();
+    expect(await (await harness.loaded()).text()).toContain('Loaded identities: 2');
+    expect(await (await harness.next()).getAttribute('aria-disabled')).toBe('false');
+    expect(await (await harness.previous()).getAttribute('aria-disabled')).toBe('true');
+    expect(await (await harness.pageNumber()).text()).toBe('Page 1');
     expect(CATALOG_OMITTED_COLUMNS).toEqual([
       { column: 'revision', missingField: 'CaseDto.current_revision_id' },
       { column: 'platform', missingField: 'CaseDto.platform' },
@@ -167,23 +169,24 @@ describe('CaseListPage', () => {
     expect(await harness.empty()).not.toBeNull();
     expect(await harness.text()).toContain('No test identities in this project');
     expect(await harness.table()).toBeNull();
-    expect(await harness.more()).toBeNull();
+    expect(await (await harness.next()).getAttribute('aria-disabled')).toBe('true');
+    expect(await (await harness.previous()).getAttribute('aria-disabled')).toBe('true');
   });
 
-  it('shows the local match count separately from loaded rows in the pagination footer', async () => {
+  it('shows the current-page loaded count visibly and announces its local match count', async () => {
     const { fixture, harness } = await render();
-    const footerCount = await harness.loaded();
-    expect(await footerCount.text()).not.toContain('Matches in loaded results:');
+    const loadedCount = await harness.loaded();
+    expect(await loadedCount.text()).toContain('Loaded identities: 2');
     query.next(convertToParamMap({ q: firstCase.annotation_id }));
     fixture.detectChanges();
     await fixture.whenStable();
-    expect(await footerCount.text()).toContain('2 loaded');
-    expect(await footerCount.text()).toContain('Matches in loaded results: 1');
-    expect(await harness.more()).not.toBeNull();
+    expect(await loadedCount.text()).toContain('Loaded identities: 2');
+    expect(await (await harness.summary()).text()).toContain('1 matching identities in loaded results.');
+    expect(await (await harness.next()).getAttribute('aria-disabled')).toBe('false');
     expect(list).toHaveBeenCalledTimes(1);
   });
 
-  it('searches only accumulated rows and keeps Load more available for a no-match', async () => {
+  it('searches only the current page and keeps Next available for a no-match', async () => {
     const { fixture, harness } = await render();
     const summary = await harness.summary();
     expect(await summary.getAttribute('role')).toBe('status');
@@ -194,11 +197,11 @@ describe('CaseListPage', () => {
     fixture.detectChanges();
     await fixture.whenStable();
     expect(await summary.text()).toContain('2 loaded');
-    expect(await (await harness.loaded()).text()).toContain('Matches in loaded results: 0');
+    expect(await (await harness.loaded()).text()).toContain('Loaded identities: 2');
     expect(await summary.text()).toContain('No matching identities in loaded results.');
     expect(list).toHaveBeenCalledTimes(1);
     expect(await harness.text()).toContain('No matching identities in loaded results');
-    expect(await harness.more()).not.toBeNull();
+    expect(await (await harness.next()).getAttribute('aria-disabled')).toBe('false');
     expect(await harness.table()).toBeNull();
   });
 
@@ -225,7 +228,7 @@ describe('CaseListPage', () => {
       expect(list).toHaveBeenCalledTimes(2);
       expect(list).toHaveBeenLastCalledWith(
         'project',
-        { framework: 'vitest', limit: 50 },
+        { framework: 'vitest', limit: 20 },
         expect.any(AbortSignal),
       );
       expect(await harness.loading()).not.toBeNull();
@@ -359,125 +362,123 @@ describe('CaseListPage', () => {
     expect(update).not.toHaveBeenCalled();
   });
 
-  it('appends the next cursor page, announces the count and focuses its first row', async () => {
-    const appended = {
+  it('replaces the cursor page, announces its count and retains focus on Next', async () => {
+    const nextRow = {
       ...firstCase,
-      id: 'appended-case',
-      annotation_id: 'appended-identity',
-      name: 'Appended identity',
+      id: 'next-page-case',
+      annotation_id: 'next-page-identity',
+      name: 'Next page identity',
     };
     list
       .mockResolvedValueOnce(CASE_LIST_FIXTURE)
-      .mockResolvedValueOnce({ items: [appended], next_cursor: null });
+      .mockResolvedValueOnce({ items: [nextRow], next_cursor: null });
     const { fixture, harness } = await render();
-    await (await harness.more())?.click();
+    const next = await harness.next();
+    await next.focus();
+    await next.click();
     await fixture.whenStable();
-    expect(await harness.rows()).toHaveLength(3);
-    expect(await (await harness.loaded()).text()).toContain('3 loaded');
-    expect(await (await harness.summary()).text()).toContain('3 loaded');
-    const rows = await harness.rows();
-    expect(await rows[2]?.getAttribute('data-row-id')).toBe(appended.id);
-    expect(await rows[2]?.isFocused()).toBe(true);
+    expect(await harness.rows()).toHaveLength(1);
+    expect(await (await harness.loaded()).text()).toContain('Loaded identities: 1');
+    expect(await (await harness.summary()).text()).toContain('1 loaded');
+    expect(await (await harness.pageNumber()).text()).toBe('Page 2');
+    expect(await (await harness.rows())[0]?.getAttribute('data-row-id')).toBe(nextRow.id);
+    expect(await next.isFocused()).toBe(true);
+    expect(await next.getAttribute('aria-disabled')).toBe('true');
     expect(list).toHaveBeenLastCalledWith(
       'project',
-      { cursor: CASE_LIST_FIXTURE.next_cursor, limit: 50 },
+      { cursor: CASE_LIST_FIXTURE.next_cursor, limit: 20 },
       expect.any(AbortSignal),
     );
   });
 
-  it('focuses the loaded count when local search hides every appended row', async () => {
-    const appended = {
+  it('retains pager focus when local search hides every row of the next page', async () => {
+    const nextRow = {
       ...firstCase,
-      id: 'appended-case',
-      annotation_id: 'appended-identity',
+      id: 'next-page-case',
+      annotation_id: 'next-page-identity',
       name: 'Unrelated identity',
     };
     list
       .mockResolvedValueOnce(CASE_LIST_FIXTURE)
-      .mockResolvedValueOnce({ items: [appended], next_cursor: null });
+      .mockResolvedValueOnce({ items: [nextRow], next_cursor: null });
     const { fixture, harness } = await render();
     query.next(convertToParamMap({ q: 'Checkout' }));
     fixture.detectChanges();
     await fixture.whenStable();
-    await (await harness.more())?.click();
+    const next = await harness.next();
+    await next.focus();
+    await next.click();
     await fixture.whenStable();
-    expect(await harness.rows()).toHaveLength(1);
-    expect(await (await harness.loaded()).text()).toContain('3 loaded');
-    expect(await (await harness.loaded()).isFocused()).toBe(true);
-    expect(await (await harness.summary()).text()).toContain('3 loaded');
+    expect(await harness.rows()).toHaveLength(0);
+    expect(await harness.empty()).not.toBeNull();
+    expect(await (await harness.loaded()).text()).toContain('Loaded identities: 1');
+    expect(await next.isFocused()).toBe(true);
+    expect(await (await harness.summary()).text()).toContain('1 loaded');
+    expect(await (await harness.pageNumber()).text()).toBe('Page 2');
     expect(list).toHaveBeenCalledTimes(2);
   });
 
-  it('resets accumulated rows and the cursor when a server filter changes', async () => {
-    const appended = { ...firstCase, id: 'appended-case', annotation_id: 'appended-identity' };
+  it('resets the current page and cursor when a server filter changes', async () => {
+    const nextPageRow = { ...firstCase, id: 'next-page-case', annotation_id: 'next-page-identity' };
     list
       .mockResolvedValueOnce(CASE_LIST_FIXTURE)
-      .mockResolvedValueOnce({ items: [appended], next_cursor: 'next-page' })
+      .mockResolvedValueOnce({ items: [nextPageRow], next_cursor: 'next-page' })
       .mockResolvedValueOnce({ items: [firstCase], next_cursor: null });
     const { fixture, harness } = await render();
-    await (await harness.more())?.click();
+    await (await harness.next()).click();
     query.next(convertToParamMap({ framework: 'vitest' }));
     fixture.detectChanges();
     await fixture.whenStable();
     expect(await harness.rows()).toHaveLength(1);
-    expect(await (await harness.loaded()).text()).toContain('1 loaded');
+    expect(await (await harness.loaded()).text()).toContain('Loaded identities: 1');
     expect(list).toHaveBeenLastCalledWith(
       'project',
-      { framework: 'vitest', limit: 50 },
+      { framework: 'vitest', limit: 20 },
       expect.any(AbortSignal),
     );
   });
 
-  it('retains accumulated rows and offers a retry when loading another page fails', async () => {
+  it('retains the current page and offers an honest retry when another page fails', async () => {
+    const nextRow = { ...firstCase, id: 'retry-case', annotation_id: 'retry-identity' };
     list
       .mockResolvedValueOnce(CASE_LIST_FIXTURE)
-      .mockRejectedValueOnce(new ApiRequestError(CATALOG_FAILURE));
+      .mockRejectedValueOnce(new ApiRequestError(CATALOG_FAILURE))
+      .mockResolvedValueOnce({ items: [nextRow], next_cursor: null });
     const { harness } = await render();
-    await (await harness.more())?.click();
+    await (await harness.next()).click();
     expect(await harness.rows()).toHaveLength(2);
-    expect(await (await harness.loaded()).text()).toContain('2 loaded');
-    expect(await (await harness.pageError())?.text()).toContain('Loaded results are unchanged');
-    expect(await (await harness.pageError())?.text()).toContain('Retry loading more');
+    expect(await (await harness.loaded()).text()).toContain('Loaded identities: 2');
+    expect(await (await harness.pageNumber()).text()).toBe('Page 1');
+    expect(await (await harness.pageError())?.text()).toContain('The displayed page is unchanged');
+    expect(await (await harness.retryPage()).text()).toContain('Retry page');
+    await (await harness.retryPage()).click();
+    expect(await harness.rows()).toHaveLength(1);
+    expect(await (await harness.rows())[0]?.getAttribute('data-row-id')).toBe(nextRow.id);
+    expect(await (await harness.pageNumber()).text()).toBe('Page 2');
+    expect(await harness.pageError()).toBeNull();
   });
 
-  it('resets accumulated rows and persists page size without retaining a cursor', async () => {
+  it('resets the current page and persists page size without retaining a cursor', async () => {
     const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
-    const appended = { ...firstCase, id: 'appended-case', annotation_id: 'appended-identity' };
+    const nextPageRow = { ...firstCase, id: 'next-page-case', annotation_id: 'next-page-identity' };
     list
       .mockResolvedValueOnce(CASE_LIST_FIXTURE)
-      .mockResolvedValueOnce({ items: [appended], next_cursor: 'more' })
+      .mockResolvedValueOnce({ items: [nextPageRow], next_cursor: 'more' })
       .mockResolvedValue(CASE_LIST_FIXTURE);
     const { harness } = await render();
-    await (await harness.more())?.click();
-    expect(await harness.rows()).toHaveLength(3);
-    await harness.choosePageSize(25);
+    await (await harness.next()).click();
+    expect(await harness.rows()).toHaveLength(1);
+    expect(await (await harness.pageNumber()).text()).toBe('Page 2');
+    await harness.choosePageSize(50);
     expect(await harness.rows()).toHaveLength(2);
-    expect(list).toHaveBeenLastCalledWith('project', { limit: 25 }, expect.any(AbortSignal));
+    expect(await (await harness.pageNumber()).text()).toBe('Page 1');
+    expect(list).toHaveBeenLastCalledWith('project', { limit: 50 }, expect.any(AbortSignal));
     expect(navigate).toHaveBeenCalledWith(
       [],
       expect.objectContaining({
         queryParamsHandling: 'merge',
-        queryParams: { limit: 25, cursor: null },
+        queryParams: { limit: 50, cursor: null },
       }),
     );
-  });
-
-  it('uses the shared virtual viewport above 200 accumulated rows', async () => {
-    vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(1280);
-    list.mockResolvedValue({
-      items: Array.from({ length: 201 }, (_, index) => ({
-        ...firstCase,
-        id: `case-${index}`,
-        annotation_id: `identity-${index}`,
-        name: `Identity ${index}`,
-      })),
-      next_cursor: null,
-    });
-    const { harness } = await render();
-    expect(await harness.viewport()).not.toBeNull();
-    const rows = await harness.rows();
-    expect(rows.length).toBeGreaterThan(0);
-    expect(rows.length).toBeLessThan(201);
-    expect(await (await harness.loaded()).text()).toContain('201 loaded');
   });
 });

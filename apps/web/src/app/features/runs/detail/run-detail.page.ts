@@ -319,8 +319,14 @@ export class RunDetailPage {
   protected retryAttempts(): void {
     void this.store.retryAttempts();
   }
-  protected loadMoreAttempts(): void {
-    void this.store.loadMoreAttempts();
+  protected nextAttempts(): void {
+    void this.store.nextAttempts();
+  }
+  protected previousAttempts(): void {
+    void this.store.previousAttempts();
+  }
+  protected setAttemptsPageSize(size: number): void {
+    void this.store.setAttemptsPageSize(size);
   }
   protected retryDecision(): void {
     if (this.decisionRetryEligible()) void this.store.refreshDecision();

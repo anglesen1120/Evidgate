@@ -1,3 +1,4 @@
+import { ComponentHarness } from '@angular/cdk/testing';
 import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { TestBed } from '@angular/core/testing';
 import { RouterTestingHarness } from '@angular/router/testing';
@@ -11,10 +12,21 @@ import {
   configureRunDetailTestBed,
   get,
   listAttempts,
+  listEvidenceRevisions,
   open,
   refRun,
   run,
 } from './run-detail.page.test-support';
+
+class DetailPagingHarness extends ComponentHarness {
+  static hostSelector = 'app-run-detail-page';
+  readonly next = this.locatorFor('app-attempts-table [data-page="next"]');
+  readonly previous = this.locatorFor('app-attempts-table [data-page="previous"]');
+  readonly summary = this.locatorFor('app-attempts-table app-data-table-pager [role="status"]');
+  readonly rows = this.locatorForAll('app-attempts-table [data-attempt-row]');
+  readonly producers = this.locatorFor('app-producer-status-table');
+  readonly evidence = this.locatorFor('app-evidence-panel');
+}
 
 describe('RunDetailPage', () => {
   provideLayoutTestStubs();
@@ -104,7 +116,7 @@ describe('RunDetailPage', () => {
   });
   it('localizes normalized attempt statuses, preserves reporter strings and groups retries without a decision', async () => {
     const { root } = await open();
-    expect(listAttempts).toHaveBeenCalledExactlyOnceWith(run.run_id, { limit: 200 });
+    expect(listAttempts).toHaveBeenCalledExactlyOnceWith(run.run_id, { limit: 20 });
     const attempts = root.querySelector('app-attempts-table')!;
     const rows = [...attempts.querySelectorAll('[data-attempt-row]')];
     expect(rows).toHaveLength(attemptPage.items.length);
@@ -117,6 +129,27 @@ describe('RunDetailPage', () => {
     expect(attempts.querySelector('[data-attempts-healing-unavailable]')).not.toBeNull();
     expect(attempts.querySelector('[data-attempts-unavailable]')).toBeNull();
     expect(root.textContent).not.toContain('PASS');
+  });
+  it('wires independent attempts next and previous without resetting producers or revisions', async () => {
+    const first = { items: attemptPage.items.slice(0, 2), next_cursor: 'attempt-tail' };
+    const last = { items: attemptPage.items.slice(2), next_cursor: null };
+    listAttempts.mockResolvedValueOnce(first).mockResolvedValueOnce(last).mockResolvedValueOnce(first);
+    const { harness } = await open();
+    const table = await TestbedHarnessEnvironment.loader(harness.fixture).getHarness(DetailPagingHarness);
+    const producerText = await (await table.producers()).text();
+    const evidenceText = await (await table.evidence()).text();
+    expect(await table.rows()).toHaveLength(first.items.length);
+    await (await table.next()).click();
+    expect(await (await table.summary()).text()).toBe('Page 2');
+    expect(await table.rows()).toHaveLength(last.items.length);
+    expect(listAttempts).toHaveBeenLastCalledWith(run.run_id, { limit: 20, cursor: 'attempt-tail' });
+    expect(await (await table.producers()).text()).toBe(producerText);
+    expect(await (await table.evidence()).text()).toBe(evidenceText);
+    await (await table.previous()).click();
+    expect(await (await table.summary()).text()).toBe('Page 1');
+    expect(await table.rows()).toHaveLength(first.items.length);
+    expect(get).toHaveBeenCalledTimes(1);
+    expect(listEvidenceRevisions).toHaveBeenCalledTimes(1);
   });
   it('renders an empty attempts read as the empty state, not unavailable', async () => {
     listAttempts.mockResolvedValueOnce({ items: [], next_cursor: null });

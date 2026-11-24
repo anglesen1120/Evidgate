@@ -129,11 +129,6 @@
           <p class="text-muted-foreground" data-testid="suite-flat-note">
             {{ copy.flatMatrixNote }}
           </p>
-          @if (view.flatMembers.length > listChunk) {
-            <p role="status" data-testid="suite-members-shown">
-              {{ copy.membersShown(visibleMembers().length, view.flatMembers.length) }}
-            </p>
-          }
           <div
             hlmTableContainer
             class="min-w-0 max-w-full overflow-x-auto overscroll-x-contain focus-visible:outline-[length:var(--eg-focus-width)] focus-visible:outline-ring focus-visible:outline-offset-[var(--eg-focus-offset)]"
@@ -165,7 +160,7 @@
                 </tr>
               </thead>
               <tbody hlmTBody role="rowgroup" class="max-md:grid max-md:gap-3">
-                @for (member of visibleMembers(); track member.memberId) {
+                @for (member of pageMembers(); track member.memberId) {
                   <tr
                     hlmTr
                     role="row"
@@ -223,19 +218,16 @@
               </tbody>
             </table>
           </div>
-          @if (view.flatMembers.length > listChunk) {
-            <button
-              hlmBtn
-              [variant]="'outline'"
-              type="button"
-              class="max-w-full justify-self-start aria-disabled:cursor-default aria-disabled:text-muted-foreground"
-              data-testid="suite-members-more"
-              [attr.aria-disabled]="visibleMembers().length >= view.flatMembers.length"
-              (click)="showMoreMembers()"
-            >
-              {{ copy.showMore }}
-            </button>
-          }
+          <app-data-table-pager
+            [page]="memberPage()"
+            [pageSize]="pageSize()"
+            [total]="view.flatMembers.length"
+            [count]="pageMembers().length"
+            [hasNext]="memberPage() < memberPageCount()"
+            (previous)="moveMemberPage(-1)"
+            (next)="moveMemberPage(1)"
+            (pageSizeChange)="changePageSize($event)"
+          />
         } @else {
           <div
             hlmTableContainer

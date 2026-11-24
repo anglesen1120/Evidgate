@@ -1,3 +1,4 @@
+import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { provideZonelessChangeDetection, reflectComponentType } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { clearTranslations, loadTranslations } from '@angular/localize';
@@ -10,6 +11,7 @@ import { stubLayoutApis } from '../../../../shared/testing/layout.testing';
 import { evidenceHref, producerAnchorId } from '../evidence/run-evidence-anchors';
 import { producerSlotsFromRun, type ProducerSlot, type ProducerStatus } from './producer-slots';
 import { ProducerStatusTableComponent } from './producer-status-table.component';
+import { ProducerStatusTableHarness } from './producer-status-table.harness';
 
 const FINALIZED: ProducerSlot = {
   producerId: 'shard-3',
@@ -306,12 +308,12 @@ describe('ProducerStatusTableComponent', () => {
   });
 
   it('uses the shared page-flow table without a local sticky-header scroller for long producer lists', async () => {
-    const slots = Array.from({ length: 50 }, (_, index) => ({
+    const slots = Array.from({ length: 20 }, (_, index) => ({
       ...FINALIZED,
       producerId: `shard-${index}-${'long-id'.repeat(20)}`,
     }));
     const { root } = await render(slots);
-    expect(root.querySelectorAll('tr[data-row-id]')).toHaveLength(50);
+    expect(root.querySelectorAll('tr[data-row-id]')).toHaveLength(20);
     expect(root.querySelector('[data-producer-scroll] .eg-table-long')).toBeNull();
     expect(root.querySelector('[data-producer-scroll] .eg-table-sticky')).toBeNull();
     expect(root.querySelector('app-data-table')?.getAttribute('style')).toContain(
@@ -319,7 +321,7 @@ describe('ProducerStatusTableComponent', () => {
     );
     expect(root.querySelector('.eg-table-layout')).not.toBeNull();
     const identities = [...root.querySelectorAll('[data-producer-slot]')];
-    expect(identities).toHaveLength(50);
+    expect(identities).toHaveLength(20);
     expect(identities.map((identity) => identity.getAttribute('data-producer-slot'))).toEqual(
       slots.map((slot) => slot.producerId),
     );
@@ -329,40 +331,33 @@ describe('ProducerStatusTableComponent', () => {
     expect([...root.querySelectorAll('th[data-column-role="number"]')]).toHaveLength(2);
   });
 
-  // Volume cases still render real 200-row tables; retain their existing DOM-test budget.
-  it.each([200, 201])(
-    'bounds %i producers to pages of at most 200 rows',
-    async (count) => {
-      useLightweightTablePresentation();
-      const slots = Array.from({ length: count }, (_, index) => ({
-        ...FINALIZED,
-        producerId: `shard-${index}`,
-      }));
-      const { fixture, root } = await render(slots);
-      expect(root.querySelectorAll('tr[data-row-id]')).toHaveLength(200);
-      const next = root.querySelector<HTMLButtonElement>('[data-producer-next]');
-      if (count === 200) {
-        expect(next).toBeNull();
-      } else {
-        expect(next?.disabled).toBe(false);
-        next?.click();
-        await fixture.whenStable();
-        expect(root.querySelectorAll('tr[data-row-id]')).toHaveLength(1);
-        expect(root.querySelector('tr[data-row-id]')?.getAttribute('data-row-id')).toBe(
-          'shard-200',
-        );
-        expect(next?.disabled).toBe(true);
-        expect(root.querySelector('[data-producer-slot]')?.id).toBe('producer-shard-200');
-        expect(root.querySelectorAll('[data-fact]')).toHaveLength(4);
-        root.querySelector<HTMLButtonElement>('[data-producer-previous]')?.click();
-        await fixture.whenStable();
-        expect(root.querySelectorAll('tr[data-row-id]')).toHaveLength(200);
-      }
-    },
-    15_000,
-  );
+  it.each([200, 201])('bounds %i producers to supported 100-row pages', async (count) => {
+    useLightweightTablePresentation();
+    const slots = Array.from({ length: count }, (_, index) => ({
+      ...FINALIZED,
+      producerId: `shard-${index}`,
+    }));
+    const { fixture, root } = await render(slots);
+    const table = await TestbedHarnessEnvironment.harnessForFixture(
+      fixture,
+      ProducerStatusTableHarness,
+    );
+    await table.chooseSize(100);
+    expect(await table.rowIds()).toHaveLength(100);
+    await (await table.next()).click();
+    expect((await table.rowIds())[0]).toBe('shard-100');
+    if (count === 201) {
+      await (await table.next()).click();
+      expect(await table.rowIds()).toEqual(['shard-200']);
+      expect(root.querySelector('[data-producer-slot]')?.id).toBe('producer-shard-200');
+      expect(root.querySelectorAll('[data-fact]')).toHaveLength(4);
+    }
+    expect(await (await table.next()).getProperty('disabled')).toBe(true);
+    await (await table.previous()).click();
+    expect(await table.rowIds()).toHaveLength(100);
+  });
 
-  it('selects the page containing a producer fragment and preserves manual pages on polling', async () => {
+  it('selects a producer fragment page and resets on replacement data', async () => {
     useLightweightTablePresentation();
     const slots = Array.from({ length: 256 }, (_, index) => ({
       ...FINALIZED,
@@ -370,9 +365,12 @@ describe('ProducerStatusTableComponent', () => {
     }));
     const { fixture, root } = await render(slots, 'ready', null, 'producer-shard-255');
     expect(root.querySelector('#producer-shard-255')).not.toBeNull();
-    expect(root.querySelectorAll('tr[data-row-id]')).toHaveLength(56);
-    root.querySelector<HTMLButtonElement>('[data-producer-previous]')?.click();
-    await fixture.whenStable();
+    expect(root.querySelectorAll('tr[data-row-id]')).toHaveLength(16);
+    const table = await TestbedHarnessEnvironment.harnessForFixture(
+      fixture,
+      ProducerStatusTableHarness,
+    );
+    await (await table.previous()).click();
     fixture.componentRef.setInput('slots', [...slots]);
     await fixture.whenStable();
     expect(root.querySelector('#producer-shard-0')).not.toBeNull();
@@ -383,9 +381,8 @@ describe('ProducerStatusTableComponent', () => {
     useLightweightTablePresentation();
     loadTranslations({
       'runs.detail.producers.run-after-cancel-one': '1 sự kiện sau khi hủy của lượt chạy này',
-      'runs.detail.producers.previous': 'Nguồn gửi dữ liệu trước',
-      'runs.detail.producers.next': 'Nguồn gửi dữ liệu tiếp theo',
-      'runs.detail.producers.page': 'Trang {$page} / {$pages}',
+      'shared.data-table.next': 'Bản ghi tiếp theo',
+      'shared.data-table.range': '{$start}–{$end} trên {$loaded}',
     });
     const slots = Array.from({ length: 201 }, (_, index) => ({
       ...FINALIZED,
@@ -395,10 +392,10 @@ describe('ProducerStatusTableComponent', () => {
     expect(
       root.querySelector('[data-run-after-cancel] .status-pill__detail')?.textContent?.trim(),
     ).toBe('1 sự kiện sau khi hủy của lượt chạy này');
-    expect(root.querySelector('[data-producer-next]')?.textContent).toContain(
-      'Nguồn gửi dữ liệu tiếp theo',
+    expect(root.querySelector('button[data-page="next"]')?.textContent).toContain(
+      'Bản ghi tiếp theo',
     );
-    expect(root.querySelector('nav [role="status"]')?.textContent).toBe('Trang 1 / 2');
+    expect(root.querySelector('nav [role="status"]')?.textContent).toBe('1–20 trên 201');
   });
 
   it('uses the evidence-link anchor helper even for reserved characters', async () => {

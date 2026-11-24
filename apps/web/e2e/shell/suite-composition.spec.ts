@@ -28,9 +28,6 @@ const PUBLISHED = publishedFixture.body;
 const EMPTY = emptyFixture.body;
 const LARGE = largeFixture.body;
 
-/** The rows one `Show more` press appends; mirrors `LIST_CHUNK` in `suite-composition.model.ts`. */
-const LIST_CHUNK = 200;
-
 /** The review address one revision hangs off (see `dev-routes.fixtures.ts`). */
 const REVISIONS = [
   '/dev/suite-composition',
@@ -167,47 +164,56 @@ for (const locale of LOCALES) {
     await expect(page.getByTestId('suite-flat-note')).toBeVisible();
     const flat = page.getByTestId('suite-members-flat');
     const rows = flat.locator('tbody tr');
-    const shown = page.getByTestId('suite-members-shown');
+    const pager = page.locator('app-data-table-pager');
+    const shown = pager.locator('[role="status"]');
     await expect(flat).toBeVisible();
     await expect(flat.locator('thead th')).toHaveCount(5);
-    await expect(rows).toHaveCount(LIST_CHUNK);
-    // The two numbers are the only part of the count sentence both locales carry, so they are what
-    // this case reads; the sentence itself is pinned by the component spec and the i18n gate.
-    await expect(shown).toContainText(new RegExp(`\\b${LIST_CHUNK}\\b`));
-    await expect(shown).toContainText(new RegExp(`\\b${LARGE.members.length}\\b`));
+    await expect(rows).toHaveCount(20);
+    await expect(shown).toContainText('1–20');
+    await expect(shown).toContainText(String(LARGE.members.length));
     await expectNoA11yViolations(page, `suite composition flat ${locale}`);
 
-    const more = page.getByTestId('suite-members-more');
-    await more.click();
-    // One press appends a whole chunk, so the page grows to every served member and the control
-    // stays mounted (it is the focus a keyboard user just spent).
-    await expect(rows).toHaveCount(LARGE.members.length);
-    await expect(shown).toContainText(new RegExp(`\\b${LARGE.members.length}\\b`));
-    await expect(more).toBeFocused();
-    // The focused element is the pressed control, never the heading the route focused on load; the
-    // test id is locale-free, unlike the control's label.
-    expect(
-      await page.evaluate(() => document.activeElement?.getAttribute('data-testid') ?? ''),
-    ).toBe('suite-members-more');
-    await expect(more).toHaveAttribute('aria-disabled', 'true');
-    // The exhausted state is the one the load scan cannot reach: a disabled control, the full rows
-    // and the final count sentence, all after the press.
+    const next = pager.locator('button[data-page="next"]');
+    const previous = pager.locator('button[data-page="previous"]');
+    await expect(previous).toBeDisabled();
+    await next.click();
+    await expect(rows).toHaveCount(20);
+    await expect(shown).toContainText('21–40');
+    await expect(next).toBeFocused();
+    await pager.locator('hlm-select-trigger button').click();
+    await page.getByRole('option', { name: '100', exact: true }).click();
+    await expect(shown).toContainText('1–100');
+    await expect(previous).toBeDisabled();
+    const seen: string[] = [];
+    for (let offset = 0; offset < LARGE.members.length; offset += 100) {
+      if (offset > 0) await next.click();
+      const count = Math.min(100, LARGE.members.length - offset);
+      await expect(rows).toHaveCount(count);
+      await expect(shown).toContainText(`${offset + 1}–${offset + count}`);
+      seen.push(...(await flat.locator('[data-suite-flat-member-id]').allTextContents()).map(
+        (id) => id.trim(),
+      ));
+    }
+    expect(new Set(seen)).toEqual(new Set(LARGE.members.map((member) => member.id)));
+    expect(seen).toHaveLength(LARGE.members.length);
+    await expect(next).toBeDisabled();
     await expectNoA11yViolations(page, `suite composition flat exhausted ${locale}`);
   });
 
-  test(`Enter and Space activate Show more in the real browser (${locale})`, async ({ page }) => {
+  test(`Enter and Space activate the shared member pager in the real browser (${locale})`, async ({ page }) => {
     const rows = page.getByTestId('suite-members-flat').locator('tbody tr');
-    const more = page.getByTestId('suite-members-more');
+    const next = page.locator('app-data-table-pager button[data-page="next"]');
     // jsdom runs no default action for a key press, so the component spec can only prove the page
     // leaves both keys alone; this case is where the browser's own activation is observed.
     for (const key of ['Enter', 'Space']) {
       await page.goto(revisionPath(locale, 'large', LARGE.id));
       await composition(page, 'ready');
-      await expect(rows).toHaveCount(LIST_CHUNK);
-      await more.focus();
+      await expect(rows).toHaveCount(20);
+      await next.focus();
       await page.keyboard.press(key);
-      await expect(rows, `${key} pages the member list`).toHaveCount(LARGE.members.length);
-      await expect(more, `${key} leaves focus on the control`).toBeFocused();
+      await expect(rows, `${key} retains a bounded member page`).toHaveCount(20);
+      await expect(page.locator('app-data-table-pager [role="status"]')).toContainText('21–40');
+      await expect(next, `${key} leaves focus on the control`).toBeFocused();
     }
   });
 

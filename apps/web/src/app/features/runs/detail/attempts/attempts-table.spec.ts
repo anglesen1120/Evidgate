@@ -1,6 +1,6 @@
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { groupAttempts, paginateAttemptGroups } from './attempt-groups';
+import { groupAttempts } from './attempt-groups';
 import type { AttemptRow } from './attempt-summary';
 import { AttemptsTableComponent } from './attempts-table.component';
 import { render, row, rows } from './attempts-table.test-support';
@@ -58,15 +58,6 @@ describe('retry-chain grouping', () => {
       }),
     ]);
     expect(group!.preHealingFailure).toBeNull();
-  });
-  it('retains every attempt across bounded pages, including a 5000-attempt retry chain', () => {
-    const input = Array.from({ length: 5000 }, (_, index) => row({ attemptNo: index + 1 }));
-    const pages = paginateAttemptGroups(groupAttempts(input));
-    expect(pages).toHaveLength(100);
-    expect(
-      pages.every((page) => page.reduce((count, group) => count + group.attempts.length, 0) <= 50),
-    ).toBe(true);
-    expect(pages.flatMap((page) => page.flatMap((group) => group.attempts))).toEqual(input);
   });
 });
 
@@ -314,26 +305,6 @@ describe('AttemptsTableComponent', () => {
     root.querySelector<HTMLButtonElement>('app-error-pattern button')!.click();
     expect(retried).toHaveBeenCalledTimes(1);
   });
-  it('offers one bounded load-more only while a cursor remains and keeps the page on append', async () => {
-    const input = Array.from({ length: 120 }, (_, index) =>
-      row({ executionKey: 'execution-' + index }),
-    );
-    const { root, fixture } = await render(input.slice(0, 100));
-    const more = vi.fn();
-    fixture.componentInstance.loadMore.subscribe(more);
-    expect(root.querySelector('[data-attempts-load-more]')).toBeNull();
-    fixture.componentRef.setInput('hasMore', true);
-    await fixture.whenStable();
-    root.querySelector<HTMLButtonElement>('[data-attempts-next]')!.click();
-    await fixture.whenStable();
-    root.querySelector<HTMLButtonElement>('[data-attempts-load-more]')!.click();
-    expect(more).toHaveBeenCalledTimes(1);
-    fixture.componentRef.setInput('attempts', [...input]);
-    fixture.componentRef.setInput('hasMore', false);
-    await fixture.whenStable();
-    expect(root.querySelector('nav [role="status"]')?.textContent).toContain('Page 2 / 3');
-    expect(root.querySelector('[data-attempts-load-more]')).toBeNull();
-  });
   it('shows a failed follow-up page beside the rows already loaded', async () => {
     const { root, fixture } = await render([row()]);
     fixture.componentRef.setInput('hasMore', true);
@@ -350,7 +321,7 @@ describe('AttemptsTableComponent', () => {
     await fixture.whenStable();
     expect(rows(root)).toHaveLength(1);
     expect(root.querySelector('app-error-pattern')).not.toBeNull();
-    expect(root.querySelector('[data-attempts-load-more]')).not.toBeNull();
+    expect(root.querySelector('app-data-table-pager')).not.toBeNull();
   });
 
   it('uses a caption and scoped column/row headers', async () => {
@@ -374,121 +345,4 @@ describe('AttemptsTableComponent', () => {
     );
   });
 
-  // Repeated rich-row renders use the run list's bounded 15 s DOM-test budget.
-  it('bounds 120 execution groups to 50 rows, pages both ways and resets on new input', async () => {
-    const input = Array.from({ length: 120 }, (_, index) =>
-      row({ executionKey: `execution-${index}` }),
-    );
-    const { root, fixture } = await render(input);
-    const next = () => root.querySelector<HTMLButtonElement>('[data-attempts-next]')!;
-    const previous = () => root.querySelector<HTMLButtonElement>('[data-attempts-previous]')!;
-    expect(rows(root)).toHaveLength(50);
-    expect(root.querySelector('nav')?.getAttribute('aria-label')).toBe('Attempts pagination');
-    expect(root.querySelector('nav [role="status"]')?.hasAttribute('aria-live')).toBe(false);
-    expect(previous().disabled).toBe(true);
-    next().click();
-    await fixture.whenStable();
-    expect(rows(root)).toHaveLength(50);
-    expect(rows(root)[0]?.textContent).toContain('execution-50');
-    next().click();
-    await fixture.whenStable();
-    expect(rows(root)).toHaveLength(20);
-    expect(next().disabled).toBe(true);
-    expect(root.querySelector('nav [role="status"]')?.textContent).toContain('Page 3 / 3');
-    previous().click();
-    await fixture.whenStable();
-    expect(rows(root)[0]?.textContent).toContain('execution-50');
-    fixture.componentRef.setInput('attempts', [...input]);
-    await fixture.whenStable();
-    expect(rows(root)[0]?.textContent).toContain('execution-0');
-    expect(previous().disabled).toBe(true);
-  }, 15_000);
-  it('hands focus to the opposite pager button when a page turn disables the activated one', async () => {
-    const input = Array.from({ length: 120 }, (_, index) =>
-      row({ executionKey: `execution-${index}` }),
-    );
-    const { root, fixture } = await render(input);
-    const next = () => root.querySelector<HTMLButtonElement>('[data-attempts-next]')!;
-    const previous = () => root.querySelector<HTMLButtonElement>('[data-attempts-previous]')!;
-
-    // Reaching the last page disables Next in the render that follows its own activation, so a
-    // disabled element cannot keep holding focus: the place moves to the pager's other control.
-    next().focus();
-    next().click();
-    await fixture.whenStable();
-    next().click();
-    await fixture.whenStable();
-    expect(root.querySelector('nav [role="status"]')?.textContent).toContain('Page 3 / 3');
-    expect(next().disabled).toBe(true);
-    expect(document.activeElement).toBe(previous());
-
-    // The same on the way back: Previous disables itself at page 1 and Next takes the focus.
-    previous().click();
-    await fixture.whenStable();
-    previous().click();
-    await fixture.whenStable();
-    expect(root.querySelector('nav [role="status"]')?.textContent).toContain('Page 1 / 3');
-    expect(previous().disabled).toBe(true);
-    expect(document.activeElement).toBe(next());
-  });
-
-  it('leaves focus alone when the activated pager button never held it', async () => {
-    const input = Array.from({ length: 120 }, (_, index) =>
-      row({ executionKey: `execution-${index}` }),
-    );
-    const { root, fixture } = await render(input);
-    // A pointer press that did not move focus must not move it afterwards either.
-    expect(document.activeElement).toBe(document.body);
-    for (let page = 0; page < 2; page++) {
-      root.querySelector<HTMLButtonElement>('[data-attempts-next]')!.click();
-      await fixture.whenStable();
-    }
-    expect(root.querySelector('nav [role="status"]')?.textContent).toContain('Page 3 / 3');
-    expect(document.activeElement).toBe(document.body);
-  });
-
-  it('resets synchronously when a later page shrinks to fewer pages or a single row', async () => {
-    const input = Array.from({ length: 120 }, (_, index) =>
-      row({ executionKey: `execution-${index}` }),
-    );
-    const { root, fixture } = await render(input);
-    for (let page = 0; page < 2; page++) {
-      root.querySelector<HTMLButtonElement>('[data-attempts-next]')!.click();
-      await fixture.whenStable();
-    }
-    expect(root.querySelector('nav [role="status"]')?.textContent).toContain('Page 3 / 3');
-
-    fixture.componentRef.setInput('attempts', input.slice(0, 51));
-    fixture.detectChanges();
-    expect(rows(root)).toHaveLength(50);
-    expect(rows(root)[0]?.textContent).toContain('execution-0');
-    expect(root.querySelector('nav [role="status"]')?.textContent).toContain('Page 1 / 2');
-
-    root.querySelector<HTMLButtonElement>('[data-attempts-next]')!.click();
-    await fixture.whenStable();
-    fixture.componentRef.setInput('attempts', input.slice(0, 1));
-    fixture.detectChanges();
-    expect(rows(root)).toHaveLength(1);
-    expect(rows(root)[0]?.textContent).toContain('execution-0');
-    expect(root.querySelector('nav')).toBeNull();
-  });
-  it('bounds a 5000-attempt healing chain and keeps the original failure pinned on continuation', async () => {
-    const input = Array.from({ length: 5000 }, (_, index) =>
-      row({
-        attemptNo: index + 1,
-        normalisedStatus: index === 0 ? 'failed' : 'passed',
-        healingCandidate: index === 1 ? { candidateHash: 'candidate', mode: 'shadow' } : null,
-      }),
-    );
-    const { root, fixture } = await render(input);
-    expect(rows(root)).toHaveLength(50);
-    root.querySelector<HTMLButtonElement>('[data-attempts-next]')!.click();
-    await fixture.whenStable();
-    expect(rows(root)).toHaveLength(50);
-    expect(rows(root)[0]?.querySelector('.attempt-number')?.textContent).toBe('Attempt 1');
-    expect(rows(root)[0]?.querySelector('.pre-healing-block')?.textContent).toContain(
-      'Pre-healing failure',
-    );
-    expect(rows(root)[1]?.querySelector('.attempt-number')?.textContent).toBe('Attempt 51');
-  });
 });

@@ -147,110 +147,149 @@ describe('RunDetailStore', () => {
       ).toEqual([]);
       expect(store.hasMoreAttempts()).toBe(false);
     });
-    it('follows next_cursor once per call, appends in order and keeps earlier rows', async () => {
+    it('accepts an empty first page without inventing a total or allowing navigation', async () => {
       get.mockResolvedValue(run);
-      listAttempts.mockResolvedValueOnce(first).mockResolvedValueOnce(second);
+      listAttempts.mockResolvedValue({ items: [], next_cursor: null });
       const store = TestBed.inject(RunDetailStore);
       await store.load(run.run_id);
-      await vi.waitFor(() => expect(store.attemptsStatus()).toBe('ready'));
-      const head = store.attempts()![0];
-      await store.loadMoreAttempts();
-      expect(listAttempts).toHaveBeenLastCalledWith(run.run_id, {
-        limit: ATTEMPTS_PAGE_LIMIT,
-        cursor: first.next_cursor,
-      });
-      expect(store.attempts()).toHaveLength(first.items.length + second.items.length);
-      expect(store.attempts()![0]).toBe(head);
-      expect(store.hasMoreAttempts()).toBe(false);
-      await store.loadMoreAttempts();
-      expect(listAttempts).toHaveBeenCalledTimes(2);
+      expect(store.attempts()).toEqual([]);
+      expect(store.attemptsPage()).toBe(1);
+      expect(store.attemptsStatus()).toBe('ready');
+      await store.nextAttempts();
+      await store.previousAttempts();
+      expect(listAttempts).toHaveBeenCalledTimes(1);
     });
-    it('refuses a repeated cursor with typed copy and ends the walk with its rows kept', async () => {
+    it('replaces pages, returns to the first page and refuses to advance past the last', async () => {
       get.mockResolvedValue(run);
-      listAttempts
-        .mockResolvedValueOnce(first)
+      listAttempts.mockResolvedValueOnce(first).mockResolvedValueOnce(second).mockResolvedValueOnce(first);
+      const store = TestBed.inject(RunDetailStore);
+      await store.load(run.run_id);
+      expect(store.attemptsPage()).toBe(1);
+      expect(store.attemptsPageSize()).toBe(20);
+      await store.previousAttempts();
+      expect(listAttempts).toHaveBeenCalledTimes(1);
+      await store.nextAttempts();
+      expect(store.attemptsPage()).toBe(2);
+      expect(store.attempts()).toHaveLength(second.items.length);
+      expect(store.attempts()?.[0]?.executionKey).toBe(second.items[0]?.execution_key);
+      expect(store.hasMoreAttempts()).toBe(false);
+      await store.nextAttempts();
+      expect(listAttempts).toHaveBeenCalledTimes(2);
+      await store.previousAttempts();
+      expect(listAttempts).toHaveBeenLastCalledWith(run.run_id, { limit: 20 });
+      expect(store.attemptsPage()).toBe(1);
+      expect(store.attempts()).toHaveLength(first.items.length);
+    });
+    it('retains rows and the committed page on error, retrying the failed previous intent', async () => {
+      get.mockResolvedValue(run);
+      listAttempts.mockResolvedValueOnce(first).mockResolvedValueOnce(second)
+        .mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce(first);
+      const store = TestBed.inject(RunDetailStore);
+      await store.load(run.run_id);
+      await store.nextAttempts();
+      const rows = store.attempts();
+      await store.previousAttempts();
+      expect(store.attempts()).toBe(rows);
+      expect(store.attemptsPage()).toBe(2);
+      expect(store.attemptsStatus()).toBe('ready');
+      expect(store.attemptsError()).not.toBeNull();
+      await store.retryAttempts();
+      expect(listAttempts).toHaveBeenLastCalledWith(run.run_id, { limit: 20 });
+      expect(store.attemptsPage()).toBe(1);
+      expect(store.attemptsError()).toBeNull();
+    });
+    it('retries a failed next intent without appending or refetching run and revisions', async () => {
+      get.mockResolvedValue(run);
+      listAttempts.mockResolvedValueOnce(first).mockRejectedValueOnce(new Error('offline'))
+        .mockResolvedValueOnce(second);
+      const store = TestBed.inject(RunDetailStore);
+      await store.load(run.run_id);
+      const runData = store.run();
+      const revisionData = store.revisions();
+      const rows = store.attempts();
+      await store.nextAttempts();
+      expect(store.attempts()).toBe(rows);
+      expect(store.attemptsPage()).toBe(1);
+      await store.retryAttempts();
+      expect(listAttempts).toHaveBeenLastCalledWith(run.run_id, { limit: 20, cursor: first.next_cursor });
+      expect(store.attempts()).toHaveLength(second.items.length);
+      expect(store.run()).toBe(runData);
+      expect(store.revisions()).toBe(revisionData);
+      expect(get).toHaveBeenCalledTimes(1);
+      expect(listEvidenceRevisions).toHaveBeenCalledTimes(1);
+    });
+    it('rejects a cursor cycle while keeping the accepted page', async () => {
+      get.mockResolvedValue(run);
+      listAttempts.mockResolvedValueOnce(first)
         .mockResolvedValueOnce({ items: second.items, next_cursor: first.next_cursor });
       const store = TestBed.inject(RunDetailStore);
       await store.load(run.run_id);
-      await vi.waitFor(() => expect(store.attemptsStatus()).toBe('ready'));
-      await store.loadMoreAttempts();
-      expect(store.attempts()).toHaveLength(first.items.length);
-      // A plain Error would reach the panel as UNRESOLVED_FAILURE: blank message and code.
-      expect(store.attemptsError()).toMatchObject({
-        kind: 'unexpected',
-        code: 'attempts_cursor_repeated',
-        message: 'The attempts list returned the same page cursor again.',
-        retryable: false,
-      });
-      expect(store.attemptsStatus()).toBe('ready');
+      const rows = store.attempts();
+      await store.nextAttempts();
+      expect(store.attempts()).toBe(rows);
+      expect(store.attemptsError()?.code).toBe('attempts_cursor_repeated');
       expect(store.hasMoreAttempts()).toBe(false);
-      // The refused cursor is gone, so Load more cannot ask for it again.
-      await store.loadMoreAttempts();
-      expect(listAttempts).toHaveBeenCalledTimes(2);
     });
-    it('drops the rows of a page a cursor cycle serves again (A → B → A) and ends the walk', async () => {
+    it('accepts an empty terminal page and can return from it', async () => {
       get.mockResolvedValue(run);
-      listAttempts
-        .mockResolvedValueOnce({ items: first.items, next_cursor: 'cycle-b' })
-        .mockResolvedValueOnce({ items: second.items, next_cursor: 'cycle-c' })
-        .mockResolvedValueOnce({ items: first.items, next_cursor: 'cycle-d' });
+      listAttempts.mockResolvedValueOnce(first).mockResolvedValueOnce({ items: [], next_cursor: null })
+        .mockResolvedValueOnce(first);
       const store = TestBed.inject(RunDetailStore);
       await store.load(run.run_id);
-      await vi.waitFor(() => expect(store.attemptsStatus()).toBe('ready'));
-      await store.loadMoreAttempts();
-      expect(store.attempts()).toHaveLength(first.items.length + second.items.length);
-      await store.loadMoreAttempts();
-      expect(store.attempts()).toHaveLength(first.items.length + second.items.length);
-      expect(store.attempts()!.map((row) => `${row.executionKey}/${row.attemptNo}`)).toEqual(
-        [...first.items, ...second.items].map((item) => `${item.execution_key}/${item.attempt_no}`),
-      );
-      expect(store.attemptsError()).toMatchObject({
-        code: 'attempts_page_without_new_rows',
-        message: 'The attempts list returned a follow-up page with no new attempts.',
-        retryable: false,
-      });
+      await store.nextAttempts();
+      expect(store.attempts()).toEqual([]);
+      expect(store.attemptsPage()).toBe(2);
       expect(store.hasMoreAttempts()).toBe(false);
-      await store.loadMoreAttempts();
-      expect(listAttempts).toHaveBeenCalledTimes(3);
+      await store.previousAttempts();
+      expect(store.attempts()).toHaveLength(first.items.length);
     });
-    it('ends the walk quietly on an empty terminal page', async () => {
+    it.each([50, 100])('resets cursor history when selecting %s rows', async (size) => {
       get.mockResolvedValue(run);
-      listAttempts
-        .mockResolvedValueOnce({ items: first.items, next_cursor: 'tail' })
+      listAttempts.mockResolvedValueOnce(first).mockResolvedValueOnce(second)
         .mockResolvedValueOnce({ items: [], next_cursor: null });
       const store = TestBed.inject(RunDetailStore);
       await store.load(run.run_id);
-      await vi.waitFor(() => expect(store.attemptsStatus()).toBe('ready'));
-      await store.loadMoreAttempts();
-      expect(store.attemptsError()).toBeNull();
-      expect(store.hasMoreAttempts()).toBe(false);
-      expect(store.attempts()).toHaveLength(first.items.length);
+      await store.nextAttempts();
+      await store.setAttemptsPageSize(size);
+      expect(listAttempts).toHaveBeenLastCalledWith(run.run_id, { limit: size });
+      expect(store.attemptsPageSize()).toBe(size);
+      expect(store.attemptsPage()).toBe(1);
+      expect(store.attempts()).toEqual([]);
+      await store.previousAttempts();
+      await store.setAttemptsPageSize(200);
+      expect(listAttempts).toHaveBeenCalledTimes(3);
     });
-    it('appends only the attempts a follow-up page has not shown yet', async () => {
-      const freshRow = {
-        ...first.items[0]!,
-        attempt_id: '018f0000-0000-7000-8000-0000000c1009',
-        execution_key: 'f'.repeat(64),
-        attempt_no: 9,
-      };
+    it('resets page and size on run identity changes and ignores an older page response', async () => {
       get.mockResolvedValue(run);
-      listAttempts
-        .mockResolvedValueOnce({ items: first.items, next_cursor: 'overlap-b' })
-        .mockResolvedValueOnce({
-          items: [first.items[1]!, freshRow, { ...freshRow }],
-          next_cursor: null,
-        });
+      const old = deferred<RunAttemptPage>();
+      listAttempts.mockResolvedValueOnce(first).mockResolvedValueOnce(first)
+        .mockReturnValueOnce(old.promise).mockResolvedValueOnce(second);
       const store = TestBed.inject(RunDetailStore);
       await store.load(run.run_id);
-      await vi.waitFor(() => expect(store.attemptsStatus()).toBe('ready'));
-      await store.loadMoreAttempts();
-      expect(store.attempts()).toHaveLength(first.items.length + 1);
-      expect(store.attempts()!.at(-1)).toMatchObject({
-        executionKey: freshRow.execution_key,
-        attemptNo: 9,
-      });
-      expect(store.attemptsError()).toBeNull();
-      expect(store.hasMoreAttempts()).toBe(false);
+      await store.setAttemptsPageSize(50);
+      const next = store.nextAttempts();
+      get.mockResolvedValueOnce({ ...run, run_id: 'another-run' });
+      await store.load('another-run');
+      old.resolve(first);
+      await next;
+      expect(listAttempts).toHaveBeenLastCalledWith('another-run', { limit: 20 });
+      expect(store.attemptsPage()).toBe(1);
+      expect(store.attemptsPageSize()).toBe(20);
+      expect(store.attempts()).toHaveLength(second.items.length);
+    });
+    it('ignores repeated navigation while a page is loading', async () => {
+      get.mockResolvedValue(run);
+      const pending = deferred<RunAttemptPage>();
+      listAttempts.mockResolvedValueOnce(first).mockReturnValueOnce(pending.promise);
+      const store = TestBed.inject(RunDetailStore);
+      await store.load(run.run_id);
+      const next = store.nextAttempts();
+      await store.nextAttempts();
+      await store.previousAttempts();
+      expect(listAttempts).toHaveBeenCalledTimes(2);
+      pending.resolve(second);
+      await next;
+      expect(store.attemptsPage()).toBe(2);
     });
     it('a first-page failure is its own error state and retry re-reads only attempts', async () => {
       get.mockResolvedValue(run);
