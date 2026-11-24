@@ -202,7 +202,14 @@ describe('RunDetailPage producer region', () => {
     const target = root.querySelector('#producer-shard-255');
     expect(target).not.toBeNull();
     expect(document.activeElement).toBe(target);
-    expect(root.querySelectorAll('#producers tr[data-row-id]')).toHaveLength(56);
+    expect(
+      [...root.querySelectorAll('#producers tr[data-row-id]')].map((row) =>
+        row.getAttribute('data-row-id'),
+      ),
+    ).toEqual(Array.from({ length: 16 }, (_, index) => `shard-${240 + index}`));
+    expect(
+      root.querySelector('#producers app-data-table-pager [role="status"]')?.textContent?.trim(),
+    ).toBe('241–256 of 256');
   });
 
   it('keeps an attempt fragment waiting for the attempts response', async () => {

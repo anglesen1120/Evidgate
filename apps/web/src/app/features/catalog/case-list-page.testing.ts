@@ -8,10 +8,12 @@ export class CatalogPageHarness extends ComponentHarness {
   readonly empty = this.locatorForOptional('app-empty-pattern');
   readonly error = this.locatorForOptional('app-error-pattern');
   readonly forbidden = this.locatorForOptional('app-forbidden-pattern');
-  readonly more = this.locatorForOptional('[data-catalog-load-more]');
-  readonly loaded = this.locatorFor('[data-catalog-loaded]');
+  readonly next = this.locatorFor('app-data-table-pager [data-page="next"]');
+  readonly previous = this.locatorFor('app-data-table-pager [data-page="previous"]');
+  readonly pageNumber = this.locatorFor('app-data-table-pager [role="status"]');
+  readonly retryPage = this.locatorFor('[data-catalog-page-error] button');
+  readonly loaded = this.locatorFor('app-page-header .header-description');
   readonly rows = this.locatorForAll('app-case-list-table [data-row-id]');
-  readonly viewport = this.locatorForOptional('cdk-virtual-scroll-viewport');
   readonly ownerFailure = this.locatorForOptional('[data-catalog-owner-error]');
   readonly ownerPending = this.locatorForOptional('[data-catalog-owner-pending]');
   readonly pageError = this.locatorForOptional('[data-catalog-page-error]');
@@ -64,7 +66,7 @@ export class CatalogPageHarness extends ComponentHarness {
     throw new Error(`Owner option ${email} is missing`);
   }
   async choosePageSize(size: number) {
-    await (await this.locatorFor('#catalog-page-size')()).click();
+    await (await this.locatorFor('app-data-table-pager hlm-select-trigger button')()).click();
     const options = await this.documentRootLocatorFactory().locatorForAll('[role="option"]')();
     for (const option of options) {
       if ((await option.text()).trim() === String(size)) {

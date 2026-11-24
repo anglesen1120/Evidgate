@@ -90,34 +90,36 @@ for (const locale of LOCALES) {
       RUN.current_evidence_revision_id,
     );
   });
-  test(`attempts keyset walk appends the second page and keeps the retry chain together (${locale})`, async ({
+  test(`attempts server pages replace rows, go back and reset selected size (${locale})`, async ({
     page,
   }) => {
     await page.goto(path(locale, 'detail-ready', RUN.run_id, 'page-1'));
     await ready(page);
     const rows = page.locator('app-attempts-table [data-attempt-row]');
+    const pager = page.locator('app-attempts-table app-data-table-pager');
+    const next = pager.locator('[data-page="next"]');
+    const previous = pager.locator('[data-page="previous"]');
     await expect(rows).toHaveCount(4);
-    const more = page.locator('[data-attempts-load-more]');
-    await more.focus();
+    const firstPage = await rows.allTextContents();
+    await expect(pager.locator('hlm-select-trigger button')).toContainText('20');
+    await expect(previous).toHaveAttribute('aria-disabled', 'true');
+    await next.focus();
     await page.keyboard.press('Enter');
-    await expect(rows).toHaveCount(7);
-    await expect(more).toHaveCount(0);
-    const chainKey = attemptsFixture.body.items.find(
-      (item) => item.attempt_no === 2,
-    )!.execution_key;
-    const chain = page.locator('app-attempts-table tbody').filter({ hasText: chainKey });
-    await expect(chain.locator('[data-attempt-row]')).toHaveCount(2);
-    await expect(chain.locator('[data-attempt-normalised] app-status-pill').first()).toHaveText(
-      locale === 'vi' ? 'Không đạt' : 'Failed',
-    );
-    await expect(chain.locator('[data-attempt-normalised] app-status-pill').last()).toHaveText(
-      locale === 'vi' ? 'Đạt' : 'Passed',
-    );
-    await expect(
-      page
-        .locator('[data-attempt-row]', { hasText: 'BLOCKED_BY_ENV' })
-        .locator('[data-attempt-normalised]'),
-    ).not.toContainText(locale === 'vi' ? 'Đạt' : 'Passed');
+    await expect(rows).toHaveCount(3);
+    await expect(next).toHaveAttribute('aria-disabled', 'true');
+    await expect(previous).toHaveAttribute('aria-disabled', 'false');
+    await expect(next).toBeFocused();
+    await previous.click();
+    await expect(rows).toHaveCount(4);
+    expect(await rows.allTextContents()).toEqual(firstPage);
+    await expect(previous).toHaveAttribute('aria-disabled', 'true');
+    await next.click();
+    await expect(rows).toHaveCount(3);
+    await pager.locator('hlm-select-trigger button').click();
+    await page.getByRole('option', { name: '50', exact: true }).click();
+    await expect(pager.locator('hlm-select-trigger button')).toContainText('50');
+    await expect(rows).toHaveCount(4);
+    await expect(previous).toHaveAttribute('aria-disabled', 'true');
   });
   test(`empty and unavailable attempts reads render their own states (${locale})`, async ({
     page,

@@ -2579,10 +2579,6 @@
 <trans-unit id="runs.detail.producers.after-cancel-one" datatype="html"><source>1 after-cancel event</source><target>1 sự kiện sau khi hủy</target></trans-unit>
 <trans-unit id="runs.detail.producers.run-after-cancel-one" datatype="html"><source>1 after-cancel event for this run</source><target>1 sự kiện sau khi hủy của lượt chạy này</target></trans-unit>
 <trans-unit id="runs.detail.producers.run-after-cancel" datatype="html"><source><x id="count" equiv-text="count"/> after-cancel events for this run</source><target><x id="count"/> sự kiện sau khi hủy của lượt chạy này</target></trans-unit>
-<trans-unit id="runs.detail.producers.previous" datatype="html"><source>Previous producers</source><target>Nguồn gửi dữ liệu trước</target></trans-unit>
-<trans-unit id="runs.detail.producers.next" datatype="html"><source>Next producers</source><target>Nguồn gửi dữ liệu tiếp theo</target></trans-unit>
-<trans-unit id="runs.detail.producers.pagination" datatype="html"><source>Producer pages</source><target>Các trang nguồn gửi dữ liệu</target></trans-unit>
-<trans-unit id="runs.detail.producers.page" datatype="html"><source>Page <x id="page" equiv-text="page"/> of <x id="pages" equiv-text="pages"/></source><target>Trang <x id="page"/> / <x id="pages"/></target></trans-unit>
 <trans-unit id="runs.detail.timeline.after-cancel-one" datatype="html"><source>1 event arrived after cancel (informational)</source><target>1 sự kiện đến sau khi hủy (chỉ mang tính thông tin)</target></trans-unit>
 <trans-unit id="runs.detail.timeline" datatype="html"><source>Run state timeline</source><target>Dòng thời gian trạng thái lượt chạy</target></trans-unit>
 <trans-unit id="runs.detail.timeline.reached" datatype="html"><source>Reached</source><target>Đã qua</target></trans-unit>
@@ -2601,7 +2597,6 @@
 <trans-unit id="runs.detail.inspect-evidence" datatype="html"><source>Inspect evidence</source><target>Kiểm tra bằng chứng</target></trans-unit>
 <trans-unit id="runs.detail.attempts.title" datatype="html"><source>Attempts</source><target>Các lần thử</target></trans-unit>
 <trans-unit id="runs.detail.attempts.scroll-region" datatype="html"><source>Attempts table</source><target>Bảng các lần thử</target></trans-unit>
-<trans-unit id="runs.detail.attempts.pagination" datatype="html"><source>Attempts pagination</source><target>Phân trang các lần thử</target></trans-unit>
 <trans-unit id="runs.detail.attempts.execution" datatype="html"><source>Execution</source><target>Lượt thực thi</target></trans-unit>
 <trans-unit id="runs.detail.attempts.attempt" datatype="html"><source>Attempt</source><target>Lần thử</target></trans-unit>
 <trans-unit id="runs.detail.attempts.raw" datatype="html"><source>Raw status</source><target>Trạng thái gốc</target></trans-unit>
@@ -2613,13 +2608,10 @@
 <trans-unit id="runs.detail.attempts.candidate" datatype="html"><source>Healing candidate</source><target>Ứng viên tự sửa</target></trans-unit>
 <trans-unit id="runs.detail.attempts.shadow" datatype="html"><source>Shadow evaluation</source><target>Đánh giá đối chứng</target></trans-unit>
 <trans-unit id="runs.detail.attempts.official" datatype="html"><source>Official evaluation</source><target>Đánh giá chính thức</target></trans-unit>
-<trans-unit id="runs.detail.attempts.page" datatype="html"><source>Page <x id="page" equiv-text="page"/> / <x id="pages" equiv-text="pages"/></source><target>Trang <x id="page"/> / <x id="pages"/></target></trans-unit>
-<trans-unit id="runs.detail.attempts.previous" datatype="html"><source>Previous page</source><target>Trang trước</target></trans-unit>
-<trans-unit id="runs.detail.attempts.next" datatype="html"><source>Next page</source><target>Trang sau</target></trans-unit>
 <trans-unit id="runs.detail.attempts.healing-candidates" datatype="html"><source>Healing candidates</source><target>Ứng viên tự sửa</target></trans-unit>
-<trans-unit id="runs.detail.attempts.more" datatype="html"><source>Load more attempts</source><target>Tải thêm lần thử</target></trans-unit>
-<trans-unit id="runs.detail.attempts.loading-more" datatype="html"><source>Loading more attempts</source><target>Đang tải thêm lần thử</target></trans-unit>
-<trans-unit id="runs.detail.attempts.more-loaded" datatype="html"><source>More attempts loaded</source><target>Đã tải thêm lần thử</target></trans-unit>
+<trans-unit id="runs.detail.attempts.server-order" datatype="html"><source>Server order: execution key ascending, then attempt number ascending.</source><target>Thứ tự máy chủ: khóa lượt thực thi tăng dần, sau đó số lần thử tăng dần.</target></trans-unit>
+<trans-unit id="runs.detail.attempts.page-loading" datatype="html"><source>Loading attempts page</source><target>Đang tải trang lượt chạy</target></trans-unit>
+<trans-unit id="runs.detail.attempts.page-loaded" datatype="html"><source>Attempts page loaded</source><target>Đã tải trang lượt chạy</target></trans-unit>
 <trans-unit id="runs.detail.environment-revision" datatype="html"><source>Revision</source><target>Phiên bản</target></trans-unit>
 <trans-unit id="suites.composition.suite-composition" datatype="html"><source>Suite composition</source><target>Thành phần bộ kiểm thử</target></trans-unit>
 <trans-unit id="suites.composition.revision" datatype="html"><source>Revision</source><target>Bản sửa đổi</target></trans-unit>
@@ -3398,24 +3390,19 @@
       <trans-unit id="catalog.case-id" datatype="html"><source>Case ID</source><target>Mã ca kiểm thử</target></trans-unit>
       <trans-unit id="catalog.unassigned" datatype="html"><source>Unassigned</source><target>Chưa gán</target></trans-unit>
       <trans-unit id="catalog.unresolved" datatype="html"><source>The catalog request did not complete. Try again.</source><target>Yêu cầu danh mục chưa hoàn tất. Hãy thử lại.</target></trans-unit>
-      <trans-unit id="catalog.loaded-filter-hint" datatype="html"><source>Status and framework filter the server list. Search matches name or ID in loaded results only; it never loads more results.</source><target>Trạng thái và framework lọc danh sách trên máy chủ. Tìm kiếm chỉ khớp tên hoặc mã trong kết quả đã tải và không tự tải thêm kết quả.</target></trans-unit>
-      <trans-unit id="catalog.loaded-search" datatype="html"><source>Search name or ID in loaded results</source><target>Tìm tên hoặc mã trong kết quả đã tải</target></trans-unit>
+      <trans-unit id="catalog.page-filter-hint" datatype="html"><source>Status and framework filter the server list. Search matches name or ID on the current page only.</source><target>Trạng thái và framework lọc danh sách trên máy chủ. Tìm kiếm chỉ đối chiếu tên hoặc mã trên trang hiện tại.</target></trans-unit>
+      <trans-unit id="catalog.page-search" datatype="html"><source>Search name or ID on this page</source><target>Tìm tên hoặc mã trên trang này</target></trans-unit>
       <trans-unit id="catalog.loaded-no-match-title" datatype="html"><source>No matching identities in loaded results</source><target>Không có định danh khớp trong kết quả đã tải</target></trans-unit>
-      <trans-unit id="catalog.loaded-no-match-description" datatype="html"><source>Clear the filters to return to loaded results, or load more identities below. Local search does not inspect unloaded results.</source><target>Xoá bộ lọc để trở về kết quả đã tải hoặc tải thêm định danh bên dưới. Tìm kiếm cục bộ không kiểm tra kết quả chưa tải.</target></trans-unit>
+      <trans-unit id="catalog.page-no-match-description" datatype="html"><source>Clear the filters or browse another page. Local search only checks the current page.</source><target>Xóa bộ lọc hoặc chuyển sang trang khác. Tìm kiếm cục bộ chỉ kiểm tra trang hiện tại.</target></trans-unit>
       <trans-unit id="catalog.available-fields-note" datatype="html"><source>This list does not supply revision, platform, level, purpose or rename history; these columns are not displayed.</source><target>Danh sách không cung cấp phiên bản, nền tảng, cấp, mục đích hoặc lịch sử đổi tên nên không hiển thị các cột này.</target></trans-unit>
-      <trans-unit id="catalog.pagination" datatype="html"><source>Catalog pagination</source><target>Phân trang danh mục</target></trans-unit>
-      <trans-unit id="catalog.page-size" datatype="html"><source>Page size</source><target>Số dòng mỗi trang</target></trans-unit>
-      <trans-unit id="catalog.load-more" datatype="html"><source>Load more</source><target>Tải thêm</target></trans-unit>
-      <trans-unit id="catalog.loading-more" datatype="html"><source>Loading more identities…</source><target>Đang tải thêm định danh…</target></trans-unit>
-      <trans-unit id="catalog.load-more-failed" datatype="html"><source>More identities could not be loaded. Loaded results are unchanged.</source><target>Không thể tải thêm định danh. Kết quả đã tải được giữ nguyên.</target></trans-unit>
-      <trans-unit id="catalog.retry-more" datatype="html"><source>Retry loading more</source><target>Thử tải thêm lần nữa</target></trans-unit>
+      <trans-unit id="catalog.page-load-failed" datatype="html"><source>The requested page could not be loaded. The displayed page is unchanged.</source><target>Không thể tải trang được yêu cầu. Trang đang hiển thị không thay đổi.</target></trans-unit>
+      <trans-unit id="catalog.retry-page" datatype="html"><source>Retry page</source><target>Thử tải lại trang</target></trans-unit>
       <trans-unit id="catalog.owners-loading" datatype="html"><source>Loading owner choices…</source><target>Đang tải danh sách người phụ trách…</target></trans-unit>
       <trans-unit id="catalog.owners-failed" datatype="html"><source>Owner choices could not be loaded. Existing ownership is unchanged.</source><target>Không thể tải danh sách người phụ trách. Người phụ trách hiện tại được giữ nguyên.</target></trans-unit>
       <trans-unit id="catalog.retry-owners" datatype="html"><source>Retry owner choices</source><target>Thử tải lại người phụ trách</target></trans-unit>
       <trans-unit id="catalog.owner-permission-reason" datatype="html"><source>case:write is required to assign an owner.</source><target>Cần quyền case:write để gán người phụ trách.</target></trans-unit>
       <trans-unit id="catalog.owner-narrow-reason" datatype="html"><source>Assign owners on a screen at least 768 pixels wide. Owner details remain readable here.</source><target>Gán người phụ trách trên màn hình rộng từ 768 pixel. Bạn vẫn xem được thông tin người phụ trách tại đây.</target></trans-unit>
       <trans-unit id="catalog.owner-choices-hint" datatype="html"><source>Choose an active member by email. Clearing an owner is not supported.</source><target>Chọn thành viên đang hoạt động theo email. Chưa hỗ trợ bỏ gán người phụ trách.</target></trans-unit>
-      <trans-unit id="catalog.loaded-count" datatype="html"><source><x id="INTERPOLATION" equiv-text="{{ store.rows().length | number }}"/> loaded</source><target><x id="INTERPOLATION" equiv-text="{{ store.rows().length | number }}"/> định danh đã tải</target></trans-unit>
       <trans-unit id="catalog.loaded-count-live" datatype="html"><source><x id="INTERPOLATION" equiv-text="{{ store.rows().length | number }}"/> loaded</source><target><x id="INTERPOLATION" equiv-text="{{ store.rows().length | number }}"/> định danh đã tải</target></trans-unit>
       <trans-unit id="catalog.loaded-search-no-results" datatype="html"><source>No matching identities in loaded results.</source><target>Không có định danh khớp trong kết quả đã tải.</target></trans-unit>
       <trans-unit id="catalog.loaded-search-results" datatype="html"><source><x id="INTERPOLATION" equiv-text="{{ store.visibleRows().length | number }}"/> matching identities in loaded results.</source><target><x id="INTERPOLATION" equiv-text="{{ store.visibleRows().length | number }}"/> định danh khớp trong kết quả đã tải.</target></trans-unit>
@@ -22194,13 +22181,9 @@
         <source>Download summary</source>
         <target>Tóm tắt nội dung tải xuống</target>
       </trans-unit>
-      <trans-unit id="catalog.results-title" datatype="html">
-        <source>Catalog results</source>
-        <target>Kết quả danh mục</target>
-      </trans-unit>
-      <trans-unit id="catalog.matches-loaded" datatype="html">
-        <source>Matches in loaded results: <x id="INTERPOLATION" equiv-text="{{ store.visibleRows().length | number }}"/></source>
-        <target>Số định danh khớp trong kết quả đã tải: <x id="INTERPOLATION" equiv-text="{{ store.visibleRows().length | number }}"/></target>
+      <trans-unit id="catalog.results-oldest-first" datatype="html">
+        <source>Catalog results (oldest first)</source>
+        <target>Kết quả danh mục (cũ nhất trước)</target>
       </trans-unit>
 <trans-unit id="settings.members.active-hint" datatype="html"><source>On this page · organization directory</source><target>Trên trang này · danh bạ tổ chức</target></trans-unit>
 <trans-unit id="settings.members.pending-hint" datatype="html"><source>On this page · awaiting acceptance</source><target>Trên trang này · chờ chấp nhận</target></trans-unit>

@@ -123,7 +123,9 @@ for (const locale of LOCALES) {
     // An empty declaration is a fact about the run, not a failed read: no error state, no retry.
     await expect(producers.locator('[data-state="error"]')).toHaveCount(0);
     await expect(producers.getByRole('alert')).toHaveCount(0);
-    await expect(producers.locator('button')).toHaveCount(0);
+    await expect(producers.locator('button[data-page="previous"]')).toBeDisabled();
+    await expect(producers.locator('button[data-page="next"]')).toBeDisabled();
+    await expect(producers.locator('app-data-table-pager [role="status"]')).toHaveText(/0–0/);
     await expectNoA11yViolations(page, 'run detail, producers empty state');
   });
 
@@ -132,6 +134,8 @@ for (const locale of LOCALES) {
   }) => {
     await page.setViewportSize({ width: 320, height: 800 });
     const producers = await producersOf(page, 'many-producers', locale);
+    await producers.locator('app-data-table-pager hlm-select-trigger button').click();
+    await page.getByRole('option', { name: '50', exact: true }).click();
     await expect(producers.locator('li[data-row-id]')).toHaveCount(50);
 
     const slots = await slotIds(producers);
@@ -163,6 +167,8 @@ for (const locale of LOCALES) {
     page,
   }) => {
     const producers = await producersOf(page, 'many-producers', locale);
+    await producers.locator('app-data-table-pager hlm-select-trigger button').click();
+    await page.getByRole('option', { name: '50', exact: true }).click();
     const manifestCopies = page.locator('app-manifest-panel app-copy-value-button button');
     await expect(manifestCopies).toHaveCount(3);
     await manifestCopies.first().focus();
@@ -188,16 +194,45 @@ for (const locale of LOCALES) {
       await expect(copy).toHaveAccessibleName(/^(Copy|Sao chép) /);
     }
     await page.keyboard.press('Tab');
+    const pageSize = producers.locator('app-data-table-pager hlm-select-trigger button');
+    await expect(pageSize).toBeFocused();
+    const producerPager = producers.locator('app-data-table-pager');
+    const producerPrevious = producerPager.locator('button[data-page="previous"]');
+    const producerNext = producerPager.locator('button[data-page="next"]');
+    // Unavailable shared-pager actions remain keyboard reachable via aria-disabled.
+    for (const action of [producerPrevious, producerNext]) {
+      await expect(action).toHaveAttribute('aria-disabled', 'true');
+      await page.keyboard.press('Tab');
+      await expect(action).toBeFocused();
+    }
+    await page.keyboard.press('Tab');
     await expect(page.getByRole('tab', { name: /^(Evidence|Bằng chứng)/ })).toBeFocused();
+    for (const control of [producerNext, producerPrevious, pageSize]) {
+      await page.keyboard.press('Shift+Tab');
+      await expect(control).toBeFocused();
+    }
     await page.keyboard.press('Shift+Tab');
     for (const copy of (await producerCopies.all()).reverse()) {
       await expect(copy).toBeFocused();
       await page.keyboard.press('Shift+Tab');
     }
-    // Page flow deliberately has no inner scrolling-region stop: the stop before the first producer
-    // copy is the attempts table, not the producer scroller.
+    // The independent attempts pager precedes the first producer copy, with no
+    // inner scrolling-region stop between the two tables.
     await expect(scroller).not.toBeFocused();
-    await expect(page.locator('app-attempts-table :focus')).toHaveCount(1);
+    const attempts = page.locator('app-attempts-table');
+    const attemptsPager = attempts.locator('app-data-table-pager');
+    const attemptsNext = attemptsPager.locator('button[data-page="next"]');
+    const attemptsPrevious = attemptsPager.locator('button[data-page="previous"]');
+    const attemptsPageSize = attemptsPager.locator('hlm-select-trigger button');
+    await expect(attemptsNext).toBeFocused();
+    await expect(attemptsNext).toHaveAttribute('aria-disabled', 'true');
+    await page.keyboard.press('Shift+Tab');
+    await expect(attemptsPrevious).toBeFocused();
+    await expect(attemptsPrevious).toHaveAttribute('aria-disabled', 'true');
+    await page.keyboard.press('Shift+Tab');
+    await expect(attemptsPageSize).toBeFocused();
+    await page.keyboard.press('Shift+Tab');
+    await expect(attempts.locator('app-copy-value-button button').last()).toBeFocused();
 
     // `#producer-<slot>` is the documented anchor: a deep link lands on, and focuses, that row.
     await page.goto(`${runDetailPath({ locale, run: 'many-producers' })}#producer-shard-42`);
@@ -210,5 +245,32 @@ for (const locale of LOCALES) {
     await expect(anchor).toBeInViewport();
     await expect(anchor).toBeFocused();
     await expect(anchor).toContainText('shard-42');
+  });
+
+  test(`producer paging shows every slot exactly once and resets on size changes (${locale})`, async ({
+    page,
+  }) => {
+    const producers = await producersOf(page, 'many-producers', locale);
+    const pager = producers.locator('app-data-table-pager');
+    const summary = pager.locator('[role="status"]');
+    await expect(producers.locator('[data-row-id]')).toHaveCount(20);
+    await expect(summary).toHaveText(/1–20.*50/);
+    await expect(pager.locator('button[data-page="previous"]')).toBeDisabled();
+    const seen = await slotIds(producers);
+    await pager.locator('button[data-page="next"]').click();
+    await expect(summary).toHaveText(/21–40.*50/);
+    seen.push(...(await slotIds(producers)));
+    await pager.locator('button[data-page="next"]').click();
+    await expect(summary).toHaveText(/41–50.*50/);
+    await expect(producers.locator('[data-row-id]')).toHaveCount(10);
+    seen.push(...(await slotIds(producers)));
+    expect(seen).toEqual(Array.from({ length: 50 }, (_, index) => `shard-${index + 1}`));
+    await expect(pager.locator('button[data-page="next"]')).toBeDisabled();
+    await pager.locator('hlm-select-trigger button').click();
+    await page.getByRole('option', { name: '50', exact: true }).click();
+    await expect(summary).toHaveText(/1–50.*50/);
+    await expect(producers.locator('[data-row-id]')).toHaveCount(50);
+    await expect(pager.locator('button[data-page="previous"]')).toBeDisabled();
+    await expect(pager.locator('button[data-page="next"]')).toBeDisabled();
   });
 }

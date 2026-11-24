@@ -83,10 +83,11 @@ describe('CaseListStore owner recovery', () => {
   });
 
   it('refetches only the refused case and quotes its fresh ETag on the retry', async () => {
-    const { store, row } = await loaded();
-    const appended = { ...row, id: '018f0000-0000-7000-8000-00000000ca77' };
-    list.mockResolvedValueOnce({ items: [appended], next_cursor: null });
-    await expect(store.loadMore()).resolves.toBe(true);
+    const { store, row: firstPageRow } = await loaded();
+    const row = { ...firstPageRow, id: '018f0000-0000-7000-8000-00000000ca77' };
+    const other = { ...firstPageRow, id: '018f0000-0000-7000-8000-00000000ca78' };
+    list.mockResolvedValueOnce({ items: [row, other], next_cursor: null });
+    await expect(store.nextPage()).resolves.toBe(true);
     update.mockRejectedValueOnce(
       new ApiRequestError({ ...CATALOG_FAILURE, kind: 'precondition_failed', status: 412 }),
     );
@@ -94,7 +95,8 @@ describe('CaseListStore owner recovery', () => {
     const refreshed = { ...row, version: row.version + 1 };
     get.mockResolvedValueOnce({ row: refreshed, etag: '"new-server-etag"' });
     await store.reloadOwner(row.id);
-    expect(store.rows()).toEqual([refreshed, ...CASE_LIST_FIXTURE.items.slice(1), appended]);
+    expect(store.rows()).toEqual([refreshed, other]);
+    expect(store.page()).toBe(2);
     update.mockResolvedValueOnce({ ...refreshed, owner_membership_id: OWNER });
     await store.assignOwner(row.id, OWNER);
     expect(update.mock.calls[1]?.[3]).toBe('"new-server-etag"');
