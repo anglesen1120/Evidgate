@@ -157,20 +157,19 @@
           </header>
           <ng-template #projectAction let-row>
             <button
-              hlmBtn
+              appRowAction
               #trigger
-              [variant]="'outline'"
+              [label]="copy.view + ' · ' + metricLabel(metric.metric) + ' · ' + row.project_id"
               type="button"
               data-quota-view
               [attr.aria-haspopup]="'dialog'"
-              class="short-action min-h-(--eg-control-touch)"
               [attr.aria-label]="
                 copy.view + ' · ' + metricLabel(metric.metric) + ' · ' + row.project_id
               "
-              (click)="inspected.set({ row, metric: metric.metric, trigger })"
-            >
-              {{ copy.view }}
-            </button>
+              (click)="
+                inspected.set({ row, metric: metric.metric, trigger: trigger.nativeElement })
+              "
+            ></button>
           </ng-template>
           <app-data-table
             [columns]="[...columns(), { ...viewColumn, cellTemplate: projectAction }]"
@@ -225,18 +224,21 @@
                     </td>
                     <td hlmTd class="text-end">
                       <button
-                        hlmBtn
+                        appRowAction
                         #trigger
-                        [variant]="'outline'"
+                        [label]="copy.view + ' · ' + metricLabel(metric.metric)"
                         type="button"
                         [attr.aria-haspopup]="'dialog'"
                         data-quota-view
-                        class="short-action min-h-(--eg-control-touch)"
                         [attr.aria-label]="copy.view + ' · ' + metricLabel(metric.metric)"
-                        (click)="inspected.set({ row: metric, metric: metric.metric, trigger })"
-                      >
-                        {{ copy.view }}
-                      </button>
+                        (click)="
+                          inspected.set({
+                            row: metric,
+                            metric: metric.metric,
+                            trigger: trigger.nativeElement,
+                          })
+                        "
+                      ></button>
                     </td>
                   </tr>
                 }

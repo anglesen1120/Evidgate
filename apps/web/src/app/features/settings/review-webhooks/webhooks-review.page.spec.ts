@@ -13,7 +13,8 @@ import { webhooksFixture } from './webhooks-review.fixture';
 class ReviewHarness extends ComponentHarness {
   static hostSelector = 'app-webhooks-review';
   readonly title = this.locatorFor('h1');
-  readonly choices = this.locatorForAll('[data-view-record]');
+  readonly choices = this.locatorForAll('button[data-view-record]');
+  readonly viewIcons = this.locatorForAll('button[data-view-record] hlm-icon');
   readonly dialog = this.documentRootLocatorFactory().locatorForOptional('[role="dialog"]');
   readonly previewToggle = this.documentRootLocatorFactory().locatorFor(
     'footer button[aria-expanded]',
@@ -72,6 +73,12 @@ describe('Webhook integrations review', () => {
     expect(await (await view.title()).text()).toBe('Webhook integrations');
     expect(await view.dialog()).toBeNull();
     const trigger = await view.open();
+    expect(await trigger.text({ exclude: '[popover]' })).toBe('');
+    expect(await trigger.getProperty('type')).toBe('button');
+    expect(await trigger.getAttribute('aria-label')).toBe(
+      `View · ${webhooksFixture.endpoints[0]?.name}`,
+    );
+    expect(await view.viewIcons()).toHaveLength(webhooksFixture.endpoints.length);
     const dialog = await view.dialog();
     if (!dialog) throw new Error('Expected the selected record in a dialog');
     for (const fact of ['ci.example.test/hooks/evidgate', 'release-checks-signing', '503'])

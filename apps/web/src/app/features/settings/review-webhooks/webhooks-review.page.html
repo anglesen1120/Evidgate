@@ -97,19 +97,15 @@
               </td>
               <td hlmTd class="text-end max-sm:h-auto max-sm:p-0">
                 <button
-                  hlmBtn
+                  appRowAction
                   type="button"
-                  [variant]="'outline'"
-                  [size]="'sm'"
+                  [label]="viewLabel + ' · ' + ep.name"
                   [attr.data-view-record]="'endpoint'"
                   [attr.aria-haspopup]="'dialog'"
                   [attr.aria-expanded]="viewing() && choice() === ep.id"
-                  class="pointer-coarse:min-h-11"
-                  [attr.aria-labelledby]="'view-endpoint-' + idx + ' endpoint-' + idx"
+                  [attr.aria-label]="viewLabel + ' · ' + ep.name"
                   (click)="selectEndpoint(ep.id)"
-                >
-                  <span [id]="'view-endpoint-' + idx" i18n="@@review.directory.view">View</span>
-                </button>
+                ></button>
               </td>
             </tr>
           }

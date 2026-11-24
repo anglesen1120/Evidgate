@@ -38,6 +38,9 @@ class MemberActionsHarness extends ComponentHarness {
   readonly header = this.locatorFor('th[data-column-role="actions"]');
   readonly trigger = this.locatorFor('button[data-members-actions]');
   readonly view = this.locatorFor('[data-member-view]');
+  readonly viewAction = this.locatorFor('button[data-member-row-view]');
+  readonly viewIcon = this.locatorFor('button[data-member-row-view] hlm-icon');
+  readonly menuIcon = this.locatorFor('button[data-members-actions] hlm-icon');
   readonly rowView = this.locatorFor(
     'td[data-column-role="actions"] button[aria-haspopup="dialog"]',
   );
@@ -143,8 +146,9 @@ describe('MemberListComponent', () => {
       MemberActionsHarness,
     );
     const view = await harness.rowView();
-    expect(await view.text()).toBe('View');
-    expect(await view.getAttribute('aria-label')).toContain(membership.invited_email);
+    expect(await view.text({ exclude: '[popover]' })).toBe('');
+    expect(await view.getAttribute('aria-label')).toBe(`View · ${membership.invited_email}`);
+    expect(await (await harness.viewIcon()).getAttribute('aria-hidden')).toBe('true');
     await view.focus();
     await view.click();
     const dialog = document.querySelector('[role="dialog"]');
@@ -177,8 +181,11 @@ describe('MemberListComponent', () => {
     expect(await header.hasClass('break-all')).toBe(false);
     expect(await header.hasClass('break-words')).toBe(false);
     expect(await header.getCssValue('min-inline-size')).toBe('max-content');
-    expect(await (await harness.trigger()).hasClass('whitespace-nowrap')).toBe(true);
-    expect(await (await harness.rowView()).text()).toBe('View');
+    const trigger = await harness.trigger();
+    expect(await trigger.text({ exclude: '[popover]' })).toBe('');
+    expect(await trigger.getAttribute('aria-label')).toBe('Actions pending@example.test');
+    expect(await (await harness.menuIcon()).getAttribute('aria-hidden')).toBe('true');
+    expect(await (await harness.rowView()).text({ exclude: '[popover]' })).toBe('');
   });
 
   it('uses role-based column budgets and one row menu instead of percentage widths and four actions', async () => {
@@ -187,12 +194,13 @@ describe('MemberListComponent', () => {
     expect(root.querySelectorAll('thead th[data-column-role="status"]')).toHaveLength(1);
     expect(root.querySelectorAll('thead th[data-column-role="actions"]')).toHaveLength(1);
     expect(root.querySelectorAll('[data-members-actions]')).toHaveLength(1);
-    const trigger = root.querySelector<HTMLButtonElement>('[data-members-actions]');
-    expect(trigger?.hasAttribute('aria-label')).toBe(false);
-    expect(trigger?.textContent).toContain('Actions');
-    expect(trigger?.querySelector('.sr-only')?.textContent?.trim()).toBe(
-      'Actions pending@example.test',
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(
+      fixture,
+      MemberActionsHarness,
     );
+    const trigger = await harness.trigger();
+    expect(await trigger.text({ exclude: '[popover]' })).toBe('');
+    expect(await trigger.getAttribute('aria-label')).toBe('Actions pending@example.test');
     expect(root.querySelector('[data-members-edit-open]')).toBeNull();
     expect(root.textContent).toContain('No roles assigned');
     memberAction(root, '[data-members-edit-open]');
@@ -236,7 +244,13 @@ describe('MemberListComponent', () => {
       expect(
         [...root.querySelectorAll('.eg-table-fact dt')].map((label) => label.textContent),
       ).toEqual(['Member', 'Status', 'Actions', 'Organization roles']);
-      expect(records?.querySelector('[data-member-row-view]')?.textContent?.trim()).toBe('View');
+      const harness = await TestbedHarnessEnvironment.harnessForFixture(
+        fixture,
+        MemberActionsHarness,
+      );
+      const view = await harness.viewAction();
+      expect(await view.text({ exclude: '[popover]' })).toBe('');
+      expect(await view.getAttribute('aria-label')).toBe(`View · ${membership.invited_email}`);
       expect(root.querySelector('[data-members-actions]')).toBeNull();
     },
   );

@@ -22,6 +22,7 @@ import {
   type DataTableColumn,
   type DataTableCellContext,
 } from '../../../shared/ui/data-table';
+import { RowActionComponent } from '../../../shared/ui/data-table/row-action.component';
 import { EmptyPatternComponent } from '../../../shared/ui/states/empty-pattern.component';
 import { RequestStateComponent } from '../../../shared/ui/states/request-state.component';
 import { AbsoluteTimeComponent } from '../../../shared/time/absolute-time.component';
@@ -47,6 +48,7 @@ import { AiSettingsSnapshotFieldsComponent } from './ai-settings-snapshot-fields
     HlmInput,
     HlmLabel,
     DataTableComponent,
+    RowActionComponent,
     EmptyPatternComponent,
     RequestStateComponent,
     AbsoluteTimeComponent,
@@ -85,7 +87,7 @@ export class AiSettingsHistoryComponent {
     source: this.store.scope,
     computation: (): number | null => null,
   });
-  private opener: HTMLButtonElement | null = null;
+  private opener: HTMLElement | null = null;
   protected readonly rowId = (row: AiSettingsVersionSummary): number => row.version_no;
   protected readonly rows = computed(() =>
     (this.store.historyPage()?.items ?? []).filter((row) =>
@@ -173,7 +175,7 @@ export class AiSettingsHistoryComponent {
   protected viewName(version: number): string {
     return $localize`:@@authoring.ai-settings.view-version:View version ${version}:VERSION:`;
   }
-  protected inspect(version: number, opener: HTMLButtonElement): void {
+  protected inspect(version: number, opener: HTMLElement): void {
     this.opener = opener;
     this.viewedNo.set(version);
   }

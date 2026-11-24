@@ -10,7 +10,7 @@ import {
   viewChild,
 } from '@angular/core';
 import { HlmBadge } from '@evidgate/ui/badge';
-import { HlmButton } from '@evidgate/ui/button';
+import { RowActionComponent } from '../../../shared/ui/data-table/row-action.component';
 import { HlmIcon } from '@evidgate/ui/icon';
 import {
   DataTableComponent,
@@ -25,7 +25,7 @@ type Cell = TemplateRef<DataTableCellContext<Template>>;
 
 @Component({
   selector: 'app-gallery-template-table',
-  imports: [DataTableComponent, HlmBadge, HlmButton, HlmIcon, ShellIconComponent],
+  imports: [DataTableComponent, HlmBadge, RowActionComponent, HlmIcon, ShellIconComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'block min-w-0 [&_tr[data-row-id]]:h-(--eg-space-11)' },
   template: `
@@ -73,20 +73,13 @@ type Cell = TemplateRef<DataTableCellContext<Template>>;
     <ng-template #actions let-item>
       <button
         #trigger
-        hlmBtn
-        type="button"
-        [variant]="'outline'"
-        [size]="'sm'"
-        class="shrink-0 whitespace-nowrap"
+        appRowAction
+        [label]="copy.view + ' ' + item.title"
+        [attr.aria-label]="copy.view + ' ' + item.title"
         [attr.data-gallery-view]="item.id"
         [attr.aria-haspopup]="'dialog'"
-        (click)="choose(item, trigger)"
-      >
-        {{ copy.view
-        }}<span class="sr-only"
-          >&ngsp;<bdi>{{ item.title }}</bdi></span
-        >
-      </button>
+        (click)="choose(item, trigger.nativeElement)"
+      ></button>
     </ng-template>
   `,
 })
@@ -135,7 +128,7 @@ export class GalleryTemplateTableComponent {
     ];
   });
 
-  protected choose(item: Template, trigger: HTMLButtonElement): void {
+  protected choose(item: Template, trigger: HTMLElement): void {
     this.returnIndex = Math.max(
       0,
       this.rows().findIndex((row) => row.id === item.id),

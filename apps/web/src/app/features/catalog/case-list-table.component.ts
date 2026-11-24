@@ -14,7 +14,7 @@ import {
   viewChild,
 } from '@angular/core';
 import type { CaseDto, MembershipView } from '@evidgate/sdk';
-import { HlmButton } from '@evidgate/ui/button';
+import { RowActionComponent } from '../../shared/ui/data-table/row-action.component';
 import type { ApiError } from '../../core/http/api-error';
 import { StatusPillComponent } from '../../shared/ui/chips/status-pill.component';
 import { DataTableComponent } from '../../shared/ui/data-table/data-table.component';
@@ -43,7 +43,7 @@ type CaseCell = TemplateRef<DataTableCellContext<CaseDto>>;
     CopyableIdentifierComponent,
     StatusPillComponent,
     CaseRecordDialogComponent,
-    HlmButton,
+    RowActionComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: {

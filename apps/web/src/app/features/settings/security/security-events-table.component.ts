@@ -9,7 +9,6 @@ import {
   type TemplateRef,
 } from '@angular/core';
 import { HlmDialogImports } from '@evidgate/ui/dialog';
-import { HlmButton } from '@evidgate/ui/button';
 import type { SecurityEventRow } from '../../../core/data/security-events-data.service';
 import { AbsoluteTimeComponent } from '../../../shared/time/absolute-time.component';
 import {
@@ -22,6 +21,7 @@ import {
 } from '../../../shared/ui/data-table/data-table.component';
 import type { DataTableCellContext } from '../../../shared/ui/data-table/data-table-column';
 import { DataTableValueComponent } from '../../../shared/ui/data-table/data-table-value.component';
+import { RowActionComponent } from '../../../shared/ui/data-table/row-action.component';
 import { CopyableIdentifierComponent } from '../../../shared/ui/values/copyable-identifier.component';
 import { SECURITY_SEVERITY_LABELS, securityTypeLabel } from './security-events.config';
 
@@ -29,7 +29,7 @@ import { SECURITY_SEVERITY_LABELS, securityTypeLabel } from './security-events.c
   selector: 'app-security-events-table',
   imports: [
     JsonPipe,
-    HlmButton,
+    RowActionComponent,
     HlmDialogImports,
     AbsoluteTimeComponent,
     StatusPillComponent,
@@ -93,18 +93,15 @@ import { SECURITY_SEVERITY_LABELS, securityTypeLabel } from './security-events.c
     </ng-template>
     <ng-template #detailsCell let-row>
       <button
-        hlmBtn
+        appRowAction
         #trigger
-        [variant]="'outline'"
+        [label]="copy.view + ' · ' + typeLabel(row.type) + ' · ' + row.id"
         type="button"
         data-security-view
         [attr.aria-haspopup]="'dialog'"
-        class="min-h-(--eg-control-touch)"
         [attr.aria-label]="copy.view + ' · ' + typeLabel(row.type) + ' · ' + row.id"
-        (click)="inspected.set({ row, trigger })"
-      >
-        {{ copy.view }}
-      </button>
+        (click)="inspected.set({ row, trigger: trigger.nativeElement })"
+      ></button>
     </ng-template>
     @if (inspected(); as selection) {
       @let row = selection.row;
@@ -214,7 +211,7 @@ export class SecurityEventsTableComponent {
   readonly rows = input.required<readonly SecurityEventRow[]>();
   protected readonly inspected = linkedSignal<
     readonly SecurityEventRow[],
-    { row: SecurityEventRow; trigger: HTMLButtonElement } | null
+    { row: SecurityEventRow; trigger: HTMLElement } | null
   >({
     source: this.rows,
     computation: () => null,
