@@ -20,7 +20,7 @@
 @media (prefers-reduced-motion: no-preference) {
   [data-table-progress]::after {
     width: 40%;
-    animation: table-read 1.2s ease-in-out infinite alternate;
+    animation: table-read calc(var(--eg-duration-standard) * 4) ease-in-out infinite alternate;
   }
 
   @keyframes table-read {
