@@ -3609,7 +3609,8 @@
       <trans-unit id="authoring.tree.current" datatype="html"><source>Current scope</source><target>Phạm vi hiện tại</target></trans-unit>
       <trans-unit id="authoring.tree.path" datatype="html"><source>Selected node path</source><target>Đường dẫn nút đã chọn</target></trans-unit>
       <trans-unit id="authoring.tree.all" datatype="html"><source>Project roots</source><target>Các nút gốc của dự án</target></trans-unit>
-      <trans-unit id="authoring.tree.selected-id" datatype="html"><source>Selected node ID</source><target>Mã nút đã chọn</target></trans-unit>
+      <trans-unit id="authoring.tree.details" datatype="html"><source>Node details</source><target>Chi tiết nút</target></trans-unit>
+      <trans-unit id="authoring.tree.node-id" datatype="html"><source>Node ID</source><target>Mã nút</target></trans-unit>
       <trans-unit id="authoring.tree.loading" datatype="html"><source>Loading project hierarchy…</source><target>Đang tải phân cấp dự án…</target></trans-unit>
       <trans-unit id="authoring.tree.loading-children" datatype="html"><source>Loading child nodes…</source><target>Đang tải các nút con…</target></trans-unit>
       <trans-unit id="authoring.tree.empty" datatype="html"><source>This project has no authoring content yet</source><target>Dự án này chưa có nội dung biên soạn</target></trans-unit>

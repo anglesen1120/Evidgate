@@ -150,15 +150,47 @@ describe('AuthoringTreePaneComponent', () => {
     expect(await (await harness.scope(child.node_id)).isFocused()).toBe(true);
   });
 
-  it('shows direct child/checklist counts and unavailable pending, never a guessed case total', async () => {
+  it('keeps facts out of the row and copies the inspected node without selecting or expanding it', async () => {
     const { fixture, harness } = await render();
-    fixture.componentRef.setInput('selectedNodeId', root.node_id);
+    fixture.componentRef.setInput('selectedNodeId', second.node_id);
+    const select = vi.fn();
+    const expand = vi.fn();
+    fixture.componentInstance.selectNode.subscribe(select);
+    fixture.componentInstance.expand.subscribe(expand);
     const text = await harness.text();
-    expect(text).toContain('Child nodes');
-    expect(text).toContain('Checklist items');
-    expect(text).toContain('Pending change count unavailable');
-    expect(await (await harness.scope(root.node_id)).getAttribute('aria-current')).toBe('location');
-    expect(text).not.toContain('0 pending');
+    for (const fact of ['Child nodes', 'Checklist items', 'Pending', root.node_id]) {
+      expect(text).not.toContain(fact);
+    }
+    const details = await harness.details(root.node_id);
+    expect(await details.getAttribute('aria-label')).toContain(root.title);
+    await details.click();
+    expect(await (await harness.dialog()).text()).toContain(root.title);
+    expect(await Promise.all((await harness.dialogTerms()).map((term) => term.text()))).toEqual([
+      'Child nodes',
+      'Checklist items',
+      'Pending',
+      'Node ID',
+    ]);
+    const values = await harness.dialogValues();
+    expect(await values[0]?.text()).toBe('1');
+    expect(await values[1]?.text()).toBe('2');
+    expect(await values[2]?.text()).toContain('Pending change count unavailable');
+    expect(await values[3]?.text()).toContain(root.node_id);
+    const original = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+    try {
+      await (await harness.dialogCopy()).click();
+      expect(writeText).toHaveBeenCalledWith(root.node_id);
+    } finally {
+      if (original) Object.defineProperty(navigator, 'clipboard', original);
+      else Reflect.deleteProperty(navigator, 'clipboard');
+    }
+    expect(select).not.toHaveBeenCalled();
+    expect(expand).not.toHaveBeenCalled();
+    expect(await (await harness.scope(second.node_id)).getAttribute('aria-current')).toBe(
+      'location',
+    );
   });
 
   it('keeps child loading and cursor controls inside the expanded branch', async () => {
