@@ -1,9 +1,11 @@
 <section
   class="grid min-w-0 grid-cols-1 items-start gap-(--eg-space-4) md:grid-cols-2 lg:grid-cols-3"
   data-testid="suite-composition"
-  [attr.aria-busy]="store.status() === 'idle' || store.status() === 'loading'"
 >
-  <header class="col-span-full mb-(--eg-space-3) flex min-w-0 items-start gap-(--eg-space-4)">
+  <header
+    [attr.aria-busy]="store.status() === 'idle' || store.status() === 'loading'"
+    class="col-span-full mb-(--eg-space-3) flex min-w-0 items-start gap-(--eg-space-4)"
+  >
     <span
       aria-hidden="true"
       class="grid size-(--eg-space-9) shrink-0 place-items-center rounded-(--eg-radius-md) border border-solid border-border bg-(--eg-accent-soft) text-primary md:size-(--eg-space-10)"
@@ -29,7 +31,12 @@
     </div>
   </header>
   @if (store.status() === 'idle' || store.status() === 'loading') {
-    <app-loading-pattern class="col-span-full" [label]="state().body" [layout]="'cards'" />
+    <app-loading-pattern
+      [layout]="'table'"
+      [busy]="true"
+      class="col-span-full"
+      [label]="state().body"
+    />
   } @else if (store.status() !== 'ready') {
     <p hlmAlert role="status" class="col-span-full">{{ state().body }}</p>
   }

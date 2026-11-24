@@ -13,7 +13,12 @@
     [textContent]="copy.title"
   ></h2>
   @if (status() === 'loading') {
-    <app-loading-pattern [attr.data-state]="'loading'" [label]="copy.loading" />
+    <app-loading-pattern
+      [layout]="'table'"
+      [busy]="true"
+      [attr.data-state]="'loading'"
+      [label]="copy.loading"
+    />
   } @else if (status() === 'error') {
     <app-error-pattern [attr.data-state]="'error'" [headingLevel]="3" [retryDisabled]="true" />
   } @else if (slots(); as rows) {

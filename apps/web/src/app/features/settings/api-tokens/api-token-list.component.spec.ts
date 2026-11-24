@@ -62,6 +62,27 @@ describe('ApiTokenListComponent', () => {
     return { fixture, root: fixture.nativeElement as HTMLElement, harness, wide };
   }
 
+  it('announces a page read even when the local search has no matches', async () => {
+    const { fixture, root, harness } = await render();
+    const input = await harness.search();
+    await input.setInputValue('no such token');
+    await input.dispatchEvent('input');
+    expect(root.querySelector('app-empty-pattern')).not.toBeNull();
+    fixture.componentRef.setInput('fetching', true);
+    await vi.waitFor(() => {
+      fixture.detectChanges();
+      expect(root.querySelector('[data-table-progress]')).not.toBeNull();
+      expect(root.querySelector('app-live-status [role="status"]')?.textContent?.trim()).toBe(
+        'Loading…',
+      );
+    });
+    expect(root.querySelector('app-empty-pattern')).toBeNull();
+    fixture.componentRef.setInput('fetching', false);
+    await fixture.whenStable();
+    expect(root.querySelector('[data-table-progress]')).toBeNull();
+    expect(root.querySelector('app-empty-pattern')).not.toBeNull();
+  });
+
   it('renders twenty metadata rows in a labelled directory and never a full credential', async () => {
     const full = 'credential-that-must-not-be-rendered';
     const { root } = await render(

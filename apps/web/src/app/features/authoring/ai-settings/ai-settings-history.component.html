@@ -85,8 +85,9 @@
           ></button>
         </div>
       </ng-template>
-      @if (rows().length) {
+      @if (rows().length || store.history.isLoading()) {
         <app-data-table
+          [busy]="store.history.isLoading()"
           class="[--eg-row-default:var(--eg-space-11)]"
           [rows]="rows()"
           [columns]="columns()"
@@ -95,12 +96,12 @@
         />
       }
       <app-request-state
-        [status]="store.history.isLoading() ? 'loading' : store.history.error() ? 'error' : 'ready'"
+        [status]="store.history.error() ? 'error' : 'ready'"
         [error]="historyError()"
         [retryEligible]="true"
         (retry)="store.history.reload()"
       >
-        @if (page && !rows().length) {
+        @if (!store.history.isLoading() && page && !rows().length) {
           <app-empty-pattern
             [bare]="true"
             [icon]="'lucideClock'"

@@ -219,6 +219,7 @@ const DETAILS_WIDTH: DataTableColumnWidth = {
       </hlm-dialog>
     }
     <app-data-table
+      [busy]="fetching()"
       class="[&_td]:py-(--eg-space-1)!"
       [columns]="columns()"
       [rows]="rows()"
@@ -232,6 +233,7 @@ const DETAILS_WIDTH: DataTableColumnWidth = {
 export class AuditTableComponent {
   private readonly element = inject<ElementRef<HTMLElement>>(ElementRef);
 
+  readonly fetching = input(false);
   readonly rows = input.required<readonly AuditEntryDto[]>();
   protected readonly inspected = linkedSignal<
     readonly AuditEntryDto[],

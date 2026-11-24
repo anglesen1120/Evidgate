@@ -1,3 +1,4 @@
+import { LoadingPatternComponent } from '../../../shared/ui/states/loading-pattern.component';
 import { DatePipe } from '@angular/common';
 import {
   ChangeDetectionStrategy,
@@ -22,6 +23,7 @@ import { CREDENTIAL_STATUS, CredentialRecordComponent } from './credential-recor
 @Component({
   selector: 'app-connect-ci-binding-table',
   imports: [
+    LoadingPatternComponent,
     DatePipe,
     StatusPillComponent,
     HlmTableImports,
@@ -32,8 +34,9 @@ import { CREDENTIAL_STATUS, CredentialRecordComponent } from './credential-recor
   host: { class: 'block min-w-0' },
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
+    <app-loading-pattern [layout]="'table'" [busy]="fetching()" [hasRows]="bindings().length > 0" />
     <div hlmTableContainer class="min-w-0 max-w-full">
-      <table hlmTable class="wrap-normal">
+      <table [attr.aria-busy]="fetching()" hlmTable class="wrap-normal">
         <caption hlmCaption class="caption-top text-start">
           {{
             bindingsLabel
@@ -111,6 +114,7 @@ import { CREDENTIAL_STATUS, CredentialRecordComponent } from './credential-recor
 })
 export class ConnectCiBindingTableComponent {
   protected readonly dateTimeFormat = shortDateFormat(inject(LOCALE_ID), true, 'medium');
+  readonly fetching = input(false);
   readonly bindings = input.required<readonly CiBindingView[]>();
   readonly truncated = input.required<boolean>();
   readonly viewRecord = output<OnboardingRecordView>();

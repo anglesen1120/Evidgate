@@ -172,18 +172,14 @@ describe('AuditStore (09.7.1-T6)', () => {
       expect(store.loadError()?.message).not.toContain('o-1');
     });
 
-    it('clears the previous rows while the new first page is in flight', async () => {
+    it.each(['o-1', 'o-2'])('retains only rows belonging to the requested org %s', async (org) => {
       data.all = rows(4);
       await store.load('o-1');
-      expect(store.rows()).toHaveLength(4);
-
       data.manual = true;
-      const reload = store.load('o-1', { ...EMPTY_AUDIT_FILTERS, action: 'secret.rotate' });
-
+      const reload = store.load(org, { ...EMPTY_AUDIT_FILTERS, action: 'secret.rotate' });
       expect(store.phase()).toBe('loading');
-      expect(store.rows()).toEqual([]);
+      expect(store.rows()).toHaveLength(org === 'o-1' ? 4 : 0);
       expect(store.nextCursor()).toBeNull();
-
       data.pending[0]?.resolve({ items: rows(2), next_cursor: null });
       await reload;
       expect(store.phase()).toBe('ready');

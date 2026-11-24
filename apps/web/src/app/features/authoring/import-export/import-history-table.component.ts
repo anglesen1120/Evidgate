@@ -48,6 +48,7 @@ function template(cellTemplate: Cell | undefined) {
 })
 export class ImportHistoryTableComponent {
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  readonly fetching = input(false);
   readonly rows = input.required<readonly Version[]>();
   protected readonly selectedId = signal<string | null>(null);
   private opener: HTMLElement | null = null;

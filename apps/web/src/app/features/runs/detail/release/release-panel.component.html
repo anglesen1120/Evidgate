@@ -52,7 +52,7 @@
     }
     @switch (status()) {
       @case ('loading') {
-        <app-loading-pattern [label]="copy.loading" />
+        <app-loading-pattern [layout]="'table'" [busy]="true" [label]="copy.loading" />
       }
       @case ('error') {
         @if (retryAfter(); as refusal) {

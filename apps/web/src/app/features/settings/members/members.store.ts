@@ -200,13 +200,13 @@ export class MembersStore {
       this.removeAttempt += 1;
       this.removeStateSignal.set(IDLE);
     }
+    if (orgId !== this.orgId) this.membersSignal.set(NO_MEMBERS);
     this.orgId = orgId;
     this.phaseSignal.set('loading');
     this.loadErrorSignal.set(null);
     this.requestCursors = [undefined];
     this.pageSignal.set(1);
     this.busySignal.set(false);
-    this.membersSignal.set(NO_MEMBERS);
     this.nextCursorSignal.set(null);
 
     const [membersRead, rolesRead, catalogueRead] = await Promise.all([

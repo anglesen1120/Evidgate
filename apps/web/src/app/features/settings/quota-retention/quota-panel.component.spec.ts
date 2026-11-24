@@ -208,9 +208,12 @@ describe('QuotaPanelComponent', () => {
 
   it('announces loading without presenting stale counters', async () => {
     loadState.set('loading');
-    const { root } = await render();
+    const { root, fixture } = await render();
     expect(root.querySelector('[aria-busy]')?.getAttribute('aria-busy')).toBe('true');
-    expect(root.querySelector('[role="status"]')?.textContent).toContain('Loading');
+    await vi.waitFor(() => {
+      fixture.detectChanges();
+      expect(root.querySelector('[role="status"]')?.textContent).toContain('Loading');
+    });
     expect(root.querySelector('[data-quota-metric]')).toBeNull();
   });
 

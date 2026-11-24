@@ -303,7 +303,11 @@ describe('AuditPage', () => {
     const root = fixture.nativeElement as HTMLElement;
     const loading = root.querySelector('app-loading-pattern');
     expect(loading).not.toBeNull();
-    expect(loading?.textContent).toContain('Loading audit activity…');
+    expect(loading?.textContent?.trim()).toBe('');
+    await vi.waitFor(() => {
+      fixture.detectChanges();
+      expect(loading?.textContent).toContain('Loading audit activity…');
+    });
     expect(root.querySelector('[data-audit-row]')).toBeNull();
     expect(root.querySelector('[data-audit-summary]')).toBeNull();
     pending.resolve({ items: [], next_cursor: null });
@@ -454,15 +458,19 @@ describe('AuditPage', () => {
     expect(data.list).toHaveBeenCalledTimes(2);
     expect(store.page()).toBe(1);
     expect(store.rows()).toEqual([entry('first')]);
-    expect(root.querySelector('section[aria-busy]')?.getAttribute('aria-busy')).toBe('true');
-    expect(root.textContent).toContain('Loading activity page…');
+    expect(root.querySelector('[role="table"]')?.getAttribute('aria-busy')).toBe('true');
+    await vi.waitFor(() => {
+      fixture.detectChanges();
+      expect(root.querySelector('app-data-table [data-table-progress]')).not.toBeNull();
+      expect(root.querySelector('app-data-table app-live-status')?.textContent?.trim()).toBe('');
+    });
     pending.resolve({ items: [entry('second')], next_cursor: null });
     await fixture.whenStable();
     // Zoneless: a fake promise settling is not a pending task, so `whenStable()` can resolve with
     // the view still rendered from `paging() === true` — the store has settled, the DOM has not.
     fixture.detectChanges();
     expect(store.paging()).toBe(false);
-    expect(root.querySelector('section[aria-busy]')?.getAttribute('aria-busy')).toBe('false');
+    expect(root.querySelector('[role="table"]')?.getAttribute('aria-busy')).toBe('false');
   });
   it('contains an unexpected paging rejection without rendering internal exception text', async () => {
     data.list.mockResolvedValueOnce({ items: [entry('first')], next_cursor: 'page2' });

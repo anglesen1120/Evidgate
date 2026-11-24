@@ -92,6 +92,7 @@ interface PreviewRow {
       </span>
     </ng-template>
     <app-data-table
+      [busy]="fetching()"
       [rows]="visibleRows()"
       [columns]="columns()"
       [rowId]="rowId"
@@ -113,6 +114,7 @@ interface PreviewRow {
 export class ImportPreviewComponent {
   private readonly document = inject(DOCUMENT);
   private readonly injector = inject(Injector);
+  readonly fetching = input(false);
   readonly local = input<LocalPreview | null>(null);
   readonly report = input<ImportResponse | null>(null);
   readonly details = input<readonly ErrorEnvelopeDetail[]>([]);

@@ -88,6 +88,7 @@ export interface OnboardingViewState {
    * full-page pattern a failed `load` earns.
    */
   refreshFailure: OnboardingFailure;
+  refreshing: boolean;
   /** The step whose panel is rendered; gated by `currentStep()`. */
   viewStep: StepNumber;
   /** Counts the step moves a user caused; the shell's cue to move focus (see the header). */
@@ -99,6 +100,7 @@ function initialState(): OnboardingViewState {
     status: 'loading',
     failure: null,
     progress: null,
+    refreshing: false,
     refreshFailure: null,
     viewStep: 1,
     focusToken: 0,
@@ -165,7 +167,12 @@ export const OnboardingStore = signalStore(
       // Any load invalidates the create marker: a revisit, a route change or a Retry is a fresh
       // read, and the activation after it must not inherit a skip meant for another one.
       createdScope = null;
-      patchState(store, { status: 'loading', failure: null, refreshFailure: null });
+      patchState(store, {
+        status: 'loading',
+        failure: null,
+        refreshFailure: null,
+        refreshing: false,
+      });
       try {
         const progress = await progressService.load(orgId, projectId);
         if (loadSequence !== newestLoad) {
@@ -213,6 +220,7 @@ export const OnboardingStore = signalStore(
     async function refresh(orgId: string, projectId: string): Promise<void> {
       newestRefresh += 1;
       const refreshSequence = newestRefresh;
+      patchState(store, { refreshing: true });
       // The load counter this refresh found. A load that starts afterwards bumps it, which is
       // what makes this answer stale — and the reverse is not true: this refresh leaves `newestLoad`
       // alone, so the in-flight load it overlaps still publishes (F4).
@@ -224,14 +232,14 @@ export const OnboardingStore = signalStore(
         }
         // Only the derivation and its own failure marker: `status`, `viewStep`, `focusToken` and
         // the create marker belong to the activation on screen, which a refresh does not change.
-        patchState(store, { progress, refreshFailure: null });
+        patchState(store, { progress, refreshFailure: null, refreshing: false });
       } catch (error) {
         if (refreshSequence !== newestRefresh || loadAtStart !== newestLoad) {
           return;
         }
         // The page keeps what it renders — including the one-time secret it is revealing — and
         // shows that the refresh did not land (the shell has no full-page pattern for this).
-        patchState(store, { refreshFailure: failureFor(error) });
+        patchState(store, { refreshFailure: failureFor(error), refreshing: false });
       }
     }
 
@@ -252,6 +260,7 @@ export const OnboardingStore = signalStore(
           return;
         // A refresh started before this confirmation must not replace the newer server answer.
         newestRefresh += 1;
+        patchState(store, { refreshing: false });
         const done: StepsDone = { ...progress.done, 5: true };
         patchState(store, {
           progress: {

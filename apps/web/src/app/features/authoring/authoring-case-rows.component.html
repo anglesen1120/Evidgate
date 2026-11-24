@@ -1,4 +1,5 @@
 <app-data-table
+  [busy]="fetching()"
   class="[--eg-table-row:calc(var(--eg-row-default)_+_var(--eg-space-3))]! [&_th]:whitespace-nowrap! [&_th.cdk-column-select]:text-[length:var(--eg-space-0)]! [&_.cdk-column-select]:px-(--eg-space-2)! [&_.cdk-column-coverage>.eg-table-value]:max-w-none!"
   [columns]="columns()"
   [rows]="rows()"

@@ -299,7 +299,9 @@ describe('RevisionDiffComponent', { timeout: 15_000 }, () => {
         }),
     );
     const { fixture, root } = await render();
-    expect(root.querySelector('[data-policy-diff]')?.getAttribute('aria-busy')).toBe('true');
+    expect(root.querySelector('[data-policy-diff] [aria-busy]')?.getAttribute('aria-busy')).toBe(
+      'true',
+    );
     fixture.destroy();
     resolveBody?.(head);
     await Promise.resolve();

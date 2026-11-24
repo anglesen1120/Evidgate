@@ -14,15 +14,19 @@
     {{ copy.title }}
   </h2>
   <p class="text-xs text-muted-foreground" data-attempts-order>{{ copy.serverOrder }}</p>
-  @if (status() === 'loading') {
-    <app-loading-pattern />
-  } @else if (status() === 'error') {
+  <app-loading-pattern
+    [layout]="'table'"
+    [busy]="status() === 'loading' || loadingMore()"
+    [hasRows]="status() === 'ready' && !!attempts()?.length"
+    [label]="loadingMore() ? copy.loadingMore : undefined"
+  />
+  @if (status() === 'error') {
     <app-error-pattern [error]="error()" [headingLevel]="3" (retry)="requestFirstPageRetry()" />
-  } @else if (attempts() === null) {
+  } @else if (status() === 'ready' && attempts() === null) {
     <p data-attempts-unavailable class="text-muted-foreground">{{ copy.notProvided }}</p>
-  } @else if (attempts()?.length === 0) {
+  } @else if (status() === 'ready' && attempts()?.length === 0 && !loadingMore()) {
     <app-empty-pattern [icon]="'navRun'" [title]="copy.empty" />
-  } @else {
+  } @else if (status() === 'ready' && attempts()?.length) {
     @if (healingUnavailable()) {
       <p
         class="flex flex-wrap items-baseline gap-(--eg-space-3) rounded-(--eg-radius-md) bg-(--eg-surface-raised) p-(--eg-space-4) text-xs text-muted-foreground"
@@ -45,6 +49,7 @@
       [attr.aria-busy]="loadingMore() ? 'true' : null"
     >
       <table
+        [attr.aria-busy]="loadingMore()"
         hlmTable
         role="table"
         class="eg-table-layout min-w-0 [min-inline-size:0] w-full border-collapse [@media(max-width:767px)]:block [&_th]:whitespace-normal [&_th]:wrap-normal [&_td]:whitespace-normal [&_td]:wrap-anywhere [&_bdi]:block"

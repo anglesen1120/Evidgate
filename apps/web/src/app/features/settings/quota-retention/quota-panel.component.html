@@ -1,9 +1,11 @@
 <section
   class="@container grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 wrap-anywhere"
   aria-labelledby="quota-title"
-  [attr.aria-busy]="quota.projectPaging() || quota.loadState() === 'loading'"
 >
-  <header class="flex min-w-0 items-start gap-3">
+  <header
+    [attr.aria-busy]="quota.projectPaging() || quota.loadState() === 'loading'"
+    class="flex min-w-0 items-start gap-3"
+  >
     <span
       class="grid size-12 shrink-0 place-items-center rounded-lg bg-(--eg-accent-soft) text-(--eg-accent)"
     >
@@ -40,7 +42,7 @@
     </div>
   </header>
   @if (quota.loadState() === 'loading' || quota.loadState() === 'idle') {
-    <app-loading-pattern [label]="copy.loading" [layout]="loadingLayout" [bare]="true" />
+    <app-loading-pattern [label]="copy.loading" [layout]="'table'" [busy]="true" [bare]="true" />
   } @else if (quota.usageSummary(); as summary) {
     @if (summary.next_cursor) {
       <app-inline-feedback
@@ -175,6 +177,7 @@
             ></button>
           </ng-template>
           <app-data-table
+            [busy]="quota.projectPaging()"
             [columns]="[...columns(), { ...viewColumn, cellTemplate: projectAction }]"
             [rows]="metric.projects"
             [rowId]="projectId"
@@ -216,8 +219,17 @@
             </h3>
             <p class="m-0 text-sm text-muted-foreground">{{ copy.stateDescription }}</p>
           </header>
+          <app-loading-pattern
+            [layout]="'table'"
+            [busy]="quota.projectPaging()"
+            [hasRows]="summary.metrics.length > 0"
+          />
           <div hlmTableContainer>
-            <table hlmTable aria-labelledby="quota-state-title">
+            <table
+              [attr.aria-busy]="quota.projectPaging()"
+              hlmTable
+              aria-labelledby="quota-state-title"
+            >
               <thead hlmTHead>
                 <tr hlmTr>
                   <th hlmTh scope="col">{{ copy.metric }}</th>

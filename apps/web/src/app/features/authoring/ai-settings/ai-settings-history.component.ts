@@ -1,3 +1,4 @@
+import { rowsDuringFetch } from '../../../shared/ui/data-table/rows-during-fetch';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -92,8 +93,13 @@ export class AiSettingsHistoryComponent {
   });
   private opener: HTMLElement | null = null;
   protected readonly rowId = (row: AiSettingsVersionSummary): number => row.version_no;
+  private readonly servedRows = rowsDuringFetch(
+    this.store.scope,
+    this.store.history.isLoading,
+    () => this.store.historyPage()?.items ?? [],
+  );
   protected readonly rows = computed(() =>
-    (this.store.historyPage()?.items ?? []).filter((row) =>
+    this.servedRows().filter((row) =>
       (row.reason ?? '').toLocaleLowerCase().includes(this.filter().toLocaleLowerCase()),
     ),
   );

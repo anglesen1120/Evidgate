@@ -62,7 +62,8 @@
 </p>
 <app-request-state
   class="mt-6 [&_.state-panel]:min-h-88"
-  [status]="status()"
+  [status]="status() === 'loading' && store.members().length ? 'ready' : status()"
+  [tableLoading]="true"
   [loadingLabel]="copy.loading"
   [error]="store.loadError()"
   [emptyIcon]="'navPeople'"
@@ -77,7 +78,7 @@
     [attr.data-members-page-count]="''"
     [metrics]="pageCounts()"
   />
-  <section hlmCard class="members-content min-w-0 gap-0 rounded-xl p-0" [attr.aria-busy]="paging()">
+  <section hlmCard class="members-content min-w-0 gap-0 rounded-xl p-0">
     <div hlmCardHeader class="border-b border-border px-5 py-4">
       @if (ownsPageHeading) {
         <h2 hlmCardTitle [size]="'subsection'" class="m-0">{{ copy.directory }}</h2>
@@ -97,6 +98,7 @@
       </div>
     </div>
     <app-member-list
+      [fetching]="status() === 'loading' || paging()"
       class="[&_.caption]:sr-only [&_.scroll]:rounded-none [&_.scroll]:border-0"
       [members]="visibleMembers()"
       [canWrite]="canWrite()"
@@ -121,7 +123,7 @@
     }
   </section>
 </app-request-state>
-@if (store.phase() === 'ready') {
+@if (store.phase() === 'ready' || (status() === 'loading' && store.members().length)) {
   <app-data-table-pager
     class="pagination border-t border-border px-4 py-3"
     [page]="store.page()"
@@ -129,13 +131,14 @@
     [count]="visibleMembers().length"
     [total]="null"
     [hasNext]="store.hasMore()"
-    [busy]="paging() || store.busy() || !retryReady()"
+    [busy]="paging() || status() === 'loading' || !retryReady()"
     (previous)="previous()"
     (next)="next()"
     (pageSizeChange)="changePageSize($event)"
   />
   @if (store.members().length > 0) {
     <app-role-matrix
+      [fetching]="paging() || status() === 'loading'"
       class="mt-6"
       [headingLevel]="ownsPageHeading ? 2 : 3"
       [matrix]="visibleMatrix()"

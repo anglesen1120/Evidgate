@@ -1,3 +1,4 @@
+import { rowsDuringFetch } from '../../../shared/ui/data-table/rows-during-fetch';
 import { FieldHintComponent } from '../../../shared/ui/forms/field-hint.component';
 import { DOCUMENT, NgTemplateOutlet } from '@angular/common';
 import {
@@ -110,6 +111,11 @@ export class PendingChangesPage {
       return params;
     },
   });
+  protected readonly displayRows = rowsDuringFetch(
+    () => (this.store.canRead() ? this.store.projectId() : null),
+    this.store.queueLoading,
+    this.store.rows,
+  );
   protected readonly status = computed<'loading' | 'ready' | 'error'>(() =>
     this.store.queueStatus() === 'ready'
       ? 'ready'

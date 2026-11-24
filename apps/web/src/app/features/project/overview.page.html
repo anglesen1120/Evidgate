@@ -71,6 +71,7 @@
         <app-dashboard-widget
           class="wide"
           data-dashboard-trend
+          [tableContent]="rows().length > 0"
           [title]="copy.trend"
           [description]="sampleLabel()"
           [loading]="store.runs.loading()"
@@ -131,6 +132,7 @@
         <app-dashboard-widget
           class="wide"
           data-dashboard-recent
+          [tableContent]="true"
           [title]="recentTitle()"
           [description]="sampleLabel()"
           [loading]="store.runs.loading()"
@@ -140,7 +142,11 @@
           [emptyIcon]="'navRun'"
           (retry)="store.runs.reload()"
         >
-          <app-dashboard-runs [rows]="latest()" [decisionsVisible]="store.decisionsVisible()" />
+          <app-dashboard-runs
+            [fetching]="store.runs.loading()"
+            [rows]="latest()"
+            [decisionsVisible]="store.decisionsVisible()"
+          />
         </app-dashboard-widget>
       }
       @if (authoringVisible()) {

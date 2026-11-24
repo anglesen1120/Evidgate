@@ -1,3 +1,4 @@
+import { LoadingPatternComponent } from '../../../shared/ui/states/loading-pattern.component';
 import { formatNumber } from '@angular/common';
 import {
   ChangeDetectionStrategy,
@@ -36,6 +37,7 @@ import { API_TOKENS_COPY } from './api-tokens.copy';
 @Component({
   selector: 'app-api-token-list',
   imports: [
+    LoadingPatternComponent,
     HlmTableImports,
     ShellIconComponent,
     SettingsPageCountsComponent,
@@ -84,10 +86,16 @@ import { API_TOKENS_COPY } from './api-tokens.copy';
           </p>
         </div>
       </header>
+      <app-loading-pattern
+        [layout]="'table'"
+        [busy]="fetching()"
+        [hasRows]="filtered().length > 0"
+      />
       @if (filtered().length) {
         @let narrow = viewport.narrow();
         <div hlmTableContainer>
           <table
+            [attr.aria-busy]="fetching()"
             hlmTable
             class="w-full table-fixed border-collapse"
             aria-labelledby="api-directory-title"
@@ -208,7 +216,7 @@ import { API_TOKENS_COPY } from './api-tokens.copy';
             </tbody>
           </table>
         </div>
-      } @else {
+      } @else if (!fetching()) {
         <div class="grid justify-items-start gap-3 px-5 py-4">
           <app-empty-pattern
             [icon]="'navKey'"
@@ -234,6 +242,7 @@ export class ApiTokenListComponent {
   protected readonly viewport = inject(NarrowMutationPolicy);
   private readonly locale = inject(LOCALE_ID);
 
+  readonly fetching = input(false);
   readonly rows = input<readonly ApiTokenView[]>([]);
   readonly canWrite = input(false);
   readonly busy = input(false);

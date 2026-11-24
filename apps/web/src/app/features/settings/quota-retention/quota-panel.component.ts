@@ -80,7 +80,6 @@ export class QuotaPanelComponent {
   >({ source: this.quota.usageSummary, computation: () => null });
   protected readonly pageSize = 'page' as const;
   protected readonly subsectionSize = 'subsection' as const;
-  protected readonly loadingLayout = 'cards' as const;
   protected readonly destructive = 'destructive' as const;
   protected readonly off = 'off' as const;
   protected readonly warningTone = 'warning' as const;

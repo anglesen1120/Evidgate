@@ -189,12 +189,18 @@ describe('Members invitation feedback and contextual loading', () => {
   });
 
   it('announces members loading rather than an unrelated evidence context', async () => {
+    store.members.set([]);
     store.phase.set('loading');
     const fixture = TestBed.createComponent(MembersPage);
     await fixture.whenStable();
     const root = fixture.nativeElement as HTMLElement;
     expect(root.querySelectorAll('app-loading-pattern')).toHaveLength(1);
-    expect(root.querySelector('app-loading-pattern')?.textContent).toContain('Loading members…');
+    await vi.waitFor(() => {
+      fixture.detectChanges();
+      expect(root.querySelector('app-loading-pattern [role="status"]')?.textContent).toContain(
+        'Loading members…',
+      );
+    });
     expect(root.querySelector('app-member-list')).toBeNull();
   });
 });

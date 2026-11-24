@@ -162,19 +162,8 @@
 @if (store.phase() === 'idle') {
   <p hlmAlert class="text-muted-foreground">{{ copy.idle }}</p>
 }
-@if (store.phase() === 'loading') {
-  <div
-    hlmCard
-    class="grid min-w-0 gap-(--eg-space-4) rounded-lg p-(--eg-space-5)"
-    role="status"
-    [attr.aria-busy]="true"
-  >
-    <p class="font-semibold">{{ copy.loading }}</p>
-    <div aria-hidden="true" class="grid gap-(--eg-space-3)">
-      <div hlmSkeleton class="h-(--eg-space-7) w-1/3" aria-hidden="true"></div>
-      <div hlmSkeleton class="h-(--eg-space-11) w-full" aria-hidden="true"></div>
-    </div>
-  </div>
+@if (store.phase() === 'loading' && !store.revisions().length) {
+  <app-loading-pattern [layout]="'table'" [busy]="true" [label]="copy.loading" />
 }
 @if (store.phase() === 'not_found') {
   <p hlmAlert class="text-muted-foreground">{{ copy.notFound }}</p>
@@ -222,6 +211,7 @@
 @if (store.phase() === 'ready' || store.revisions().length > 0) {
   <div class="grid min-w-0 gap-(--eg-space-6)">
     <app-policy-revision-list
+      [fetching]="store.paging() || paging() || store.phase() === 'loading'"
       [rows]="store.revisions()"
       [headId]="store.headRevisionId()"
       [hasMore]="store.hasMore()"

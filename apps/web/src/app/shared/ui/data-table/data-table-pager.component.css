@@ -27,6 +27,10 @@
   overflow-wrap: anywhere;
 }
 
+.eg-table-pagination[aria-busy='true'] button {
+  cursor: progress;
+}
+
 .page-actions .page-boundary {
   border-color: var(--eg-border);
   font-weight: var(--eg-weight-regular);

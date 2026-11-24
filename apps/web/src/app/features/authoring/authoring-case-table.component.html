@@ -13,7 +13,8 @@
         type="button"
         [variant]="'ghost'"
         [attr.aria-pressed]="draft().state === state"
-        [disabled]="searchTooLong() || itemInvalid()"
+        [disabled]="busy() || store.loadingMore() || searchTooLong() || itemInvalid()"
+        [attr.aria-busy]="busy() || store.loadingMore()"
         (click)="quickState(draft().state === state ? '' : state)"
         class="lifecycle-option rounded-none border-s border-border aria-pressed:bg-(--eg-accent-soft)"
       >
@@ -43,7 +44,7 @@
     </summary>
     <form
       class="filters"
-      (ngSubmit)="apply()"
+      (ngSubmit)="!(busy() || store.loadingMore()) && apply()"
       [attr.aria-label]="copy.filters"
       [attr.aria-describedby]="'authoring-case-scope-help'"
     >
@@ -138,12 +139,21 @@
             hlmBtn
             [variant]="'outline'"
             type="submit"
-            [disabled]="searchTooLong() || itemInvalid()"
+            [disabled]="busy() || store.loadingMore() || searchTooLong() || itemInvalid()"
+            [attr.aria-busy]="busy() || store.loadingMore()"
             data-case-apply
           >
             {{ copy.apply }}
           </button>
-          <button hlmBtn [variant]="'outline'" type="button" (click)="clear()" data-case-clear>
+          <button
+            hlmBtn
+            [variant]="'outline'"
+            type="button"
+            (click)="!(busy() || store.loadingMore()) && clear()"
+            [disabled]="busy() || store.loadingMore()"
+            [attr.aria-busy]="busy() || store.loadingMore()"
+            data-case-clear
+          >
             {{ copy.reset }}
           </button>
         </div>
@@ -182,7 +192,7 @@
 }
 
 <app-live-status [text]="capAnnouncement()" />
-<div class="results" [attr.aria-busy]="busy()">
+<div class="results">
   @if (projectEmpty()) {
     <ng-content />
   } @else if (store.invalidLink()) {
@@ -217,7 +227,8 @@
       />
     }
     <app-request-state
-      [status]="busy() && !hasRows() ? 'loading' : store.status()"
+      [status]="busy() ? (hasRows() ? 'ready' : 'loading') : store.status()"
+      [tableLoading]="true"
       [loadingLabel]="copy.loading"
       [error]="store.error()"
       [emptyIcon]="'navList'"
@@ -233,7 +244,11 @@
       (emptyAction)="clear()"
     >
       <p class="help">{{ copy.order }}</p>
-      <app-authoring-case-rows [rows]="store.rows()" [editorScope]="editorScope()" />
+      <app-authoring-case-rows
+        [fetching]="busy() || store.loadingMore()"
+        [rows]="store.rows()"
+        [editorScope]="editorScope()"
+      />
     </app-request-state>
     @if (store.browseCapped()) {
       <app-inline-feedback
