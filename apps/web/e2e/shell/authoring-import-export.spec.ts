@@ -71,12 +71,14 @@ for (const locale of LOCALES) {
           await expect(page.locator('[data-import-confirm]')).toHaveCount(0);
           await pick(page);
           await expect(page.locator('app-import-preview')).toContainText('Checkout');
+          const pager = page.locator('app-import-preview app-data-table-pager');
           await expect(
-            page.locator('app-import-preview app-data-table-pager [data-page="previous"]'),
-          ).toHaveAttribute('aria-disabled', 'true');
-          await expect(
-            page.locator('app-import-preview app-data-table-pager [data-page="next"]'),
-          ).toHaveAttribute('aria-disabled', 'true');
+            pager.getByText(locale === 'vi' ? 'Hiển thị 1–1 trên 1' : 'Showing 1–1 of 1', {
+              exact: true,
+            }),
+          ).toBeVisible();
+          await expect(pager.getByRole('navigation')).toHaveCount(0);
+          await expect(pager.locator('button, [role="combobox"]')).toHaveCount(0);
           await expect(page.locator('[data-import-history] app-data-table-pager')).toHaveCount(1);
           await expect(page.locator('[data-import-history]')).toContainText(
             locale === 'vi' ? 'mới nhất trước' : 'newest first',

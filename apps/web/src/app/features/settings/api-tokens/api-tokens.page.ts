@@ -174,6 +174,7 @@ import { escapeFormatChars } from '../../../shared/ui/values/ref-name-display';
           [hasNext]="store.hasNext()"
           [busy]="store.pageResource.isLoading() || !retryReady()"
           [fetching]="store.pageResource.isLoading()"
+          [recovering]="!!store.visiblePage() && !!store.loadError()"
           (previous)="previous()"
           (next)="next()"
           (pageSizeChange)="changePageSize($event)"

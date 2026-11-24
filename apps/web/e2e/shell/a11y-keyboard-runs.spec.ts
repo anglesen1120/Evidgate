@@ -139,21 +139,8 @@ test('the list, a row and the way back are keyboard-reachable and identifiable',
     const root = page.locator(selector);
     if (selector === '#producers') await tabThroughTableScroller(page, root);
     await tabThroughRunControls(page, root.locator(rows), copies);
-    const pager = root.getByRole('navigation', { name: 'Table pagination' });
-    const size = pager.getByRole('combobox', { name: 'Rows per page', exact: true });
-    await page.keyboard.press('Tab');
-    await expect(size).toBeFocused();
-    await expectFocusRing(size, '2px');
-    for (const name of ['Previous page', 'Next page']) {
-      const button = pager.getByRole('button', { name, exact: true });
-      await page.keyboard.press('Tab');
-      await expect(button).toBeFocused();
-      await expectFocusRing(button, '2px');
-      await expect(button).toHaveAttribute('aria-disabled', 'true');
-      await page.keyboard.press('Enter');
-      await expect(button).toBeFocused();
-      await expect(pager.locator('.page-range')).toHaveText(summary);
-    }
+    await expect(root.getByRole('navigation', { name: 'Table pagination' })).toHaveCount(0);
+    await expect(root.locator('app-data-table-pager .page-range')).toHaveText(summary);
   }
 
   // Evidence and the latest live decision are tabs: only the selected tab is a Tab stop, the arrow

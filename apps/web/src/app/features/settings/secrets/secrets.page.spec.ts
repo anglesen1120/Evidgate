@@ -174,6 +174,7 @@ describe('SecretsPage', () => {
     expect(document.querySelector('[data-testid="reveal-value"]')).toBeNull();
   });
   it('keeps the token table named and uses the shared pagination landmark', async () => {
+    store.hasMore.set(true);
     const { fixture } = await render();
     const page = await TestbedHarnessEnvironment.harnessForFixture(fixture, SecretsPagingHarness);
     expect(await (await page.tokenTable()).getAttribute('aria-label')).toBe('Secret references');

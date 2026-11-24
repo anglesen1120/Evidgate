@@ -126,7 +126,7 @@ export class DataTableComponent<T> {
   readonly busy = input<boolean>();
   /** Server pagers own their accessible progress feedback even when outside this table. */
   readonly progressAtPager = input(false);
-  readonly rowHeight = input<DataTableDensity>('default');
+  readonly rowHeight = input<DataTableDensity>('compact');
   readonly virtualThreshold = input(200);
   /** Opt ordinary tables into record reflow when readable columns cannot fit their container. */
   readonly fitToContainer = input(false);
@@ -170,7 +170,7 @@ export class DataTableComponent<T> {
     return rows.slice(start, start + this.pageSize);
   });
   protected readonly cellClasses =
-    'box-border min-w-0 h-[var(--eg-table-row)] px-[var(--eg-space-4)] py-[var(--eg-table-inset)] whitespace-normal [overflow-wrap:anywhere] border-b border-border [&.numeric]:text-right [&.numeric]:tabular-nums';
+    'box-border min-w-0 h-[var(--eg-table-row)] px-[var(--eg-space-4)] py-[var(--eg-table-inset)] whitespace-normal [overflow-wrap:anywhere] border-b border-border [&.numeric]:text-end [&.numeric]:tabular-nums';
   protected readonly bodyCellClasses = computed(() =>
     hlm(this.cellClasses, this.virtual() ? 'py-0 border-b-0 shadow-sm' : ''),
   );

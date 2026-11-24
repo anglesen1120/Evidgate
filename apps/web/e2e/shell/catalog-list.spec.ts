@@ -133,14 +133,12 @@ for (const locale of LOCALES) {
   }) => {
     await page.goto(withVariants(base, ['?fixture.variant.listCases=empty']));
     await expect(page.locator('app-empty-pattern')).toBeVisible();
-    await expect(page.locator('app-data-table-pager [data-page="next"]')).toHaveAttribute(
-      'aria-disabled',
-      'true',
-    );
-    await expect(page.locator('app-data-table-pager [data-page="previous"]')).toHaveAttribute(
-      'aria-disabled',
-      'true',
-    );
+    const pager = page.locator('app-data-table-pager');
+    await expect(
+      pager.getByText(locale === 'vi' ? 'Hiển thị 0–0' : 'Showing 0–0', { exact: true }),
+    ).toBeVisible();
+    await expect(pager.getByRole('navigation')).toHaveCount(0);
+    await expect(pager.locator('button, [role="combobox"]')).toHaveCount(0);
     await page.goto(withVariants(base, ['?q=no-such-identity']));
     await expect(page.locator('app-empty-pattern')).toBeVisible();
     await expect(page.locator('app-data-table-pager [data-page="next"]')).toHaveAttribute(

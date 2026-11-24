@@ -40,6 +40,7 @@ class SecurityPageHarness extends ComponentHarness {
   readonly forbidden = this.locatorForOptional('app-forbidden-pattern');
   readonly loading = this.locatorForOptional('app-loading-pattern');
   readonly pager = this.locatorFor('app-data-table-pager');
+  readonly pagerControls = this.locatorForAll('app-data-table-pager button');
   readonly previous = this.locatorFor('app-data-table-pager [data-page="previous"]');
   readonly next = this.locatorFor('app-data-table-pager [data-page="next"]');
   readonly retry = this.locatorFor('app-error-pattern button');
@@ -253,23 +254,23 @@ describe('SecurityEventsPage', () => {
     },
   );
   it('renders the shared pager with only 20/50/100 choices and unknown-total page text', async () => {
+    list.mockResolvedValueOnce({ items: [event], next_cursor: 'second' });
     const { harness } = await render();
     expect(list).toHaveBeenLastCalledWith('org1', { limit: 20 }, expect.any(AbortSignal));
     expect(await (await harness.pager()).text()).toContain('Page 1');
     expect(await (await harness.pager()).text()).not.toContain('of 1');
     expect(await (await harness.previous()).getAttribute('aria-disabled')).toBe('true');
-    expect(await (await harness.next()).getAttribute('aria-disabled')).toBe('true');
+    expect(await (await harness.next()).getAttribute('aria-disabled')).toBe('false');
     await (await harness.sizeTrigger()).click();
     expect(await Promise.all((await harness.sizeOptions()).map((option) => option.text()))).toEqual(
       ['20', '50', '100'],
     );
   });
-  it('keeps the shared pager available for an empty page and refuses unavailable navigation', async () => {
+  it('shows only the page-local range for an empty terminal result', async () => {
     list.mockResolvedValue({ items: [], next_cursor: null });
     const { harness } = await render();
-    expect(await (await harness.pager()).text()).toContain('Page 1');
-    await (await harness.next()).click();
-    await (await harness.previous()).click();
+    expect(await (await harness.pager()).text()).toContain('Showing 0–0');
+    expect(await harness.pagerControls()).toHaveLength(0);
     expect(list).toHaveBeenCalledTimes(1);
     expect(await harness.content()).toContain('No security events recorded');
   });

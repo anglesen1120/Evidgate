@@ -37,8 +37,26 @@ class AuditPagingHarness extends ComponentHarness {
   readonly action = this.locatorFor('input[name="action"]');
   readonly apply = this.locatorFor('button[type="submit"]');
   readonly size = this.locatorFor('app-data-table-pager hlm-select-trigger button');
+  readonly range = this.locatorFor('app-data-table-pager .page-range');
+  private readonly options = this.documentRootLocatorFactory().locatorForAll('[role="option"]');
   readonly retry = this.locatorFor('[data-audit-paging-error] button');
   readonly pagingError = this.locatorFor('[data-audit-paging-error]');
+  async chooseSize(size: number): Promise<void> {
+    const trigger = await this.size();
+    await trigger.focus();
+    await trigger.click();
+    for (const option of await this.options()) {
+      if ((await option.text()).trim() === String(size)) return option.click();
+    }
+    throw new Error(`Missing page size ${size}`);
+  }
+  async hasNavigation(): Promise<boolean> {
+    return (
+      (await this.locatorForOptional(
+        'app-data-table-pager [data-page], app-data-table-pager nav[aria-label]',
+      )()) !== null
+    );
+  }
 }
 
 class AuditDialogHarness extends ComponentHarness {
@@ -54,10 +72,6 @@ class AuditTableBoundaryHarness extends ComponentHarness {
   readonly time = this.locatorFor('app-absolute-time');
   readonly dates = this.locatorForAll('time');
   readonly view = this.locatorFor('[data-audit-view]');
-}
-
-class AuditPageSizeOptionHarness extends ComponentHarness {
-  static hostSelector = '[role="option"]';
 }
 
 function required<T extends Element>(root: HTMLElement, selector: string): T {
@@ -121,13 +135,7 @@ describe('AuditPage boundary browsing and export scope', () => {
         if (store.hasNext()) await (await harness.next()).click();
       }
       expect(seen).toEqual(entries.map((event) => event.created_at));
-      const next = await harness.next();
-      expect(await next.getAttribute('aria-disabled')).toBe('true');
-      expect(await next.getProperty('disabled')).toBe(false);
-      await next.focus();
-      await next.click();
-      await next.sendKeys(TestKey.ENTER);
-      expect(await next.isFocused()).toBe(true);
+      expect(await harness.hasNavigation()).toBe(count > 20);
       expect(store.page()).toBe(Math.max(1, Math.ceil(count / 20)));
       expect(list).toHaveBeenCalledTimes(Math.max(1, Math.ceil(count / 20)));
     },
@@ -186,14 +194,7 @@ describe('AuditPage boundary browsing and export scope', () => {
     expect(store.filters().action).toBe('auth.login');
     expect(list).toHaveBeenLastCalledWith('org-1', { limit: 20, action: 'auth.login' });
     await (await harness.next()).click();
-    await (await harness.size()).click();
-    const options = await TestbedHarnessEnvironment.documentRootLoader(fixture).getAllHarnesses(
-      AuditPageSizeOptionHarness,
-    );
-    for (const option of options) {
-      const host = await option.host();
-      if ((await host.text()).trim() === '50') await host.click();
-    }
+    await harness.chooseSize(50);
     expect(store.pageSize()).toBe(50);
     expect(store.page()).toBe(1);
     expect(store.filters().action).toBe('auth.login');
@@ -288,47 +289,58 @@ describe('AuditPage boundary browsing and export scope', () => {
     expect(store.filters().action).toBe('auth.login');
     expect(store.page()).toBe(1);
     expect(list).toHaveBeenLastCalledWith('org-1', { limit: 20, action: 'auth.login' });
-    await (await harness.size()).click();
-    const options = await TestbedHarnessEnvironment.documentRootLoader(fixture).getAllHarnesses(
-      AuditPageSizeOptionHarness,
-    );
-    const choices = await Promise.all(
-      options.map(async (option) => {
-        const host = await option.host();
-        return { host, text: await host.text() };
-      }),
-    );
-    const selected = choices.find((option) => option.text.trim() === '50');
-    if (!selected) throw new Error('Expected the supported 50-row option');
-    await selected.host.click();
+    await harness.chooseSize(50);
     expect(store.pageSize()).toBe(50);
     expect(store.page()).toBe(1);
     expect(store.filters().action).toBe('auth.login');
     expect(list).toHaveBeenLastCalledWith('org-1', { limit: 50, action: 'auth.login' });
   });
 
-  it('announces terminal navigation as unavailable and refuses mouse or keyboard activation', async () => {
-    list.mockResolvedValue({ items: [row(1)], next_cursor: null });
+  it('leaves focus on the one-row range when choosing 20 removes audit paging controls', async () => {
+    list
+      .mockResolvedValueOnce({ items: [row(1)], next_cursor: 'next' })
+      .mockResolvedValue({ items: [row(1)], next_cursor: null });
+    const fixture = TestBed.createComponent(AuditPage);
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, AuditPagingHarness);
+    await harness.chooseSize(100);
+    expect(await (await harness.size()).text()).toBe('100');
+    const host = fixture.nativeElement as HTMLElement;
+    const region = host.querySelector<HTMLElement>('app-audit-table [hlmTableContainer]');
+    if (!region) throw new Error('audit table container not rendered');
+    (region.querySelector('table') as HTMLElement).style.minWidth = '2000px';
+    region.scrollLeft = 300;
+    expect(region.scrollLeft).toBeGreaterThan(0);
+    await harness.chooseSize(20);
+    expect(list).toHaveBeenLastCalledWith('org-1', { limit: 20 });
+    expect(await harness.hasNavigation()).toBe(false);
+    expect(region.isConnected).toBe(true);
+    expect(region.scrollLeft).toBe(0);
+    const range = await harness.range();
+    expect(await range.text()).toBe('Showing 1–1');
+    expect(await range.isFocused()).toBe(true);
+  });
+
+  it('hides controls on a terminal first page and refuses activation of disabled Next on a terminal later page', async () => {
+    list
+      .mockResolvedValueOnce({ items: [row(1)], next_cursor: 'c1' })
+      .mockResolvedValueOnce({ items: [row(2)], next_cursor: null });
     const fixture = TestBed.createComponent(AuditPage);
     await fixture.whenStable();
     const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, AuditPagingHarness);
+    await (await harness.next()).click();
+    expect(fixture.debugElement.injector.get(AuditStore).page()).toBe(2);
     const next = await harness.next();
     const previous = await harness.previous();
     expect(await next.getProperty('disabled')).toBe(false);
-    expect(await previous.getProperty('disabled')).toBe(false);
     expect(await next.getAttribute('aria-disabled')).toBe('true');
-    expect(await previous.getAttribute('aria-disabled')).toBe('true');
+    expect(await previous.getAttribute('aria-disabled')).not.toBe('true');
     await next.focus();
     expect(await next.isFocused()).toBe(true);
     await next.click();
     await next.sendKeys(TestKey.ENTER);
     expect(await next.isFocused()).toBe(true);
-    await previous.click();
-    await previous.focus();
-    await previous.sendKeys(TestKey.ENTER);
-    expect(await previous.isFocused()).toBe(true);
-    expect(list).toHaveBeenCalledTimes(1);
-    expect(fixture.debugElement.injector.get(AuditStore).rows()).toEqual([row(1)]);
+    expect(list).toHaveBeenCalledTimes(2);
+    expect(fixture.debugElement.injector.get(AuditStore).rows()).toEqual([row(2)]);
   });
 });
 

@@ -22,6 +22,13 @@ class PreviewHarness extends ComponentHarness {
       .getAttribute('aria-disabled')
       .then((value) => value !== 'true');
   }
+  async hasNavigation(): Promise<boolean> {
+    return (
+      (await this.locatorForOptional(
+        'app-data-table-pager [data-page], app-data-table-pager nav[aria-label]',
+      )()) !== null
+    );
+  }
   async hasRow(index: number): Promise<boolean> {
     return (await this.locatorForOptional(`#import-row-${index}-status`)()) !== null;
   }
@@ -74,10 +81,7 @@ describe('Import preview client paging', () => {
   it.each([0, 1])('shows an honest range and no navigation for %s rows', async (count) => {
     const { harness } = await setup(count);
     expect(await harness.summary()).toBe(`Showing ${count}–${count} of ${count}`);
-    expect(await harness.available('previous')).toBe(false);
-    expect(await harness.available('next')).toBe(false);
-    await harness.move('next');
-    expect(await harness.summary()).toBe(`Showing ${count}–${count} of ${count}`);
+    expect(await harness.hasNavigation()).toBe(false);
   });
 
   it('pages first/middle/last and Previous after Next without mutating any preview payload rows', async () => {

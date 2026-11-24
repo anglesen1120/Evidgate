@@ -84,6 +84,7 @@ describe('AttemptsTableComponent server pagination', () => {
   it('offers only 20, 50 and 100 rows and emits the selected size', async () => {
     const { fixture } = await render([row()]);
     const table = await TestbedHarnessEnvironment.harnessForFixture(fixture, AttemptsHarness);
+    fixture.componentRef.setInput('hasMore', true);
     const changed = vi.fn();
     fixture.componentInstance.pageSizeChange.subscribe(changed);
     expect(await (await table.trigger()).text()).toContain('20');

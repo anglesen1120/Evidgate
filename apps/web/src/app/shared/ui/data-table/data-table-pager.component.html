@@ -1,5 +1,10 @@
-<nav class="eg-table-pagination" [attr.aria-label]="landmark()" [attr.aria-busy]="pending()">
-  <span class="page-range">{{ summary() }}</span>
+<nav
+  class="eg-table-pagination"
+  [attr.role]="showControls() ? null : 'presentation'"
+  [attr.aria-label]="showControls() ? landmark() : null"
+  [attr.aria-busy]="showControls() ? pending() : null"
+>
+  <span #range class="page-range" tabindex="-1">{{ summary() }}</span>
   <!-- Reserve feedback beside the controls, using the actual translated label width. -->
   <span
     data-page-feedback
@@ -11,7 +16,7 @@
     <span class="page-spinner" aria-hidden="true"></span>
     {{ loadingLabel }}
   </span>
-  @if (loadedCaption() === null) {
+  @if (showControls() && loadedCaption() === null) {
     <div class="size-field">
       <label hlmLabel [for]="sizeId">{{ sizeLabel }}</label>
       <hlm-select
@@ -34,35 +39,37 @@
       </hlm-select>
     </div>
   }
-  <div class="page-actions">
-    <span role="status">{{ pageLabel() }}</span>
-    <button
-      hlmBtn
-      type="button"
-      [attr.data-page]="'previous'"
-      [variant]="'outline'"
-      [size]="'icon'"
-      [hlmTooltip]="previousLabel"
-      [attr.aria-label]="previousLabel"
-      [class.page-boundary]="page() <= 1"
-      [attr.aria-disabled]="busy() || page() <= 1"
-      (click)="move(false)"
-    >
-      <hlm-icon [name]="'lucideChevronLeft'" class="size-(--eg-space-5)" />
-    </button>
-    <button
-      hlmBtn
-      type="button"
-      [attr.data-page]="'next'"
-      [variant]="'outline'"
-      [size]="'icon'"
-      [hlmTooltip]="nextLabel"
-      [attr.aria-label]="nextLabel"
-      [class.page-boundary]="!canNext()"
-      [attr.aria-disabled]="busy() || !canNext()"
-      (click)="move(true)"
-    >
-      <hlm-icon [name]="'lucideChevronRight'" class="size-(--eg-space-5)" />
-    </button>
-  </div>
+  @if (showControls()) {
+    <div class="page-actions">
+      <span role="status">{{ pageLabel() }}</span>
+      <button
+        hlmBtn
+        type="button"
+        [attr.data-page]="'previous'"
+        [variant]="'outline'"
+        [size]="'icon'"
+        [hlmTooltip]="previousLabel"
+        [attr.aria-label]="previousLabel"
+        [class.page-boundary]="page() <= 1"
+        [attr.aria-disabled]="busy() || page() <= 1"
+        (click)="move(false)"
+      >
+        <hlm-icon [name]="'lucideChevronLeft'" class="size-(--eg-space-5)" />
+      </button>
+      <button
+        hlmBtn
+        type="button"
+        [attr.data-page]="'next'"
+        [variant]="'outline'"
+        [size]="'icon'"
+        [hlmTooltip]="nextLabel"
+        [attr.aria-label]="nextLabel"
+        [class.page-boundary]="!canNext()"
+        [attr.aria-disabled]="busy() || !canNext()"
+        (click)="move(true)"
+      >
+        <hlm-icon [name]="'lucideChevronRight'" class="size-(--eg-space-5)" />
+      </button>
+    </div>
+  }
 </nav>

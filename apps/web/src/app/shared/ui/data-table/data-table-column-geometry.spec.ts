@@ -16,6 +16,11 @@ interface SpecimenColumn {
   readonly value: string;
 }
 
+const geometryTokens = `:root {
+  --eg-space-2:4px; --eg-space-3:8px; --eg-space-4:12px; --eg-control-touch:44px;
+  --eg-row-compact:40px; --eg-row-default:44px; --eg-font-mono:ui-monospace,monospace;
+}`;
+
 function productionRules(): string {
   const paths = [
     resolve('src/styles/helm/table.css'),
@@ -193,8 +198,7 @@ describe('shared table content-class minimum widths', () => {
 
   function roleContentDocument(locale: string, scale: number, rules: string): string {
     return `<!doctype html><html lang="${locale}"><head><style>
-        :root { --eg-space-3:8px; --eg-space-4:12px; --eg-control-touch:44px;
-          --eg-row-default:44px; --eg-font-mono:ui-monospace,monospace; }
+        ${geometryTokens}
         body { margin:0; font:${14 * scale}px/${20 * scale}px Arial,sans-serif; }
         .scroll { inline-size:calc(100vw - 16rem); max-inline-size:100%; overflow:auto; }
         table { inline-size:100%; border-collapse:collapse; font:inherit; }
@@ -244,6 +248,7 @@ describe('shared table content-class minimum widths', () => {
         }
         expect(measured.identifierFits).toBe(true);
         expect(measured.headerHeight).toBeLessThanOrEqual(88);
+        expect(measured.rowHeight).toBeGreaterThanOrEqual(40);
         expect(measured.rowHeight).toBeLessThanOrEqual(200);
         expect(measured.localScroll).toBe(true);
         expect(measured.documentFits).toBe(true);
@@ -259,8 +264,7 @@ describe('shared table content-class minimum widths', () => {
       const page = await browser.newPage({ viewport: { width: 768, height: 900 } });
       try {
         await page.setContent(`<!doctype html><style>
-        :root { --eg-space-3:8px; --eg-space-4:12px; --eg-control-touch:44px;
-          --eg-row-default:44px; --eg-font-mono:ui-monospace,monospace; }
+        ${geometryTokens}
         body { margin:0; font:${fontSize}px/1.5 Arial,sans-serif; }
         table { inline-size:100%; border-collapse:collapse; font:inherit; }
         th,td { box-sizing:border-box; }
@@ -317,8 +321,7 @@ describe('shared table content-class minimum widths', () => {
       const page = await browser.newPage({ viewport: { width: 900, height: 900 } });
       try {
         await page.setContent(`<!doctype html><style>
-        :root { --eg-space-3:8px; --eg-space-4:12px; --eg-control-touch:44px;
-          --eg-row-default:44px; --eg-font-mono:ui-monospace,monospace; }
+        ${geometryTokens}
         body { margin:0; font:${fontSize}px/1.5 Arial,sans-serif; }
         table { inline-size:100%; border-collapse:collapse; font:inherit; }
         th,td { box-sizing:border-box; }

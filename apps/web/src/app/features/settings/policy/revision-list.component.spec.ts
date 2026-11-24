@@ -24,6 +24,7 @@ class RevisionHistoryHarness extends ComponentHarness {
   readonly next = this.locatorFor('app-data-table-pager [data-page="next"]');
   readonly previous = this.locatorFor('app-data-table-pager [data-page="previous"]');
   readonly pager = this.locatorFor('app-data-table-pager');
+  readonly pagerControls = this.locatorForAll('app-data-table-pager button');
   readonly section = this.locatorFor('section');
   readonly row = this.locatorFor('[data-policy-revision]');
   readonly rows = this.locatorForAll('[data-policy-revision]');
@@ -65,17 +66,16 @@ describe('RevisionListComponent', () => {
     expect(await harness.copyButton()).toBeDefined();
     expect(await (await harness.section()).text()).toContain('Oldest first');
   });
-  it('keeps empty history labelled and navigation disabled on its only page', async () => {
+  it('keeps empty history labelled without offering page controls', async () => {
     const fixture = TestBed.createComponent(RevisionListComponent);
     const harness = await TestbedHarnessEnvironment.harnessForFixture(
       fixture,
       RevisionHistoryHarness,
     );
-    expect(await (await harness.pager()).text()).toContain('Page 1');
+    expect(await (await harness.pager()).text()).toContain('Showing 0–0');
     expect(await harness.rows()).toHaveLength(0);
     expect(await (await harness.empty()).text()).toBe('No revisions available.');
-    expect(await (await harness.previous()).getAttribute('aria-disabled')).toBe('true');
-    expect(await (await harness.next()).getAttribute('aria-disabled')).toBe('true');
+    expect(await harness.pagerControls()).toHaveLength(0);
   });
   it('emits cursor navigation through the shared pager and blocks busy actions', async () => {
     const fixture = TestBed.createComponent(RevisionListComponent);
@@ -132,6 +132,7 @@ describe('RevisionListComponent', () => {
   });
   it.each([50, 100])('forwards selected history size %i', async (size) => {
     const fixture = TestBed.createComponent(RevisionListComponent);
+    fixture.componentRef.setInput('hasMore', true);
     const changed = vi.fn();
     fixture.componentInstance.pageSizeChange.subscribe(changed);
     const harness = await TestbedHarnessEnvironment.harnessForFixture(

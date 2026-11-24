@@ -52,6 +52,9 @@ const ROW_ACTION_CLASSES = buttonVariants({ variant: 'ghost', size: 'icon-sm' })
     >
   `,
   styles: `
+    :host {
+      border-radius: var(--eg-radius-sm);
+    }
     :host(.row-action-danger) {
       color: var(--eg-danger-fg);
     }

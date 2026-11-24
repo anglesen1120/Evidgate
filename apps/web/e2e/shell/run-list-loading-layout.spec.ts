@@ -1,6 +1,6 @@
 import { expect, test, type Locator } from '@playwright/test';
 import { latencyToggle } from './onboarding-support';
-import { RUN_RECORDS } from './run-list.support';
+import { openRunFilters, RUN_RECORDS } from './run-list.support';
 import {
   localePath,
   LOCALES,
@@ -24,6 +24,40 @@ async function documentBox(locator: Locator) {
 }
 
 for (const locale of LOCALES) {
+  test(`single-page footer keeps its text-line height during a filter refetch (${locale})`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 900 });
+    await page.goto(
+      withVariants(
+        localePath(locale, `/dev/run-list/orgs/${ORG_ACME}/projects/${PROJECT_STOREFRONT}`),
+        [
+          '?fixture.variant.listPermissions=settings-policy-readonly',
+          '?fixture.variant.listRuns=runs',
+          `?${latencyToggle(1000)}`,
+        ],
+      ),
+    );
+    const pager = page.locator('app-data-table-pager');
+    const footer = pager.getByRole('presentation');
+    const range = pager.locator('.page-range');
+    const feedback = pager.locator('[data-page-feedback]');
+    await expect(range).toBeVisible();
+    await expect(pager.getByRole('navigation')).toHaveCount(0);
+    await expect(feedback).toBeHidden();
+    await page.evaluate(() => document.fonts.ready);
+    const idle = await documentBox(footer);
+    expect(idle.height).toBe((await documentBox(range)).height);
+
+    await openRunFilters(page);
+    await page.locator('#run-ref').fill('main');
+    await page.locator('[data-run-apply]').click();
+    await expect(pager.getByRole('progressbar')).toBeVisible();
+    expect((await documentBox(footer)).height).toBe(idle.height);
+    await expect(feedback).toBeHidden();
+    await expect(pager.getByRole('navigation')).toHaveCount(0);
+  });
+
   for (const theme of THEMES) {
     for (const width of [390, 768, 1440]) {
       test(`runs ${locale} ${theme} ${width}px: size refetch preserves subtitle, first row and pager geometry`, async ({

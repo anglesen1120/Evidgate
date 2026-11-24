@@ -194,13 +194,10 @@ test.describe('AC7: an audit:read session reads the log and exports it', () => {
       await expect(page.locator('app-audit-export[data-audit-export-phase="idle"]')).toHaveCount(1);
       await expect(page.locator('[data-audit-export]')).toBeEnabled();
       const pager = page.locator('app-data-table-pager');
-      await expect(pager.getByRole('combobox')).toContainText('20');
-      for (const direction of ['previous', 'next']) {
-        await expect(pager.locator(`[data-page="${direction}"]`)).toHaveAttribute(
-          'aria-disabled',
-          'true',
-        );
-      }
+      const range = `${locale === 'vi' ? 'Hiển thị' : 'Showing'} 1–${DEFAULT_ROWS.length}`;
+      await expect(pager.getByText(range, { exact: true })).toBeVisible();
+      await expect(pager.getByRole('navigation')).toHaveCount(0);
+      await expect(pager.locator('button, [role="combobox"]')).toHaveCount(0);
     });
   }
 

@@ -104,7 +104,7 @@ for (const locale of LOCALES) {
       await expect(page.locator(`${host} ${pattern}`)).toBeVisible();
       await expect(page.locator(rows)).toHaveCount(0);
       await expect(pager.getByRole('progressbar')).toHaveCount(0);
-      await expect(pager.locator('nav')).toHaveAttribute('aria-busy', 'false');
+      await expect(pager.getByRole('navigation')).toHaveCount(0);
       await expectNoA11yViolations(page, `security events ${variant} ${locale}`);
     });
   }

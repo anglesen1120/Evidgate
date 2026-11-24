@@ -7,7 +7,8 @@ import { mount, refusal, ROW } from './api-tokens.test-support';
 class TokenPagingHarness extends ComponentHarness {
   static hostSelector = 'app-api-tokens-page';
   private readonly summary = this.locatorFor('app-data-table-pager [role="status"]');
-  private readonly nextButton = this.locatorFor('app-data-table-pager [data-page="next"]');
+  readonly range = this.locatorFor('app-data-table-pager .page-range');
+  readonly nextButton = this.locatorFor('app-data-table-pager [data-page="next"]');
   private readonly previousButton = this.locatorFor('app-data-table-pager [data-page="previous"]');
   private readonly sizeButton = this.locatorFor('app-data-table-pager hlm-select-trigger button');
 
@@ -57,7 +58,7 @@ describe('API tokens shared pager', () => {
     await h.settle();
     await pager.previous();
     await h.settle();
-    expect(await pager.text()).toBe('Page 1');
+    expect(await (await pager.range()).text()).toBe('Showing 1–1');
     expect(h.navigate).toHaveBeenLastCalledWith(
       [],
       expect.objectContaining({
@@ -76,8 +77,11 @@ describe('API tokens shared pager', () => {
     await h.settle();
     await pager.chooseSize(50);
     await h.settle();
-    expect(await pager.text()).toBe('Page 1');
+    expect(await (await pager.range()).text()).toBe('Showing 1–1');
     expect(h.list).toHaveBeenLastCalledWith('project-1', undefined, expect.any(AbortSignal), 50);
+    await pager.chooseSize(20);
+    await h.settle();
+    expect(h.list).toHaveBeenLastCalledWith('project-1', undefined, expect.any(AbortSignal), 20);
   });
 
   it('keeps rows and the displayed page during a later failure with visible recovery', async () => {
@@ -89,6 +93,7 @@ describe('API tokens shared pager', () => {
     await pager.next();
     await h.settle();
     expect(await pager.text()).toBe('Page 1');
+    expect(await (await pager.nextButton()).getAttribute('aria-disabled')).toBe('true');
     expect(h.store.rows()).toEqual([ROW]);
     expect(h.root.textContent).toContain(ROW.name);
     expect(h.root.querySelector('app-error-pattern')).not.toBeNull();

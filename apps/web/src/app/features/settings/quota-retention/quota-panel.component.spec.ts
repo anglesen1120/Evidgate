@@ -458,6 +458,7 @@ describe('QuotaPanelComponent', () => {
 
   it.each([50, 100])('passes selected size %s to the coordinated store control', async (size) => {
     const { harness } = await render();
+    usageSummary.set({ period: '2026-11', project: null, metrics: [], next_cursor: 'next-page' });
     expect(await (await harness.sizeTrigger()).text()).toBe('20');
     await (await harness.sizeTrigger()).click();
     const options = await harness.sizeOptions();

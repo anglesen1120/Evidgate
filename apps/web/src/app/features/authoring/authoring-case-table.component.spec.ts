@@ -351,7 +351,7 @@ describe('AuthoringCaseTableComponent', () => {
     expect(await harness.retryOptional()).toBeNull();
     expect(await (await harness.host()).text()).toContain('SHOP-1');
     expect(await (await harness.host()).text()).toContain('server repeated the case cursor');
-    expect(await (await harness.loaded()).text()).toContain('Page 1');
+    expect(await (await harness.host()).text()).toContain('Showing 1–1');
     const text = await (await harness.host()).text();
     expect(text).not.toContain('Retry explicitly');
     expect(text).not.toContain('Case list may be stale');

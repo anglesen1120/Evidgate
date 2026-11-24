@@ -130,20 +130,11 @@ describe('ProducerStatusTableComponent paging', () => {
   });
 
   it.each([0, 1, 20])('shows the exact single-page range for %i producers', async (count) => {
-    const { table } = await render(slots(count));
+    const { root, table } = await render(slots(count));
     expect(await (await table.summary()).text()).toBe(
       `Showing ${count === 0 ? 0 : 1}–${count} of ${count}`,
     );
-    for (const button of [await table.previous(), await table.next()]) {
-      expect(await button.getAttribute('aria-disabled')).toBe('true');
-      expect(await button.getProperty('disabled')).toBe(false);
-      await button.focus();
-      await button.click();
-      expect(await button.isFocused()).toBe(true);
-      expect(await (await table.summary()).text()).toBe(
-        `Showing ${count === 0 ? 0 : 1}–${count} of ${count}`,
-      );
-    }
+    expect(root.querySelector('app-data-table-pager button')).toBeNull();
     expect(await table.rowIds()).toHaveLength(count);
   });
 
@@ -181,11 +172,16 @@ describe('ProducerStatusTableComponent paging', () => {
     ['shrunk', slots(1)],
     ['empty', []],
   ] as const)('resets when producer identities are %s', async (_change, changed) => {
-    const { fixture, table } = await render(slots(53));
+    const { fixture, root, table } = await render(slots(53));
     await (await table.next()).click();
     await (await table.next()).click();
     fixture.componentRef.setInput('slots', changed);
-    expect(await (await table.previous()).getAttribute('aria-disabled')).toBe('true');
+    await fixture.whenStable();
+    if (changed.length > 20) {
+      expect(await (await table.previous()).getAttribute('aria-disabled')).toBe('true');
+    } else {
+      expect(root.querySelector('app-data-table-pager button')).toBeNull();
+    }
     expect((await table.rowIds())[0]).toBe(changed[0]?.producerId);
     expect(await (await table.summary()).text()).toBe(
       `Showing ${changed.length === 0 ? 0 : 1}–${Math.min(20, changed.length)} of ${changed.length}`,
@@ -225,6 +221,6 @@ describe('ProducerStatusTableComponent paging', () => {
     expect(await (await table.summary()).text()).toBe('Showing 1–20 of 53');
     fixture.componentRef.setInput('slots', []);
     expect(await (await table.summary()).text()).toBe('Showing 0–0 of 0');
-    expect(await (await table.next()).getAttribute('aria-disabled')).toBe('true');
+    expect(await table.hasNavigation()).toBe(false);
   });
 });

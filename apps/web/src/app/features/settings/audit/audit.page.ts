@@ -255,7 +255,12 @@ export class AuditPage {
     const org = this.session.currentOrg();
     if (!org) return;
     await this.store.setPageSize(org.id, size);
-    if (this.session.currentOrg()?.id === org.id) this.focusRows();
+    if (this.session.currentOrg()?.id !== org.id) return;
+    this.table()?.resetScroll();
+    // The shared pager hands focus to its range when it removes its controls; focusing the heading here would override that.
+    const controlsRemain =
+      this.store.hasNext() || this.store.page() > 1 || this.store.pageSize() > 20;
+    if (controlsRemain) this.heading()?.nativeElement.focus();
   }
 
   private async navigate(direction: 'next' | 'previous' | 'retryPage'): Promise<void> {

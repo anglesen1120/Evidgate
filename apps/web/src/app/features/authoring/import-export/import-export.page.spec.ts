@@ -186,8 +186,8 @@ describe('ImportExportPage presentation and route heading contract', () => {
     const opener = `button[aria-label="View version 3 of ${history.items[0]?.entity_id}"]`;
     expect(await harness.textAt('[data-import-history] .caption')).toBe(IMPEX_COPY.history);
     expect(await harness.textAt('[data-import-history]')).toContain('newest first (server order)');
-    expect(await harness.textAt('[data-import-history] app-data-table-pager [role="status"]')).toBe(
-      'Page 1',
+    expect(await harness.textAt('[data-import-history] app-data-table-pager .page-range')).toBe(
+      `Showing 1–${history.items.length}`,
     );
     expect(await harness.attr(opener, 'aria-label')).toContain(
       'View version 3 of ' + history.items[0]?.entity_id,

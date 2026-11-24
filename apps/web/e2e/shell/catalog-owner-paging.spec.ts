@@ -151,10 +151,8 @@ for (const locale of LOCALES) {
         ]),
       );
       await expect(page.locator('app-empty-pattern')).toBeVisible();
-      await expect(previous).toBeDisabled();
-      await expect(next).toBeDisabled();
-      expect((await style(previous)).background).toBe(transparent);
-      expect(await style(next)).toEqual(await style(previous));
+      await expect(pager.getByRole('navigation')).toHaveCount(0);
+      await expect(pager.locator('.page-range')).toContainText('0–0');
     });
 
     test(`shared pager uses equal-height controls without overflow (${locale}, ${theme})`, async ({
