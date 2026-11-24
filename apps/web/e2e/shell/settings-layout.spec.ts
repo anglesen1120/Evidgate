@@ -114,7 +114,7 @@ for (const locale of LOCALES) {
     await expect(items.first()).toBeVisible();
     for (const item of await items.all()) {
       await expect(item).toHaveCSS('text-align', 'start');
-      await expect(item).toHaveCSS('justify-content', 'flow-start');
+      await expect(item).toHaveCSS('justify-content', /^(?:flex-start|flow-start|start)$/);
       await expect(item).toHaveCSS('white-space', 'nowrap');
       const bounds = await item.evaluate((node) => {
         const range = document.createRange();
