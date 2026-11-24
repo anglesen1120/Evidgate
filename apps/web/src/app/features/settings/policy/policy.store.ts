@@ -70,9 +70,13 @@ export class PolicyStore {
   readonly reads = inject(PolicyProjectReads);
 
   private readonly revisionsSignal = signal<readonly PolicyRevisionSummaryDto[]>(NO_REVISIONS);
+  private readonly openedRevisionSignal = signal<PolicyRevisionSummaryDto | null>(null);
   private readonly phaseSignal = signal<PolicyPhase>('idle');
   private readonly loadErrorSignal = signal<ApiError | null>(null);
   private readonly nextCursorSignal = signal<string | null>(null);
+  private readonly pageSignal = signal(1);
+  private readonly pageSizeSignal = signal(20);
+  private readonly pagingSignal = signal(false);
   private readonly projectIdSignal = signal<string | null>(null);
   private readonly headRevisionIdSignal = signal<string | null>(null);
   private readonly activationSignal = signal<PolicyActivationStateDto | null>(null);
@@ -95,10 +99,8 @@ export class PolicyStore {
    * the page's own retry.
    */
   private lastRequestedRevisionId: string | null = null;
-  /** The cursors this store already asked for, so a repeated one is an error, not a loop. */
-  private readonly followedCursors = new Set<string>();
-  /** Pages read for the current anchor, the first page included; bounded by the page cap. */
-  private pagesRead = 1;
+  private requestCursors: (string | undefined)[] = [undefined];
+  private pendingPage: number | null = null;
   /** Bumped by every read; a read of an older generation never writes state. */
   private generation = 0;
   /** The bodies the diff and the publish seed share, and the reads still out for them. */
@@ -107,8 +109,9 @@ export class PolicyStore {
     (generation) => generation === this.generation,
   );
 
-  /** The project's revisions, ascending as served, as many cursor pages as were followed. */
+  /** The current history page, ascending as served. */
   readonly revisions = this.revisionsSignal.asReadonly();
+  readonly openedRevision = this.openedRevisionSignal.asReadonly();
   /** The read state the page renders. */
   readonly phase = this.phaseSignal.asReadonly();
   /** The server's typed failure for the revision or list read; `null` when it never failed. */
@@ -117,6 +120,9 @@ export class PolicyStore {
   readonly projectId = this.projectIdSignal.asReadonly();
   /** True while the server named another page, so the page's next control can be offered. */
   readonly hasMore = computed(() => this.nextCursorSignal() !== null);
+  readonly page = this.pageSignal.asReadonly();
+  readonly pageSize = this.pageSizeSignal.asReadonly();
+  readonly paging = this.pagingSignal.asReadonly();
   /**
    * The head revision id the last list answer named (its `ETag`, unquoted) — the value a publish
    * quotes in `If-Match`, and `null` until a list answer says what the head is.
@@ -174,57 +180,83 @@ export class PolicyStore {
     }
 
     this.projectIdSignal.set(projectId);
+    const {
+      id: openedId,
+      revision_no,
+      hash,
+      state,
+      created_by,
+      created_at,
+      version,
+    } = revision.value;
+    this.openedRevisionSignal.set({
+      id: openedId,
+      revision_no,
+      hash,
+      state,
+      created_by,
+      created_at,
+      version,
+    });
     this.startReads(projectId);
     await this.readList(id, generation, true);
   }
 
-  /**
-   * Follows `next_cursor` once and appends the page, so the rows already shown stay while the next
-   * one is on its way. A repeated cursor or a page past {@link MAX_CURSOR_PAGES} is a contract
-   * violation and throws; a typed refusal becomes `loadError` and keeps the rows.
-   */
-  async loadMore(): Promise<void> {
+  /** Moves history only; selected revision bodies remain in their independent cache. */
+  loadMore(): Promise<void> {
+    return this.navigate(this.pageSignal() + 1);
+  }
+
+  previousPage(): Promise<void> {
+    return this.navigate(this.pageSignal() - 1);
+  }
+
+  retryPage(): Promise<void> {
+    return this.pendingPage === null ? this.reload() : this.navigate(this.pendingPage);
+  }
+
+  async setPageSize(size: number): Promise<void> {
+    if (![20, 50, 100].includes(size) || size === this.pageSizeSignal()) return;
+    this.pageSizeSignal.set(size);
+    // Rows served for another size cannot be shown under the new size's label.
+    this.revisionsSignal.set(NO_REVISIONS);
+    await this.reload();
+  }
+
+  private async navigate(target: number): Promise<void> {
     const anchor = this.anchorRevisionId;
-    const projectId = this.projectIdSignal();
-    const cursor = this.nextCursorSignal();
-    if (anchor === null || projectId === null || cursor === null) {
-      return;
-    }
-    if (this.followedCursors.has(cursor)) {
+    const forward = target === this.pageSignal() + 1;
+    const cursor = forward ? this.nextCursorSignal() : this.requestCursors[target - 1];
+    if (anchor === null || this.pagingSignal() || this.phaseSignal() !== 'ready') return;
+    if (target < 1 || target > this.pageSignal() + 1 || (forward && cursor === null)) return;
+    if (forward && this.requestCursors.includes(cursor ?? undefined)) {
       throw new Error(`the policy revision list repeated cursor "${cursor}"`);
     }
-    if (this.pagesRead >= MAX_CURSOR_PAGES) {
+    if (target > MAX_CURSOR_PAGES) {
       throw new Error(`the policy list did not finish within ${MAX_CURSOR_PAGES} pages`);
     }
-
     const generation = this.generation;
-    const read = await settledRead(() => this.data.listRevisions(anchor, cursor));
-    // A newer read (another open, a reload, a publish's refresh) owns the state now.
-    if (generation !== this.generation) {
-      return;
-    }
-    if (!read.ok) {
-      // Only a typed refusal is the server's answer; a contract violation is re-thrown.
-      if (!isApiRequestError(read.error)) {
-        throw read.error;
-      }
-      this.loadErrorSignal.set(read.error.error);
-      if (this.revisionsSignal().length === 0) {
-        this.phaseSignal.set('error');
-      }
-      return;
-    }
-
-    this.followedCursors.add(cursor);
-    this.pagesRead += 1;
-    const page = read.value;
-    this.revisionsSignal.update((rows) => [...rows, ...page.items]);
-    this.nextCursorSignal.set(page.nextCursor);
-    // Every page of one list names the same head; taking it from the newest answer keeps the
-    // `If-Match` source honest if a publish committed elsewhere in between.
-    this.headRevisionIdSignal.set(page.headRevisionId);
-    // A page that arrived is the answer an earlier refusal withheld: its alert must not outlive it.
+    this.pendingPage = target;
+    this.pagingSignal.set(true);
     this.loadErrorSignal.set(null);
+    try {
+      const read = await settledRead(() =>
+        this.data.listRevisions(anchor, cursor ?? undefined, this.pageSizeSignal()),
+      );
+      if (generation !== this.generation) return;
+      if (!read.ok) {
+        if (!isApiRequestError(read.error)) throw read.error;
+        if (classifyReadFailure(read.error).notFound) this.settleFailure(read.error);
+        this.loadErrorSignal.set(read.error.error);
+        return;
+      }
+      this.requestCursors = [...this.requestCursors.slice(0, target - 1), cursor ?? undefined];
+      this.pendingPage = null;
+      this.pageSignal.set(target);
+      this.applyPage(read.value);
+    } finally {
+      if (generation === this.generation) this.pagingSignal.set(false);
+    }
   }
 
   /**
@@ -351,32 +383,47 @@ export class PolicyStore {
 
   /** The one read every entry point shares (open's list, reload, a publish's refresh). */
   private async readList(anchor: string, generation: number, foreground: boolean): Promise<void> {
-    this.anchorRevisionId = anchor;
-    this.followedCursors.clear();
-    this.nextCursorSignal.set(null);
-    this.pagesRead = 1;
+    // Do not relabel retained background rows until the replacement page actually arrives.
+    // A foreground reload starts a new cursor walk immediately.
+    this.pagingSignal.set(true);
     if (foreground) {
+      this.revisionsSignal.set(NO_REVISIONS);
+      this.anchorRevisionId = anchor;
+      this.requestCursors = [undefined];
+      this.pendingPage = null;
+      this.pageSignal.set(1);
+      this.nextCursorSignal.set(null);
       this.phaseSignal.set('loading');
       this.loadErrorSignal.set(null);
     }
 
-    const read = await settledRead(() => this.data.listRevisions(anchor));
-    if (generation !== this.generation) {
-      return;
-    }
-    if (!read.ok) {
-      // A background refresh must not cost the revision the server stored, and the rows stay as
-      // they are; its refusal still goes to the page's alert, because the screen shows a head that
-      // is no longer true. The next read that succeeds clears it.
-      if (foreground) {
-        this.settleFailure(read.error);
-      } else if (isApiRequestError(read.error)) {
-        this.loadErrorSignal.set(read.error.error);
+    try {
+      const read = await settledRead(() =>
+        this.data.listRevisions(anchor, undefined, this.pageSizeSignal()),
+      );
+      if (generation !== this.generation) {
+        return;
       }
-      return;
-    }
+      if (!read.ok) {
+        // A recoverable background failure keeps the committed rows and cursor walk. An access
+        // refusal instead clears every retained object, just like a foreground refusal.
+        if (foreground || classifyReadFailure(read.error).notFound) {
+          this.settleFailure(read.error);
+        }
+        if (isApiRequestError(read.error)) {
+          this.loadErrorSignal.set(read.error.error);
+        }
+        return;
+      }
 
-    this.applyPage(read.value);
+      this.anchorRevisionId = anchor;
+      this.requestCursors = [undefined];
+      this.pendingPage = null;
+      this.pageSignal.set(1);
+      this.applyPage(read.value);
+    } finally {
+      if (generation === this.generation) this.pagingSignal.set(false);
+    }
   }
 
   /** Writes one served page as the list, the cursor and the head the next publish quotes. */
@@ -391,6 +438,13 @@ export class PolicyStore {
   /** Writes what one failed read means: `not_found`, or `error` with the server's own copy. */
   private settleFailure(error: unknown): void {
     const failure = classifyReadFailure(error);
+    if (failure.notFound) {
+      // Every retained object belongs to the access that was just refused. Invalidate pending
+      // body and project reads too, so an older answer cannot repopulate the cleared view.
+      this.generation += 1;
+      this.clearState();
+      this.bodies.clear();
+    }
     if (failure.error !== null) {
       this.loadErrorSignal.set(failure.error);
     }
@@ -416,6 +470,7 @@ export class PolicyStore {
   /** The state every new read starts from; the generation is the caller's to bump. */
   private clearState(): void {
     this.revisionsSignal.set(NO_REVISIONS);
+    this.openedRevisionSignal.set(null);
     this.nextCursorSignal.set(null);
     this.projectIdSignal.set(null);
     this.headRevisionIdSignal.set(null);
@@ -425,8 +480,10 @@ export class PolicyStore {
     // answer still on its way cannot report the project that just left the screen.
     this.reads.clear();
     this.anchorRevisionId = null;
-    this.followedCursors.clear();
-    this.pagesRead = 1;
+    this.requestCursors = [undefined];
+    this.pendingPage = null;
+    this.pageSignal.set(1);
+    this.pagingSignal.set(false);
   }
 
   /**

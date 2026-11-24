@@ -274,7 +274,7 @@ describe('API token creation dialog', () => {
     await h.settle();
     // The read starts from the click handler, so the close cannot outrun a committed token.
     expect(h.list).toHaveBeenCalledTimes(2);
-    expect(h.list).toHaveBeenLastCalledWith('project-1', undefined, expect.any(AbortSignal));
+    expect(h.list).toHaveBeenLastCalledWith('project-1', undefined, expect.any(AbortSignal), 20);
     expect(h.store.createOpen()).toBe(false);
   });
 

@@ -164,12 +164,12 @@ describe('PolicyDataService (09.7.1-T4)', () => {
     }
   });
 
-  it('listRevisions() reads one page at the contract’s maximum page size', async () => {
+  it('listRevisions() defaults to twenty history revisions', async () => {
     const read = service.listRevisions(REVISION_ID);
     const request = await takeRequest(httpMock, LIST_URL);
     expect(request.request.method).toBe('GET');
     // One page, never a dump: the caller owns the cursor loop (00 §9.1, W7).
-    expect(request.request.urlWithParams).toContain('limit=200');
+    expect(new URL(request.request.urlWithParams).searchParams.get('limit')).toBe('20');
     expect(request.request.urlWithParams).not.toContain('cursor=');
     flushPage(request, { items: [ROW], next_cursor: 'c-2' });
 
@@ -180,11 +180,24 @@ describe('PolicyDataService (09.7.1-T4)', () => {
     const read = service.listRevisions(REVISION_ID, 'c-2');
     const request = await takeRequest(httpMock, LIST_URL);
     expect(request.request.urlWithParams).toContain('cursor=c-2');
-    expect(request.request.urlWithParams).toContain('limit=200');
+    expect(new URL(request.request.urlWithParams).searchParams.get('limit')).toBe('20');
     flushPage(request, { items: [], next_cursor: null });
 
     await expect(read).resolves.toEqual({ items: [], nextCursor: null, headRevisionId: null });
   });
+
+  it.each([20, 50, 100])(
+    'listRevisions() sends selected limit %i with its opaque cursor',
+    async (limit) => {
+      const read = service.listRevisions(REVISION_ID, 'opaque+/cursor', limit);
+      const request = await takeRequest(httpMock, LIST_URL);
+      const query = new URL(request.request.urlWithParams).searchParams;
+      expect(query.get('limit')).toBe(String(limit));
+      expect(query.get('cursor')).toBe('opaque+/cursor');
+      flushPage(request, { items: [ROW], next_cursor: null });
+      await expect(read).resolves.toMatchObject({ items: [ROW], nextCursor: null });
+    },
+  );
 
   it('listRevisions() hands back the ETag as the head, unquoted', async () => {
     const head = '018f0000-0000-7000-8000-0000000000b2';

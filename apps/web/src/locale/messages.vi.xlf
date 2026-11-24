@@ -181,10 +181,7 @@
 <trans-unit id="settings.members.omitted" datatype="html"><source>Permissions omitted because they are missing from the live catalogue:</source><target>Quyền bị lược bỏ vì không có trong danh mục trực tiếp:</target></trans-unit>
 <trans-unit id="settings.members.empty-title" datatype="html"><source>No members yet</source><target>Chưa có thành viên</target></trans-unit>
 <trans-unit id="settings.members.empty-description" datatype="html"><source>Members and pending invitations will appear here.</source><target>Thành viên và lời mời đang chờ sẽ hiển thị tại đây.</target></trans-unit>
-<trans-unit id="settings.members.next" datatype="html"><source>Next members</source><target>Thành viên tiếp theo</target></trans-unit>
-<trans-unit id="settings.members.previous" datatype="html"><source>Previous members</source><target>Thành viên trước đó</target></trans-unit>
 <trans-unit id="settings.members.saved" datatype="html"><source>Membership updated.</source><target>Đã cập nhật thành viên.</target></trans-unit>
-<trans-unit id="settings.members.load-more-failed" datatype="html"><source>The next members page could not be loaded. The members already shown are unchanged.</source><target>Không tải được trang thành viên tiếp theo. Các thành viên đang hiển thị vẫn giữ nguyên.</target></trans-unit>
 <trans-unit id="settings.members.narrow" datatype="html"><source>Use a wider screen to invite, edit or remove members.</source><target>Dùng màn hình rộng hơn để mời, sửa vai trò hoặc xoá thành viên.</target></trans-unit>
 <trans-unit id="settings.members.pending" datatype="html"><source>Invitation pending</source><target>Lời mời đang chờ</target></trans-unit>
 <trans-unit id="settings.members.active" datatype="html"><source>Active</source><target>Đang hoạt động</target></trans-unit>
@@ -2371,7 +2368,6 @@
 <trans-unit id="settings.policy.head" datatype="html"><source>Head</source><target>Mới nhất</target></trans-unit>
 <trans-unit id="settings.policy.hash" datatype="html"><source>Hash</source><target>Mã băm</target></trans-unit>
 <trans-unit id="settings.policy.created" datatype="html"><source>Created</source><target>Thời điểm tạo</target></trans-unit>
-<trans-unit id="settings.policy.more" datatype="html"><source>Load more</source><target>Tải thêm</target></trans-unit>
 <trans-unit id="settings.policy.gating" datatype="html"><source>Gating</source><target>Chặn theo chính sách</target></trans-unit>
 <trans-unit id="settings.policy.advisory" datatype="html"><source>Advisory</source><target>Chỉ tư vấn</target></trans-unit>
 <trans-unit id="settings.policy.diff-title" datatype="html"><source>Compare revisions</source><target>So sánh các phiên bản</target></trans-unit>
@@ -2960,6 +2956,7 @@
 <trans-unit id="settings.tab.api-tokens" datatype="html"><source>API tokens</source><target>Mã truy cập API</target></trans-unit>
 <trans-unit id="settings.api-tokens.title" datatype="html"><source>API tokens</source><target>Mã truy cập API</target></trans-unit>
 <trans-unit id="settings.api-tokens.project" datatype="html"><source>Project</source><target>Dự án</target></trans-unit>
+<trans-unit id="settings.api-tokens.project-filter" datatype="html"><source>Project (all pages)</source><target>Dự án (tất cả các trang)</target></trans-unit>
 <trans-unit id="settings.api-tokens.create" datatype="html"><source>Create token</source><target>Tạo mã truy cập</target></trans-unit>
 <trans-unit id="settings.api-tokens.directory" datatype="html"><source>Project API tokens</source><target>Mã truy cập API của dự án</target></trans-unit>
 <trans-unit id="settings.api-tokens.name" datatype="html"><source>Name</source><target>Tên</target></trans-unit>
@@ -2975,9 +2972,7 @@
 <trans-unit id="settings.api-tokens.empty-title" datatype="html"><source>No API tokens yet</source><target>Chưa có mã truy cập API</target></trans-unit>
 <trans-unit id="settings.api-tokens.empty-description" datatype="html"><source>Create a token with an expiry and only the permissions your script needs.</source><target>Tạo mã truy cập có thời hạn và chỉ cấp các quyền mà tập lệnh cần.</target></trans-unit>
 <trans-unit id="settings.api-tokens.no-projects" datatype="html"><source>Select a project to manage its API tokens.</source><target>Chọn dự án để quản lý mã truy cập API.</target></trans-unit>
-<trans-unit id="settings.api-tokens.next" datatype="html"><source>Next tokens</source><target>Các mã truy cập tiếp theo</target></trans-unit>
 <trans-unit id="settings.api-tokens.first" datatype="html"><source>First tokens</source><target>Các mã truy cập đầu tiên</target></trans-unit>
-<trans-unit id="settings.api-tokens.pages" datatype="html"><source>API token pages</source><target>Các trang mã truy cập API</target></trans-unit>
 <trans-unit id="settings.api-tokens.create-name" datatype="html"><source>Token name</source><target>Tên mã truy cập</target></trans-unit>
 <trans-unit id="settings.api-tokens.create-expires" datatype="html"><source>Expiry (UTC)</source><target>Thời điểm hết hạn (UTC)</target></trans-unit>
 <trans-unit id="settings.api-tokens.expiry-required" datatype="html"><source>Enter an expiry in the future. The server enforces the maximum lifetime.</source><target>Nhập thời hạn trong tương lai. Máy chủ áp dụng thời hạn tối đa.</target></trans-unit>
@@ -22156,7 +22151,6 @@
 <trans-unit id="settings.members.active-hint" datatype="html"><source>On this page · organization directory</source><target>Trên trang này · danh bạ tổ chức</target></trans-unit>
 <trans-unit id="settings.members.pending-hint" datatype="html"><source>On this page · awaiting acceptance</source><target>Trên trang này · chờ chấp nhận</target></trans-unit>
 <trans-unit id="settings.members.admin-hint" datatype="html"><source>On this page · last admin protected</source><target>Trên trang này · bảo vệ quản trị viên cuối cùng</target></trans-unit>
-<trans-unit id="settings.members.visible-range" datatype="html"><source>Showing <x id="INTERPOLATION"/>–<x id="INTERPOLATION_1"/></source><target>Đang hiển thị <x id="INTERPOLATION"/>–<x id="INTERPOLATION_1"/></target></trans-unit>
 <trans-unit id="settings.security.intro" datatype="html"><source>Inspect authorized event metadata without exposing request bodies or foreign targets.</source><target>Xem siêu dữ liệu sự kiện được phép mà không tiết lộ nội dung yêu cầu hay đối tượng của tổ chức khác.</target></trans-unit>
 <trans-unit id="settings.security.visible" datatype="html"><source>Visible events</source><target>Sự kiện hiển thị</target></trans-unit>
 <trans-unit id="settings.security.critical" datatype="html"><source>Critical events</source><target>Sự kiện nghiêm trọng</target></trans-unit>
@@ -22171,7 +22165,6 @@
 <trans-unit id="settings.api-tokens.revocation-recorded" datatype="html"><source>Revocation recorded</source><target>Đã ghi nhận thu hồi</target></trans-unit>
 <trans-unit id="settings.api-tokens.showing-page" datatype="html"><source>Showing <x id="range"/> of <x id="count"/> tokens on this page.</source><target>Đang hiển thị <x id="range"/> trong số <x id="count"/> mã truy cập trên trang này.</target></trans-unit>
 <trans-unit id="settings.members.header-facts" datatype="html"><source>On this page: <x id="INTERPOLATION"/> active · <x id="INTERPOLATION_1"/> pending</source><target>Trên trang này: <x id="INTERPOLATION"/> đang hoạt động · <x id="INTERPOLATION_1"/> đang chờ</target></trans-unit>
-<trans-unit id="settings.members.complete-range" datatype="html"><source>Showing <x id="INTERPOLATION"/>–<x id="INTERPOLATION_1"/> of <x id="INTERPOLATION_2"/></source><target>Đang hiển thị <x id="INTERPOLATION"/>–<x id="INTERPOLATION_1"/> trên <x id="INTERPOLATION_2"/></target></trans-unit>
 <trans-unit id="settings.members.created-date" datatype="html"><source>Created <x id="INTERPOLATION"/> UTC</source><target>Ngày tạo: <x id="INTERPOLATION"/> UTC</target></trans-unit>
 <trans-unit id="quota.panel.counters" datatype="html"><source>Usage counters</source><target>Bộ đếm mức sử dụng</target></trans-unit>
 <trans-unit id="quota.panel.metric" datatype="html"><source>Metric</source><target>Chỉ số</target></trans-unit>
@@ -22187,7 +22180,6 @@
 <trans-unit id="settings.secrets.actions" datatype="html"><source>Actions</source><target>Thao tác</target></trans-unit>
 <trans-unit id="settings.secrets.page-shown" datatype="html"><source>Showing <x id="INTERPOLATION"/> of <x id="INTERPOLATION_1"/> on this page</source><target>Đang hiển thị <x id="INTERPOLATION"/> trong số <x id="INTERPOLATION_1"/> trên trang này</target></trans-unit>
 <trans-unit id="settings.policy.loaded-revisions" datatype="html"><source>Loaded revisions</source><target>Phiên bản đã tải</target></trans-unit>
-<trans-unit id="settings.policy.history-range" datatype="html"><source>Showing 1–<x id="INTERPOLATION"/> loaded revisions</source><target>Đang hiển thị 1–<x id="INTERPOLATION"/> trong số các phiên bản đã tải</target></trans-unit>
 <trans-unit id="settings.secrets.ci.records" datatype="html"><source>CI binding records</source><target>Bản ghi liên kết CI</target></trans-unit>
 <trans-unit id="runs.list.column-actions" datatype="html"><source>Actions</source><target>Thao tác</target></trans-unit>
 <trans-unit id="runs.list.view" datatype="html"><source>View</source><target>Xem</target></trans-unit>
@@ -22762,6 +22754,10 @@
       <trans-unit id="orgoverview.project-id" datatype="html"><source>Project ID</source><target>Mã dự án</target></trans-unit>
       <trans-unit id="orgoverview.project-name" datatype="html"><source>Name</source><target>Tên</target></trans-unit>
       <trans-unit id="orgoverview.open-project" datatype="html"><source>Open project</source><target>Mở dự án</target></trans-unit>
+      <trans-unit id="settings.members.page-load-failed" datatype="html"><source>The members page could not be loaded. The members already shown are unchanged.</source><target>Không thể tải trang thành viên. Các thành viên đang hiển thị không thay đổi.</target></trans-unit>
+      <trans-unit id="settings.members.order" datatype="html"><source>Oldest first · creation date</source><target>Cũ nhất trước · ngày tạo</target></trans-unit>
+      <trans-unit id="settings.policy.history-order" datatype="html"><source>Oldest first</source><target>Cũ nhất trước</target></trans-unit>
+      <trans-unit id="settings.api-tokens.order" datatype="html"><source>Oldest created first</source><target>Theo ngày tạo, cũ nhất trước</target></trans-unit>
       <trans-unit id="settings.secrets.order" datatype="html"><source>Oldest first</source><target>Cũ nhất trước</target></trans-unit>
       <trans-unit id="settings.security.filter-scope" datatype="html"><source>Filters apply to all matching security events on the server.</source><target>Bộ lọc áp dụng cho tất cả sự kiện bảo mật phù hợp trên máy chủ.</target></trans-unit>
       <trans-unit id="quota.panel.project-order" datatype="html"><source>Projects ordered oldest first</source><target>Dự án được sắp xếp từ cũ nhất đến mới nhất</target></trans-unit>

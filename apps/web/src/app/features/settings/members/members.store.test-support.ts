@@ -13,7 +13,7 @@
 // - the matrix is members x roles read from the server's own role objects, columns in server order;
 // - a failed role or catalogue read degrades the substrate and never hides the memberships, while a
 //   failed member read is the tab's error state with the server's message;
-// - the list follows `next_cursor` once per call, appends, and refuses a cursor it already followed;
+// - cursor navigation replaces the visible page and refuses a repeated forward cursor;
 // - every mutation carries the caller's intent, so a retry reuses the `Idempotency-Key`; a refusal is
 //   stored verbatim (AC2's 409 `last_admin`) and leaves the list exactly as it was;
 // - a role change is applied one request at a time in the order the dialog built (grants first) and
@@ -232,7 +232,11 @@ export class FakeMembersDataService {
   endless = false;
   /** When true, a membership read answers only when the test settles `pending`. */
   manual = false;
-  readonly pending: Array<{ orgId: string; resolve: (page: MembershipListResponse) => void }> = [];
+  readonly pending: Array<{
+    orgId: string;
+    resolve: (page: MembershipListResponse) => void;
+    reject: (error: Error) => void;
+  }> = [];
   /** When true, an invite answers only when the test settles `pendingInvites`. */
   inviteManual = false;
   readonly pendingInvites: Array<{
@@ -282,19 +286,21 @@ export class FakeMembersDataService {
   readonly invites: Array<{ orgId: string; body: InviteMemberRequest; intent: Intent }> = [];
   readonly removals: Array<{ orgId: string; membershipId: string; intent: Intent }> = [];
   readonly membershipCursors: Array<string | undefined> = [];
+  readonly membershipLimits: number[] = [];
   /** The org of each membership read, so a reload of a stale scope is visible. */
   readonly membershipOrgs: string[] = [];
   membershipCalls = 0;
   roleCalls = 0;
   catalogueCalls = 0;
 
-  listMemberships(orgId: string, cursor?: string): Promise<MembershipListResponse> {
+  listMemberships(orgId: string, cursor?: string, limit = 20): Promise<MembershipListResponse> {
     this.membershipCalls += 1;
     this.membershipCursors.push(cursor);
     this.membershipOrgs.push(orgId);
+    this.membershipLimits.push(limit);
     if (this.manual) {
-      return new Promise<MembershipListResponse>((resolve) => {
-        this.pending.push({ orgId, resolve });
+      return new Promise<MembershipListResponse>((resolve, reject) => {
+        this.pending.push({ orgId, resolve, reject });
       });
     }
     if (this.membersFailure !== null && (!this.failCursorPagesOnly || cursor !== undefined)) {

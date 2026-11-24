@@ -72,7 +72,7 @@ describe('API token mutations without credential state', () => {
     h.store.next();
     h.list.mockResolvedValueOnce({ items: [{ ...ROW, id: 'row-2' }], next_cursor: null });
     await h.settle();
-    expect(h.list).toHaveBeenLastCalledWith('project-1', 'next-page', expect.any(AbortSignal));
+    expect(h.list).toHaveBeenLastCalledWith('project-1', 'next-page', expect.any(AbortSignal), 20);
     h.list.mockResolvedValueOnce({
       items: [{ ...ROW, id: 'created-row' }, ROW],
       next_cursor: null,
@@ -80,7 +80,7 @@ describe('API token mutations without credential state', () => {
     await expect(h.store.create(BODY, createIntent())).resolves.toEqual(CREATED);
     await h.settle();
     expect(h.store.cursor()).toBeUndefined();
-    expect(h.list).toHaveBeenLastCalledWith('project-1', undefined, expect.any(AbortSignal));
+    expect(h.list).toHaveBeenLastCalledWith('project-1', undefined, expect.any(AbortSignal), 20);
     expect(h.store.rows().map((row) => row.id)).toEqual(['created-row', 'row-1']);
   });
 
@@ -105,11 +105,30 @@ describe('API token mutations without credential state', () => {
     await h.settle();
     h.store.next();
     await h.settle();
-    expect(h.store.phase()).toBe('error');
+    expect(h.store.phase()).toBe('success');
+    expect(h.store.rows()).toEqual([ROW]);
+    expect(h.store.page()).toBe(1);
+    expect(h.store.visiblePage()).toEqual({
+      items: [ROW],
+      next_cursor: 'next-page',
+      cursor: undefined,
+    });
+    expect(h.store.loadError()).toEqual(stale.error);
+    const callsBeforeRetry = h.list.mock.calls.length;
+    h.store.reload();
+    await h.settle();
+    expect(h.list).toHaveBeenCalledTimes(callsBeforeRetry + 1);
+    expect(h.list).toHaveBeenLastCalledWith('project-1', 'next-page', expect.any(AbortSignal), 20);
+    expect(h.store.rows()).toEqual([ROW]);
+    expect(h.store.page()).toBe(1);
+    expect(h.store.loadError()).toEqual(stale.error);
     await expect(h.store.revoke(ROW.id, createIntent())).resolves.toBe(true);
     await h.settle();
-    expect(h.list).toHaveBeenLastCalledWith('project-1', undefined, expect.any(AbortSignal));
+    expect(h.list).toHaveBeenLastCalledWith('project-1', undefined, expect.any(AbortSignal), 20);
     expect(h.store.phase()).toBe('success');
+    expect(h.store.loadError()).toBeNull();
+    expect(h.store.cursor()).toBeUndefined();
+    expect(h.store.rows()).toEqual([{ ...ROW, status: 'revoked' }]);
   });
 
   it('never optimistically revokes a row, then refreshes authoritative metadata on success', async () => {

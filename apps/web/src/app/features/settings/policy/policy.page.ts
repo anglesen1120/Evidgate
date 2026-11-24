@@ -94,7 +94,7 @@ export class PolicyPage {
   protected readonly selectedRevisionId = computed(() => {
     const rows = this.store.revisions();
     const requested = this.targetId();
-    if (rows.some((row) => row.id === requested)) return requested;
+    if (requested !== null) return requested;
     const head = rows.find((row) => row.id === this.store.headRevisionId());
     return head?.id ?? rows.at(-1)?.id ?? null;
   });
@@ -133,6 +133,15 @@ export class PolicyPage {
   constructor() {
     if (this.revisionId()) void this.store.open(this.revisionId());
     inject(DestroyRef).onDestroy(() => this.store.reset());
+    effect(() => {
+      if (this.store.phase() === 'not_found') {
+        untracked(() => {
+          this.dialog()?.close();
+          this.viewed.set(null);
+          this.published.set(null);
+        });
+      }
+    });
     let previousOrg = this.session.currentOrg()?.id ?? null;
     let previousProject = this.session.currentProject()?.id ?? null;
     effect(() => {
@@ -190,16 +199,22 @@ export class PolicyPage {
   }
   protected selectRevision(id: string | null): void {
     if (this.store.publishing() || this.store.phase() === 'loading') return;
-    if (id && this.store.revisions().some((row) => row.id === id)) this.targetId.set(id);
+    if (id) this.targetId.set(id);
   }
-  protected async loadMore(): Promise<void> {
-    if (this.paging() || this.store.publishing()) return;
+  protected async loadMore(previous = false): Promise<void> {
+    if (this.paging() || this.store.paging() || this.store.publishing()) return;
     this.paging.set(true);
     try {
-      await this.store.loadMore();
+      await (previous ? this.store.previousPage() : this.store.loadMore());
     } finally {
       this.paging.set(false);
     }
+  }
+  protected setPageSize(size: number): void {
+    if (!this.store.publishing()) void this.store.setPageSize(size);
+  }
+  protected retryPage(): void {
+    void this.store.retryPage();
   }
   protected reload(): void {
     void this.store.reload();

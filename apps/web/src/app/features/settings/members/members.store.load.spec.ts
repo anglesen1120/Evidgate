@@ -111,7 +111,7 @@ describe('MembersStore (09.7.1-T2)', () => {
     });
   });
   describe('loadMore', () => {
-    it('appends the next page and stops at a null cursor', async () => {
+    it('replaces the visible rows with the next page and stops at a null cursor', async () => {
       const [first, second] = PAGE.items;
       data.pages = [
         { items: first === undefined ? [] : [first], next_cursor: '1' },
@@ -121,7 +121,7 @@ describe('MembersStore (09.7.1-T2)', () => {
       expect(store.hasMore()).toBe(true);
 
       await store.loadMore();
-      expect(store.members().map((member) => member.id)).toEqual([first?.id, second?.id]);
+      expect(store.members().map((member) => member.id)).toEqual([second?.id]);
       expect(store.hasMore()).toBe(false);
 
       // Nothing left to follow: a second call asks the server nothing.
