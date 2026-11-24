@@ -1,17 +1,5 @@
-<app-data-table
-  [busy]="fetching()"
-  [progressAtPager]="true"
-  class="[--eg-table-row:calc(var(--eg-row-default)_+_var(--eg-space-3))]! [&_th]:whitespace-nowrap! [&_th.cdk-column-select]:text-[length:var(--eg-space-0)]! [&_.cdk-column-select]:px-(--eg-space-2)! [&_.cdk-column-coverage>.eg-table-value]:max-w-none!"
-  [columns]="columns()"
-  [rows]="rows()"
-  [rowId]="rowId"
-  [caption]="copy.caption"
-  [virtualThreshold]="virtualThreshold"
-  [fitToContainer]="true"
-  [fixedHeightCells]="roomForFixedTracks()"
-/>
 @if (desktop()) {
-  <div class="selection-bar" data-select-visible>
+  <div class="selection-bar" role="group" [attr.aria-label]="copy.selection" data-select-visible>
     <label
       class="checkbox-target"
       for="authoring-select-visible"
@@ -28,31 +16,51 @@
       />
       <span>{{ copy.select }}</span>
     </label>
-    <p data-selection-summary role="status" i18n="@@authoring.case-table.selection-summary">
-      {{ selectedCount() | number }} of {{ rows().length | number }} loaded selected; applies to
-      visible rows only
-    </p>
-    <p id="authoring-selection-help" class="help">{{ copy.selectionHelp }}</p>
+    <app-field-hint
+      descriptionId="authoring-selection-help"
+      [label]="copy.selection"
+      [text]="copy.selectionHelp"
+    >
+      <p data-selection-summary role="status" i18n="@@authoring.case-table.selection-summary">
+        Selected {{ selectedCount() | number }} / {{ visibleRows().length | number }} visible cases
+      </p>
+    </app-field-hint>
+    @if (selectedCount() > 0) {
+      <app-field-hint
+        descriptionId="authoring-export-help"
+        [label]="copy.export"
+        [text]="copy.exportHelp"
+      >
+        <button
+          hlmBtn
+          type="button"
+          [variant]="'outline'"
+          [size]="'sm'"
+          [attr.aria-disabled]="true"
+          aria-describedby="authoring-export-help"
+          data-export-selection
+          (click)="$event.preventDefault()"
+        >
+          {{ copy.export }}
+        </button>
+      </app-field-hint>
+    }
   </div>
 } @else {
   <p class="help" data-selection-notice tabindex="-1">{{ copy.narrowHelp }}</p>
 }
-@if (desktop()) {
-  <div class="export-bar">
-    <a
-      hlmBtn
-      [variant]="'outline'"
-      [attr.aria-disabled]="'true'"
-      [attr.role]="'link'"
-      [attr.aria-describedby]="'authoring-export-help'"
-      data-export-selection
-      tabindex="0"
-      >{{ copy.export }}</a
-    >
-    <p id="authoring-export-help" class="help">{{ copy.exportHelp }}</p>
-  </div>
-}
-<p id="authoring-case-pending-help" class="help">{{ copy.pendingHelp }}</p>
+<app-data-table
+  [busy]="fetching()"
+  [progressAtPager]="true"
+  class="[--eg-table-row:calc(var(--eg-row-default)_+_var(--eg-space-3))]! [&_th]:whitespace-nowrap! [&_th.cdk-column-select]:text-[length:var(--eg-space-0)]! [&_.cdk-column-select]:px-(--eg-space-2)! [&_.cdk-column-coverage>.eg-table-value]:max-w-none!"
+  [columns]="columns()"
+  [rows]="rows()"
+  [rowId]="rowId"
+  [caption]="copy.caption"
+  [virtualThreshold]="virtualThreshold"
+  [fitToContainer]="true"
+  [fixedHeightCells]="roomForFixedTracks()"
+/>
 
 <ng-template #selectionCell let-row>
   <label

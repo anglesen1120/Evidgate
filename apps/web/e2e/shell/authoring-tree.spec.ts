@@ -299,7 +299,24 @@ for (const locale of LOCALES) {
     await rowBoxes.first().click();
     await expect(all).toHaveAttribute('aria-checked', 'mixed');
     await expect(page.locator('[data-selection-summary]')).toContainText(/1.*2/);
-    await expect(page.locator('[data-export-selection]')).toHaveAttribute('aria-disabled', 'true');
+    const exportAction = page.locator('button[data-export-selection]');
+    await expect(exportAction).toHaveAttribute('aria-disabled', 'true');
+    await expect(exportAction).toHaveAccessibleDescription(
+      locale === 'vi' ? /Chưa thể xuất lựa chọn/ : /Selection export is unavailable/,
+    );
+    await expect(page.locator('#authoring-export-help')).toBeHidden();
+    const url = page.url();
+    const requestCount = () => window.__evidgateFixtureRequests?.length;
+    const before = await page.evaluate(requestCount);
+    expect(before).toBeGreaterThan(0);
+    await exportAction.focus();
+    await expect(exportAction).toBeFocused();
+    await page.keyboard.press('Enter');
+    await page.keyboard.press('Space');
+    await exportAction.dispatchEvent('click');
+    await expect(page).toHaveURL(url);
+    expect(await page.evaluate(requestCount)).toBe(before);
+    await page.locator('button[aria-controls="authoring-export-help"]').click();
     await expect(page.locator('#authoring-export-help')).toBeVisible();
     await page.locator('[data-case-filter-help] summary').click();
     await expect(page.locator('#authoring-case-source')).toBeDisabled();
@@ -404,7 +421,9 @@ for (const locale of LOCALES) {
           const treeScroll = page.locator('[aria-labelledby="authoring-hierarchy-title"]');
           expect(await treeScroll.evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(true);
         }
-        await expect(page.locator('#authoring-case-pending-help')).toBeVisible();
+        await expect(page.locator('[data-case-refresh]')).toHaveAccessibleName(
+          locale === 'vi' ? 'Làm mới ca kiểm thử' : 'Refresh cases',
+        );
         if (width < 768) {
           await expect(page.locator('[data-case-select]')).toHaveCount(0);
           await expect(page.locator('[data-selection-notice]')).toBeVisible();

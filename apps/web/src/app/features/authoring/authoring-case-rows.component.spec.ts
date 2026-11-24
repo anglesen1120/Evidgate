@@ -16,7 +16,6 @@ class RowsHarness extends ComponentHarness {
   readonly selectAll = this.locatorFor('[data-select-visible] [role="checkbox"]');
   readonly rowBoxes = this.locatorForAll('[data-case-select] [role="checkbox"]');
   readonly summary = this.locatorFor('[data-selection-summary]');
-  readonly exportAction = this.locatorFor('[data-export-selection]');
   readonly selectionNotice = this.locatorFor('[data-selection-notice]');
   readonly links = this.locatorForAll('a[data-case-view]');
   readonly identifiers = this.locatorFor('button[aria-label="Identifiers · SHOP-1"]');
@@ -87,7 +86,7 @@ describe('AuthoringCaseRowsComponent', () => {
     expect(await links[1]?.getAttribute('aria-label')).toBe('View ' + row(2).title);
     expect(await links[1]?.text({ exclude: '[popover]' })).toBe('');
     expect(await (await harness.viewIcon()).getAttribute('aria-hidden')).toBe('true');
-    expect(await (await harness.summary()).text()).toContain('0 of 2 loaded selected');
+    expect(await (await harness.summary()).text()).toBe('Selected 0 / 2 visible cases');
   });
 
   it('opens case identifiers from a named icon button without changing selection', async () => {
@@ -97,18 +96,18 @@ describe('AuthoringCaseRowsComponent', () => {
     expect(await (await harness.identifierIcon()).getAttribute('aria-hidden')).toBe('true');
     await opener.click();
     expect(await (await harness.dialog())?.text()).toContain(row(1).case_id);
-    expect(await (await harness.summary()).text()).toContain('0 of 2 loaded selected');
+    expect(await (await harness.summary()).text()).toBe('Selected 0 / 2 visible cases');
   });
 
   it('selects one row, exposes mixed select-visible, and selects or clears visible rows only', async () => {
     const { harness } = await mount();
     await (await harness.rowBoxes())[0]?.click();
     expect(await (await harness.selectAll()).getAttribute('aria-checked')).toBe('mixed');
-    expect(await (await harness.summary()).text()).toContain('1 of 2 loaded selected');
+    expect(await (await harness.summary()).text()).toBe('Selected 1 / 2 visible cases');
     await (await harness.selectAll()).click();
-    expect(await (await harness.summary()).text()).toContain('2 of 2 loaded selected');
+    expect(await (await harness.summary()).text()).toBe('Selected 2 / 2 visible cases');
     await (await harness.selectAll()).click();
-    expect(await (await harness.summary()).text()).toContain('0 of 2 loaded selected');
+    expect(await (await harness.summary()).text()).toBe('Selected 0 / 2 visible cases');
   });
 
   it('clears selection when a new filter result replaces rows', async () => {
@@ -116,7 +115,7 @@ describe('AuthoringCaseRowsComponent', () => {
     await (await harness.selectAll()).click();
     fixture.componentRef.setInput('rows', [row(3)]);
     fixture.detectChanges();
-    expect(await (await harness.summary()).text()).toContain('0 of 1 loaded selected');
+    expect(await (await harness.summary()).text()).toBe('Selected 0 / 1 visible cases');
   });
 
   it('keeps case-id selection when Load more appends rows', async () => {
@@ -125,14 +124,7 @@ describe('AuthoringCaseRowsComponent', () => {
     fixture.componentRef.setInput('rows', [row(1), row(2), row(3)]);
     fixture.detectChanges();
     expect(await (await harness.rowBoxes())[0]?.getAttribute('aria-checked')).toBe('true');
-    expect(await (await harness.summary()).text()).toContain('1 of 3 loaded selected');
-  });
-
-  it('never enables export or hides its visible reason', async () => {
-    const { harness } = await mount();
-    expect(await (await harness.exportAction()).getAttribute('aria-disabled')).toBe('true');
-    expect(await (await harness.host()).text()).toContain('cannot export explicit case IDs');
-    expect(await (await harness.host()).text()).toContain('Pending change count unavailable');
+    expect(await (await harness.summary()).text()).toBe('Selected 1 / 3 visible cases');
   });
 
   it('removes export-selection controls below the viewport policy without hiding case facts', async () => {
@@ -155,13 +147,13 @@ describe('AuthoringCaseRowsComponent', () => {
   it('retains the selection when only the viewport narrows and widens again', async () => {
     const { fixture, harness } = await mount();
     await (await harness.selectAll()).click();
-    expect(await (await harness.summary()).text()).toContain('2 of 2 loaded selected');
+    expect(await (await harness.summary()).text()).toBe('Selected 2 / 2 visible cases');
     desktop.set(false);
     fixture.detectChanges();
     expect(await harness.rowBoxes()).toHaveLength(0);
     desktop.set(true);
     fixture.detectChanges();
-    expect(await (await harness.summary()).text()).toContain('2 of 2 loaded selected');
+    expect(await (await harness.summary()).text()).toBe('Selected 2 / 2 visible cases');
   });
 
   it('keeps case-id selection across table and stacked-record switches above 200 rows', async () => {
@@ -180,7 +172,9 @@ describe('AuthoringCaseRowsComponent', () => {
     table.narrow.set(true);
     fixture.detectChanges();
     expect(await (await harness.rowBoxes())[0]?.getAttribute('aria-checked')).toBe('true');
-    expect(await (await harness.summary()).text()).toContain('1 of 201 loaded selected');
+    expect(await (await harness.summary()).text()).toBe(
+      `Selected 1 / ${records.length} visible cases`,
+    );
   }, 20_000);
 
   it('keeps the full case key and its identifiers disclosure together, not in separate UUID columns', async () => {

@@ -226,6 +226,26 @@
         (retry)="movePage(null)"
       />
     }
+    @if (hasRows() || store.status() === 'ready') {
+      <div class="table-toolbar">
+        @if (hasRows()) {
+          <p class="help">{{ copy.order }}</p>
+        }
+        @if (store.status() === 'ready') {
+          <button
+            appRowAction
+            type="button"
+            [icon]="'lucideRotateCw'"
+            [label]="copy.refresh"
+            [attr.aria-label]="copy.refresh"
+            aria-describedby="authoring-case-refresh-help"
+            [disabled]="busy() || store.loadingMore() || !store.retryReady()"
+            (click)="refresh()"
+            data-case-refresh
+          ></button>
+        }
+      </div>
+    }
     <app-request-state
       [status]="busy() ? (hasRows() ? 'ready' : 'loading') : store.status()"
       [tableLoading]="true"
@@ -243,7 +263,6 @@
       (retry)="movePage(null)"
       (emptyAction)="clear()"
     >
-      <p class="help">{{ copy.order }}</p>
       <app-authoring-case-rows
         [fetching]="busy() || store.loadingMore()"
         [rows]="store.rows()"
@@ -279,16 +298,5 @@
       (next)="movePage(true)"
       (pageSizeChange)="setPageSize($event)"
     />
-    <button
-      hlmBtn
-      [variant]="'ghost'"
-      type="button"
-      [disabled]="busy() || store.loadingMore() || !store.retryReady()"
-      [attr.aria-describedby]="'authoring-case-refresh-help'"
-      (click)="refresh()"
-      data-case-refresh
-    >
-      {{ copy.refresh }}
-    </button>
   </div>
 }
