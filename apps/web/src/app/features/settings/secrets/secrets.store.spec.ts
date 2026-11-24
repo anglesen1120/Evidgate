@@ -327,7 +327,7 @@ describe('SecretsStore (09.7.1-T3)', () => {
   });
 
   describe('loadMore', () => {
-    it('appends the next page once per call and reports when another one exists', async () => {
+    it('replaces the current page once per call and reports when another one exists', async () => {
       const second = pageRow(UNUSABLE_PAGE, 0);
       data.pages = [
         { items: PAGE.items, next_cursor: '1' },
@@ -338,10 +338,7 @@ describe('SecretsStore (09.7.1-T3)', () => {
 
       await store.loadMore();
 
-      expect(store.rows().map((row) => row.id)).toEqual([
-        ...PAGE.items.map((row) => row.id),
-        second.id,
-      ]);
+      expect(store.rows().map((row) => row.id)).toEqual([second.id]);
       expect(store.hasMore()).toBe(false);
       expect(data.listCalls).toEqual([
         { projectId: 'p-1', cursor: undefined },

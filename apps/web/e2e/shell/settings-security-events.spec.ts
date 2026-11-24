@@ -128,12 +128,14 @@ for (const locale of LOCALES) {
     await expect(page.locator(`${host} app-loading-pattern`)).toBeVisible();
     await expect(page.locator('#security-results')).toBeFocused();
     await ready(page);
-    await page.locator('#security-page-size').click();
-    await page.getByRole('option').first().click();
+    const size = page.locator(`${host} app-data-table-pager`).getByRole('combobox');
+    await size.click();
+    await page.getByRole('option', { name: '50', exact: true }).click();
     await expect(page.locator(`${host} app-loading-pattern`)).toBeVisible();
-    await expect(page.locator('#security-page-size')).toBeFocused();
+    await expect(size).toBeFocused();
     await ready(page);
-    await expect(page.locator('#security-page-size')).toBeFocused();
+    await expect(size).toBeFocused();
+    await expect(size).toContainText('50');
   });
   test(`security disclosure retains focus across responsive remounts ${locale}`, async ({
     page,

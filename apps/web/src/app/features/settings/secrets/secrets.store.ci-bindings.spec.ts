@@ -28,6 +28,7 @@
 //   end enumerates the store's own fields and serialises every public signal to prove it, and the
 //   listed row carries no challenge — a list never does (`CiBindingView`'s own contract text).
 
+import { isSignal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import type {
   CiBindingListResponse,
@@ -316,7 +317,7 @@ describe('SecretsStore ci-bindings (09.7.1-F15)', () => {
     expect(JSON.stringify([store.ciBindingsError(), store.ciBindings()])).not.toContain('boom');
   });
 
-  it('appends the next page by following one cursor, without dropping a row it already shows', async () => {
+  it('replaces the current binding page by following one cursor', async () => {
     const firstPage = makeRows(2, 'p1');
     const third = pageRow(PAGE, 0);
     data.pages = [
@@ -330,10 +331,7 @@ describe('SecretsStore ci-bindings (09.7.1-F15)', () => {
 
     await store.loadMoreCiBindings();
 
-    expect(store.ciBindings().map((row) => row.id)).toEqual([
-      ...firstPage.map((row) => row.id),
-      third.id,
-    ]);
+    expect(store.ciBindings().map((row) => row.id)).toEqual([third.id]);
     expect(store.ciBindingsPhase()).toBe('ready');
     expect(store.hasMoreCiBindings()).toBe(false);
     expect(data.listCalls).toEqual([
@@ -353,7 +351,7 @@ describe('SecretsStore ci-bindings (09.7.1-F15)', () => {
     await store.loadCiBindings('p-1');
     await store.loadMoreCiBindings();
 
-    expect(store.ciBindings().map((row) => row.id)).toEqual([first.id, second.id, third.id]);
+    expect(store.ciBindings().map((row) => row.id)).toEqual([second.id, third.id]);
   });
 
   it('offers the next page on a full 200-row page that names a cursor, and sends no request after it', async () => {
@@ -372,9 +370,9 @@ describe('SecretsStore ci-bindings (09.7.1-F15)', () => {
     await store.loadMoreCiBindings();
 
     expect(data.listCalls).toHaveLength(2);
-    // The follow-up page was empty and named no cursor: the list now ends, with every row kept.
+    // The follow-up page was empty and named no cursor: the current page is empty.
     expect(store.hasMoreCiBindings()).toBe(false);
-    expect(store.ciBindings()).toHaveLength(FULL_PAGE_ROWS);
+    expect(store.ciBindings()).toHaveLength(0);
   });
 
   it('offers no next page on a full 200-row page that names none, and sends no request', async () => {
@@ -567,18 +565,18 @@ describe('SecretsStore ci-bindings (09.7.1-F15)', () => {
     ];
     await store.loadCiBindings('p-1');
     await store.loadMoreCiBindings();
+    expect(store.ciBindings()).toEqual([]);
+    await store.previousCiBindings();
     expect(store.ciBindings()).toEqual(PAGE.items);
 
-    // Every public signal of the binding track, serialised: no challenge, no value of any kind.
-    const publicState = {
-      ciBindings: store.ciBindings(),
-      ciBindingsPhase: store.ciBindingsPhase(),
-      ciBindingsError: store.ciBindingsError(),
-      ciBindingsProjectId: store.ciBindingsProjectId(),
-      hasMoreCiBindings: store.hasMoreCiBindings(),
-      rows: store.rows(),
-      rotateState: store.rotateState(),
-    };
+    // Inspect real signals only: navigation methods can also take zero arguments.
+    const reads = [...data.listCalls];
+    const publicState = Object.fromEntries(
+      Object.entries(store).flatMap(([name, value]) => (isSignal(value) ? [[name, value()]] : [])),
+    );
+    expect(Object.keys(publicState)).toContain('ciBindings');
+    expect(publicState['ciBindings']).toEqual(PAGE.items);
+    expect(data.listCalls).toEqual(reads);
     const serialised = JSON.stringify(publicState);
     expect(serialised).not.toContain('challenge');
     expect(serialised).not.toContain('binding_challenge');
