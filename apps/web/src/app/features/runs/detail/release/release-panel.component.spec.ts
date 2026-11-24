@@ -336,7 +336,6 @@ describe('ReleasePanelComponent', () => {
     );
     expect(served).toEqual(expected);
     expect(served.every((value, index) => value?.length === expected[index]!.length)).toBe(true);
-    expect(root.querySelector('.eg-table-long')).toBeNull();
     expect(rows[99]?.textContent).toContain('Bound');
     expect(rows[0]?.textContent).not.toContain('Bound');
     // Shared auto-layout roles budget identifiers; narrow layouts use shared full-fact records.
@@ -420,7 +419,6 @@ describe('ReleasePanelComponent', () => {
     const { fixture } = await render();
     const table = fixture.debugElement.query(By.directive(DataTableComponent))
       .componentInstance as DataTableComponent<unknown>;
-    expect(table.flow()).toBe('page');
     expect(table.fitToContainer()).toBe(true);
     expect(table.columns().map((column) => column.width?.preferred)).toEqual([
       '1%',

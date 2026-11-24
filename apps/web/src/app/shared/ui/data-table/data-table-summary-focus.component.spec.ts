@@ -29,7 +29,6 @@ type Row = { id: string };
       [columns]="columns()"
       [rowId]="rowId"
       [caption]="'Security activity'"
-      [flow]="'page'"
     />
   `,
 })

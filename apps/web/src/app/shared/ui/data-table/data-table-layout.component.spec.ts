@@ -101,24 +101,14 @@ describe('Shared table column layout and reflow', () => {
     return host;
   }
 
-  it('isolates sticky descendants below app chrome and disables native sticky offsets in page flow', async () => {
+  it('isolates descendants below app chrome without reserving a sticky offset for ordinary rows', () => {
     expect(root.classList.contains('isolate')).toBe(true);
-    expect(root.querySelector('tr.eg-table-sticky')).not.toBeNull();
-    expect(root.style.getPropertyValue('--eg-table-header-height')).not.toBe('0px');
-    fixture.componentRef.setInput('flow', 'page');
-    await fixture.whenStable();
     expect(root.querySelector('tr.eg-table-sticky')).toBeNull();
-    expect(root.querySelector('.eg-table-long')).toBeNull();
     expect(root.style.getPropertyValue('--eg-table-header-height')).toBe('0px');
-    fixture.componentRef.setInput('flow', 'bounded');
-    await fixture.whenStable();
-    expect(root.querySelector('tr.eg-table-sticky')).not.toBeNull();
-    expect(root.style.getPropertyValue('--eg-table-header-height')).not.toBe('0px');
   });
 
-  it('retains the virtual header and its offset when page flow is requested', async () => {
+  it('retains the virtual header and its offset', async () => {
     fixture.componentRef.setInput('rows', dataTableFixtureRows(201));
-    fixture.componentRef.setInput('flow', 'page');
     await fixture.whenStable();
     expect(fixture.componentInstance.virtual()).toBe(true);
     expect(root.querySelector('tr.eg-table-sticky')).not.toBeNull();
@@ -182,24 +172,16 @@ describe('Shared table column layout and reflow', () => {
     }
   });
 
-  it.each(['bounded', 'page'] as const)(
-    'keeps 25 loaded rows and header context in %s flow',
-    async (flow) => {
-      fixture.componentRef.setInput('rows', dataTableFixtureRows(25));
-      fixture.componentRef.setInput('flow', flow);
-      await fixture.whenStable();
-      expect(root.querySelectorAll('tbody [data-row-id]')).toHaveLength(25);
-      expect(root.querySelectorAll('[role="columnheader"]')).toHaveLength(columns.length);
-      expect(root.querySelector('.scroll')?.classList.contains('eg-table-long')).toBe(
-        flow === 'bounded',
-      );
-      expect(root.querySelector('cdk-virtual-scroll-viewport')).toBeNull();
-    },
-  );
+  it('keeps all 25 loaded rows with their header in ordinary page flow', async () => {
+    fixture.componentRef.setInput('rows', dataTableFixtureRows(25));
+    await fixture.whenStable();
+    expect(root.querySelectorAll('tbody [data-row-id]')).toHaveLength(25);
+    expect(root.querySelectorAll('[role="columnheader"]')).toHaveLength(columns.length);
+    expect(root.querySelector('cdk-virtual-scroll-viewport')).toBeNull();
+  });
 
-  it('retains fixed-height virtualization above 200 despite page-flow and fit opt-ins', async () => {
+  it('retains fixed-height virtualization above 200 despite the fit opt-in', async () => {
     fixture.componentRef.setInput('rows', dataTableFixtureRows(201));
-    fixture.componentRef.setInput('flow', 'page');
     fixture.componentRef.setInput('fitToContainer', true);
     await fixture.whenStable();
     expect(fixture.componentInstance.virtual()).toBe(true);
@@ -253,20 +235,6 @@ describe('Shared table column layout and reflow', () => {
     expect(resolved[0]?.virtualWidth).toBeNull();
     expect(resolved[1]?.virtualWidth).toBe('calc(23ch + var(--eg-space-4) * 2)');
   });
-
-  it.each(['light', 'dark'])(
-    'preserves named locally sticky header structure in %s theme',
-    (theme) => {
-      root.setAttribute('data-theme', theme);
-      const scroll = root.querySelector('.eg-table-long');
-      const header = root.querySelector('.eg-table-sticky');
-      expect(scroll?.contains(header)).toBe(true);
-      expect(header?.querySelectorAll('th[scope="col"]')).toHaveLength(4);
-      expect(header?.closest('cdk-virtual-scroll-viewport')).toBeNull();
-      expect(root.classList.contains('bg-card')).toBe(true);
-      // jsdom has no real sticky positioning or token cascade; browser QA measures those.
-    },
-  );
 
   it('replaces narrow tables with P1 identity/state then every labelled P2 fact', async () => {
     resizeViewport(390);

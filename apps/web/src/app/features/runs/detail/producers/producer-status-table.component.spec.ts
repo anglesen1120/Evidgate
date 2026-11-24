@@ -68,9 +68,7 @@ describe('ProducerStatusTableComponent', () => {
     const { fixture, root } = await render();
     const table = fixture.debugElement.query(By.directive(DataTableComponent))
       .componentInstance as DataTableComponent<ProducerSlot>;
-    expect(table.flow()).toBe('page');
     expect(table.fitToContainer()).toBe(true);
-    expect(root.querySelector('.eg-table-long')).toBeNull();
     expect(table.columns().map((column) => column.width?.preferred)).toEqual([
       '1%',
       '1%',
@@ -312,7 +310,6 @@ describe('ProducerStatusTableComponent', () => {
     }));
     const { root } = await render(slots);
     expect(root.querySelectorAll('tr[data-row-id]')).toHaveLength(20);
-    expect(root.querySelector('[data-producer-scroll] .eg-table-long')).toBeNull();
     expect(root.querySelector('[data-producer-scroll] .eg-table-sticky')).toBeNull();
     expect(root.querySelector('app-data-table')?.getAttribute('style')).toContain(
       '--eg-table-header-height: 0px',

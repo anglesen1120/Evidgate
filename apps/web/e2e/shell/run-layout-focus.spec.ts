@@ -103,6 +103,33 @@ async function tableGeometry(page: Page, selector = 'app-run-list-table'): Promi
 }
 
 for (const theme of THEMES) {
+  test(`paginated run rows scroll with the page, not inside the table (${theme})`, async ({
+    page,
+  }) => {
+    await seedStoredTheme(page, theme);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(listPath('250-rows'));
+    const table = page.locator('app-run-list-table');
+    const scroll = table.locator('.spartan-table-container');
+    await expect(table.locator('tbody tr[data-row-id]')).toHaveCount(20);
+    await expect(scroll).toHaveCSS('max-height', 'none');
+    await expect(scroll).toHaveCSS('overflow-x', 'auto');
+    await expect
+      .poll(() => scroll.evaluate((element) => element.scrollHeight - element.clientHeight))
+      .toBeLessThanOrEqual(1);
+    const header = table.locator('thead th').first();
+    await expect(header).toHaveCSS('position', 'static');
+    const firstTop = await scroll.evaluate((element) => element.getBoundingClientRect().top);
+    await table.locator('tbody tr[data-row-id]').last().scrollIntoViewIfNeeded();
+    expect(await scroll.evaluate((element) => element.scrollTop)).toBe(0);
+    expect(await scroll.evaluate((element) => element.getBoundingClientRect().top)).toBeLessThan(
+      firstTop,
+    );
+    await expect(table.locator('tbody tr[data-row-id]').last()).toBeInViewport();
+  });
+}
+
+for (const theme of THEMES) {
   for (const width of WIDTHS) {
     for (const variant of ['runs', '250-rows'] as const) {
       test(`run table column parity ${width}px ${theme} ${variant}`, async ({ page }) => {
