@@ -162,6 +162,9 @@
                   <span class="separator" aria-hidden="true">/</span>
                   @if (entry.node_id === store.selectedNodeId()) {
                     <bdi [attr.aria-current]="'location'">{{ entry.title }}</bdi>
+                    @if (store.selectedNode(); as selected) {
+                      <app-authoring-node-details [node]="selected" />
+                    }
                   } @else {
                     <button hlmBtn [variant]="'link'" type="button" (click)="select(entry.node_id)">
                       <bdi>{{ entry.title }}</bdi>
@@ -171,18 +174,6 @@
               }
             </ol>
           </nav>
-          @if (store.selectedNode(); as selected) {
-            <dl class="selected-id">
-              <dt>{{ copy.selectedId }}</dt>
-              <dd>
-                <app-copyable-identifier
-                  [value]="selected.node_id"
-                  [label]="copy.selectedId"
-                  [copySize]="'lg'"
-                />
-              </dd>
-            </dl>
-          }
         }
       </div>
     }

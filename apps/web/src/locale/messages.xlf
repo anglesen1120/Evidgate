@@ -445,7 +445,11 @@
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-case-rows.component.html</context>
-          <context context-type="linenumber">172,177</context>
+          <context context-type="linenumber">171,176</context>
+        </context-group>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/authoring-node-details.component.ts</context>
+          <context context-type="linenumber">75,78</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/import-export/import-history-table.component.html</context>
@@ -481,7 +485,7 @@
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/members/member-list.component.ts</context>
-          <context context-type="linenumber">355,358</context>
+          <context context-type="linenumber">354,357</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/review-agent-pools/agent-pools-review.page.html</context>
@@ -1071,14 +1075,14 @@
         <source> <x id="INTERPOLATION" equiv-text="{{ selectedCount() | number }}"/> of <x id="INTERPOLATION_1" equiv-text="{{ rows().length | number }}"/> loaded selected; applies to visible rows only </source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-case-rows.component.html</context>
-          <context context-type="linenumber">31,34</context>
+          <context context-type="linenumber">30,33</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.case-table.live-links" datatype="html">
         <source>Live links</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-case-rows.component.html</context>
-          <context context-type="linenumber">115,120</context>
+          <context context-type="linenumber">114,119</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.case-table.identifiers" datatype="html">
@@ -1753,144 +1757,151 @@
           <context context-type="linenumber">15</context>
         </context-group>
       </trans-unit>
-      <trans-unit id="authoring.tree.selected-id" datatype="html">
-        <source>Selected node ID</source>
+      <trans-unit id="authoring.tree.details" datatype="html">
+        <source>Node details</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-tree.copy.ts</context>
           <context context-type="linenumber">16</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.tree.node-id" datatype="html">
+        <source>Node ID</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/authoring-tree.copy.ts</context>
+          <context context-type="linenumber">17</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.tree.loading" datatype="html">
         <source>Loading project hierarchy…</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-tree.copy.ts</context>
-          <context context-type="linenumber">17</context>
+          <context context-type="linenumber">18</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.tree.loading-children" datatype="html">
         <source>Loading child nodes…</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-tree.copy.ts</context>
-          <context context-type="linenumber">18</context>
+          <context context-type="linenumber">19</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.tree.empty" datatype="html">
         <source>This project has no authoring content yet</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-tree.copy.ts</context>
-          <context context-type="linenumber">19</context>
+          <context context-type="linenumber">20</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.tree.no-roots" datatype="html">
         <source>No hierarchy nodes in this project</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-tree.copy.ts</context>
-          <context context-type="linenumber">20</context>
+          <context context-type="linenumber">21</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.tree.empty-description" datatype="html">
         <source>Import a checklist and its manual cases to build the first branch of this tree.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-tree.copy.ts</context>
-          <context context-type="linenumber">21</context>
+          <context context-type="linenumber">22</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.tree.empty-children" datatype="html">
         <source>No child nodes in this scope</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-tree.copy.ts</context>
-          <context context-type="linenumber">22</context>
+          <context context-type="linenumber">23</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.tree.refresh" datatype="html">
         <source>Refresh hierarchy</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-tree.copy.ts</context>
-          <context context-type="linenumber">23</context>
+          <context context-type="linenumber">24</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.tree.stale" datatype="html">
         <source>Hierarchy may be stale</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-tree.copy.ts</context>
-          <context context-type="linenumber">24</context>
+          <context context-type="linenumber">25</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.tree.stale-description" datatype="html">
         <source>Refresh failed; previously loaded hierarchy data is still shown. Retry to refresh this region only.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-tree.copy.ts</context>
-          <context context-type="linenumber">25</context>
+          <context context-type="linenumber">26</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.tree.more-roots" datatype="html">
         <source>Load more root nodes</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-tree.copy.ts</context>
-          <context context-type="linenumber">26</context>
+          <context context-type="linenumber">27</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.tree.more-children" datatype="html">
         <source>Load more child nodes</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-tree.copy.ts</context>
-          <context context-type="linenumber">27</context>
+          <context context-type="linenumber">28</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.tree.browse-capped" datatype="html">
         <source>Hierarchy list is at its load limit</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-tree.copy.ts</context>
-          <context context-type="linenumber">28</context>
+          <context context-type="linenumber">29</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.tree.table" datatype="html">
         <source>Manual cases</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-tree.copy.ts</context>
-          <context context-type="linenumber">29</context>
+          <context context-type="linenumber">30</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.tree.import-export" datatype="html">
         <source>Import and export</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-tree.copy.ts</context>
-          <context context-type="linenumber">30</context>
+          <context context-type="linenumber">31</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.tree.category-cases" datatype="html">
         <source>Category cases</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-tree.copy.ts</context>
-          <context context-type="linenumber">31</context>
+          <context context-type="linenumber">32</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.tree.direct-items" datatype="html">
         <source>Direct checklist items</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-tree.copy.ts</context>
-          <context context-type="linenumber">32</context>
+          <context context-type="linenumber">33</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.tree.loaded-cases" datatype="html">
         <source>Loaded cases</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-tree.copy.ts</context>
-          <context context-type="linenumber">33</context>
+          <context context-type="linenumber">34</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.tree.loaded-scope" datatype="html">
         <source>Loaded in this scope</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-tree.copy.ts</context>
-          <context context-type="linenumber">34</context>
+          <context context-type="linenumber">35</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.tree.browse-capped-help" datatype="html">
         <source>Showing the first <x id="cap" equiv-text="formatNumber(cap, locale)"/> nodes in this list. Open a known node link to inspect a scope outside these results.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-tree.copy.ts</context>
-          <context context-type="linenumber">39</context>
+          <context context-type="linenumber">40</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.tree.announce-selection-failed" datatype="html">
@@ -3822,7 +3833,7 @@
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-change-table.component.html</context>
-          <context context-type="linenumber">113,116</context>
+          <context context-type="linenumber">112,115</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.review-context.related-cases" datatype="html">
@@ -3864,21 +3875,21 @@
         <source> Change details </source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-change-table.component.html</context>
-          <context context-type="linenumber">68,70</context>
+          <context context-type="linenumber">67,69</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.pending-changes.summary-heading" datatype="html">
         <source> Summary </source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-change-table.component.html</context>
-          <context context-type="linenumber">77,80</context>
+          <context context-type="linenumber">76,79</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.pending-changes.change-id" datatype="html">
         <source>Change id</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-change-table.component.html</context>
-          <context context-type="linenumber">88,90</context>
+          <context context-type="linenumber">87,89</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.ui-copy.ts</context>
@@ -3889,67 +3900,67 @@
         <source> History </source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-change-table.component.html</context>
-          <context context-type="linenumber">98,101</context>
+          <context context-type="linenumber">97,100</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.review-context.author-id" datatype="html">
         <source>Author membership id</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-change-table.component.html</context>
-          <context context-type="linenumber">102,105</context>
+          <context context-type="linenumber">101,104</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-change-table.component.html</context>
-          <context context-type="linenumber">106,110</context>
+          <context context-type="linenumber">105,109</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.review-context.author-name" datatype="html">
         <source>Author display name</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-change-table.component.html</context>
-          <context context-type="linenumber">112,115</context>
+          <context context-type="linenumber">111,114</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.review-context.source" datatype="html">
         <source>Source</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-change-table.component.html</context>
-          <context context-type="linenumber">116,120</context>
+          <context context-type="linenumber">115,119</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.pending-changes.manual-source" datatype="html">
         <source>Manual</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-change-table.component.html</context>
-          <context context-type="linenumber">123,124</context>
+          <context context-type="linenumber">122,123</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.pending-changes.ai-source" datatype="html">
         <source>AI</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-change-table.component.html</context>
-          <context context-type="linenumber">131,132</context>
+          <context context-type="linenumber">130,131</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.pending-changes.import-source" datatype="html">
         <source>Import</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-change-table.component.html</context>
-          <context context-type="linenumber">139,140</context>
+          <context context-type="linenumber">138,139</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.review-context.state" datatype="html">
         <source>Change state</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-change-table.component.html</context>
-          <context context-type="linenumber">151,155</context>
+          <context context-type="linenumber">150,154</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.pending-changes.pending-state" datatype="html">
         <source>Queued</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-change-table.component.html</context>
-          <context context-type="linenumber">158,159</context>
+          <context context-type="linenumber">157,158</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.ui-copy.ts</context>
@@ -3960,7 +3971,7 @@
         <source>Applied</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-change-table.component.html</context>
-          <context context-type="linenumber">166,167</context>
+          <context context-type="linenumber">165,166</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-change-table.component.ts</context>
@@ -3971,7 +3982,7 @@
         <source>Discarded</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-change-table.component.html</context>
-          <context context-type="linenumber">173,175</context>
+          <context context-type="linenumber">172,174</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-change-table.component.ts</context>
@@ -3982,21 +3993,21 @@
         <source>Target base version</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-change-table.component.html</context>
-          <context context-type="linenumber">186,189</context>
+          <context context-type="linenumber">185,188</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.pending-changes.queued-at" datatype="html">
         <source>Queued at (UTC)</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-change-table.component.html</context>
-          <context context-type="linenumber">190,193</context>
+          <context context-type="linenumber">189,192</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.review-context.reason" datatype="html">
         <source>Change reason</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-change-table.component.html</context>
-          <context context-type="linenumber">194,196</context>
+          <context context-type="linenumber">193,195</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-change-table.component.ts</context>
@@ -4007,7 +4018,7 @@
         <source>Not set</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-change-table.component.html</context>
-          <context context-type="linenumber">199,204</context>
+          <context context-type="linenumber">198,203</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.copy.ts</context>
@@ -4018,14 +4029,14 @@
         <source> Apply checks </source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-change-table.component.html</context>
-          <context context-type="linenumber">207,211</context>
+          <context context-type="linenumber">206,210</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.pending-changes.payload-preview" datatype="html">
         <source> Change preview </source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-change-table.component.html</context>
-          <context context-type="linenumber">218,222</context>
+          <context context-type="linenumber">217,221</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.pending-changes.ordered-caption" datatype="html">
@@ -12908,70 +12919,70 @@
         <source> Retry run summaries </source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/org-overview/org-overview.page.html</context>
-          <context context-type="linenumber">72,76</context>
+          <context context-type="linenumber">71,75</context>
         </context-group>
       </trans-unit>
       <trans-unit id="orgoverview.projects-more" datatype="html">
         <source>{VAR_PLURAL, plural, =1 {Showing 1 project; more available} other {Showing <x id="INTERPOLATION"/> projects; more available}}</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/org-overview/org-overview.page.html</context>
-          <context context-type="linenumber">78,83</context>
+          <context context-type="linenumber">77,82</context>
         </context-group>
       </trans-unit>
       <trans-unit id="orgoverview.projects-count" datatype="html">
         <source>{VAR_PLURAL, plural, =1 {Showing 1 project} other {Showing <x id="INTERPOLATION"/> projects}}</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/org-overview/org-overview.page.html</context>
-          <context context-type="linenumber">83,90</context>
+          <context context-type="linenumber">82,89</context>
         </context-group>
       </trans-unit>
       <trans-unit id="orgoverview.run-bound" datatype="html">
         <source> Latest run is available only when the bounded read contains every run (up to 50 per project). </source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/org-overview/org-overview.page.html</context>
-          <context context-type="linenumber">91,97</context>
+          <context context-type="linenumber">90,96</context>
         </context-group>
       </trans-unit>
       <trans-unit id="orgoverview.period" datatype="html">
         <source> Period: <x id="INTERPOLATION" equiv-text="{{ store.usage.value().period }}"/> </source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/org-overview/org-overview.page.html</context>
-          <context context-type="linenumber">122,124</context>
+          <context context-type="linenumber">121,123</context>
         </context-group>
       </trans-unit>
       <trans-unit id="orgoverview.ai-explanation" datatype="html">
         <source> Token usage is not a credit balance. Unavailable measurements are not zero. </source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/org-overview/org-overview.page.html</context>
-          <context context-type="linenumber">154,157</context>
+          <context context-type="linenumber">153,156</context>
         </context-group>
       </trans-unit>
       <trans-unit id="orgoverview.empty-usage" datatype="html">
         <source>No usage metrics returned.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/org-overview/org-overview.page.html</context>
-          <context context-type="linenumber">157,163</context>
+          <context context-type="linenumber">156,162</context>
         </context-group>
       </trans-unit>
       <trans-unit id="orgoverview.no-access" datatype="html">
         <source> No dashboard data is available with your current permissions. </source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/org-overview/org-overview.page.html</context>
-          <context context-type="linenumber">173,179</context>
+          <context context-type="linenumber">172,178</context>
         </context-group>
       </trans-unit>
       <trans-unit id="orgoverview.project-details" datatype="html">
         <source>Project details</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/org-overview/org-overview.page.html</context>
-          <context context-type="linenumber">186,189</context>
+          <context context-type="linenumber">185,188</context>
         </context-group>
       </trans-unit>
       <trans-unit id="orgoverview.project-id" datatype="html">
         <source>Project ID</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/org-overview/org-overview.page.html</context>
-          <context context-type="linenumber">193,196</context>
+          <context context-type="linenumber">192,195</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/org-overview/org-overview.page.ts</context>
@@ -12982,14 +12993,14 @@
         <source>Name</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/org-overview/org-overview.page.html</context>
-          <context context-type="linenumber">203,207</context>
+          <context context-type="linenumber">202,206</context>
         </context-group>
       </trans-unit>
       <trans-unit id="orgoverview.time-column" datatype="html">
         <source>Latest run (UTC)</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/org-overview/org-overview.page.html</context>
-          <context context-type="linenumber">210,213</context>
+          <context context-type="linenumber">209,212</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/org-overview/org-overview.page.ts</context>
@@ -13000,7 +13011,7 @@
         <source>Open project</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/org-overview/org-overview.page.html</context>
-          <context context-type="linenumber">221,227</context>
+          <context context-type="linenumber">220,226</context>
         </context-group>
       </trans-unit>
       <trans-unit id="orgoverview.title" datatype="html">
@@ -13187,70 +13198,70 @@
         <source>Runs in this sample</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/project/dashboard/dashboard-runs.component.ts</context>
-          <context context-type="linenumber">135</context>
+          <context context-type="linenumber">134</context>
         </context-group>
       </trans-unit>
       <trans-unit id="project.dashboard.run" datatype="html">
         <source>Run</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/project/dashboard/dashboard-runs.component.ts</context>
-          <context context-type="linenumber">136</context>
+          <context context-type="linenumber">135</context>
         </context-group>
       </trans-unit>
       <trans-unit id="project.dashboard.decision" datatype="html">
         <source>Decision</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/project/dashboard/dashboard-runs.component.ts</context>
-          <context context-type="linenumber">137</context>
+          <context context-type="linenumber">136</context>
         </context-group>
       </trans-unit>
       <trans-unit id="project.dashboard.state" datatype="html">
         <source>State</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/project/dashboard/dashboard-runs.component.ts</context>
-          <context context-type="linenumber">138</context>
+          <context context-type="linenumber">137</context>
         </context-group>
       </trans-unit>
       <trans-unit id="project.dashboard.view" datatype="html">
         <source>View</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/project/dashboard/dashboard-runs.component.ts</context>
-          <context context-type="linenumber">139</context>
+          <context context-type="linenumber">138</context>
         </context-group>
       </trans-unit>
       <trans-unit id="project.dashboard.created" datatype="html">
         <source>Created (UTC)</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/project/dashboard/dashboard-runs.component.ts</context>
-          <context context-type="linenumber">140</context>
+          <context context-type="linenumber">139</context>
         </context-group>
       </trans-unit>
       <trans-unit id="project.dashboard.run-details" datatype="html">
         <source>Run details</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/project/dashboard/dashboard-runs.component.ts</context>
-          <context context-type="linenumber">141</context>
+          <context context-type="linenumber">140</context>
         </context-group>
       </trans-unit>
       <trans-unit id="project.dashboard.run-snapshot" datatype="html">
         <source>Read-only facts from the loaded run sample.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/project/dashboard/dashboard-runs.component.ts</context>
-          <context context-type="linenumber">142</context>
+          <context context-type="linenumber">141</context>
         </context-group>
       </trans-unit>
       <trans-unit id="project.dashboard.ref" datatype="html">
         <source>Reference</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/project/dashboard/dashboard-runs.component.ts</context>
-          <context context-type="linenumber">143</context>
+          <context context-type="linenumber">142</context>
         </context-group>
       </trans-unit>
       <trans-unit id="project.dashboard.unavailable" datatype="html">
         <source>Unavailable</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/project/dashboard/dashboard-runs.component.ts</context>
-          <context context-type="linenumber">144</context>
+          <context context-type="linenumber">143</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/project/dashboard/dashboard.copy.ts</context>
@@ -13261,7 +13272,7 @@
         <source>View run <x id="id" equiv-text="id"/></source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/project/dashboard/dashboard-runs.component.ts</context>
-          <context context-type="linenumber">187</context>
+          <context context-type="linenumber">186</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shell.overview.title" datatype="html">
@@ -22727,70 +22738,70 @@
         <source>Audit activity</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/audit/audit-table.component.ts</context>
-          <context context-type="linenumber">247</context>
+          <context context-type="linenumber">246</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.audit.time" datatype="html">
         <source>Time (UTC)</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/audit/audit-table.component.ts</context>
-          <context context-type="linenumber">248</context>
+          <context context-type="linenumber">247</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.audit.actor" datatype="html">
         <source>Actor</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/audit/audit-table.component.ts</context>
-          <context context-type="linenumber">249</context>
+          <context context-type="linenumber">248</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.audit.action" datatype="html">
         <source>Action</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/audit/audit-table.component.ts</context>
-          <context context-type="linenumber">250</context>
+          <context context-type="linenumber">249</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.audit.actor-id" datatype="html">
         <source>Audit actor id</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/audit/audit-table.component.ts</context>
-          <context context-type="linenumber">251</context>
+          <context context-type="linenumber">250</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.audit.object-id" datatype="html">
         <source>Audit object id</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/audit/audit-table.component.ts</context>
-          <context context-type="linenumber">252</context>
+          <context context-type="linenumber">251</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.audit.support-grant" datatype="html">
         <source>Support grant id</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/audit/audit-table.component.ts</context>
-          <context context-type="linenumber">253</context>
+          <context context-type="linenumber">252</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.audit.object" datatype="html">
         <source>Object</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/audit/audit-table.component.ts</context>
-          <context context-type="linenumber">254</context>
+          <context context-type="linenumber">253</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.audit.request" datatype="html">
         <source>Request id</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/audit/audit-table.component.ts</context>
-          <context context-type="linenumber">255</context>
+          <context context-type="linenumber">254</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.audit.support" datatype="html">
         <source>Support access</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/audit/audit-table.component.ts</context>
-          <context context-type="linenumber">256</context>
+          <context context-type="linenumber">255</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/audit/audit.page.ts</context>
@@ -22801,11 +22812,11 @@
         <source>View</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/audit/audit-table.component.ts</context>
-          <context context-type="linenumber">257</context>
+          <context context-type="linenumber">256</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/members/member-list.component.ts</context>
-          <context context-type="linenumber">368</context>
+          <context context-type="linenumber">367</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/policy/revision-list.component.ts</context>
@@ -22817,35 +22828,35 @@
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/security/security-events-table.component.ts</context>
-          <context context-type="linenumber">227</context>
+          <context context-type="linenumber">226</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.audit.details" datatype="html">
         <source>Event details</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/audit/audit-table.component.ts</context>
-          <context context-type="linenumber">258</context>
+          <context context-type="linenumber">257</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.audit.absent" datatype="html">
         <source>—</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/audit/audit-table.component.ts</context>
-          <context context-type="linenumber">259</context>
+          <context context-type="linenumber">258</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.audit.support-description" datatype="html">
         <source>Platform staff access under support grant <x id="grantId" equiv-text="grantId"/></source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/audit/audit-table.component.ts</context>
-          <context context-type="linenumber">339</context>
+          <context context-type="linenumber">337</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.audit.support-unrecorded" datatype="html">
         <source>Platform staff access (grant id not recorded on this row)</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/audit/audit-table.component.ts</context>
-          <context context-type="linenumber">340</context>
+          <context context-type="linenumber">338</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.audit.title" datatype="html">
@@ -23573,14 +23584,14 @@
         <source>Created</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/members/member-list.component.ts</context>
-          <context context-type="linenumber">332,334</context>
+          <context context-type="linenumber">331,333</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.members.more-roles" datatype="html">
         <source>Show <x id="count" equiv-text="count"/> more roles for <x id="email" equiv-text="member.invited_email"/></source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/members/member-list.component.ts</context>
-          <context context-type="linenumber">437</context>
+          <context context-type="linenumber">436</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.members.role-viewer" datatype="html">
@@ -27696,14 +27707,14 @@
         <source>Recent security activity · newest first</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/security/security-events-table.component.ts</context>
-          <context context-type="linenumber">222</context>
+          <context context-type="linenumber">221</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.security.type" datatype="html">
         <source>Event type</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/security/security-events-table.component.ts</context>
-          <context context-type="linenumber">223</context>
+          <context context-type="linenumber">222</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/security/security-events.page.ts</context>
@@ -27714,7 +27725,7 @@
         <source>Severity</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/security/security-events-table.component.ts</context>
-          <context context-type="linenumber">224</context>
+          <context context-type="linenumber">223</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/security/security-events.page.ts</context>
@@ -27725,35 +27736,35 @@
         <source>Time (UTC)</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/security/security-events-table.component.ts</context>
-          <context context-type="linenumber">225</context>
+          <context context-type="linenumber">224</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.security.actor" datatype="html">
         <source>Principal</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/security/security-events-table.component.ts</context>
-          <context context-type="linenumber">226</context>
+          <context context-type="linenumber">225</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.security.details" datatype="html">
         <source>Inspect event</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/security/security-events-table.component.ts</context>
-          <context context-type="linenumber">228</context>
+          <context context-type="linenumber">227</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.security.id" datatype="html">
         <source>Event id</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/security/security-events-table.component.ts</context>
-          <context context-type="linenumber">229</context>
+          <context context-type="linenumber">228</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.security.project" datatype="html">
         <source>Project id</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/security/security-events-table.component.ts</context>
-          <context context-type="linenumber">230</context>
+          <context context-type="linenumber">229</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/security/security-events.page.ts</context>
@@ -27764,42 +27775,42 @@
         <source>Request id</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/security/security-events-table.component.ts</context>
-          <context context-type="linenumber">231</context>
+          <context context-type="linenumber">230</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.security.metadata" datatype="html">
         <source>Event metadata</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/security/security-events-table.component.ts</context>
-          <context context-type="linenumber">232</context>
+          <context context-type="linenumber">231</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.security.no-project" datatype="html">
         <source>No project</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/security/security-events-table.component.ts</context>
-          <context context-type="linenumber">233</context>
+          <context context-type="linenumber">232</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.security.unavailable" datatype="html">
         <source>Not available</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/security/security-events-table.component.ts</context>
-          <context context-type="linenumber">234</context>
+          <context context-type="linenumber">233</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.security.support" datatype="html">
         <source>Support access</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/security/security-events-table.component.ts</context>
-          <context context-type="linenumber">235</context>
+          <context context-type="linenumber">234</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.security.support-description" datatype="html">
         <source>Flagged platform staff access. Recorded grant metadata is listed below; expiry is not supplied by this endpoint.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/security/security-events-table.component.ts</context>
-          <context context-type="linenumber">236</context>
+          <context context-type="linenumber">235</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.security.type-auth" datatype="html">
@@ -31395,81 +31406,81 @@
         <source>Organization event</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/dashboard/dashboard-activity.component.ts</context>
-          <context context-type="linenumber">76,79</context>
+          <context context-type="linenumber">75,78</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.dashboard.activity-time" datatype="html">
         <source>Time (UTC)</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/dashboard/dashboard-activity.component.ts</context>
-          <context context-type="linenumber">83,86</context>
+          <context context-type="linenumber">82,85</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/dashboard/dashboard-activity.component.ts</context>
-          <context context-type="linenumber">145</context>
+          <context context-type="linenumber">144</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.dashboard.activity-id" datatype="html">
         <source>Event ID</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/dashboard/dashboard-activity.component.ts</context>
-          <context context-type="linenumber">87,90</context>
+          <context context-type="linenumber">86,89</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.dashboard.activity-actor" datatype="html">
         <source>Actor type</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/dashboard/dashboard-activity.component.ts</context>
-          <context context-type="linenumber">97,101</context>
+          <context context-type="linenumber">96,100</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.dashboard.activity-object" datatype="html">
         <source>Object ID</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/dashboard/dashboard-activity.component.ts</context>
-          <context context-type="linenumber">104,106</context>
+          <context context-type="linenumber">103,105</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.dashboard.activity-title" datatype="html">
         <source>Organization activity</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/dashboard/dashboard-activity.component.ts</context>
-          <context context-type="linenumber">119</context>
+          <context context-type="linenumber">118</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.dashboard.activity-description" datatype="html">
         <source>Most recent organization events. Not filtered by project.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/dashboard/dashboard-activity.component.ts</context>
-          <context context-type="linenumber">120</context>
+          <context context-type="linenumber">119</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.dashboard.activity-empty" datatype="html">
         <source>No organization activity recorded.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/dashboard/dashboard-activity.component.ts</context>
-          <context context-type="linenumber">121</context>
+          <context context-type="linenumber">120</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.dashboard.activity-action" datatype="html">
         <source>Action</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/dashboard/dashboard-activity.component.ts</context>
-          <context context-type="linenumber">137</context>
+          <context context-type="linenumber">136</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.dashboard.activity-details-column" datatype="html">
         <source>Details</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/dashboard/dashboard-activity.component.ts</context>
-          <context context-type="linenumber">156</context>
+          <context context-type="linenumber">155</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.dashboard.activity-view-label" datatype="html">
         <source>View event <x id="action" equiv-text="auditActionLabel(action)"/></source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/dashboard/dashboard-activity.component.ts</context>
-          <context context-type="linenumber">171</context>
+          <context context-type="linenumber">170</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.dashboard.trend-table" datatype="html">
@@ -31557,7 +31568,7 @@
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/data-table/data-table.component.html</context>
-          <context context-type="linenumber">177,183</context>
+          <context context-type="linenumber">176,182</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.field-hint.name" datatype="html">
@@ -32345,7 +32356,7 @@
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/gallery/gallery-tables.component.ts</context>
-          <context context-type="linenumber">176</context>
+          <context context-type="linenumber">175</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.gallery.members.roles" datatype="html">
@@ -33231,103 +33242,103 @@
         <source> Permission and role labels </source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/gallery/gallery-tables.component.ts</context>
-          <context context-type="linenumber">91,95</context>
+          <context context-type="linenumber">90,94</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.gallery.records.title" datatype="html">
         <source> Stacked records for narrow screens </source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/gallery/gallery-tables.component.ts</context>
-          <context context-type="linenumber">114,116</context>
+          <context context-type="linenumber">113,115</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.gallery.records.description" datatype="html">
         <source> The standalone renderer keeps every supplied fact, label and full value; it never hides a column or invents a total. </source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/gallery/gallery-tables.component.ts</context>
-          <context context-type="linenumber">117,122</context>
+          <context context-type="linenumber">116,121</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.gallery.roles.identity" datatype="html">
         <source>Evidence identity</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/gallery/gallery-tables.component.ts</context>
-          <context context-type="linenumber">130</context>
+          <context context-type="linenumber">129</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/gallery/gallery-tables.component.ts</context>
-          <context context-type="linenumber">188</context>
+          <context context-type="linenumber">187</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.gallery.roles.caption" datatype="html">
         <source>Role-bound Helm columns with a long status label and a machine identifier</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/gallery/gallery-tables.component.ts</context>
-          <context context-type="linenumber">131</context>
+          <context context-type="linenumber">130</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.gallery.roles.attempts" datatype="html">
         <source>Attempts</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/gallery/gallery-tables.component.ts</context>
-          <context context-type="linenumber">177</context>
+          <context context-type="linenumber">176</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/gallery/gallery-tables.component.ts</context>
-          <context context-type="linenumber">202</context>
+          <context context-type="linenumber">201</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.gallery.roles.date" datatype="html">
         <source>Recorded (UTC)</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/gallery/gallery-tables.component.ts</context>
-          <context context-type="linenumber">178</context>
+          <context context-type="linenumber">177</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/gallery/gallery-tables.component.ts</context>
-          <context context-type="linenumber">209</context>
+          <context context-type="linenumber">208</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.gallery.roles.long-status" datatype="html">
         <source>Review blocked until supplied evidence is complete</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/gallery/gallery-tables.component.ts</context>
-          <context context-type="linenumber">179</context>
+          <context context-type="linenumber">178</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.gallery.roles.long-status-detail" datatype="html">
         <source>The complete explanation stays outside the compact chip so the table row keeps its height.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/gallery/gallery-tables.component.ts</context>
-          <context context-type="linenumber">180</context>
+          <context context-type="linenumber">179</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.gallery.roles.long-role" datatype="html">
         <source>Project administrator and evidence approver for this environment</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/gallery/gallery-tables.component.ts</context>
-          <context context-type="linenumber">181</context>
+          <context context-type="linenumber">180</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.gallery.roles.short-role" datatype="html">
         <source>Reviewer</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/gallery/gallery-tables.component.ts</context>
-          <context context-type="linenumber">182</context>
+          <context context-type="linenumber">181</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.gallery.records.caption" datatype="html">
         <source>Recorded examples: every supplied fact, already-loaded rows</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/gallery/gallery-tables.component.ts</context>
-          <context context-type="linenumber">183</context>
+          <context context-type="linenumber">182</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.gallery.roles.note" datatype="html">
         <source>Context</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/gallery/gallery-tables.component.ts</context>
-          <context context-type="linenumber">196</context>
+          <context context-type="linenumber">195</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.gallery.menu-request-patterns" datatype="html">
