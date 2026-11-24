@@ -67,8 +67,12 @@ export class SecretsDataService {
    * page is on its way and a broken cursor costs the page it was following rather than the list on
    * screen.
    */
-  listIngestTokens(projectId: string, cursor?: string): Promise<IngestTokenListResponse> {
-    const query: IngestTokenListQuery = { limit: INGEST_TOKEN_PAGE_LIMIT };
+  listIngestTokens(
+    projectId: string,
+    cursor?: string,
+    limit = INGEST_TOKEN_PAGE_LIMIT,
+  ): Promise<IngestTokenListResponse> {
+    const query: IngestTokenListQuery = { limit };
     if (cursor !== undefined) {
       query.cursor = cursor;
     }
@@ -91,8 +95,12 @@ export class SecretsDataService {
    * The page is returned as served, so the caller keeps the rows it already renders while the next
    * page is on its way and owns the cursor loop (00 §9.1, W7 "never load all").
    */
-  listCiBindings(projectId: string, cursor?: string): Promise<CiBindingListResponse> {
-    const query: CiBindingListQuery = { limit: CI_BINDING_PAGE_LIMIT };
+  listCiBindings(
+    projectId: string,
+    cursor?: string,
+    limit = CI_BINDING_PAGE_LIMIT,
+  ): Promise<CiBindingListResponse> {
+    const query: CiBindingListQuery = { limit };
     if (cursor !== undefined) {
       query.cursor = cursor;
     }

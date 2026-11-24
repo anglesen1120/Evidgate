@@ -23,6 +23,7 @@ import { SessionStore } from '../../../core/session/session.store';
 import { RetryAfterComponent } from '../../../shared/ui/conflict/retry-after.component';
 import { RevealSlot } from '../../../shared/ui/reveal/one-time-reveal.slot';
 import { RequestStateComponent } from '../../../shared/ui/states/request-state.component';
+import { DataTablePagerComponent } from '../../../shared/ui/data-table/data-table-pager.component';
 import { NumberValueComponent } from '../../../shared/ui/values/number-value.component';
 import { SecretReferenceListComponent } from './secret-reference-list.component';
 import { SECRETS_COPY } from './secrets.copy';
@@ -57,6 +58,7 @@ type RotationTarget = {
     RotateConfirmDialogComponent,
     DesktopRequiredNoticeComponent,
     HlmLabel,
+    DataTablePagerComponent,
   ],
   providers: [SecretsStore, RevealSlot],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -93,12 +95,7 @@ export class SecretsPage {
   });
   protected readonly bindingsPaging = signal(false);
   protected readonly bindingsPagingFailure = signal(false);
-  protected readonly offset = signal(0);
-  protected readonly visibleRows = computed(() =>
-    this.store.rows().slice(this.offset(), this.offset() + 200),
-  );
-  protected readonly cachedNext = computed(() => this.offset() + 200 < this.store.rows().length);
-  protected readonly hasNext = computed(() => this.cachedNext() || this.store.hasMore());
+  protected readonly visibleRows = computed(() => this.store.rows());
   protected readonly paging = signal(false);
   protected readonly pagingFailure = signal(false);
   protected readonly busy = signal(false);
@@ -207,8 +204,15 @@ export class SecretsPage {
       !this.session.projects().some((project) => project.id === id)
     )
       return;
-    this.bindingsPagingFailure.set(false);
-    void this.store.loadCiBindings(id);
+    if (
+      this.store.ciBindings().length &&
+      (this.store.ciBindingsError() || this.bindingsPagingFailure())
+    ) {
+      void this.pageBindings(() => this.store.retryCiBindingsPage());
+    } else {
+      this.bindingsPagingFailure.set(false);
+      void this.store.loadCiBindings(id);
+    }
   }
   protected async moreBindings(): Promise<void> {
     if (
@@ -268,7 +272,7 @@ export class SecretsPage {
     this.busy.set(false);
     this.rotatingId.set(null);
     if (!result) return;
-    this.offset.set(0);
+    this.pagingFailure.set(false);
     const successorId = result.successorId;
     this.slot.show({ source: 'ingest-token-rotation', value: result.value });
     this.dialog()?.open(target.opener, result.overlapEndsAt, () => {
@@ -289,23 +293,51 @@ export class SecretsPage {
     )
       this.requestRotation(this.retryTarget);
   }
-  protected previous(): void {
-    this.offset.update((value) => Math.max(0, value - 200));
-    this.heading().nativeElement.focus();
+  protected async previous(): Promise<void> {
+    await this.pageTokens(() => this.store.previous());
   }
   protected async next(): Promise<void> {
+    await this.pageTokens(() => this.store.loadMore());
+  }
+  protected async changeSize(size: number): Promise<void> {
+    await this.pageTokens(() => this.store.setPageSize(size));
+  }
+  protected async retryPage(): Promise<void> {
+    await this.pageTokens(() => this.store.retryPage());
+  }
+  protected resetFilters(): void {
+    if (this.store.page() > 1) this.reload();
+  }
+  private async pageTokens(action: () => Promise<void>): Promise<void> {
     if (this.paging() || this.busy() || !this.readRetryReady()) return;
     const generation = this.generation;
     this.paging.set(true);
+    this.pagingFailure.set(false);
     try {
-      if (!this.cachedNext()) await this.store.loadMore();
-      if (generation !== this.generation) return;
-      if (this.cachedNext()) this.offset.update((value) => value + 200);
-      this.pagingFailure.set(false);
+      await action();
     } catch {
       if (generation === this.generation) this.pagingFailure.set(true);
     } finally {
       if (generation === this.generation) this.paging.set(false);
+    }
+  }
+  protected async previousBindings(): Promise<void> {
+    await this.pageBindings(() => this.store.previousCiBindings());
+  }
+  protected async changeBindingsSize(size: number): Promise<void> {
+    await this.pageBindings(() => this.store.setCiBindingsPageSize(size));
+  }
+  private async pageBindings(action: () => Promise<void>): Promise<void> {
+    if (this.bindingsPaging() || !this.canReadBindings()) return;
+    const project = this.selectedProject();
+    this.bindingsPaging.set(true);
+    this.bindingsPagingFailure.set(false);
+    try {
+      await action();
+    } catch {
+      if (project === this.selectedProject()) this.bindingsPagingFailure.set(true);
+    } finally {
+      if (project === this.selectedProject()) this.bindingsPaging.set(false);
     }
   }
   private clearScope(): void {
@@ -317,7 +349,6 @@ export class SecretsPage {
     this.retryTarget = null;
     this.busy.set(false);
     this.rotatingId.set(null);
-    this.offset.set(0);
     this.paging.set(false);
     this.pagingFailure.set(false);
   }
