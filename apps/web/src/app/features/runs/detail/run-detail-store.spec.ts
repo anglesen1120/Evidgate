@@ -161,7 +161,10 @@ describe('RunDetailStore', () => {
     });
     it('replaces pages, returns to the first page and refuses to advance past the last', async () => {
       get.mockResolvedValue(run);
-      listAttempts.mockResolvedValueOnce(first).mockResolvedValueOnce(second).mockResolvedValueOnce(first);
+      listAttempts
+        .mockResolvedValueOnce(first)
+        .mockResolvedValueOnce(second)
+        .mockResolvedValueOnce(first);
       const store = TestBed.inject(RunDetailStore);
       await store.load(run.run_id);
       expect(store.attemptsPage()).toBe(1);
@@ -182,8 +185,11 @@ describe('RunDetailStore', () => {
     });
     it('retains rows and the committed page on error, retrying the failed previous intent', async () => {
       get.mockResolvedValue(run);
-      listAttempts.mockResolvedValueOnce(first).mockResolvedValueOnce(second)
-        .mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce(first);
+      listAttempts
+        .mockResolvedValueOnce(first)
+        .mockResolvedValueOnce(second)
+        .mockRejectedValueOnce(new Error('offline'))
+        .mockResolvedValueOnce(first);
       const store = TestBed.inject(RunDetailStore);
       await store.load(run.run_id);
       await store.nextAttempts();
@@ -200,7 +206,9 @@ describe('RunDetailStore', () => {
     });
     it('retries a failed next intent without appending or refetching run and revisions', async () => {
       get.mockResolvedValue(run);
-      listAttempts.mockResolvedValueOnce(first).mockRejectedValueOnce(new Error('offline'))
+      listAttempts
+        .mockResolvedValueOnce(first)
+        .mockRejectedValueOnce(new Error('offline'))
         .mockResolvedValueOnce(second);
       const store = TestBed.inject(RunDetailStore);
       await store.load(run.run_id);
@@ -211,7 +219,10 @@ describe('RunDetailStore', () => {
       expect(store.attempts()).toBe(rows);
       expect(store.attemptsPage()).toBe(1);
       await store.retryAttempts();
-      expect(listAttempts).toHaveBeenLastCalledWith(run.run_id, { limit: 20, cursor: first.next_cursor });
+      expect(listAttempts).toHaveBeenLastCalledWith(run.run_id, {
+        limit: 20,
+        cursor: first.next_cursor,
+      });
       expect(store.attempts()).toHaveLength(second.items.length);
       expect(store.run()).toBe(runData);
       expect(store.revisions()).toBe(revisionData);
@@ -220,7 +231,8 @@ describe('RunDetailStore', () => {
     });
     it('rejects a cursor cycle while keeping the accepted page', async () => {
       get.mockResolvedValue(run);
-      listAttempts.mockResolvedValueOnce(first)
+      listAttempts
+        .mockResolvedValueOnce(first)
         .mockResolvedValueOnce({ items: second.items, next_cursor: first.next_cursor });
       const store = TestBed.inject(RunDetailStore);
       await store.load(run.run_id);
@@ -232,7 +244,9 @@ describe('RunDetailStore', () => {
     });
     it('accepts an empty terminal page and can return from it', async () => {
       get.mockResolvedValue(run);
-      listAttempts.mockResolvedValueOnce(first).mockResolvedValueOnce({ items: [], next_cursor: null })
+      listAttempts
+        .mockResolvedValueOnce(first)
+        .mockResolvedValueOnce({ items: [], next_cursor: null })
         .mockResolvedValueOnce(first);
       const store = TestBed.inject(RunDetailStore);
       await store.load(run.run_id);
@@ -245,7 +259,9 @@ describe('RunDetailStore', () => {
     });
     it.each([50, 100])('resets cursor history when selecting %s rows', async (size) => {
       get.mockResolvedValue(run);
-      listAttempts.mockResolvedValueOnce(first).mockResolvedValueOnce(second)
+      listAttempts
+        .mockResolvedValueOnce(first)
+        .mockResolvedValueOnce(second)
         .mockResolvedValueOnce({ items: [], next_cursor: null });
       const store = TestBed.inject(RunDetailStore);
       await store.load(run.run_id);
@@ -262,8 +278,11 @@ describe('RunDetailStore', () => {
     it('resets page and size on run identity changes and ignores an older page response', async () => {
       get.mockResolvedValue(run);
       const old = deferred<RunAttemptPage>();
-      listAttempts.mockResolvedValueOnce(first).mockResolvedValueOnce(first)
-        .mockReturnValueOnce(old.promise).mockResolvedValueOnce(second);
+      listAttempts
+        .mockResolvedValueOnce(first)
+        .mockResolvedValueOnce(first)
+        .mockReturnValueOnce(old.promise)
+        .mockResolvedValueOnce(second);
       const store = TestBed.inject(RunDetailStore);
       await store.load(run.run_id);
       await store.setAttemptsPageSize(50);

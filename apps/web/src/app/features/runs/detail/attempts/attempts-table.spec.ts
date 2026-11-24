@@ -344,5 +344,4 @@ describe('AttemptsTableComponent', () => {
       'Attempts table',
     );
   });
-
 });

@@ -181,7 +181,9 @@ describe('CaseListPage', () => {
     fixture.detectChanges();
     await fixture.whenStable();
     expect(await loadedCount.text()).toContain('Loaded identities: 2');
-    expect(await (await harness.summary()).text()).toContain('1 matching identities in loaded results.');
+    expect(await (await harness.summary()).text()).toContain(
+      '1 matching identities in loaded results.',
+    );
     expect(await (await harness.next()).getAttribute('aria-disabled')).toBe('false');
     expect(list).toHaveBeenCalledTimes(1);
   });

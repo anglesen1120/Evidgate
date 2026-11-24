@@ -44,16 +44,28 @@ describe('ProducerStatusTableComponent paging', () => {
   it('shows exact first, middle and last ranges with bounded navigation', async () => {
     const { table } = await render(slots(53));
     expect(await (await table.summary()).text()).toBe('1–20 of 53');
-    expect(await (await table.previous()).getProperty('disabled')).toBe(true);
+    const previous = await table.previous();
+    expect(await previous.getAttribute('aria-disabled')).toBe('true');
+    expect(await previous.getProperty('disabled')).toBe(false);
+    await previous.focus();
+    await previous.click();
+    expect(await previous.isFocused()).toBe(true);
+    expect(await (await table.summary()).text()).toBe('1–20 of 53');
     expect(await table.rowIds()).toEqual(slots(20).map((row) => row.producerId));
     await (await table.next()).click();
     expect(await (await table.summary()).text()).toBe('21–40 of 53');
+    expect(await (await table.previous()).getAttribute('aria-disabled')).toBe('false');
+    expect(await (await table.next()).getAttribute('aria-disabled')).toBe('false');
     expect((await table.rowIds())[0]).toBe('shard-20');
     await (await table.next()).click();
     expect(await (await table.summary()).text()).toBe('41–53 of 53');
     expect(await table.rowIds()).toHaveLength(13);
-    expect(await (await table.next()).getProperty('disabled')).toBe(true);
-    await (await table.next()).click();
+    const next = await table.next();
+    expect(await next.getAttribute('aria-disabled')).toBe('true');
+    expect(await next.getProperty('disabled')).toBe(false);
+    await next.focus();
+    await next.click();
+    expect(await next.isFocused()).toBe(true);
     expect(await (await table.summary()).text()).toBe('41–53 of 53');
     await (await table.previous()).click();
     expect(await (await table.summary()).text()).toBe('21–40 of 53');
@@ -61,9 +73,19 @@ describe('ProducerStatusTableComponent paging', () => {
 
   it.each([0, 1, 20])('shows the exact single-page range for %i producers', async (count) => {
     const { table } = await render(slots(count));
-    expect(await (await table.summary()).text()).toBe(`${count === 0 ? 0 : 1}–${count} of ${count}`);
-    expect(await (await table.previous()).getProperty('disabled')).toBe(true);
-    expect(await (await table.next()).getProperty('disabled')).toBe(true);
+    expect(await (await table.summary()).text()).toBe(
+      `${count === 0 ? 0 : 1}–${count} of ${count}`,
+    );
+    for (const button of [await table.previous(), await table.next()]) {
+      expect(await button.getAttribute('aria-disabled')).toBe('true');
+      expect(await button.getProperty('disabled')).toBe(false);
+      await button.focus();
+      await button.click();
+      expect(await button.isFocused()).toBe(true);
+      expect(await (await table.summary()).text()).toBe(
+        `${count === 0 ? 0 : 1}–${count} of ${count}`,
+      );
+    }
     expect(await table.rowIds()).toHaveLength(count);
   });
 
@@ -83,7 +105,7 @@ describe('ProducerStatusTableComponent paging', () => {
       await (await table.next()).click();
       fixture.componentRef.setInput('slots', changed);
       await fixture.whenStable();
-      expect(await (await table.previous()).getProperty('disabled')).toBe(true);
+      expect(await (await table.previous()).getAttribute('aria-disabled')).toBe('true');
       expect((await table.rowIds())[0]).toBe(changed[0]?.producerId);
       expect(await (await table.summary()).text()).toBe(
         `1–${Math.min(20, changed.length)} of ${changed.length}`,

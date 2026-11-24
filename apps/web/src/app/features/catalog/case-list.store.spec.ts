@@ -343,27 +343,30 @@ describe('CaseListStore', () => {
     );
   });
 
-  it.each([25, 30, 200])('resets the current page for a supported size and ignores %s', async (size) => {
-    const store = TestBed.inject(CaseListStore);
-    store.init('project', {});
-    await settle();
-    const first = CASE_LIST_FIXTURE.items[0];
-    if (!first) throw new Error('Missing case fixture');
-    list.mockResolvedValueOnce({ items: [{ ...first, id: 'next-case' }], next_cursor: null });
-    await store.nextPage();
-    expect(store.page()).toBe(2);
-    store.setPageSize(100);
-    TestBed.tick();
-    expect(store.rows()).toEqual([]);
-    await settle();
-    expect(store.pageSize()).toBe(100);
-    expect(store.page()).toBe(1);
-    expect(list).toHaveBeenLastCalledWith('project', { limit: 100 }, expect.any(AbortSignal));
-    const calls = list.mock.calls.length;
-    store.setPageSize(size);
-    await settle();
-    expect(list).toHaveBeenCalledTimes(calls);
-  });
+  it.each([25, 30, 200])(
+    'resets the current page for a supported size and ignores %s',
+    async (size) => {
+      const store = TestBed.inject(CaseListStore);
+      store.init('project', {});
+      await settle();
+      const first = CASE_LIST_FIXTURE.items[0];
+      if (!first) throw new Error('Missing case fixture');
+      list.mockResolvedValueOnce({ items: [{ ...first, id: 'next-case' }], next_cursor: null });
+      await store.nextPage();
+      expect(store.page()).toBe(2);
+      store.setPageSize(100);
+      TestBed.tick();
+      expect(store.rows()).toEqual([]);
+      await settle();
+      expect(store.pageSize()).toBe(100);
+      expect(store.page()).toBe(1);
+      expect(list).toHaveBeenLastCalledWith('project', { limit: 100 }, expect.any(AbortSignal));
+      const calls = list.mock.calls.length;
+      store.setPageSize(size);
+      await settle();
+      expect(list).toHaveBeenCalledTimes(calls);
+    },
+  );
 
   it('optimistically assigns one owner and replaces the row with the server confirmation', async () => {
     const store = TestBed.inject(CaseListStore);

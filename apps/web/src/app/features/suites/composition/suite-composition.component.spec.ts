@@ -12,6 +12,7 @@ import unavailable from '../../../../../../../fixtures/web-api/suite-revision-un
 import { SuitesDataService } from '../../../core/data/suites-data.service';
 import { ApiRequestError } from '../../../core/http/api-error';
 import { mapApiError } from '../../../core/http/error-mapper';
+import { provideLayoutTestStubs } from '../../../shared/testing/layout.testing';
 import { CopyableIdentifierHarness } from '../../../shared/ui/values/values.harness';
 import { routes } from '../suites.routes';
 import { SuiteCompositionComponent } from './suite-composition.component';
@@ -21,6 +22,8 @@ import {
   readyRevision as revision,
   sparseGridRevision,
 } from './suite-composition.testing';
+
+provideLayoutTestStubs();
 
 const publishedRevision = published.body as SuiteRevisionDto;
 const emptyRevision = empty.body as SuiteRevisionDto;
@@ -231,7 +234,9 @@ describe('SuiteCompositionComponent', () => {
     );
     const flat = root.querySelector('[data-testid="suite-members-flat"]');
     expect(root.querySelector('[data-testid="suite-matrix"]')).toBeNull();
-    expect(root.querySelector('[data-testid="suite-flat-note"]')?.textContent).toContain('flat table');
+    expect(root.querySelector('[data-testid="suite-flat-note"]')?.textContent).toContain(
+      'flat table',
+    );
     expect(flat?.querySelectorAll('thead th')).toHaveLength(5);
     expect(await page.flatRows()).toHaveLength(20);
     expect(await (await page.summary()).text()).toBe('1–20 of 3,600');
@@ -291,8 +296,14 @@ describe('SuiteCompositionComponent', () => {
     expect(root.querySelector('[data-testid="suite-flat-note"]')).not.toBeNull();
     expect(await page.flatRows()).toHaveLength(61);
     expect(await (await page.summary()).text()).toBe('1–61 of 61');
-    expect(await (await page.previous()).getProperty('disabled')).toBe(true);
-    expect(await (await page.next()).getProperty('disabled')).toBe(true);
+    for (const boundary of [await page.previous(), await page.next()]) {
+      expect(await boundary.getAttribute('aria-disabled')).toBe('true');
+      await boundary.focus();
+      expect(await boundary.isFocused()).toBe(true);
+      await boundary.click();
+      expect(await (await page.summary()).text()).toBe('1–61 of 61');
+      expect(await page.flatRows()).toHaveLength(61);
+    }
     expect(root.querySelector('[data-testid="suite-matrix"]')).toBeNull();
   });
 
@@ -338,7 +349,7 @@ describe('SuiteCompositionComponent', () => {
     await (await page.next()).click();
     expect(await page.flatRows()).toHaveLength(11);
     expect(await (await page.summary()).text()).toBe('51–61 of 61');
-    expect(await (await page.next()).getProperty('disabled')).toBe(true);
+    expect(await (await page.next()).getAttribute('aria-disabled')).toBe('true');
     await (await page.next()).click();
     expect(await page.flatRows()).toHaveLength(11);
     await (await page.previous()).click();

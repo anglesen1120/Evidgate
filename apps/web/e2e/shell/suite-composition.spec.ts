@@ -190,9 +190,11 @@ for (const locale of LOCALES) {
       const count = Math.min(100, LARGE.members.length - offset);
       await expect(rows).toHaveCount(count);
       await expect(shown).toContainText(`${offset + 1}–${offset + count}`);
-      seen.push(...(await flat.locator('[data-suite-flat-member-id]').allTextContents()).map(
-        (id) => id.trim(),
-      ));
+      seen.push(
+        ...(await flat.locator('[data-suite-flat-member-id]').allTextContents()).map((id) =>
+          id.trim(),
+        ),
+      );
     }
     expect(new Set(seen)).toEqual(new Set(LARGE.members.map((member) => member.id)));
     expect(seen).toHaveLength(LARGE.members.length);
@@ -200,7 +202,9 @@ for (const locale of LOCALES) {
     await expectNoA11yViolations(page, `suite composition flat exhausted ${locale}`);
   });
 
-  test(`Enter and Space activate the shared member pager in the real browser (${locale})`, async ({ page }) => {
+  test(`Enter and Space activate the shared member pager in the real browser (${locale})`, async ({
+    page,
+  }) => {
     const rows = page.getByTestId('suite-members-flat').locator('tbody tr');
     const next = page.locator('app-data-table-pager button[data-page="next"]');
     // jsdom runs no default action for a key press, so the component spec can only prove the page

@@ -5,6 +5,7 @@ import { provideRouter } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
 import type { SuiteRevisionDto } from '@evidgate/sdk';
 import { SuitesDataService } from '../../../core/data/suites-data.service';
+import { provideLayoutTestStubs } from '../../../shared/testing/layout.testing';
 import { routes } from '../suites.routes';
 import { SuiteCompositionComponent } from './suite-composition.component';
 import { SuiteCompositionHarness } from './suite-composition.harness';
@@ -14,6 +15,8 @@ import {
   readyRevision as revision,
   sparseGridRevision,
 } from './suite-composition.testing';
+
+provideLayoutTestStubs();
 
 // Applies to every test in this file. Idle wall of the slowest is 190 ms; the smoke run hit the
 // 5000 ms default here after the fuzz stage (CPU contention), so 15 s keeps a ~1.3x margin only (11.3 s of 15 s under smoke load).
@@ -247,7 +250,13 @@ describe('SuiteCompositionComponent members', { timeout: 15_000 }, () => {
     }
     expect(seen).toHaveLength(61);
     expect(new Set(seen).size).toBe(61);
-    expect(await (await page.next()).getProperty('disabled')).toBe(true);
+    const next = await page.next();
+    expect(await next.getAttribute('aria-disabled')).toBe('true');
+    await next.focus();
+    expect(await next.isFocused()).toBe(true);
+    await next.click();
+    expect(await (await page.summary()).text()).toBe('61–61 of 61');
+    expect(await page.ids()).toEqual(['member-60']);
   });
 
   it('keeps the 2500-cell matrix intact and pages only above that bound', async () => {
@@ -289,7 +298,10 @@ describe('SuiteCompositionComponent members', { timeout: 15_000 }, () => {
       getRevision.mockResolvedValue(changed);
       await store.load(changed.id);
       expect(await (await page.summary()).text()).toBe(`1–20 of ${changed.members.length}`);
-      expect(await (await page.previous()).getProperty('disabled')).toBe(true);
+      const previous = await page.previous();
+      expect(await previous.getAttribute('aria-disabled')).toBe('true');
+      await previous.click();
+      expect(await (await page.summary()).text()).toBe(`1–20 of ${changed.members.length}`);
       expect((await page.ids())[0]).toBe(changed.members[0]?.id);
     }
   });

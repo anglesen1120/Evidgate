@@ -244,5 +244,4 @@ export class AttemptsTableComponent {
       ? `${formatNumber(milliseconds, this.locale, '1.0-20')} ms`
       : `${formatNumber(milliseconds / 1000, this.locale, '1.0-2')} s`;
   }
-
 }

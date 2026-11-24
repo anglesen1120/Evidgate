@@ -290,7 +290,6 @@ export class CaseListPage {
     });
   }
 
-
   protected readonly assignOwner = async (row: CaseDto, membershipId: string): Promise<boolean> => {
     if (
       !this.canReadMembers() ||

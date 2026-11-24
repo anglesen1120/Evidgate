@@ -152,18 +152,21 @@ describe('Catalog cursor pages', () => {
       expect(store.hasMore()).toBe(false);
     },
   );
-  it.each([false, true])('does not navigate beyond a single page with rows: %s', async (hasRows) => {
-    list.mockResolvedValue({
-      items: hasRows ? CASE_LIST_FIXTURE.items : [],
-      next_cursor: null,
-    });
-    const store = TestBed.inject(CaseListStore);
-    store.init('project', {});
-    await settle();
-    await store.nextPage();
-    await store.previousPage();
-    expect(store.page()).toBe(1);
-    expect(store.rows()).toEqual(hasRows ? CASE_LIST_FIXTURE.items : []);
-    expect(list).toHaveBeenCalledTimes(1);
-  });
+  it.each([false, true])(
+    'does not navigate beyond a single page with rows: %s',
+    async (hasRows) => {
+      list.mockResolvedValue({
+        items: hasRows ? CASE_LIST_FIXTURE.items : [],
+        next_cursor: null,
+      });
+      const store = TestBed.inject(CaseListStore);
+      store.init('project', {});
+      await settle();
+      await store.nextPage();
+      await store.previousPage();
+      expect(store.page()).toBe(1);
+      expect(store.rows()).toEqual(hasRows ? CASE_LIST_FIXTURE.items : []);
+      expect(list).toHaveBeenCalledTimes(1);
+    },
+  );
 });

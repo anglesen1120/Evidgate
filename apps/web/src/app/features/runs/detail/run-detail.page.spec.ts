@@ -133,16 +133,24 @@ describe('RunDetailPage', () => {
   it('wires independent attempts next and previous without resetting producers or revisions', async () => {
     const first = { items: attemptPage.items.slice(0, 2), next_cursor: 'attempt-tail' };
     const last = { items: attemptPage.items.slice(2), next_cursor: null };
-    listAttempts.mockResolvedValueOnce(first).mockResolvedValueOnce(last).mockResolvedValueOnce(first);
+    listAttempts
+      .mockResolvedValueOnce(first)
+      .mockResolvedValueOnce(last)
+      .mockResolvedValueOnce(first);
     const { harness } = await open();
-    const table = await TestbedHarnessEnvironment.loader(harness.fixture).getHarness(DetailPagingHarness);
+    const table = await TestbedHarnessEnvironment.loader(harness.fixture).getHarness(
+      DetailPagingHarness,
+    );
     const producerText = await (await table.producers()).text();
     const evidenceText = await (await table.evidence()).text();
     expect(await table.rows()).toHaveLength(first.items.length);
     await (await table.next()).click();
     expect(await (await table.summary()).text()).toBe('Page 2');
     expect(await table.rows()).toHaveLength(last.items.length);
-    expect(listAttempts).toHaveBeenLastCalledWith(run.run_id, { limit: 20, cursor: 'attempt-tail' });
+    expect(listAttempts).toHaveBeenLastCalledWith(run.run_id, {
+      limit: 20,
+      cursor: 'attempt-tail',
+    });
     expect(await (await table.producers()).text()).toBe(producerText);
     expect(await (await table.evidence()).text()).toBe(evidenceText);
     await (await table.previous()).click();

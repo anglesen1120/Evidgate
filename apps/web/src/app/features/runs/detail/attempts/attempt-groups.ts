@@ -29,4 +29,3 @@ export function groupAttempts(rows: readonly AttemptRow[]): AttemptGroup[] {
     return { executionKey, attempts, preHealingFailure };
   });
 }
-

@@ -352,7 +352,7 @@ describe('ProducerStatusTableComponent', () => {
       expect(root.querySelector('[data-producer-slot]')?.id).toBe('producer-shard-200');
       expect(root.querySelectorAll('[data-fact]')).toHaveLength(4);
     }
-    expect(await (await table.next()).getProperty('disabled')).toBe(true);
+    expect(await (await table.next()).getAttribute('aria-disabled')).toBe('true');
     await (await table.previous()).click();
     expect(await table.rowIds()).toHaveLength(100);
   });

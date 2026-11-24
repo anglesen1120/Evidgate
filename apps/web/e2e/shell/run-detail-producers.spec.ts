@@ -196,19 +196,43 @@ for (const locale of LOCALES) {
     await page.keyboard.press('Tab');
     const pageSize = producers.locator('app-data-table-pager hlm-select-trigger button');
     await expect(pageSize).toBeFocused();
+    const producerPager = producers.locator('app-data-table-pager');
+    const producerPrevious = producerPager.locator('button[data-page="previous"]');
+    const producerNext = producerPager.locator('button[data-page="next"]');
+    // Unavailable shared-pager actions remain keyboard reachable via aria-disabled.
+    for (const action of [producerPrevious, producerNext]) {
+      await expect(action).toHaveAttribute('aria-disabled', 'true');
+      await page.keyboard.press('Tab');
+      await expect(action).toBeFocused();
+    }
     await page.keyboard.press('Tab');
     await expect(page.getByRole('tab', { name: /^(Evidence|Bằng chứng)/ })).toBeFocused();
-    await page.keyboard.press('Shift+Tab');
-    await expect(pageSize).toBeFocused();
+    for (const control of [producerNext, producerPrevious, pageSize]) {
+      await page.keyboard.press('Shift+Tab');
+      await expect(control).toBeFocused();
+    }
     await page.keyboard.press('Shift+Tab');
     for (const copy of (await producerCopies.all()).reverse()) {
       await expect(copy).toBeFocused();
       await page.keyboard.press('Shift+Tab');
     }
-    // Page flow deliberately has no inner scrolling-region stop: the stop before the first producer
-    // copy is the attempts table, not the producer scroller.
+    // The independent attempts pager precedes the first producer copy, with no
+    // inner scrolling-region stop between the two tables.
     await expect(scroller).not.toBeFocused();
-    await expect(page.locator('app-attempts-table :focus')).toHaveCount(1);
+    const attempts = page.locator('app-attempts-table');
+    const attemptsPager = attempts.locator('app-data-table-pager');
+    const attemptsNext = attemptsPager.locator('button[data-page="next"]');
+    const attemptsPrevious = attemptsPager.locator('button[data-page="previous"]');
+    const attemptsPageSize = attemptsPager.locator('hlm-select-trigger button');
+    await expect(attemptsNext).toBeFocused();
+    await expect(attemptsNext).toHaveAttribute('aria-disabled', 'true');
+    await page.keyboard.press('Shift+Tab');
+    await expect(attemptsPrevious).toBeFocused();
+    await expect(attemptsPrevious).toHaveAttribute('aria-disabled', 'true');
+    await page.keyboard.press('Shift+Tab');
+    await expect(attemptsPageSize).toBeFocused();
+    await page.keyboard.press('Shift+Tab');
+    await expect(attempts.locator('app-copy-value-button button').last()).toBeFocused();
 
     // `#producer-<slot>` is the documented anchor: a deep link lands on, and focuses, that row.
     await page.goto(`${runDetailPath({ locale, run: 'many-producers' })}#producer-shard-42`);

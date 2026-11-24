@@ -87,7 +87,8 @@ export class ProducerStatusTableComponent {
           previous.source.anchor !== anchor ||
           previous.source.slots === null)
       ) {
-        const index = slots?.findIndex((slot) => producerAnchorId(slot.producerId) === anchor) ?? -1;
+        const index =
+          slots?.findIndex((slot) => producerAnchorId(slot.producerId) === anchor) ?? -1;
         if (index >= 0) return Math.floor(index / size);
       }
       return 0;

@@ -422,12 +422,16 @@ export const RunDetailStore = signalStore(
       },
       async setAttemptsPageSize(size: number): Promise<void> {
         const run = store.run();
-        if (run === null || ![20, 50, 100].includes(size) || size === store.attemptsPageSize()) return;
+        if (run === null || ![20, 50, 100].includes(size) || size === store.attemptsPageSize())
+          return;
         ++attemptsGeneration;
         attemptCursors = [null];
         patchState(store, {
-          attempts: null, attemptsPage: 1, attemptsPageSize: size,
-          attemptsCursor: null, attemptsLoadingMore: false,
+          attempts: null,
+          attemptsPage: 1,
+          attemptsPageSize: size,
+          attemptsCursor: null,
+          attemptsLoadingMore: false,
         });
         await readAttempts(run.run_id, { page: 1, cursor: null });
       },

@@ -23,20 +23,30 @@ class AttemptsHarness extends ComponentHarness {
 }
 
 const networkFailure: ApiError = {
-  kind: 'network', status: 0, code: '', message: '', requestId: null,
-  retryable: true, details: [], retryAfterSeconds: null,
+  kind: 'network',
+  status: 0,
+  code: '',
+  message: '',
+  requestId: null,
+  retryable: true,
+  details: [],
+  retryAfterSeconds: null,
 };
 
 describe('AttemptsTableComponent server pagination', () => {
   provideLayoutTestStubs();
-  beforeEach(() => TestBed.configureTestingModule({
-    imports: [AttemptsTableComponent],
-    providers: [provideZonelessChangeDetection()],
-  }));
+  beforeEach(() =>
+    TestBed.configureTestingModule({
+      imports: [AttemptsTableComponent],
+      providers: [provideZonelessChangeDetection()],
+    }),
+  );
   afterEach(() => TestBed.resetTestingModule());
 
   it('renders the supplied server page without local slicing and emits independent page intents', async () => {
-    const input = Array.from({ length: 100 }, (_, index) => row({ executionKey: `execution-${index}` }));
+    const input = Array.from({ length: 100 }, (_, index) =>
+      row({ executionKey: `execution-${index}` }),
+    );
     const { fixture } = await render(input);
     const table = await TestbedHarnessEnvironment.harnessForFixture(fixture, AttemptsHarness);
     const next = vi.fn();
@@ -94,23 +104,26 @@ describe('AttemptsTableComponent server pagination', () => {
     expect(await table.trigger()).toBeTruthy();
   });
 
-  it.each([true, false])('keeps retry focus meaningful with retained rows: %s', async (retained) => {
-    const { fixture } = await render(retained ? [row()] : null);
-    fixture.componentRef.setInput('status', retained ? 'ready' : 'error');
-    fixture.componentRef.setInput('error', networkFailure);
-    const table = await TestbedHarnessEnvironment.harnessForFixture(fixture, AttemptsHarness);
-    const retry = vi.fn();
-    fixture.componentInstance.retry.subscribe(retry);
-    await (await table.retry()).focus();
-    await (await table.retry()).click();
-    expect(retry).toHaveBeenCalledOnce();
-    fixture.componentRef.setInput('error', null);
-    fixture.componentRef.setInput('loadingMore', true);
-    if (!retained) fixture.componentRef.setInput('status', 'loading');
-    await fixture.whenStable();
-    const destination = retained ? await table.region() : await table.heading();
-    expect(await destination?.isFocused()).toBe(true);
-  });
+  it.each([true, false])(
+    'keeps retry focus meaningful with retained rows: %s',
+    async (retained) => {
+      const { fixture } = await render(retained ? [row()] : null);
+      fixture.componentRef.setInput('status', retained ? 'ready' : 'error');
+      fixture.componentRef.setInput('error', networkFailure);
+      const table = await TestbedHarnessEnvironment.harnessForFixture(fixture, AttemptsHarness);
+      const retry = vi.fn();
+      fixture.componentInstance.retry.subscribe(retry);
+      await (await table.retry()).focus();
+      await (await table.retry()).click();
+      expect(retry).toHaveBeenCalledOnce();
+      fixture.componentRef.setInput('error', null);
+      fixture.componentRef.setInput('loadingMore', true);
+      if (!retained) fixture.componentRef.setInput('status', 'loading');
+      await fixture.whenStable();
+      const destination = retained ? await table.region() : await table.heading();
+      expect(await destination?.isFocused()).toBe(true);
+    },
+  );
 
   it('announces loading outside the busy table and no false completion after failure', async () => {
     const { fixture, root } = await render([row()]);
