@@ -1,4 +1,3 @@
-import { mkdir } from 'node:fs/promises';
 import { expect, test } from '@playwright/test';
 import { expectNoA11yViolations } from '../a11y/axe-scan';
 import { LOCALES, ORG_ACME, THEMES, localePath, seedStoredTheme } from './support';
@@ -18,8 +17,8 @@ test.use({ bypassCSP: true });
 
 for (const locale of LOCALES) {
   for (const theme of THEMES) {
-    for (const width of [1440, 900, 390]) {
-      test(`organization dashboard ${locale}/${theme}/${width}`, async ({ page }) => {
+    for (const width of [1440, 900, 768, 390]) {
+      test(`organization dashboard ${locale}/${theme}/${width}`, async ({ page }, testInfo) => {
         await page.setViewportSize({ width, height: 1100 });
         await seedStoredTheme(page, theme);
         await page.goto(`${localePath(locale, `/orgs/${ORG_ACME}/overview`)}?${variants}`);
@@ -36,9 +35,8 @@ for (const locale of LOCALES) {
         }));
         expect(metrics.scroll).toBeLessThanOrEqual(metrics.width);
         await expectNoA11yViolations(page, `org overview ${locale}/${theme}/${width}`);
-        await mkdir('/tmp/s676-shots', { recursive: true });
         await page.screenshot({
-          path: `/tmp/s676-shots/org-after-${width}-${theme}-${locale}.png`,
+          path: testInfo.outputPath(`org-after-${width}-${theme}-${locale}.png`),
           fullPage: true,
         });
         const projectAction = main.locator('.projects button[appRowAction]').first();

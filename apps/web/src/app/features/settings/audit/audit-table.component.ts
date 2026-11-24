@@ -64,6 +64,13 @@ const DETAILS_WIDTH: DataTableColumnWidth = {
     <ng-template #timeCell let-row let-stacked="stacked">
       <app-absolute-time [value]="row.created_at" [class.whitespace-nowrap]="!stacked" />
     </ng-template>
+    <ng-template #actionCell let-row let-stacked="stacked">
+      <app-data-table-value
+        [value]="actionLabel(row.action)"
+        [truncate]="!stacked"
+        [attr.title]="row.action"
+      />
+    </ng-template>
     <ng-template #actorCell let-row let-stacked="stacked">
       <div
         class="grid min-w-0"
@@ -120,7 +127,7 @@ const DETAILS_WIDTH: DataTableColumnWidth = {
         [attr.aria-haspopup]="'dialog'"
         class="min-h-(--eg-control-touch)"
         [class.whitespace-nowrap]="!stacked"
-        [attr.aria-label]="copy.view + ' · ' + row.action"
+        [attr.aria-label]="copy.view + ' · ' + actionLabel(row.action)"
         (click)="inspected.set({ row, trigger })"
       >
         {{ copy.view }}
@@ -214,7 +221,7 @@ const DETAILS_WIDTH: DataTableColumnWidth = {
       </hlm-dialog>
     }
     <app-data-table
-      class="[&_td]:py-(--eg-space-1)! [&_td.cdk-column-action]:font-mono [&_td.cdk-column-action]:font-semibold"
+      class="[&_td]:py-(--eg-space-1)!"
       [columns]="columns()"
       [rows]="rows()"
       [rowId]="rowId"
@@ -237,6 +244,7 @@ export class AuditTableComponent {
     computation: () => null,
   });
   protected readonly supportOf = supportAccessOf;
+  protected readonly actionLabel = auditActionLabel;
   protected readonly copy = {
     caption: $localize`:@@settings.audit.caption:Audit activity`,
     time: $localize`:@@settings.audit.time:Time (UTC)`,
@@ -256,6 +264,8 @@ export class AuditTableComponent {
     viewChild<TemplateRef<DataTableCellContext<AuditEntryDto>>>('timeCell');
   private readonly actorCell =
     viewChild<TemplateRef<DataTableCellContext<AuditEntryDto>>>('actorCell');
+  private readonly actionCell =
+    viewChild<TemplateRef<DataTableCellContext<AuditEntryDto>>>('actionCell');
   private readonly objectCell =
     viewChild<TemplateRef<DataTableCellContext<AuditEntryDto>>>('objectCell');
   private readonly detailsCell =
@@ -265,9 +275,10 @@ export class AuditTableComponent {
   protected readonly columns = computed<readonly DataTableColumn<AuditEntryDto>[]>(() => {
     const time = this.timeCell();
     const actor = this.actorCell();
+    const action = this.actionCell();
     const object = this.objectCell();
     const details = this.detailsCell();
-    if (!time || !actor || !object || !details) return [];
+    if (!time || !actor || !action || !object || !details) return [];
     return [
       {
         id: 'actor',
@@ -286,7 +297,8 @@ export class AuditTableComponent {
         priority: 'primary',
         overflow: 'truncate',
         width: ACTION_WIDTH,
-        cell: (row) => auditActionLabel(row.action),
+        cell: (row) => this.actionLabel(row.action),
+        cellTemplate: action,
       },
       {
         id: 'object',

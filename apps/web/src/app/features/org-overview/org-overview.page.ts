@@ -65,6 +65,7 @@ export class OrgOverviewPage {
   >({ source: () => this.store.projectRows(), computation: () => null });
   protected readonly copy = {
     projects: $localize`:@@orgoverview.projects:My projects`,
+    projectId: $localize`:@@orgoverview.project-id:Project ID`,
     projectsDescription: $localize`:@@orgoverview.projects-description:Projects you can access in this organization.`,
     emptyProjects: $localize`:@@orgoverview.empty-projects:No projects to show.`,
     members: $localize`:@@orgoverview.members:Members and invitations`,
