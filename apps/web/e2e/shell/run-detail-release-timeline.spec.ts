@@ -147,6 +147,30 @@ for (const locale of LOCALES) {
   });
 }
 
+async function tabThroughProducers(page: Page): Promise<Locator[]> {
+  const producers = page.locator('#producers');
+  const table = producers.locator('app-data-table');
+  const copies = table.locator('app-copy-value-button button');
+  await copies.first().focus();
+  await page.keyboard.press('Shift+Tab');
+  await tabThroughTableScroller(page, table);
+  await tabThroughRunControls(page, table, 2);
+
+  const pager = producers.getByRole('navigation', { name: 'Table pagination', exact: true });
+  const size = pager.getByRole('combobox', { name: 'Rows per page', exact: true });
+  const previous = pager.getByRole('button', { name: 'Previous page', exact: true });
+  const next = pager.getByRole('button', { name: 'Next page', exact: true });
+  await expect(pager.getByRole('status')).toHaveText('Page 1');
+  await expect(previous).toHaveAttribute('aria-disabled', 'true');
+  await expect(next).toHaveAttribute('aria-disabled', 'true');
+  const pagerStops = [size, previous, next];
+  for (const stop of pagerStops) {
+    await page.keyboard.press('Tab');
+    await expect(stop).toBeFocused();
+  }
+  return [...(await copies.all()), ...pagerStops];
+}
+
 test('the unbound regions add no keyboard stops', async ({ page }) => {
   await page.goto(runDetailPath({ run: 'canceled' }));
   await ready(page);
@@ -162,20 +186,14 @@ test('the unbound regions add no keyboard stops', async ({ page }) => {
   // Nothing in the unbound timeline or release panel adds a stop after the manifest.
   await page.keyboard.press('Tab');
   expect((await activeElement(page)).tag).toBe('body');
-  const producers = page.locator('#producers');
-  const producerCopies = producers.locator('app-copy-value-button button');
-  // The producer table precedes the evidence tabs; start from the stop before it.
-  await producerCopies.first().focus();
-  await page.keyboard.press('Shift+Tab');
-  await tabThroughTableScroller(page, producers);
-  await tabThroughRunControls(page, producers, 2);
+  const producerStops = await tabThroughProducers(page);
   await page.keyboard.press('Tab');
   await expect(page.getByRole('tab', { name: 'Evidence' })).toBeFocused();
-  for (const copy of (await producerCopies.all()).reverse()) {
+  for (const stop of producerStops.reverse()) {
     await page.keyboard.press('Shift+Tab');
-    await expect(copy).toBeFocused();
+    await expect(stop).toBeFocused();
   }
-  const scroller = producers.locator('.scroll[tabindex="0"]');
+  const scroller = page.locator('#producers .scroll[tabindex="0"]');
   if (await scroller.count()) {
     await page.keyboard.press('Shift+Tab');
     await expect(scroller).toBeFocused();
@@ -199,11 +217,7 @@ test('the compact release chooser and both identifier actions preserve keyboard 
     await expect(copy).toBeFocused();
   }
   // The producer table precedes the evidence tabs; the release panel follows the manifest.
-  const producerStops = page.locator('#producers app-copy-value-button button');
-  await producerStops.first().focus();
-  await page.keyboard.press('Shift+Tab');
-  await tabThroughTableScroller(page, page.locator('#producers'));
-  await tabThroughRunControls(page, page.locator('#producers'), 2);
+  await tabThroughProducers(page);
   await manifestCopies.last().focus();
   await page.keyboard.press('Tab');
   await expect(selector).toBeFocused();

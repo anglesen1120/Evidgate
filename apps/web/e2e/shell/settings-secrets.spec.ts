@@ -333,10 +333,12 @@ for (const locale of LOCALES) {
         ]);
         const section = page.locator(CI_SECTION);
         await expect(section).toBeVisible();
-        await expect(section.locator('section')).toHaveAttribute('aria-busy', 'false');
+        await expect(section.locator('header')).toHaveAttribute('aria-busy', 'false');
+        await expect(section.getByRole('progressbar')).toHaveCount(0);
         await expect(page.locator('html')).toHaveAttribute('lang', locale);
         await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
         if (variant === 'settings') {
+          await expect(section.getByRole('table')).toHaveAttribute('aria-busy', 'false');
           await expect(page.locator(CI_ROWS)).toHaveCount(ciBindings.body.items.length);
           const cells = page.locator(CI_ROWS).first().getByRole('cell');
           await expect(cells).toHaveCount(4);
@@ -479,7 +481,12 @@ test('CI bindings shared pager replaces pages, returns by cursor and resets page
   await page.getByRole('option', { name: '50', exact: true }).click();
   await expect(pager.getByRole('status')).toHaveText('Page 1');
   await expect(pager.getByRole('combobox')).toContainText('50');
-  await expect(section.locator('section')).toHaveAttribute('aria-busy', 'false');
+  await expect(section.locator('header')).toHaveAttribute('aria-busy', 'false');
+  await expect(section.getByRole('table')).toHaveAttribute('aria-busy', 'false');
+  await expect(section.getByRole('progressbar')).toHaveCount(0);
+  await expect(page.locator(`${CI_ROWS} h3`)).toHaveText(
+    firstPageRows.map((binding) => binding.repository_full_name),
+  );
   await expectNoBindingChallenge(page);
   await expectNoA11yViolations(page, 'CI binding cursor pager en');
 });
