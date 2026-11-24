@@ -180,7 +180,7 @@
       >
         <app-form-error-summary [summaryId]="'connect-oidc-errors'" [feedback]="bindingFeedback" />
         <div class="grid min-w-0 gap-(--eg-space-3)">
-          <label hlmLabel for="connect-oidc-repo-id">{{ repoIdField.label }}</label>
+          <ng-container *ngTemplateOutlet="fieldLabel; context: { $implicit: repoIdField }" />
           <input
             hlmInput
             class="min-h-(--eg-control-touch) w-full min-w-0"
@@ -203,7 +203,7 @@
           <app-field-feedback [field]="repoIdField" />
         </div>
         <div class="grid min-w-0 gap-(--eg-space-3)">
-          <label hlmLabel for="connect-oidc-repo-name">{{ repoNameField.label }}</label>
+          <ng-container *ngTemplateOutlet="fieldLabel; context: { $implicit: repoNameField }" />
           <input
             hlmInput
             class="min-h-(--eg-control-touch) w-full min-w-0"
@@ -229,7 +229,7 @@
           <app-field-feedback [field]="repoNameField" />
         </div>
         <div class="grid min-w-0 gap-(--eg-space-3)">
-          <label hlmLabel for="connect-oidc-refs">{{ refsField.label }}</label>
+          <ng-container *ngTemplateOutlet="fieldLabel; context: { $implicit: refsField }" />
           <textarea
             hlmInput
             class="min-h-(--eg-control-lg) w-full min-w-0 resize-y font-mono"
@@ -253,7 +253,7 @@
           <app-field-feedback [field]="refsField" />
         </div>
         <div class="grid min-w-0 gap-(--eg-space-3)">
-          <label hlmLabel for="connect-oidc-workflows">{{ workflowsField.label }}</label>
+          <ng-container *ngTemplateOutlet="fieldLabel; context: { $implicit: workflowsField }" />
           <textarea
             hlmInput
             class="min-h-(--eg-control-lg) w-full min-w-0 resize-y font-mono"
@@ -343,7 +343,7 @@
       >
         <app-form-error-summary [summaryId]="'connect-token-errors'" [feedback]="tokenFeedback" />
         <div class="grid min-w-0 gap-(--eg-space-3)">
-          <label hlmLabel for="connect-token-name">{{ tokenNameField.label }}</label>
+          <ng-container *ngTemplateOutlet="fieldLabel; context: { $implicit: tokenNameField }" />
           <input
             hlmInput
             class="min-h-(--eg-control-touch) w-full min-w-0"
@@ -483,3 +483,9 @@
     </section>
   </div>
 </section>
+
+<ng-template #fieldLabel let-field>
+  <app-field-hint [descriptionId]="field.hintId" [label]="field.label" [text]="field.hint">
+    <label hlmLabel [for]="field.id">{{ field.label }}</label>
+  </app-field-hint>
+</ng-template>

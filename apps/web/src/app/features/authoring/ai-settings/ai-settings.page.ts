@@ -1,3 +1,4 @@
+import { FieldHintComponent } from '../../../shared/ui/forms/field-hint.component';
 import { DOCUMENT } from '@angular/common';
 import {
   afterRenderEffect,
@@ -58,10 +59,15 @@ const fieldSection = {
 
 const indexedFields = FIELDS.map((field, index) => ({ ...field, index }));
 const sections = [
-  { key: 'context', title: $localize`:@@authoring.ai-settings.project-context:Project context` },
+  {
+    key: 'context',
+    title: $localize`:@@authoring.ai-settings.project-context:Project context`,
+    hint: $localize`:@@authoring.ai-settings.context-help:Describe the project and its test environment.`,
+  },
   {
     key: 'guidance',
     title: $localize`:@@authoring.ai-settings.generation-guidance:Generation guidance`,
+    hint: $localize`:@@authoring.ai-settings.guidance-help:Define what cases cover, what to skip and how to write each step.`,
   },
   {
     key: 'priority',
@@ -82,6 +88,7 @@ function headingLevel(data: Record<string, unknown>): number {
   selector: 'app-ai-settings-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
+    FieldHintComponent,
     FormsModule,
     HlmButton,
     HlmCard,
@@ -183,7 +190,11 @@ export class AiSettingsPage {
     ...FIELDS.map((field) => ({
       id: 'ai-' + field.key,
       label: field.label,
-      describedBy: 'ai-' + field.key + '-counter',
+      describedBy:
+        `ai-${field.key}-counter` +
+        (fieldSection[field.key] === 'context' || fieldSection[field.key] === 'guidance'
+          ? ` ai-${fieldSection[field.key]}-hint`
+          : ''),
       error: () => this.fieldError(field.key),
     })),
     {

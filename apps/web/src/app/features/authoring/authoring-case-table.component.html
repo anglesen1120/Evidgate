@@ -73,14 +73,20 @@
           </div>
         }
         <div class="field">
-          <label hlmLabel for="authoring-case-item">{{ copy.item }}</label>
+          <app-field-hint
+            [descriptionId]="'authoring-case-item-help'"
+            [label]="copy.item"
+            [text]="copy.itemHelp"
+          >
+            <label hlmLabel for="authoring-case-item">{{ copy.item }}</label>
+          </app-field-hint>
           <input
             hlmInput
             id="authoring-case-item"
             name="item_id"
             [ngModel]="draft().itemId"
             (ngModelChange)="update({ itemId: $event })"
-            [attr.aria-describedby]="
+            [aria-describedby]="
               itemInvalid()
                 ? 'authoring-case-item-help authoring-case-item-error'
                 : 'authoring-case-item-help'
@@ -92,7 +98,13 @@
           }
         </div>
         <div class="field">
-          <label hlmLabel for="authoring-case-search">{{ copy.search }}</label>
+          <app-field-hint
+            [descriptionId]="'authoring-case-search-help'"
+            [label]="copy.search"
+            [text]="copy.searchHelp"
+          >
+            <label hlmLabel for="authoring-case-search">{{ copy.search }}</label>
+          </app-field-hint>
           <input
             hlmInput
             type="search"
@@ -100,7 +112,7 @@
             name="q"
             [ngModel]="draft().q"
             (ngModelChange)="update({ q: $event })"
-            [attr.aria-describedby]="
+            [aria-describedby]="
               searchTooLong()
                 ? 'authoring-case-search-help authoring-case-search-error'
                 : 'authoring-case-search-help'
@@ -155,8 +167,6 @@
                 </p>
               </div>
             }
-            <p id="authoring-case-item-help" class="help">{{ copy.itemHelp }}</p>
-            <p id="authoring-case-search-help" class="help">{{ copy.searchHelp }}</p>
             <p id="authoring-case-refresh-help" class="help">{{ copy.refreshHelp }}</p>
           </div>
         </details>

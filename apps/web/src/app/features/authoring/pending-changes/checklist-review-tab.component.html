@@ -96,7 +96,13 @@
         <app-form-error-summary [summaryId]="'review-errors'" [feedback]="feedback()" />
         @if (feedback().fields[0]; as field) {
           <div class="field">
-            <label hlmLabel for="review-comment">{{ copy.commentLabel }}</label>
+            <app-field-hint
+              [descriptionId]="field.hintId"
+              [label]="field.label"
+              [text]="field.hint"
+            >
+              <label hlmLabel for="review-comment">{{ copy.commentLabel }}</label>
+            </app-field-hint>
             <textarea
               hlmInput
               id="review-comment"

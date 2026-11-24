@@ -61,10 +61,14 @@
             </dl>
           } @else {
             <fieldset class="m-0 grid min-w-0 gap-2 border-0 p-0" [disabled]="policy.narrow()">
-              <legend class="font-semibold">{{ copy.roles }}</legend>
-              <p class="m-0 text-(--eg-text-muted)" i18n="@@shared.gallery.members.base-role">
-                Every sample member has the Viewer role.
-              </p>
+              <legend class="font-semibold">
+                <app-field-hint
+                  [descriptionId]="'gallery-role-hint'"
+                  [label]="copy.roles"
+                  [text]="baseRole"
+                  >{{ copy.roles }}</app-field-hint
+                >
+              </legend>
               <label
                 hlmLabel
                 for="gallery-member-reviewer"
@@ -73,6 +77,7 @@
                 <hlm-checkbox
                   [inputId]="'gallery-member-reviewer'"
                   [aria-label]="copy.reviewer"
+                  [aria-describedby]="'gallery-role-hint'"
                   [disabled]="policy.narrow()"
                   [checked]="reviewer()"
                   (checkedChange)="reviewer.set($event)"

@@ -6,6 +6,17 @@
     overflow-wrap: anywhere;
   }
 
+  /* Match the icon button's target in flat field grids and in grids of field wrappers.
+     Reserving space on the label line keeps the target clear of the input below it. */
+  :where(.grid:has(> app-field-hint), .grid:has(> * > app-field-hint) > *)
+    > :is(.spartan-label[for], app-field-hint:has(> .spartan-label[for])) {
+    min-block-size: var(--eg-control-sm);
+
+    @media (max-width: 767px), (pointer: coarse) {
+      min-block-size: var(--eg-control-touch);
+    }
+  }
+
   .spartan-label[data-disabled='true'],
   .spartan-label:has(:disabled) {
     color: var(--eg-text-muted);

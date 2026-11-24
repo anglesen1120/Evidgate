@@ -74,11 +74,16 @@
               [summaryId]="'retention-validation-error'"
               [feedback]="feedback()"
             />
-            <p id="retention-hint" class="m-0 text-muted-foreground">{{ copy.hint }}</p>
             <div class="grid min-w-0 gap-(--eg-space-5) lg:grid-cols-2">
               @if (artifactField(); as field) {
                 <div class="grid min-w-0 content-start gap-(--eg-space-3)">
-                  <label hlmLabel [for]="field.id">{{ field.label }}</label>
+                  <app-field-hint
+                    [descriptionId]="field.hintId"
+                    [label]="field.label"
+                    [text]="field.hint"
+                  >
+                    <label hlmLabel [for]="field.id">{{ field.label }}</label>
+                  </app-field-hint>
                   <input
                     hlmInput
                     [id]="field.id"
@@ -99,7 +104,13 @@
               }
               @if (metadataField(); as field) {
                 <div class="grid min-w-0 content-start gap-(--eg-space-3)">
-                  <label hlmLabel [for]="field.id">{{ field.label }}</label>
+                  <app-field-hint
+                    [descriptionId]="field.hintId"
+                    [label]="field.label"
+                    [text]="field.hint"
+                  >
+                    <label hlmLabel [for]="field.id">{{ field.label }}</label>
+                  </app-field-hint>
                   <input
                     hlmInput
                     [id]="field.id"

@@ -1,3 +1,4 @@
+import { FieldHintComponent } from '../../../shared/ui/forms/field-hint.component';
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
 import { HlmButton } from '@evidgate/ui/button';
 import { HlmDialogImports } from '@evidgate/ui/dialog';
@@ -17,10 +18,12 @@ const actions = {
 @Component({
   selector: 'app-review-action-preview',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [HlmButton, HlmDialogImports, HlmLabel, HlmInput, HlmIcon],
+  imports: [FieldHintComponent, HlmButton, HlmDialogImports, HlmLabel, HlmInput, HlmIcon],
   host: { class: 'inline-block min-w-0 max-w-full' },
   template: `
-    <hlm-dialog>
+    <hlm-dialog
+      [autoFocus]="kind() === 'submit' || kind() === 'changes' ? '#merge-note' : 'first-tabbable'"
+    >
       <button
         hlmBtn
         hlmDialogTrigger
@@ -78,18 +81,21 @@ const actions = {
             }
           </dl>
           @if (kind() === 'submit' || kind() === 'changes') {
-            <label hlmLabel class="grid gap-2">
-              {{ kind() === 'submit' ? copy.note : copy.changesNote }}
-              <textarea
-                hlmInput
-                rows="2"
-                [required]="kind() === 'submit'"
-                [attr.aria-describedby]="'merge-preview-note'"
-              ></textarea>
-            </label>
-            <p id="merge-preview-note" class="m-0 text-sm text-muted-foreground">
-              {{ copy.previewNote }}
-            </p>
+            @let noteLabel = kind() === 'submit' ? copy.note : copy.changesNote;
+            <app-field-hint
+              [descriptionId]="'merge-preview-note'"
+              [label]="noteLabel"
+              [text]="copy.previewNote"
+            >
+              <label hlmLabel for="merge-note">{{ noteLabel }}</label>
+            </app-field-hint>
+            <textarea
+              id="merge-note"
+              hlmInput
+              rows="2"
+              [required]="kind() === 'submit'"
+              [aria-describedby]="'merge-preview-note'"
+            ></textarea>
           }
           <p id="merge-preview-only" class="m-0 text-sm">{{ copy.previewReason }}</p>
         </div>

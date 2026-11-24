@@ -1,6 +1,7 @@
 // Server-derived connection metadata and a component-scoped, one-time reveal: secret-bearing
 // commands never create an Idempotency intent and never auto-retry.
-import { DatePipe, DOCUMENT } from '@angular/common';
+import { FieldHintComponent } from '../../../shared/ui/forms/field-hint.component';
+import { DatePipe, DOCUMENT, NgTemplateOutlet } from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -87,7 +88,9 @@ import {
 @Component({
   selector: 'app-onboarding-connect-ci',
   imports: [
+    FieldHintComponent,
     DatePipe,
+    NgTemplateOutlet,
     FormsModule,
     StatusPillComponent,
     HlmTableImports,

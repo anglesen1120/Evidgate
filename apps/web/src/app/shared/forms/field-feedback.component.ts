@@ -11,9 +11,6 @@ import type { FieldFeedback } from './form-feedback';
       'grid min-w-0 gap-[var(--eg-space-2)] text-sm leading-[var(--eg-leading-sm)] wrap-anywhere',
   },
   template: `
-    @if (field().hint; as hint) {
-      <p class="m-0 text-muted-foreground" [id]="field().hintId">{{ hint }}</p>
-    }
     <div [attr.aria-live]="field().announceInline() ? 'polite' : null" aria-atomic="true">
       @if (field().correction(); as correction) {
         <p

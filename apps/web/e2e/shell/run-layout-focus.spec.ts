@@ -356,12 +356,20 @@ for (const theme of THEMES) {
     const decision = page.getByRole('tab', { name: 'Latest live decision' });
     await expect(page.locator('[data-evidence-revision-select]')).toContainText('Revision 3');
     const evidencePanel = page.getByRole('tabpanel');
+    const hint = evidencePanel.getByRole('button', {
+      name: 'Hint: Evidence revision',
+      exact: true,
+    });
     await evidence.focus();
     await page.keyboard.press('Tab');
     await expect(evidencePanel).toBeFocused();
     await expect(evidencePanel).toHaveAttribute('tabindex', '0');
     await page.keyboard.press('Tab');
+    await expect(hint).toBeFocused();
+    await page.keyboard.press('Tab');
     await expect(page.locator('[data-evidence-revision-select]')).toBeFocused();
+    await page.keyboard.press('Shift+Tab');
+    await expect(hint).toBeFocused();
     await page.keyboard.press('Shift+Tab');
     await expect(evidencePanel).toBeFocused();
     await page.keyboard.press('Shift+Tab');
@@ -387,6 +395,8 @@ for (const theme of THEMES) {
     await expect(evidence).toHaveAttribute('aria-selected', 'true');
     await page.keyboard.press('Tab');
     await expect(page.getByRole('tabpanel')).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(hint).toBeFocused();
     await page.keyboard.press('Tab');
     await expect(page.locator('[data-evidence-revision-select]')).toBeFocused();
   });

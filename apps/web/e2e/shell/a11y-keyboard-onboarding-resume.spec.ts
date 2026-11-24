@@ -9,6 +9,7 @@ import {
   QUICKSTART_SNIPPET,
   stepButton,
   STEP_TITLE,
+  tabToHintedField,
 } from './onboarding-keyboard';
 import {
   TOKEN_USED_LAST_USED_AT,
@@ -114,17 +115,19 @@ test.describe('W4 — resume at step 3, Back into step 2, health panel and quick
     ).toBeFocused();
     await expect(snippet).not.toBeFocused();
 
-    // 6. The health panel and the quickstart add no stop between Copy and the first form field.
+    // Resume traverses each named hint, its input, and the two distinct submit buttons.
+    for (const field of [
+      'connect-oidc-repo-id',
+      'connect-oidc-repo-name',
+      'connect-oidc-refs',
+      'connect-oidc-workflows',
+    ] as const) {
+      await tabToHintedField(page, field);
+    }
     await pressTab(page);
-    await expectKeyboardFocus(
-      page,
-      page.locator('[data-testid="connect-oidc-repo-id"]'),
-      'the first OIDC field after the quickstart',
-    );
-
-    // 7. From the first OIDC field: three other fields, OIDC submit, token name and token submit.
-    // The token table has its own metadata View and Rotate, followed by Back and Next.
-    await pressTab(page, 6);
+    await expectKeyboardFocus(page, page.getByTestId('connect-oidc-submit'), 'create binding');
+    await tabToHintedField(page, 'connect-token-name');
+    await pressTab(page);
     await expectKeyboardFocus(page, page.getByTestId('connect-token-submit'), 'create token');
     await pressTab(page);
     await expectKeyboardFocus(

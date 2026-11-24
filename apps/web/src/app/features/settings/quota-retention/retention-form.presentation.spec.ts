@@ -49,7 +49,7 @@ describe('RetentionFormComponent presentation safeguards', () => {
     await h.settle();
     expect(input?.getAttribute('aria-invalid')).toBe('true');
     const descriptions = input?.getAttribute('aria-describedby')?.split(' ') ?? [];
-    expect(descriptions).toContain('retention-hint');
+    expect(descriptions).toContain('retention-artifact-hint');
     expect(
       descriptions.some((id) => h.root.querySelector(`#${id}`)?.textContent?.includes('whole')),
     ).toBe(true);

@@ -21,7 +21,7 @@
       <p class="m-0 text-sm text-muted-foreground" data-healing-system-note>
         {{ copy.systemReadOnly }}
       </p>
-    } @else if (note().length > 0) {
+    } @else if (note().length > 0 && !modeAdvisory()) {
       <p [id]="noteId()" class="m-0 max-w-[65ch] text-sm text-muted-foreground" data-healing-note>
         {{ note() }}
       </p>
@@ -31,7 +31,13 @@
   @if (scope() !== 'system') {
     <div *appDesktopMutation class="grid min-w-0 gap-(--eg-space-5)">
       <div class="grid min-w-0 gap-(--eg-space-2)">
-        <label hlmLabel [id]="modeId() + '-label'" [for]="modeId()">{{ copy.setMode }}</label>
+        <app-field-hint
+          [descriptionId]="noteId()"
+          [label]="copy.setMode"
+          [text]="modeAdvisory() ? copy.modeHint : undefined"
+        >
+          <label hlmLabel [id]="modeId() + '-label'" [for]="modeId()">{{ copy.setMode }}</label>
+        </app-field-hint>
         <hlm-select
           class="min-w-0"
           [value]="selectedMode()"
@@ -64,7 +70,13 @@
       </div>
 
       <div class="grid min-w-0 gap-(--eg-space-2)">
-        <label hlmLabel [for]="reasonId()">{{ copy.reasonLabel }}</label>
+        <app-field-hint
+          [descriptionId]="reasonHintId()"
+          [label]="copy.reasonLabel"
+          [text]="copy.reasonHint"
+        >
+          <label hlmLabel [for]="reasonId()">{{ copy.reasonLabel }}</label>
+        </app-field-hint>
         <textarea
           hlmInput
           [id]="reasonId()"
@@ -78,9 +90,6 @@
           [aria-describedby]="reasonDescribedBy()"
           (input)="reasonChanged($event)"
         ></textarea>
-        <p [id]="reasonHintId()" class="m-0 max-w-[65ch] text-xs text-muted-foreground">
-          {{ copy.reasonHint }}
-        </p>
         @if (reasonTooLong()) {
           <p
             [id]="reasonTooLongId()"
