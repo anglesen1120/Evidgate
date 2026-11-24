@@ -58,7 +58,7 @@ function queryFor(
 }
 
 export const SecurityEventsStore = signalStore(
-  withState({ pageSize: 50 }),
+  withState({ pageSize: 20 }),
   withProps(() => {
     const session = inject(SessionStore);
     return {
@@ -78,6 +78,8 @@ export const SecurityEventsStore = signalStore(
           const selection = store._selection();
           return selection.orgId
             ? {
+                selection,
+                pageSize: store.pageSize(),
                 orgId: selection.orgId,
                 query: queryFor(
                   selection.filters,
@@ -87,21 +89,60 @@ export const SecurityEventsStore = signalStore(
               }
             : undefined;
         },
-        loader: ({ params, abortSignal }) => data.list(params.orgId, params.query, abortSignal),
+        loader: async ({ params, abortSignal }) => ({
+          selection: params.selection,
+          pageSize: params.pageSize,
+          data: await data.list(params.orgId, params.query, abortSignal),
+        }),
+      }),
+    };
+  }),
+  withProps((store) => {
+    type LoadedPage = ReturnType<typeof store._page.value>;
+    type PageSource = {
+      selection: ReturnType<typeof store._selection>;
+      pageSize: number;
+      page: LoadedPage;
+    };
+    return {
+      _displayed: linkedSignal<PageSource, LoadedPage>({
+        source: () => ({
+          selection: store._selection(),
+          pageSize: store.pageSize(),
+          page: store._page.hasValue() ? store._page.value() : undefined,
+        }),
+        computation: (source, previous) => {
+          const page = source.page;
+          if (
+            page &&
+            page.selection.orgId === source.selection.orgId &&
+            page.selection.filters === source.selection.filters &&
+            page.pageSize === source.pageSize
+          )
+            return page;
+          const retained = previous?.value;
+          return retained &&
+            retained.selection.orgId === source.selection.orgId &&
+            retained.selection.filters === source.selection.filters &&
+            retained.pageSize === source.pageSize
+            ? retained
+            : undefined;
+        },
       }),
     };
   }),
   withComputed((store) => ({
     orgId: computed(() => store._selection().orgId),
     filters: computed(() => store._selection().filters),
-    pageIndex: computed(() => store._selection().pageIndex),
-    rawCount: computed(() => (store._page.hasValue() ? store._page.value().items.length : 0)),
-    rows: computed(() =>
-      store._page.hasValue()
-        ? store._page.value().items.filter((row) => securityEventVisible(row.type))
-        : [],
+    pageIndex: computed(
+      () => store._displayed()?.selection.pageIndex ?? store._selection().pageIndex,
     ),
-    nextCursor: computed(() => (store._page.hasValue() ? store._page.value().next_cursor : null)),
+    hasPage: computed(() => store._displayed() !== undefined),
+    rawCount: computed(() => store._displayed()?.data.items.length ?? 0),
+    rows: computed(() =>
+      (store._displayed()?.data.items ?? []).filter((row) => securityEventVisible(row.type)),
+    ),
+    nextCursor: computed(() => store._displayed()?.data.next_cursor ?? null),
     phase: computed<'loading' | 'ready' | 'error'>(() =>
       !store._selection().orgId || store._page.isLoading()
         ? 'loading'
@@ -116,10 +157,14 @@ export const SecurityEventsStore = signalStore(
     filtered: computed(() =>
       Object.values(store._selection().filters).some((value) => value !== ''),
     ),
-    capped: computed(() => store._selection().pageIndex + 1 >= MAX_CURSOR_PAGES),
+    capped: computed(
+      () =>
+        (store._displayed()?.selection.pageIndex ?? store._selection().pageIndex) + 1 >=
+        MAX_CURSOR_PAGES,
+    ),
     canNext: computed(() => {
-      const selection = store._selection();
-      const cursor = store._page.hasValue() ? store._page.value().next_cursor : null;
+      const selection = store._displayed()?.selection ?? store._selection();
+      const cursor = store._displayed()?.data.next_cursor;
       return (
         !!cursor &&
         selection.pageIndex + 1 < MAX_CURSOR_PAGES &&
@@ -137,7 +182,7 @@ export const SecurityEventsStore = signalStore(
       }));
     },
     setPageSize(pageSize: number): void {
-      if (![25, 50, 100, 200].includes(pageSize)) return;
+      if (![20, 50, 100].includes(pageSize) || pageSize === store.pageSize()) return;
       patchState(store, { pageSize });
       store._selection.update((value) => ({ ...value, pageIndex: 0, cursors: [undefined] }));
     },

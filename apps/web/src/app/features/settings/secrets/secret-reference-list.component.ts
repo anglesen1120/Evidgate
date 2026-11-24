@@ -62,6 +62,7 @@ export class SecretReferenceListComponent {
   readonly blocked = input(false);
   readonly busyId = input<string | null>(null);
   readonly rotate = output<{ reference: IngestTokenView; opener: HTMLElement }>();
+  readonly filterChange = output<void>();
   protected readonly copy = SECRETS_COPY;
   protected readonly statusLabel = secretStatusLabel;
   protected readonly states = ['active', 'rotated', 'revoked', 'expired'] as const;
@@ -136,11 +137,19 @@ export class SecretReferenceListComponent {
       : this.searchMatches();
   });
   protected search(event: Event): void {
-    if (event.target instanceof HTMLInputElement) this.query.set(event.target.value);
+    if (event.target instanceof HTMLInputElement) {
+      this.query.set(event.target.value);
+      this.filterChange.emit();
+    }
+  }
+  protected selectState(state: string): void {
+    this.state.set(state);
+    this.filterChange.emit();
   }
   protected clearFilters(): void {
     this.query.set('');
     this.state.set('');
+    this.filterChange.emit();
   }
   protected inspectLabel(name: string): string {
     return $localize`:@@settings.secrets.inspect-named:Inspect reference ${name}:name:`;

@@ -1,7 +1,7 @@
 <section
   class="@container grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 wrap-anywhere"
   aria-labelledby="quota-title"
-  [attr.aria-busy]="quota.loadState() === 'loading'"
+  [attr.aria-busy]="quota.projectPaging() || quota.loadState() === 'loading'"
 >
   <header class="flex min-w-0 items-start gap-3">
     <span
@@ -154,6 +154,9 @@
             >
               {{ metricLabel(metric.metric) }} by project
             </h3>
+            <p class="m-0 text-xs text-muted-foreground" i18n="@@quota.panel.project-order">
+              Projects ordered oldest first
+            </p>
           </header>
           <ng-template #projectAction let-row>
             <button
@@ -180,6 +183,25 @@
             [caption]="metricLabel(metric.metric) + ' · ' + copy.projectCaption"
           />
         </section>
+      }
+      <app-data-table-pager
+        [page]="quota.projectPage()"
+        [pageSize]="quota.projectPageSize()"
+        [count]="projectCount()"
+        [hasNext]="quota.hasNextProjectPage()"
+        [busy]="quota.projectPaging()"
+        (previous)="quota.previousProjectPage()"
+        (next)="quota.nextProjectPage()"
+        (pageSizeChange)="quota.setProjectPageSize($event)"
+      />
+      @if (quota.projectPagingError()) {
+        <app-inline-feedback
+          data-quota-page-error
+          [tone]="destructive"
+          [title]="copy.pageFailed"
+          [actionLabel]="copy.retryPage"
+          (action)="quota.retryProjectPage()"
+        />
       }
       @if (summary.metrics.length) {
         <section hlmCard class="min-w-0 gap-0 rounded-xl p-0" aria-labelledby="quota-state-title">

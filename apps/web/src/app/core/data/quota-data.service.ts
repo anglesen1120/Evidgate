@@ -21,7 +21,12 @@ export class QuotaDataService {
    * The refusal is not reported as a quota signal: this read is what the signal asks for, so
    * reporting its own failure would ask for the next read without end.
    */
-  summary(orgId: string, signal?: AbortSignal, limit?: number): Promise<UsageSummaryDto> {
+  summary(
+    orgId: string,
+    signal?: AbortSignal,
+    limit?: number,
+    cursor?: string,
+  ): Promise<UsageSummaryDto> {
     return this.gateway.call(
       // `signal` is spread only when present: the SDK option does not accept an explicit
       // `undefined` under `exactOptionalPropertyTypes`.
@@ -29,7 +34,14 @@ export class QuotaDataService {
         getUsageSummary({
           client,
           path: { o: orgId },
-          ...(limit === undefined ? {} : { query: { limit } }),
+          ...(limit === undefined && cursor === undefined
+            ? {}
+            : {
+                query: {
+                  ...(limit === undefined ? {} : { limit }),
+                  ...(cursor === undefined ? {} : { cursor }),
+                },
+              }),
           ...(signal === undefined ? {} : { signal }),
         }),
       { reportQuota: false },
