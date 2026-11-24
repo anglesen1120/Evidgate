@@ -75,10 +75,7 @@ button {
 }
 @media (min-width: 1200px) {
   .panes:not(.project-empty) {
-    grid-template-columns: minmax(0, 0.8fr) minmax(
-        min(80%, calc(var(--eg-control-touch) * 18)),
-        2.2fr
-      );
+    grid-template-columns: minmax(calc(var(--eg-control-touch) * 7), 0.8fr) minmax(0, 2.2fr);
   }
 }
 @media (768px <= width < 1200px) {

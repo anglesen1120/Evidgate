@@ -164,9 +164,26 @@ for (const locale of LOCALES) {
         const depth7 = await page.locator(`[data-node-id="${LEAF}"]`).boundingBox();
         if (!depth4 || !depth7) throw new Error('The deep hierarchy is not visible.');
         expect(Math.abs(depth4.x - depth7.x)).toBeLessThanOrEqual(1);
-        const longTitle = await page.locator(`[data-scope="${IDS[3]}"] bdi`).boundingBox();
-        if (!longTitle) throw new Error('The long Vietnamese title is not visible.');
-        expect(longTitle.height).toBeGreaterThan(24);
+        const deepRow = page.locator(`[data-node-id="${IDS[3]}"]`);
+        const scope = deepRow.locator('[data-scope]');
+        const title = scope.locator('bdi');
+        const fullTitle = await title.innerText();
+        const titleBox = await title.boundingBox();
+        const scopeBox = await scope.boundingBox();
+        const info = deepRow.locator('[data-node-details]');
+        const infoBox = await info.boundingBox();
+        if (!scopeBox || !titleBox || !infoBox) throw new Error('Missing deep node controls.');
+        expect(scopeBox.height).toBeGreaterThanOrEqual(24);
+        expect(titleBox.width).toBeGreaterThanOrEqual(64);
+        expect(titleBox.height).toBeGreaterThan(24);
+        expect(titleBox.height).toBeLessThanOrEqual(
+          2 * (await title.evaluate((el) => parseFloat(getComputedStyle(el).lineHeight))) + 1,
+        );
+        expect(Math.min(infoBox.width, infoBox.height)).toBeGreaterThanOrEqual(24);
+        await info.click();
+        await expect(dialog.getByText(fullTitle, { exact: true })).toBeVisible();
+        await page.keyboard.press('Escape');
+        await expect(info).toBeFocused();
         await expect(page.locator('[data-authoring-cases]')).toBeVisible();
         expect(await page.locator('[data-authoring-cases]').getAttribute('aria-busy')).toBeNull();
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(

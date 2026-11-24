@@ -9,9 +9,9 @@ ul {
   min-inline-size: 0;
 }
 ul.indented {
-  margin-inline-start: var(--eg-space-3);
+  margin-inline-start: var(--eg-space-1);
   border-inline-start: var(--eg-border-width) solid var(--eg-border-control);
-  padding-inline-start: var(--eg-space-2);
+  padding-inline-start: var(--eg-space-1);
 }
 .tree-help {
   margin: var(--eg-space-3) 0 0;
@@ -48,7 +48,7 @@ ul.indented {
   justify-content: flex-start;
   align-items: baseline;
   flex: 1 1 0;
-  min-inline-size: 0;
+  min-inline-size: var(--eg-control-sm);
   max-inline-size: 100%;
   block-size: auto;
   min-block-size: var(--eg-control-sm);
@@ -60,6 +60,10 @@ ul.indented {
 }
 .scope bdi {
   min-inline-size: 0;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
   overflow-wrap: anywhere;
   word-break: normal;
 }
