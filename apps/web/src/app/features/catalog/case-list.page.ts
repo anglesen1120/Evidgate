@@ -1,11 +1,14 @@
 import { DecimalPipe, formatNumber, Location } from '@angular/common';
 import {
+  afterNextRender,
   ChangeDetectionStrategy,
   Component,
   computed,
   DestroyRef,
   effect,
+  ElementRef,
   inject,
+  Injector,
   linkedSignal,
   LOCALE_ID,
   untracked,
@@ -79,6 +82,8 @@ export class CaseListPage {
   private readonly locale = inject(LOCALE_ID);
   private readonly cap = inject(RETAINED_ROWS_CAP);
   private readonly location = inject(Location);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly injector = inject(Injector);
   private readonly recordNavigation = {};
   protected readonly recordCopy = CATALOG_RECORD;
   private readonly query = toSignal(this.route.queryParamMap);
@@ -279,6 +284,26 @@ export class CaseListPage {
       });
     });
     this.destroyRef.onDestroy(() => this.members.clear());
+  }
+
+  protected retryPage(): void {
+    const host = this.host.nativeElement;
+    const document = host.ownerDocument;
+    const origin = document.activeElement;
+    const restore = !!origin && !!host.querySelector('[data-catalog-page-error]')?.contains(origin);
+    void this.store.retryPage();
+    if (!restore) return;
+    afterNextRender(
+      () => {
+        if (document.activeElement !== origin && document.activeElement !== document.body) return;
+        const heading = host.querySelector<HTMLElement>('#catalog-results-heading');
+        if (heading) {
+          heading.tabIndex = -1;
+          heading.focus();
+        }
+      },
+      { injector: this.injector },
+    );
   }
 
   protected setPageSize(size: number): void {

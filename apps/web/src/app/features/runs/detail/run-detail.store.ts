@@ -404,6 +404,14 @@ export const RunDetailStore = signalStore(
         const run = store.run();
         if (run !== null) await readDecision(run.run_id);
       },
+      async restartAttempts(): Promise<void> {
+        const run = store.run();
+        if (run === null) return;
+        ++attemptsGeneration;
+        attemptCursors = [null];
+        patchState(store, { attemptsLoadingMore: false });
+        await readAttempts(run.run_id, { page: 1, cursor: null });
+      },
       async retryAttempts(): Promise<void> {
         const run = store.run();
         if (run !== null && pendingAttempt !== null) await readAttempts(run.run_id, pendingAttempt);

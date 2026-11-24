@@ -242,7 +242,7 @@
         [description]="failure.message"
         [actionLabel]="failure.retryable ? copy.retryMore : undefined"
         [actionDisabled]="store.loadingMore()"
-        (action)="store.retryPage()"
+        (action)="retryPage()"
         data-catalog-page-error
       />
     }

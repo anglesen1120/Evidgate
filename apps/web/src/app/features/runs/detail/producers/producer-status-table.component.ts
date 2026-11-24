@@ -90,8 +90,27 @@ export class ProducerStatusTableComponent {
         const index =
           slots?.findIndex((slot) => producerAnchorId(slot.producerId) === anchor) ?? -1;
         if (index >= 0) return Math.floor(index / size);
+        return 0;
       }
-      return 0;
+      if (
+        previous === undefined ||
+        previous.source.size !== size ||
+        previous.source.anchor !== anchor
+      ) {
+        return 0;
+      }
+      const priorSlots = previous.source.slots;
+      if (
+        slots !== priorSlots &&
+        (slots === null ||
+          priorSlots === null ||
+          slots.length !== priorSlots.length ||
+          slots.some((slot, index) => slot.producerId !== priorSlots[index]?.producerId))
+      ) {
+        return 0;
+      }
+      const lastPage = Math.max(0, Math.ceil((slots?.length ?? 0) / size) - 1);
+      return Math.min(previous.value, lastPage);
     },
   });
   protected readonly pageSlots = computed(() => {

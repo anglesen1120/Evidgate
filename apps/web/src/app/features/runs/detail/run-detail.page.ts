@@ -67,6 +67,9 @@ import { runValueLabel } from './run-value-label';
   templateUrl: './run-detail.page.html',
   host: {
     '[attr.data-run-detail-status]': 'store.status()',
+    '(focusin)': 'cancelPendingAttemptAnchor()',
+    '(document:keydown)': 'cancelPendingAttemptAnchor()',
+    '(document:pointerdown)': 'cancelPendingAttemptAnchor()',
     class:
       'block min-w-0 font-sans text-sm leading-(--eg-leading-sm) text-foreground wrap-anywhere',
   },
@@ -146,6 +149,8 @@ export class RunDetailPage {
   private landed = false;
   /** The producer landing was re-applied once the attempts read settled. */
   private settled = false;
+  private attemptAnchorCanceled = false;
+  private anchorFocus: Element | null = null;
   protected readonly retryEligible = signal(false);
   /** The decision region's own retry window: a decision failure never gates the run's retry. */
   protected readonly decisionRetryEligible = signal(false);
@@ -217,10 +222,21 @@ export class RunDetailPage {
   constructor() {
     afterRenderEffect(() => this.revealSelectedTab());
     this.route.fragment.pipe(takeUntilDestroyed()).subscribe((fragment) => {
+      if (this.fragment() === fragment) return;
+      const anchor = decodeEvidenceAnchor(fragment ?? '');
+      if (
+        anchor?.startsWith('attempt-') &&
+        this.store.run() !== null &&
+        this.route.snapshot.paramMap.get('runId') === this.runId
+      ) {
+        void this.store.restartAttempts();
+      }
       this.fragment.set(fragment);
       this.landed = false;
       this.settled = false;
-      if (fragment?.startsWith('producer-')) this.detailTab.set('evidence');
+      this.attemptAnchorCanceled = false;
+      this.anchorFocus = this.document.activeElement;
+      if (anchor?.startsWith('producer-')) this.detailTab.set('evidence');
     });
     combineLatest([this.route.paramMap, this.route.queryParamMap])
       .pipe(takeUntilDestroyed())
@@ -228,6 +244,10 @@ export class RunDetailPage {
         const runId = params.get('runId');
         if (runId && runId !== this.runId) {
           this.runId = runId;
+          this.landed = false;
+          this.settled = false;
+          this.attemptAnchorCanceled = false;
+          this.anchorFocus = this.document.activeElement;
           void this.store.load(runId);
         }
         this.store.applyUrlPin(parsePinnedRevision(query.get('evidence_revision')));
@@ -273,26 +293,49 @@ export class RunDetailPage {
     this.watchRetryWindow(this.store.decisionError, this.decisionRetryEligible);
     this.watchRetryWindow(this.store.revisionsError, this.revisionsRetryEligible);
     this.watchRetryWindow(this.store.releaseError, this.releaseRetryEligible);
-    // Producer anchors depend on the run declaration, not a successful attempts read.
-    // Unloaded attempt targets retry only when their requested page arrives.
     effect(() => {
       const fragment = this.fragment();
       const run = this.store.run();
       const attempts = this.store.attempts();
+      const loading = this.store.attemptsLoadingMore();
+      const error = this.store.attemptsError();
       const anchor = decodeEvidenceAnchor(fragment ?? '');
       if (fragment === null || anchor === null || run === null || this.landed) return;
-      if (anchor.startsWith('attempt-') && attempts === null) return;
+      const attempt = anchor.startsWith('attempt-');
+      if (attempt && (attempts === null || loading || error !== null)) return;
       afterNextRender(
         () => {
-          if (this.landed || this.fragment() !== fragment) return;
+          if (this.landed || this.fragment() !== fragment || this.store.run() !== run) return;
+          if (
+            attempt &&
+            (this.attemptAnchorCanceled ||
+              (this.document.activeElement !== this.anchorFocus &&
+                this.document.activeElement !== this.host.nativeElement.closest('main') &&
+                !(
+                  this.document.activeElement === this.document.body &&
+                  !this.anchorFocus?.isConnected
+                )) ||
+              this.store.attemptsLoadingMore() ||
+              this.store.attemptsError() !== null)
+          ) {
+            return;
+          }
           const target = resolveEvidenceAnchor(fragment, this.document);
-          if (target === null) return;
-          this.landed = true;
-          this.focusEvidenceTarget(target);
+          if (target !== null) {
+            this.landed = true;
+            this.focusEvidenceTarget(target);
+          } else if (attempt) {
+            void this.store.nextAttempts();
+          }
         },
         { injector: this.injector },
       );
     });
+  }
+  protected cancelPendingAttemptAnchor(): void {
+    if (!this.landed && decodeEvidenceAnchor(this.fragment() ?? '')?.startsWith('attempt-')) {
+      this.attemptAnchorCanceled = true;
+    }
   }
   /**
    * A failure opens its retry control at once, or after the answer's own `Retry-After` window. One

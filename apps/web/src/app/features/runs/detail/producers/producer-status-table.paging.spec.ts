@@ -98,19 +98,40 @@ describe('ProducerStatusTableComponent paging', () => {
     expect((await table.rowIds())[0]).toBe('shard-0');
   });
 
-  it('resets on replaced, reordered, filtered and shrinking producer data', async () => {
+  it.each([1, 2])('preserves page %i and updates cells on same-order refresh', async (page) => {
     const original = slots(53);
     const { fixture, table } = await render(original);
-    for (const changed of [[...original], [...original].reverse(), original.slice(10), slots(1)]) {
-      await (await table.next()).click();
-      fixture.componentRef.setInput('slots', changed);
-      await fixture.whenStable();
-      expect(await (await table.previous()).getAttribute('aria-disabled')).toBe('true');
-      expect((await table.rowIds())[0]).toBe(changed[0]?.producerId);
+    for (let index = 0; index < page; index++) await (await table.next()).click();
+    for (const refreshed of [
+      [...original],
+      original.map((slot) => ({ ...slot, lastSequence: 987 })),
+    ]) {
+      fixture.componentRef.setInput('slots', refreshed);
       expect(await (await table.summary()).text()).toBe(
-        `1–${Math.min(20, changed.length)} of ${changed.length}`,
+        page === 1 ? '21–40 of 53' : '41–53 of 53',
       );
+      expect((await table.rowIds())[0]).toBe(page === 1 ? 'shard-20' : 'shard-40');
     }
+    expect(await (await table.rows())[0]?.text()).toContain('987');
+  });
+
+  it.each([
+    ['reordered', slots(53).reverse()],
+    ['inserted', [...slots(53), { ...slots(1)[0], producerId: 'inserted' }]],
+    ['removed', slots(53).slice(1)],
+    ['replaced', slots(53).map((slot) => ({ ...slot, producerId: `new-${slot.producerId}` }))],
+    ['shrunk', slots(1)],
+    ['empty', []],
+  ] as const)('resets when producer identities are %s', async (_change, changed) => {
+    const { fixture, table } = await render(slots(53));
+    await (await table.next()).click();
+    await (await table.next()).click();
+    fixture.componentRef.setInput('slots', changed);
+    expect(await (await table.previous()).getAttribute('aria-disabled')).toBe('true');
+    expect((await table.rowIds())[0]).toBe(changed[0]?.producerId);
+    expect(await (await table.summary()).text()).toBe(
+      `${changed.length === 0 ? 0 : 1}–${Math.min(20, changed.length)} of ${changed.length}`,
+    );
   });
 
   it('selects a linked producer page without reselecting it for unrelated facts', async () => {
@@ -121,7 +142,31 @@ describe('ProducerStatusTableComponent paging', () => {
     fixture.componentRef.setInput('runAfterCancelEvents', 3);
     fixture.componentRef.setInput('status', 'ready');
     expect(await (await table.summary()).text()).toBe('21–40 of 53');
+    fixture.componentRef.setInput('slots', slots(53));
+    expect(await (await table.summary()).text()).toBe('21–40 of 53');
+    fixture.componentRef.setInput('targetAnchor', 'producer-shard-45');
+    expect(await (await table.summary()).text()).toBe('41–53 of 53');
     await table.chooseSize(50);
     expect(await (await table.summary()).text()).toBe('1–50 of 53');
+  });
+
+  it('lands on an anchor set before producer data arrives', async () => {
+    const { fixture, table } = await render([]);
+    fixture.componentRef.setInput('slots', null);
+    fixture.componentRef.setInput('targetAnchor', 'producer-shard-52');
+    await fixture.whenStable();
+    fixture.componentRef.setInput('slots', slots(53));
+    expect(await (await table.summary()).text()).toBe('41–53 of 53');
+    expect(await table.rowIds()).toContain('shard-52');
+  });
+
+  it('keeps a missing anchor in bounds', async () => {
+    const { fixture, table } = await render(slots(53));
+    await (await table.next()).click();
+    fixture.componentRef.setInput('targetAnchor', 'producer-missing');
+    expect(await (await table.summary()).text()).toBe('1–20 of 53');
+    fixture.componentRef.setInput('slots', []);
+    expect(await (await table.summary()).text()).toBe('0–0 of 0');
+    expect(await (await table.next()).getAttribute('aria-disabled')).toBe('true');
   });
 });

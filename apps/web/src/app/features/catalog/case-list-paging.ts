@@ -80,6 +80,7 @@ export interface CasePagingHost {
   readonly page: () => number;
   readonly requestCursors: () => readonly (string | null)[];
   readonly patch: (patch: CasePagingPatch) => void;
+  readonly pageAccepted: () => void;
 }
 
 export interface CasePaging {
@@ -192,6 +193,8 @@ function replacePage(
   const retained = retainKeysetRows(step.fresh, step.nextCursor, run.cap);
   run.seen = new Set(retained.rows.map((row) => row.id));
   run.pending = null;
+  run.generation += 1;
+  host.pageAccepted();
   host.patch({
     paging: false,
     pagingError: null,

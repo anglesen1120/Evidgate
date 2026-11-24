@@ -97,6 +97,7 @@ export const CaseListStore = signalStore(
         page: () => store.page(),
         requestCursors: () => store.requestCursors(),
         patch: (patch) => patchState(store, patch),
+        pageAccepted: () => owner.reset(),
       },
       data,
       inject(RETAINED_ROWS_CAP),
