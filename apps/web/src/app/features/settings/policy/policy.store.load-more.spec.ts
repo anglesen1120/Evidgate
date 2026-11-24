@@ -294,6 +294,60 @@ describe('PolicyStore (09.7.1-T4)', () => {
       expect(data.listCalls.at(-1)?.cursor).toBeUndefined();
     });
 
+    it('clears retained page two during foreground Retry after a failed publish refresh', async () => {
+      const first = page([summary(ANCHOR_ID, 1, 'retired')], '1', HEAD_ID);
+      data.pages = [first, page([summary(SECOND_ID, 2, 'active')], null, HEAD_ID)];
+      await store.open(ANCHOR_ID);
+      await store.loadMore();
+      data.publishAnswer = {
+        created: true,
+        revision: revision(HEAD_ID, PROJECT_ID, 3, 'active'),
+      };
+      const unavailable = typedFailure(
+        { error: { code: 'unavailable', message: 'Busy', request_id: HEAD_ID, retryable: true } },
+        'unavailable',
+        503,
+      );
+      data.listManual = true;
+      expect((await store.publish('{}')).kind).toBe('created');
+      data.failList(0, unavailable);
+      await vi.waitFor(() => expect(store.paging()).toBe(false));
+      expect(store.page()).toBe(2);
+      expect(store.revisions().map((row) => row.id)).toEqual([SECOND_ID]);
+
+      const retry = store.retryPage();
+      expect(data.listCalls.at(-1)?.cursor).toBeUndefined();
+      expect(store.phase()).toBe('loading');
+      expect(store.page()).toBe(1);
+      expect(store.revisions()).toEqual([]);
+      expect(store.hasMore()).toBe(false);
+      data.failList(1, unavailable);
+      await retry;
+      expect(store.phase()).toBe('error');
+      expect(store.loadError()?.kind).toBe('unavailable');
+      expect(store.page()).toBe(1);
+      expect(store.revisions()).toEqual([]);
+      expect(store.hasMore()).toBe(false);
+      expect(store.paging()).toBe(false);
+
+      const recovery = store.retryPage();
+      expect(store.revisions()).toEqual([]);
+      data.settleList(2, first);
+      await recovery;
+      expect(store.phase()).toBe('ready');
+      expect(store.loadError()).toBeNull();
+      expect(store.page()).toBe(1);
+      expect(store.revisions().map((row) => row.id)).toEqual([ANCHOR_ID]);
+      data.listManual = false;
+      await store.loadMore();
+      expect(data.listCalls.at(-1)?.cursor).toBe('1');
+      expect(store.page()).toBe(2);
+      await store.previousPage();
+      expect(data.listCalls.at(-1)?.cursor).toBeUndefined();
+      expect(store.page()).toBe(1);
+      expect(store.revisions().map((row) => row.id)).toEqual([ANCHOR_ID]);
+    });
+
     it('serializes Next after a deferred publish refresh before committing cursor history', async () => {
       const first = page([summary(ANCHOR_ID, 1, 'retired')], '1', HEAD_ID);
       const second = page([summary(SECOND_ID, 2, 'draft')], '2', HEAD_ID);

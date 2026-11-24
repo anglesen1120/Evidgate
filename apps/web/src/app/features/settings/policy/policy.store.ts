@@ -387,6 +387,7 @@ export class PolicyStore {
     // A foreground reload starts a new cursor walk immediately.
     this.pagingSignal.set(true);
     if (foreground) {
+      this.revisionsSignal.set(NO_REVISIONS);
       this.anchorRevisionId = anchor;
       this.requestCursors = [undefined];
       this.pendingPage = null;
