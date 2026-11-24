@@ -195,12 +195,14 @@ for (const surface of ['runs', 'audit'] as const) {
     await next.dblclick();
     const table = page.locator('app-data-table');
     await expect(table.getByRole('table')).toHaveAttribute('aria-busy', 'true');
-    const bar = table.getByRole('progressbar', { name: 'Loading…', exact: true });
+    const bar = table.locator('[data-table-progress]');
     const feedback = page
       .locator('app-data-table-pager')
       .getByRole('progressbar', { name: 'Loading…', exact: true });
     await expect(bar).toBeVisible();
     await expect(feedback).toBeInViewport();
+    await expect(page.getByRole('progressbar')).toHaveCount(1);
+    await expect(bar).toHaveAttribute('aria-hidden', 'true');
     expect(
       await bar.evaluate((element) => getComputedStyle(element, '::after').animationName),
     ).toBe('none');
@@ -303,6 +305,8 @@ for (const surface of ['runs', 'audit'] as const) {
     await pager.getByRole('button', { name: 'Next records', exact: true }).click();
     const alert = page.locator(`[data-${surface === 'runs' ? 'run' : 'audit'}-paging-error]`);
     await expect(alert).toBeVisible();
+    await expect(pager.getByRole('progressbar')).toHaveCount(0);
+    await expect(pager.locator('nav')).toHaveAttribute('aria-busy', 'false');
     await expect(alert).toContainText('dependency_busy');
     expect(await rowIds(page, surface)).toEqual(first);
     await expect(pager.getByRole('status')).toHaveText('Page 1');

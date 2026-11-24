@@ -222,7 +222,7 @@
       [pageSize]="store.pageSize()"
       [count]="store.rows().length"
       [hasNext]="store.canNext()"
-      [busy]="store.phase() !== 'ready'"
+      [busy]="store.phase() === 'loading'"
       (previous)="store.previous()"
       (next)="store.next()"
       (pageSizeChange)="store.setPageSize($event)"

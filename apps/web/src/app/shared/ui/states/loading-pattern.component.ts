@@ -35,11 +35,8 @@ const summaryCards = [0, 1, 2, 3] as const;
       <app-live-status [text]="announcement()" />
       <div [attr.aria-busy]="busy()">
         @if (visible()) {
-          <span
-            data-table-progress
-            role="progressbar"
-            [attr.aria-label]="label() ?? loadingLabel"
-          ></span>
+          <!-- The pager owns accessible progress; this matching header track is decorative. -->
+          <span data-table-progress aria-hidden="true"></span>
           @if (!hasRows()) {
             <div class="grid gap-(--eg-space-2) p-(--eg-space-3)" aria-hidden="true">
               @for (field of fields; track field) {

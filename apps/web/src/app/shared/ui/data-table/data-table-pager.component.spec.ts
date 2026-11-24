@@ -86,15 +86,40 @@ describe('DataTablePagerComponent', () => {
     const feedback = await pager.feedback();
     expect(await feedback.text()).toBe('Loading…');
     expect(await feedback.getAttribute('role')).toBeNull();
+    expect(await feedback.getAttribute('aria-hidden')).toBe('true');
+    expect(await feedback.hasClass('invisible')).toBe(true);
     for (let read = 0; read < 3; read++) {
       fixture.componentRef.setInput('busy', true);
       expect(await feedback.getAttribute('role')).toBe('progressbar');
       expect(await feedback.getAttribute('aria-label')).toBe('Loading…');
       expect(await feedback.getAttribute('aria-live')).toBeNull();
+      expect(await feedback.getAttribute('aria-hidden')).toBeNull();
+      expect(await feedback.hasClass('invisible')).toBe(false);
       expect(await (await pager.nav()).getAttribute('aria-busy')).toBe('true');
       fixture.componentRef.setInput('busy', false);
       expect(await feedback.getAttribute('role')).toBeNull();
+      expect(await feedback.getAttribute('aria-hidden')).toBe('true');
+      expect(await feedback.hasClass('invisible')).toBe(true);
     }
+  });
+
+  it('keeps retry controls locked after a settled read without showing loading feedback', async () => {
+    const { fixture, pager, next } = await render();
+    fixture.componentRef.setInput('hasNext', true);
+    fixture.componentRef.setInput('busy', true);
+    fixture.componentRef.setInput('fetching', true);
+    const feedback = await pager.feedback();
+    expect(await feedback.getAttribute('role')).toBe('progressbar');
+    fixture.componentRef.setInput('fetching', false);
+    expect(await feedback.getAttribute('role')).toBeNull();
+    expect(await feedback.getAttribute('aria-hidden')).toBe('true');
+    expect(await feedback.hasClass('invisible')).toBe(true);
+    expect(await (await pager.nav()).getAttribute('aria-busy')).toBe('false');
+    const button = await pager.next();
+    expect(await button.getAttribute('aria-busy')).toBe('false');
+    expect(await button.getAttribute('aria-disabled')).toBe('true');
+    await button.click();
+    expect(next).not.toHaveBeenCalled();
   });
 
   it.each([

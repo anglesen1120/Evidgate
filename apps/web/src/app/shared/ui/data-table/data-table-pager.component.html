@@ -1,4 +1,4 @@
-<nav class="eg-table-pagination" [attr.aria-label]="landmark()" [attr.aria-busy]="busy()">
+<nav class="eg-table-pagination" [attr.aria-label]="landmark()" [attr.aria-busy]="pending()">
   <span role="status" [attr.aria-live]="'polite'" [attr.aria-atomic]="true">{{ summary() }}</span>
   @if (loadedCaption() === null) {
     <div class="size-field">
@@ -23,10 +23,10 @@
     <span
       data-page-feedback
       class="page-feedback"
-      [class.invisible]="!busy()"
-      [attr.role]="busy() ? 'progressbar' : null"
-      [attr.aria-label]="busy() ? loadingLabel : null"
-      [attr.aria-hidden]="busy() ? null : true"
+      [class.invisible]="!pending()"
+      [attr.role]="pending() ? 'progressbar' : null"
+      [attr.aria-label]="pending() ? loadingLabel : null"
+      [attr.aria-hidden]="pending() ? null : true"
     >
       <span class="page-spinner" aria-hidden="true"></span>
       {{ loadingLabel }}
@@ -39,7 +39,7 @@
       [variant]="'outline'"
       [class.page-boundary]="page() <= 1"
       [disabled]="loadedCaption() !== null && page() <= 1"
-      [attr.aria-busy]="busy()"
+      [attr.aria-busy]="pending()"
       [attr.aria-disabled]="busy() || page() <= 1"
       (click)="move(false, previousPage, nextPage)"
     >
@@ -53,7 +53,7 @@
       [variant]="'outline'"
       [class.page-boundary]="!canNext()"
       [disabled]="loadedCaption() !== null && !canNext()"
-      [attr.aria-busy]="busy()"
+      [attr.aria-busy]="pending()"
       [attr.aria-disabled]="busy() || !canNext()"
       (click)="move(true, nextPage, previousPage)"
     >

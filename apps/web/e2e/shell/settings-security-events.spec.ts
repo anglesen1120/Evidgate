@@ -93,9 +93,15 @@ for (const locale of LOCALES) {
     test(`security ${variant} state ${locale} is accessible without success rows`, async ({
       page,
     }) => {
-      await page.goto(path(locale, [`?fixture.variant.listSecurityEvents=${variant}`]));
+      await page.goto(
+        path(locale, [`?fixture.variant.listSecurityEvents=${variant}`, '?fixture.latency=1500']),
+      );
+      const pager = page.locator(`${host} app-data-table-pager`);
+      await expect(pager.getByRole('progressbar')).toBeVisible();
       await expect(page.locator(`${host} ${pattern}`)).toBeVisible();
       await expect(page.locator(rows)).toHaveCount(0);
+      await expect(pager.getByRole('progressbar')).toHaveCount(0);
+      await expect(pager.locator('nav')).toHaveAttribute('aria-busy', 'false');
       await expectNoA11yViolations(page, `security events ${variant} ${locale}`);
     });
   }

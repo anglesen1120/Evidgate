@@ -132,6 +132,7 @@
     [total]="null"
     [hasNext]="store.hasMore()"
     [busy]="paging() || status() === 'loading' || !retryReady()"
+    [fetching]="paging() || status() === 'loading'"
     (previous)="previous()"
     (next)="next()"
     (pageSizeChange)="changePageSize($event)"

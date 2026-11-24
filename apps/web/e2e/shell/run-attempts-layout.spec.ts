@@ -213,3 +213,31 @@ test('attempts layout flips between 767px and 768px on resize', async ({ page })
   await page.setViewportSize({ width: STACKED_MAX, height: 900 });
   await expect.poll(async () => (await attemptLayout(page)).rowDisplay).toBe('block');
 });
+
+for (const locale of ['en', 'vi'] as const) {
+  test(`attempts page-size read retains its table and pager until feedback settles (${locale})`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(
+      `${runDetailPath({ locale })}&fixture.variant.listRunAttempts=page-1&fixture.latency=1500`,
+    );
+    const table = page.locator('app-attempts-table');
+    const rows = table.locator('[data-attempt-row]');
+    await expect(rows.first()).toBeVisible({ timeout: 15000 });
+    const retained = await rows.allTextContents();
+    const pager = table.locator('app-data-table-pager');
+    await pager.getByRole('combobox').click();
+    await page.getByRole('option', { name: '50', exact: true }).click();
+    const feedback = pager.getByRole('progressbar');
+    await expect(feedback).toBeInViewport();
+    await expect(feedback).toHaveAccessibleName(locale === 'en' ? 'Loading…' : 'Đang tải…');
+    await expect(table.locator('table')).toBeVisible();
+    expect(await rows.allTextContents()).toEqual(retained);
+    await expect(pager.locator('nav')).toHaveAttribute('aria-busy', 'true');
+    await expect(feedback).toHaveCount(0);
+    await expect(pager.locator('nav')).toHaveAttribute('aria-busy', 'false');
+    await expect(pager.getByRole('combobox')).toContainText('50');
+    await expect(rows).toHaveCount(retained.length);
+  });
+}

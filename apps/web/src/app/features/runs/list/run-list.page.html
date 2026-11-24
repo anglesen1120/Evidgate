@@ -182,12 +182,13 @@
           />
         </div>
         <div class="flex min-w-0 flex-wrap gap-(--eg-space-3) md:col-span-2 xl:col-span-1">
+          <!-- Busy reads refuse submissions without removing the focused control from the tab order. -->
           <button
             hlmBtn
             [variant]="'outline'"
             type="submit"
             class="h-auto min-h-(--eg-control-touch) whitespace-normal"
-            [disabled]="store.busy()"
+            [attr.aria-disabled]="store.busy()"
             [attr.aria-busy]="store.busy()"
             data-run-apply
           >
@@ -198,7 +199,7 @@
             [variant]="'ghost'"
             type="button"
             class="h-auto min-h-(--eg-control-touch) whitespace-normal"
-            [disabled]="store.busy()"
+            [attr.aria-disabled]="store.busy()"
             [attr.aria-busy]="store.busy()"
             data-run-clear
             (click)="!store.busy() && clear()"

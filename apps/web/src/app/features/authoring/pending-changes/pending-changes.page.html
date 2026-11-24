@@ -172,6 +172,7 @@
           [count]="store.rows().length"
           [hasNext]="store.nextCursor() !== null"
           [busy]="busy() || readBusy() || !store.retryReady() || store.applyRequest() !== null"
+          [fetching]="readBusy()"
           (previous)="store.previous()"
           (next)="store.next()"
           (pageSizeChange)="store.setPageSize($event)"
