@@ -357,7 +357,7 @@ describe('ProducerStatusTableComponent', () => {
     expect(await table.rowIds()).toHaveLength(100);
   });
 
-  it('selects a producer fragment page and resets on replacement data', async () => {
+  it('preserves the producer fragment page and refreshes cells for the same identities', async () => {
     useLightweightTablePresentation();
     const slots = Array.from({ length: 256 }, (_, index) => ({
       ...FINALIZED,
@@ -366,16 +366,44 @@ describe('ProducerStatusTableComponent', () => {
     const { fixture, root } = await render(slots, 'ready', null, 'producer-shard-255');
     expect(root.querySelector('#producer-shard-255')).not.toBeNull();
     expect(root.querySelectorAll('tr[data-row-id]')).toHaveLength(16);
-    const table = await TestbedHarnessEnvironment.harnessForFixture(
-      fixture,
-      ProducerStatusTableHarness,
+    fixture.componentRef.setInput(
+      'slots',
+      slots.map((slot) => ({ ...slot, lastSequence: 13, count: 13, expected: 14 })),
     );
-    await (await table.previous()).click();
-    fixture.componentRef.setInput('slots', [...slots]);
     await fixture.whenStable();
-    expect(root.querySelector('#producer-shard-0')).not.toBeNull();
-    expect(root.querySelector('#producer-shard-255')).toBeNull();
+    expect(root.querySelector('#producer-shard-255')).not.toBeNull();
+    expect(root.querySelector('#producer-shard-0')).toBeNull();
+    expect(root.querySelectorAll('tr[data-row-id]')).toHaveLength(16);
+    const target = root.querySelector('tr[data-row-id="shard-255"]');
+    expect(target?.querySelector('[data-fact="last-sequence"]')?.textContent).toContain('13');
+    expect(target?.querySelector('[data-fact="count"]')?.textContent).toContain('13 / 14');
   });
+
+  it.each(['identity', 'order'] as const)(
+    'resets the selected producer page when the %s changes',
+    async (change) => {
+      useLightweightTablePresentation();
+      const slots = Array.from({ length: 256 }, (_, index) => ({
+        ...FINALIZED,
+        producerId: `shard-${index}`,
+      }));
+      const { fixture, root } = await render(slots, 'ready', null, 'producer-shard-255');
+      expect(root.querySelector('#producer-shard-255')).not.toBeNull();
+      const replacement = [...slots];
+      if (change === 'identity') {
+        replacement[0] = { ...FINALIZED, producerId: 'replacement' };
+      } else {
+        [replacement[0], replacement[1]] = [slots[1]!, slots[0]!];
+      }
+      fixture.componentRef.setInput('slots', replacement);
+      await fixture.whenStable();
+      expect(root.querySelectorAll('tr[data-row-id]')).toHaveLength(20);
+      expect(root.querySelector('tr[data-row-id]')?.getAttribute('data-row-id')).toBe(
+        change === 'identity' ? 'replacement' : 'shard-1',
+      );
+      expect(root.querySelector('#producer-shard-255')).toBeNull();
+    },
+  );
 
   it('localizes the run-level singular count and page controls into Vietnamese', async () => {
     useLightweightTablePresentation();

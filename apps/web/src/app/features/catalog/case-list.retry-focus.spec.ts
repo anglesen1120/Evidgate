@@ -108,33 +108,30 @@ describe('catalog page Retry focus', () => {
     ['failure', 'before-render'],
     ['success', 'after-handoff'],
     ['failure', 'after-handoff'],
-  ] as const)(
-    'does not steal focus moved to Search on %s %s',
-    async (outcome, timing) => {
-      const { fixture, harness } = await renderFailedPage();
-      const pending = new Subject<CaseListResponse>();
-      list.mockReturnValueOnce(firstValueFrom(pending));
-      await manualChangeDetection(async () => {
-        const retry = await harness.retryPage();
-        await retry.focus();
-        await retry.click();
-        if (timing === 'before-render') await (await harness.search()).focus();
-        fixture.detectChanges();
-        TestBed.tick();
-        if (timing === 'after-handoff') await (await harness.search()).focus();
-        expect(await (await harness.search()).isFocused()).toBe(true);
-      });
-      const row = CASE_LIST_FIXTURE.items[0];
-      if (!row) throw new Error('Missing catalog fixture');
-      if (outcome === 'success') {
-        pending.next({ items: [{ ...row, id: 'retry-page-case' }], next_cursor: null });
-      } else {
-        pending.error(new ApiRequestError(CATALOG_FAILURE));
-      }
-      await fixture.whenStable();
+  ] as const)('does not steal focus moved to Search on %s %s', async (outcome, timing) => {
+    const { fixture, harness } = await renderFailedPage();
+    const pending = new Subject<CaseListResponse>();
+    list.mockReturnValueOnce(firstValueFrom(pending));
+    await manualChangeDetection(async () => {
+      const retry = await harness.retryPage();
+      await retry.focus();
+      await retry.click();
+      if (timing === 'before-render') await (await harness.search()).focus();
+      fixture.detectChanges();
+      TestBed.tick();
+      if (timing === 'after-handoff') await (await harness.search()).focus();
       expect(await (await harness.search()).isFocused()).toBe(true);
-    },
-  );
+    });
+    const row = CASE_LIST_FIXTURE.items[0];
+    if (!row) throw new Error('Missing catalog fixture');
+    if (outcome === 'success') {
+      pending.next({ items: [{ ...row, id: 'retry-page-case' }], next_cursor: null });
+    } else {
+      pending.error(new ApiRequestError(CATALOG_FAILURE));
+    }
+    await fixture.whenStable();
+    expect(await (await harness.search()).isFocused()).toBe(true);
+  });
   it('leaves Search focused when Retry is activated without keyboard focus on it', async () => {
     const { harness } = await renderFailedPage();
     const row = CASE_LIST_FIXTURE.items[0];

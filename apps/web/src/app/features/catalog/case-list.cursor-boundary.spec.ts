@@ -184,26 +184,29 @@ describe('Catalog cursor boundaries', () => {
   it.each([
     [null, false],
     ['beyond-cap', true],
-  ] as const)('distinguishes complete current-page capacity from cursor %s', async (cursor, capped) => {
-    TestBed.overrideProvider(RETAINED_ROWS_CAP, { useValue: 2 });
-    const store = TestBed.inject(CaseListStore);
-    store.init('project', {});
-    await settle();
-    const second = page('second-case', null);
-    const third = page('third-case', null);
-    list.mockResolvedValueOnce({ items: [...second.items, ...third.items], next_cursor: cursor });
-    expect(await store.nextPage()).toBe(true);
-    expect(store.rows()).toEqual([...second.items, ...third.items]);
-    expect(store.page()).toBe(2);
-    expect(store.browseCapped()).toBe(capped);
-    expect(store.hasMore()).toBe(false);
-    expect(await store.previousPage()).toBe(true);
-    expect(store.rows()).toEqual(first.items);
-    expect(store.browseCapped()).toBe(false);
-    expect(store.hasMore()).toBe(true);
-  });
+  ] as const)(
+    'distinguishes complete current-page capacity from cursor %s',
+    async (cursor, capped) => {
+      TestBed.overrideProvider(RETAINED_ROWS_CAP, { useValue: 2 });
+      const store = TestBed.inject(CaseListStore);
+      store.init('project', {});
+      await settle();
+      const second = page('second-case', null);
+      const third = page('third-case', null);
+      list.mockResolvedValueOnce({ items: [...second.items, ...third.items], next_cursor: cursor });
+      expect(await store.nextPage()).toBe(true);
+      expect(store.rows()).toEqual([...second.items, ...third.items]);
+      expect(store.page()).toBe(2);
+      expect(store.browseCapped()).toBe(capped);
+      expect(store.hasMore()).toBe(false);
+      expect(await store.previousPage()).toBe(true);
+      expect(store.rows()).toEqual(first.items);
+      expect(store.browseCapped()).toBe(false);
+      expect(store.hasMore()).toBe(true);
+    },
+  );
 
-  it.each(['0', '-1', 'NaN', 'Infinity', '25', '20.5', '']) (
+  it.each(['0', '-1', 'NaN', 'Infinity', '25', '20.5', ''])(
     'defaults unsupported route limit %s without forwarding a route cursor',
     async (limit) => {
       const store = TestBed.inject(CaseListStore);
@@ -211,7 +214,11 @@ describe('Catalog cursor boundaries', () => {
       await settle();
       expect(store.pageSize()).toBe(20);
       expect(store.page()).toBe(1);
-      expect(list).toHaveBeenCalledExactlyOnceWith('project', { limit: 20 }, expect.any(AbortSignal));
+      expect(list).toHaveBeenCalledExactlyOnceWith(
+        'project',
+        { limit: 20 },
+        expect.any(AbortSignal),
+      );
     },
   );
 });

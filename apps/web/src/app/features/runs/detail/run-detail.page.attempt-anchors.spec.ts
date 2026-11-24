@@ -68,8 +68,7 @@ function page(start: number, next: string | null): RunAttemptPage {
   };
 }
 const anchor = (index: number) => attemptAnchorId(`anchor-${index}`, 1);
-const url = (fragment: string, id = run.run_id) =>
-  `/projects/project-1/runs/${id}#${fragment}`;
+const url = (fragment: string, id = run.run_id) => `/projects/project-1/runs/${id}#${fragment}`;
 
 describe('RunDetailPage attempt anchor paging', () => {
   provideLayoutTestStubs();
@@ -93,9 +92,7 @@ describe('RunDetailPage attempt anchor paging', () => {
       const first = deferred<RunAttemptPage>();
       listAttempts.mockReturnValueOnce(first.promise).mockResolvedValueOnce(page(21, null));
       const harness = await RouterTestingHarness.create();
-      await harness.navigateByUrl(
-        `/wrapped/projects/project-1/runs/${run.run_id}#${anchor(21)}`,
-      );
+      await harness.navigateByUrl(`/wrapped/projects/project-1/runs/${run.run_id}#${anchor(21)}`);
       await settle(harness);
       expect(document.activeElement?.tagName).toBe('MAIN');
       if (move) {
@@ -160,12 +157,15 @@ describe('RunDetailPage attempt anchor paging', () => {
     expect(document.activeElement?.id).not.toBe(anchor(80));
   });
 
-  it.each(['', 'attempt-invalid-0', '%E0%A4%A'])('does not preload for fragment %s', async (fragment) => {
-    listAttempts.mockResolvedValue(page(1, 'second'));
-    const { harness } = await open(run.run_id, fragment);
-    await settle(harness);
-    expect(listAttempts).toHaveBeenCalledExactlyOnceWith(run.run_id, { limit: 20 });
-  });
+  it.each(['', 'attempt-invalid-0', '%E0%A4%A'])(
+    'does not preload for fragment %s',
+    async (fragment) => {
+      listAttempts.mockResolvedValue(page(1, 'second'));
+      const { harness } = await open(run.run_id, encodeURIComponent(fragment));
+      await settle(harness);
+      expect(listAttempts).toHaveBeenCalledExactlyOnceWith(run.run_id, { limit: 20 });
+    },
+  );
 
   it('refuses a cursor cycle without retrying it automatically', async () => {
     listAttempts
@@ -188,16 +188,18 @@ describe('RunDetailPage attempt anchor paging', () => {
     async (kind) => {
       listAttempts
         .mockResolvedValueOnce(page(1, 'second'))
-        .mockRejectedValueOnce(new ApiRequestError({
-          kind,
-          status: kind === 'forbidden' ? 403 : 503,
-          code: kind,
-          message: '',
-          requestId: null,
-          retryable: kind === 'unavailable',
-          details: [],
-          retryAfterSeconds: null,
-        }))
+        .mockRejectedValueOnce(
+          new ApiRequestError({
+            kind,
+            status: kind === 'forbidden' ? 403 : 503,
+            code: kind,
+            message: '',
+            requestId: null,
+            retryable: kind === 'unavailable',
+            details: [],
+            retryAfterSeconds: null,
+          }),
+        )
         .mockResolvedValueOnce(page(21, null));
       const { harness } = await open(run.run_id, anchor(21));
       const table = await TestbedHarnessEnvironment.loader(harness.fixture).getHarness(
