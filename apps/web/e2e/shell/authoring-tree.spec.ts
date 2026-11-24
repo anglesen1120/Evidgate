@@ -382,6 +382,18 @@ for (const locale of LOCALES) {
         const dialog = page.getByRole('dialog');
         await expect(dialog).toHaveAccessibleName(/SHOP-601/);
         await expect(dialog).toContainText('018f0000-0000-7000-8000-000000000777');
+        const versionTerm = dialog.getByRole('term').filter({
+          hasText: locale === 'vi' ? 'Phiên bản ca kiểm thử' : 'Case version',
+        });
+        const versionValue = versionTerm.locator('+ dd');
+        await expect(versionValue).toHaveText('r5');
+        expect(
+          await versionValue.evaluate(
+            (value) =>
+              value.getBoundingClientRect().top -
+              value.previousElementSibling!.getBoundingClientRect().bottom,
+          ),
+        ).toBeGreaterThan(0);
         await page.keyboard.press('Escape');
         await expect(dialog).toHaveCount(0);
         await expect(identifiers).toBeFocused();
