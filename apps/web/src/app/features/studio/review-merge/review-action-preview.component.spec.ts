@@ -12,6 +12,7 @@ class ActionHarness extends ComponentHarness {
 class DialogHarness extends ComponentHarness {
   static hostSelector = 'hlm-dialog-content';
   readonly close = this.locatorFor('button[hlmDialogClose]');
+  readonly note = this.locatorFor('textarea');
   readonly confirmation = this.locatorFor('button[data-confirm]');
   readonly text = async () => (await this.host()).text();
 }
@@ -31,6 +32,8 @@ describe('ReviewActionPreviewComponent', () => {
       const doc = TestbedHarnessEnvironment.documentRootLoader(fixture);
       await (await action.trigger()).click();
       const dialog = await doc.getHarness(DialogHarness);
+      if (kind === 'submit' || kind === 'changes')
+        expect(await (await dialog.note()).isFocused()).toBe(true);
       expect(await dialog.text()).toContain('ah-1f9b…473a');
       expect(await dialog.text()).toContain('Preview only');
       expect(await (await dialog.confirmation()).getProperty<boolean>('disabled')).toBe(true);

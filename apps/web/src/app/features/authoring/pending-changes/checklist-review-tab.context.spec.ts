@@ -39,6 +39,7 @@ const ROW: AuthoringChangeListItem = {
 type UnlistedEnumRow = Omit<AuthoringChangeListItem, 'source' | 'state'> &
   Record<'source' | 'state', string>;
 const VI = {
+  'shared.field-hint.name': 'Gợi ý: {$label}',
   'authoring.review-context.parent-item': 'Mục danh sách kiểm tra cha',
   'authoring.review-context.parent-item-label': 'Mục danh sách kiểm tra cha',
   'authoring.review-context.priority': 'Độ ưu tiên của mục cha',
@@ -158,6 +159,16 @@ describe.each(['en', 'vi'] as const)('Checklist review context in %s', (locale) 
     );
     expect(await ui.value('context', 'parent-item')).toContain(ITEM);
     expect(await ui.count('[data-review-context="parent-item"] app-copyable-identifier')).toBe(1);
+  });
+
+  it('gives comment guidance a localized, initially collapsed disclosure', async () => {
+    const { ui } = await mount();
+    const name = locale === 'vi' ? 'Gợi ý: Bình luận' : 'Hint: Comment';
+    expect(
+      await ui.count(
+        `button[aria-controls="review-comment-hint"][aria-label="${name}"][aria-expanded="false"]`,
+      ),
+    ).toBe(1);
   });
 
   it('marks parent priority as Not provided instead of borrowing the case priority', async () => {

@@ -122,7 +122,13 @@
           </hlm-select>
         </div>
         <div class="grid min-w-0 gap-[var(--eg-space-2)]">
-          <label hlmLabel for="run-decision" class="whitespace-normal">{{ copy.decision }}</label>
+          <app-field-hint
+            [descriptionId]="'run-decision-hint'"
+            [label]="copy.decision"
+            [text]="copy.decisionHint"
+          >
+            <label hlmLabel for="run-decision" class="whitespace-normal">{{ copy.decision }}</label>
+          </app-field-hint>
           <hlm-select name="decision" [(ngModel)]="draft.decision" [itemToString]="decisionLabel">
             <hlm-select-trigger
               [buttonId]="'run-decision'"
@@ -197,9 +203,6 @@
           </button>
         </div>
       </div>
-      <p id="run-decision-hint" class="m-0 text-xs text-muted-foreground [overflow-wrap:anywhere]">
-        {{ copy.decisionHint }}
-      </p>
       @if (store.refRejected()) {
         <p
           class="m-0 text-[var(--eg-danger-fg)] [overflow-wrap:anywhere]"

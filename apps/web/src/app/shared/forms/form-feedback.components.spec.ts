@@ -1,3 +1,4 @@
+import { FieldHintComponent } from '../ui/forms/field-hint.component';
 import { Component, provideZonelessChangeDetection, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { HlmButton } from '@evidgate/ui/button';
@@ -11,6 +12,7 @@ import { FieldRequirementComponent, FormRequiredNoteComponent } from './form-req
 @Component({
   selector: 'app-form-feedback-test',
   imports: [
+    FieldHintComponent,
     HlmButton,
     HlmInput,
     HlmLabel,
@@ -23,9 +25,11 @@ import { FieldRequirementComponent, FormRequiredNoteComponent } from './form-req
     <form novalidate (submit)="submit($event)">
       <app-form-required-note />
       <app-form-error-summary [summaryId]="'test-form-errors'" [feedback]="feedback" />
-      <label hlmLabel [for]="field.id">
-        {{ field.label }} <app-field-requirement [required]="true" />
-      </label>
+      <app-field-hint [descriptionId]="field.hintId" [label]="field.label" [text]="field.hint">
+        <label hlmLabel [for]="field.id">
+          {{ field.label }} <app-field-requirement [required]="true" />
+        </label>
+      </app-field-hint>
       <input
         hlmInput
         required

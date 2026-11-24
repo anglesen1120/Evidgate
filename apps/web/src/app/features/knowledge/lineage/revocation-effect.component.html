@@ -100,7 +100,13 @@
               </div>
             </dl>
             <ng-container [ngTemplateOutlet]="counts" />
-            <label hlmLabel for="lineage-reason">{{ c.reason }}</label>
+            <app-field-hint
+              [descriptionId]="'lineage-hint'"
+              [label]="c.reason"
+              [text]="c.reasonHelp"
+            >
+              <label hlmLabel for="lineage-reason">{{ c.reason }}</label>
+            </app-field-hint>
             <textarea
               hlmInput
               id="lineage-reason"
@@ -113,7 +119,6 @@
               [ngModel]="store.reason()"
               (ngModelChange)="store.edit($event)"
             ></textarea>
-            <small id="lineage-hint">{{ c.reasonHelp }}</small>
             @if (blank()) {
               <p role="alert" id="lineage-error">{{ c.blank }}</p>
             }

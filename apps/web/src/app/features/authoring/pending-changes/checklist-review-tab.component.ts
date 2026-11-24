@@ -1,3 +1,4 @@
+import { FieldHintComponent } from '../../../shared/ui/forms/field-hint.component';
 import { DOCUMENT } from '@angular/common';
 import {
   afterRenderEffect,
@@ -44,6 +45,7 @@ import { PendingConfirmComponent } from './pending-confirm.component';
   changeDetection: ChangeDetectionStrategy.OnPush,
   providers: [PendingChangesStore],
   imports: [
+    FieldHintComponent,
     FormsModule,
     RouterLink,
     HlmButton,

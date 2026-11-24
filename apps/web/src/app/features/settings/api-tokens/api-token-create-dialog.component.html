@@ -1,0 +1,158 @@
+<hlm-dialog
+  [state]="opened() ? 'open' : 'closed'"
+  [closeOnOutsidePointerEvents]="false"
+  [disableClose]="true"
+  [restoreFocus]="false"
+  [aria-label]="revealing() ? copy.revealTitle : copy.create"
+  (closed)="finishClose()"
+>
+  <hlm-dialog-content
+    *hlmDialogPortal
+    #dialog
+    [showCloseButton]="false"
+    data-api-create-dialog
+    [size]="'lg'"
+    class="wrap-anywhere"
+    (keydown.escape)="escape($event)"
+  >
+    <header hlmDialogHeader>
+      <h2 hlmDialogTitle>{{ revealing() ? copy.revealTitle : copy.create }}</h2>
+      @if (store.createTarget(); as target) {
+        <p hlmDialogDescription data-api-create-project class="wrap-anywhere">
+          {{ projectLabel }}: {{ target.projectName }}
+        </p>
+      }
+    </header>
+    @if (slot.current(); as entry) {
+      <app-connect-step-reveal
+        [heading]="copy.revealTitle"
+        [value]="entry.value"
+        [warning]="copy.warning"
+        [copyLabel]="copy.copy"
+        [copiedLabel]="copy.copied"
+        [dismissLabel]="copy.dismiss"
+        (dismissed)="close()"
+      />
+    } @else {
+      <form
+        novalidate
+        (submit)="submit($event)"
+        (focusin)="refreshClock()"
+        (pointerdown)="refreshClock()"
+        (keydown)="refreshClock()"
+        class="grid min-w-0 gap-3"
+        [attr.aria-busy]="store.creating()"
+      >
+        <app-form-required-note />
+        <app-form-error-summary [summaryId]="'api-create-summary'" [feedback]="feedback()" />
+        <label hlmLabel for="api-create-name">{{ copy.name }}</label>
+        <input
+          hlmInput
+          #nameControl
+          id="api-create-name"
+          name="name"
+          required
+          maxlength="120"
+          autocomplete="off"
+          [value]="name()"
+          [disabled]="locked()"
+          [aria-describedby]="nameField().describedBy()"
+          [attr.aria-invalid]="nameField().ariaInvalid()"
+          [forceInvalid]="nameField().invalid()"
+          (blur)="nameField().blur()"
+          (input)="updateName($event)"
+        />
+        <app-field-feedback [field]="nameField()" />
+        <app-field-hint
+          [descriptionId]="expiryField().hintId"
+          [label]="expiryField().label"
+          [text]="expiryField().hint"
+        >
+          <label hlmLabel for="api-create-expiry">{{ copy.expires }}</label>
+        </app-field-hint>
+        <input
+          hlmInput
+          id="api-create-expiry"
+          name="expires_at"
+          type="datetime-local"
+          required
+          [value]="expires()"
+          [disabled]="locked()"
+          [attr.min]="minExpiry()"
+          [attr.max]="maxExpiry()"
+          [attr.aria-invalid]="expiryField().ariaInvalid()"
+          [forceInvalid]="expiryField().invalid()"
+          [aria-describedby]="expiryField().describedBy()"
+          (blur)="expiryField().blur()"
+          (input)="updateExpiry($event)"
+        />
+        <app-field-feedback
+          [field]="expiryField()"
+          [attr.data-api-expiry-refusal]="expiryRefused() ? '' : null"
+        />
+        <fieldset
+          id="api-create-permissions"
+          tabindex="-1"
+          class="m-0 min-w-0 rounded-md border border-border p-3"
+          [attr.aria-describedby]="permissionField().describedBy()"
+          [attr.aria-invalid]="permissionField().ariaInvalid()"
+          [disabled]="locked()"
+          (focusout)="permissionField().blur()"
+        >
+          <legend>
+            <app-field-hint
+              [descriptionId]="permissionField().hintId"
+              [label]="copy.permissions"
+              [text]="permissionField().hint"
+              >{{ copy.permissions }}</app-field-hint
+            >
+          </legend>
+          <app-field-feedback [field]="permissionField()" />
+          @for (code of choices(); track code) {
+            <label
+              hlmLabel
+              class="flex min-h-[var(--eg-control-touch)] items-center gap-2 wrap-anywhere"
+              [for]="'api-permission-' + code"
+            >
+              <hlm-checkbox
+                [inputId]="'api-permission-' + code"
+                [checked]="selected().has(code)"
+                [disabled]="locked()"
+                [forceInvalid]="permissionField().invalid()"
+                [aria-describedby]="permissionField().describedBy()"
+                (checkedChange)="toggle(code, $event)"
+              />{{ code }}
+            </label>
+          }
+        </fieldset>
+        <div id="api-create-error">
+          <app-api-token-write-error [error]="store.createError()" />
+        </div>
+        @if (uncertain()) {
+          <p role="alert" class="m-0">{{ copy.uncertain }}</p>
+        }
+        <footer hlmDialogFooter class="mt-3">
+          <button
+            hlmBtn
+            [variant]="'outline'"
+            type="button"
+            [disabled]="store.creating()"
+            (click)="dismiss()"
+          >
+            {{ uncertain() ? copy.inspect : copy.cancel }}
+          </button>
+          <button
+            hlmBtn
+            type="submit"
+            data-api-create-submit
+            [disabled]="
+              !valid() || !viewport.canMutate() || store.creating() || !retryReady() || uncertain()
+            "
+          >
+            {{ store.creating() ? copy.submitting : copy.create }}
+          </button>
+        </footer>
+      </form>
+    }
+  </hlm-dialog-content>
+</hlm-dialog>

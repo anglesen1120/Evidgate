@@ -1,3 +1,4 @@
+import { FieldHintComponent } from '../../../shared/ui/forms/field-hint.component';
 import { HttpErrorResponse } from '@angular/common/http';
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { HlmButton } from '@evidgate/ui/button';
@@ -12,7 +13,7 @@ type SignInState = 'idle' | 'submitting' | 'wrong-secret' | 'unavailable' | 'fai
 @Component({
   selector: 'app-dev-sign-in',
   providers: [DevSession],
-  imports: [HlmButton, HlmInput, HlmLabel, InlineFeedbackComponent],
+  imports: [FieldHintComponent, HlmButton, HlmInput, HlmLabel, InlineFeedbackComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: {
     class:
@@ -33,9 +34,14 @@ type SignInState = 'idle' | 'submitting' | 'wrong-secret' | 'unavailable' | 'fai
           aria-labelledby="dev-sign-in-heading"
           [attr.aria-busy]="state() === 'submitting'"
         >
-          <p class="m-0 text-sm text-muted-foreground" id="dev-sign-in-note">{{ note }}</p>
           <div class="grid min-w-0 gap-(--eg-space-3)">
-            <label hlmLabel for="dev-sign-in-secret">{{ secretLabel }}</label>
+            <app-field-hint
+              [descriptionId]="'dev-sign-in-note'"
+              [label]="secretLabel"
+              [text]="note"
+            >
+              <label hlmLabel for="dev-sign-in-secret">{{ secretLabel }}</label>
+            </app-field-hint>
             <input
               hlmInput
               class="min-h-(--eg-control-touch) w-full min-w-0 read-only:bg-muted"

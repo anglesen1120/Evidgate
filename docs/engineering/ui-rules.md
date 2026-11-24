@@ -52,11 +52,15 @@ Legend: ✅ verified with a source link · ⚠️ unverified evidence · `[INFER
 **UI33** — Require Helm/Brain `alertdialog` consent for destructive or credential-changing actions, including token/secret rotation, with named consequences, Cancel initially focused and no request before explicit confirmation; **check:** inspect role/focus and network calls through opening, Cancel, Escape and confirmation, reserving `hlmBtn destructive` for the confirmed operation.
 
 ## Forms
-**UI34** — Associate persistent above-field sentence-case HlmLabel, one consistent required/optional convention, below-control hints and specific inline errors with native/programmatic required/invalid state and `aria-describedby`; **check:** inspect accessibility associations and retained hints rather than placeholder-only or red-border-only errors.
+**UI34** — Associate persistent above-field sentence-case HlmLabel, one consistent required/optional convention, on-demand field hints and specific visible inline errors with native/programmatic required/invalid state and `aria-describedby`; **check:** inspect accessibility associations and retained hints rather than placeholder-only or red-border-only errors.
 **UI35** — Size HlmInput/HlmSelect fields by expected content inside a bounded form column with related pairs stacking and textareas growing naturally; **check:** stress a long email/URL, selected option and 40% localized expansion without fixed labelled-control widths or truncated option text.
 **UI36** — Validate touched fields on blur and during correction with authoritative submit validation, retained input and a focused linked summary after failed submit; **check:** submit invalid data, follow every summary link and reject focus jumps on each blur or duplicate submitting/announcement behavior.
 **UI37** — Distinguish readable/selectable read-only data from disabled unavailable interaction with an adjacent prerequisite explanation; **check:** select/copy immutable text, inspect contrast and reach the explanation without focusing a disabled control.
 **UI38** — Keep page-form Save/Continue then Cancel start-aligned, dialog Cancel then commit end-aligned and wizard Back then Continue, with equal DOM/visual order when wrapped; **check:** Tab the rendered footer at narrow width and inspect the HlmButton variants.
+
+### Advisory field hints
+Use `app-field-hint` beside the label for optional instructions, examples and format guidance. Keep the control’s `aria-describedby` linked to the note even when closed and append, rather than replace, error IDs. The info button must work on click, touch, Enter and Space; Escape and an outside click dismiss its anchored popover. Keep validation, blocked reasons, destructive consequences, required markers, and current scope/count status visible.
+In a field grid, reserve the same label-row height with and without a hint so neighboring controls align. Keep the info button’s full pointer or touch target clear of the input below it.
 
 ## Detail facts
 **UI39** — Group key-value facts with semantic `dl/dt/dd`, aligned wide labels/values and stacked narrow labels, preserving distinct Not set/Not available/Not applicable plus real zero/false; **check:** inspect semantics and missing-data fixtures rather than an unexplained dash or retrieval-failure zero.
@@ -225,6 +229,7 @@ Search here before writing UI. Paths are under `apps/web/src/app/`; test hosts a
 | Independent dashboard widgets, KPIs, decision bars, bounded meters and activity details | `app-dashboard-widget`, `app-dashboard-kpi`, `app-decision-trend`, `app-dashboard-meter`, `app-dashboard-activity` | `shared/ui/dashboard/` |
 | Desktop-only mutation on a narrow viewport | `[appDesktopMutation]`, `app-desktop-required-notice` | `shared/ui/narrow/` |
 | One-time credential or value reveal with copy and dismiss | `app-connect-step-reveal` | `shared/ui/reveal/` |
+| Advisory field or filter help beside its label | `app-field-hint` | `shared/ui/forms/` |
 | Field feedback, form error summary, required-field note and marker | `app-field-feedback`, `app-form-error-summary`, `app-form-required-note`, `app-field-requirement` | `shared/forms/` |
 | Absolute (UTC) timestamp | `app-absolute-time` | `shared/time/` |
 | Live examples of every shared component (specimens only, not building blocks for features) | `app-ui-gallery` with `app-gallery-composition`, `app-gallery-states`, `app-gallery-tables` | `shared/ui/gallery/` |

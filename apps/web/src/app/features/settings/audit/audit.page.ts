@@ -1,3 +1,4 @@
+import { FieldHintComponent } from '../../../shared/ui/forms/field-hint.component';
 import { formatNumber } from '@angular/common';
 import {
   ChangeDetectionStrategy,
@@ -40,6 +41,7 @@ import { supportAccessOf } from './support-access';
 @Component({
   selector: 'app-audit-page',
   imports: [
+    FieldHintComponent,
     FormsModule,
     HlmAlertImports,
     HlmButton,

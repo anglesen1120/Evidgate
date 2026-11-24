@@ -20,17 +20,14 @@ import {
 const RUN_READ_GRANT = '?fixture.variant.listPermissions=settings-policy-readonly';
 /** The fixture's first row — the row link's accessible name is the whole id, not its abbreviation. */
 const FIRST_RUN = runList.body.items[0]!.run_id;
-/** The form controls in DOM order, between the route's region and the table. */
-const FILTER_STOPS = [
+const SELECT_STOPS = [
   '#run-state',
+  'button[aria-label="Hint: Decision"]',
   '#run-decision',
   '#run-scope',
-  '#run-ref',
-  '[data-run-apply]',
-  '[data-run-clear]',
 ] as const;
+const FILTER_STOPS = [...SELECT_STOPS, '#run-ref', '[data-run-apply]', '[data-run-clear]'] as const;
 
-/** The server cursor pager starts with twenty records. */
 const FULL_PAGE_ROWS = 20;
 const LARGE_PAGE_FIRST = runList250.body.items[0]?.run_id;
 const LARGE_PAGE_SECOND = runList250.body.items[20]?.run_id;
@@ -38,7 +35,6 @@ if (LARGE_PAGE_FIRST === undefined || LARGE_PAGE_SECOND === undefined) {
   throw new Error('The paging specimen needs at least twenty-one records');
 }
 
-/** `/dev/run-list/orgs/:orgId/projects/:projectId` plus the grant and one case variant. */
 function listAddress(variant: string): string {
   return withVariants(
     localePath('en', `/dev/run-list/orgs/${ORG_ACME}/projects/${PROJECT_STOREFRONT}`),
@@ -79,7 +75,7 @@ async function enterMain(page: Page): Promise<void> {
   await expect(page.locator('#main-content')).toBeFocused();
 }
 
-/** The native disclosure is an intentional stop before the six filter controls. */
+/** The filter disclosure precedes the controls and their optional guidance. */
 async function enterFilterDisclosure(page: Page): Promise<void> {
   await page.keyboard.press('Tab');
   const summary = page.locator(RUN_FILTER_SUMMARY);
@@ -193,6 +189,10 @@ test('the list, a row and the way back are keyboard-reachable and identifiable',
 
   // The revision picker precedes the peer timeline/context area, then manifest provenance.
   await page.keyboard.press('Tab');
+  await expect(
+    page.getByRole('button', { name: 'Hint: Evidence revision', exact: true }),
+  ).toBeFocused();
+  await page.keyboard.press('Tab');
   await expect(page.getByRole('combobox', { name: 'Evidence revision' })).toBeFocused();
   await expect(page.locator('app-evidence-panel app-copy-value-button button')).toHaveCount(0);
   await tabThroughRunControls(page, page.locator('app-run-header').last(), 4);
@@ -292,7 +292,7 @@ test('a filter change keeps the focus that asked for it, and Clear restores the 
   // The three selects are comboboxes reached and left by Tab alone; their option lists are a
   // portaled overlay opened with Enter or an arrow key, so the value this walk sets is the text
   // filter's — the one a keystroke sequence can type unambiguously.
-  for (const selector of ['#run-state', '#run-decision', '#run-scope']) {
+  for (const selector of SELECT_STOPS) {
     await page.keyboard.press('Tab');
     await expect(page.locator(selector)).toBeFocused();
     await expectFocusRing(page.locator(selector), '2px');
@@ -401,7 +401,7 @@ test('a retried 503 hands focus to the page heading instead of dropping it to bo
   await enterMain(page);
   await enterFilterDisclosure(page);
   await auditRunTabStops(page.locator('app-run-list-page'), 'retry-503');
-  // The newly introduced disclosure is explicit; the six filter stops keep their exact order.
+  // Opening the filter disclosure preserves the same hint and field order during recovery.
   for (const selector of FILTER_STOPS) {
     await page.keyboard.press('Tab');
     await expect(page.locator(selector)).toBeFocused();

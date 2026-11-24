@@ -1,3 +1,4 @@
+import { FieldHintComponent } from '../../../shared/ui/forms/field-hint.component';
 import { BreakpointObserver } from '@angular/cdk/layout';
 import { DOCUMENT, formatNumber } from '@angular/common';
 import {
@@ -39,6 +40,7 @@ import { EMPTY_RUN_LIST_FILTERS, RunListStore } from './run-list.store';
 @Component({
   selector: 'app-run-list-page',
   imports: [
+    FieldHintComponent,
     FormsModule,
     HlmAlert,
     HlmButton,

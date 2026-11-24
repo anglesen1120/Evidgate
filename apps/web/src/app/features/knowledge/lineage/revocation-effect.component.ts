@@ -1,3 +1,4 @@
+import { FieldHintComponent } from '../../../shared/ui/forms/field-hint.component';
 import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -19,6 +20,7 @@ import { RevocationPreviewStore } from './revocation-preview.store';
 @Component({
   selector: 'app-revocation-effect',
   imports: [
+    FieldHintComponent,
     NgTemplateOutlet,
     FormsModule,
     RouterLink,

@@ -1,3 +1,4 @@
+import { FieldHintComponent } from '../../shared/ui/forms/field-hint.component';
 import { DEFAULT_DIALOG_CONFIG, Dialog, DialogConfig } from '@angular/cdk/dialog';
 import { BrnDialogService } from '@spartan-ng/brain/dialog';
 import { DOCUMENT } from '@angular/common';
@@ -38,6 +39,7 @@ export type SaveCatalogOwner = (row: CaseDto, membershipId: string) => Promise<b
 @Component({
   selector: 'app-case-record-dialog',
   imports: [
+    FieldHintComponent,
     FormsModule,
     HlmButton,
     HlmDialogImports,

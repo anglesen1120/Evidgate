@@ -123,6 +123,22 @@ test.describe('AC7: an audit:read session reads the log and exports it', () => {
       // Portalled options retain the wire enums in data-value, independently of locale.
       const form = page.locator('app-audit-page form');
       await expect(form).toHaveCount(1);
+      const actionField = form.locator('#audit-action');
+      const hint = form.locator('button[aria-controls="audit-action-hint"]');
+      const note = form.locator('#audit-action-hint');
+      const label = await form.locator('label[for="audit-action"]').innerText();
+      await expect(hint).toHaveAccessibleName(`${locale === 'vi' ? 'Gợi ý' : 'Hint'}: ${label}`);
+      const guidance = (await note.textContent())?.trim();
+      expect(guidance).toBeTruthy();
+      await expect(actionField).toHaveAccessibleDescription(guidance ?? '');
+      await expect(note).toBeHidden();
+      for (const key of ['Enter', 'Space']) {
+        await hint.press(key);
+        await expect(note).toBeVisible();
+        await hint.press('Escape');
+        await expect(note).toBeHidden();
+        await expect(hint).toBeFocused();
+      }
       const actor = form.locator('button#audit-actor');
       await expect(actor).toHaveRole('combobox');
       await actor.click();

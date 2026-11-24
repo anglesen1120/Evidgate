@@ -123,7 +123,13 @@
         </hlm-select>
       </div>
       <div class="grid min-w-0 gap-2">
-        <label hlmLabel for="audit-action">{{ copy.action }}</label>
+        <app-field-hint
+          [descriptionId]="'audit-action-hint'"
+          [label]="copy.action"
+          [text]="copy.actionHint"
+        >
+          <label hlmLabel for="audit-action">{{ copy.action }}</label>
+        </app-field-hint>
         <input
           hlmInput
           class="min-h-[var(--eg-control-touch)]"
@@ -134,12 +140,15 @@
           (ngModelChange)="updateDraft({ action: $event })"
           [aria-describedby]="'audit-action-hint'"
         />
-        <p id="audit-action-hint" class="m-0 text-xs text-muted-foreground">
-          {{ copy.actionHint }}
-        </p>
       </div>
       <div class="grid min-w-0 gap-2">
-        <label hlmLabel for="audit-object">{{ copy.objectType }}</label>
+        <app-field-hint
+          [descriptionId]="'audit-object-hint'"
+          [label]="copy.objectType"
+          [text]="copy.objectHint"
+        >
+          <label hlmLabel for="audit-object">{{ copy.objectType }}</label>
+        </app-field-hint>
         <input
           hlmInput
           class="min-h-[var(--eg-control-touch)]"
@@ -150,12 +159,15 @@
           (ngModelChange)="updateDraft({ objectType: $event })"
           [aria-describedby]="'audit-object-hint'"
         />
-        <p id="audit-object-hint" class="m-0 text-xs text-muted-foreground">
-          {{ copy.objectHint }}
-        </p>
       </div>
       <div class="grid min-w-0 gap-2">
-        <label hlmLabel for="audit-from">{{ copy.from }}</label>
+        <app-field-hint
+          [descriptionId]="'audit-from-hint'"
+          [label]="copy.from"
+          [text]="copy.dateHint"
+        >
+          <label hlmLabel for="audit-from">{{ copy.from }}</label>
+        </app-field-hint>
         <input
           hlmInput
           class="min-h-[var(--eg-control-touch)]"
@@ -167,12 +179,14 @@
           (ngModelChange)="updateDraft({ from: $event })"
           [attr.aria-invalid]="invalidRange()"
           [aria-describedby]="
-            invalidRange() ? 'audit-date-hint audit-range-error' : 'audit-date-hint'
+            invalidRange() ? 'audit-from-hint audit-range-error' : 'audit-from-hint'
           "
         />
       </div>
       <div class="grid min-w-0 gap-2">
-        <label hlmLabel for="audit-to">{{ copy.to }}</label>
+        <app-field-hint [descriptionId]="'audit-to-hint'" [label]="copy.to" [text]="copy.dateHint">
+          <label hlmLabel for="audit-to">{{ copy.to }}</label>
+        </app-field-hint>
         <input
           hlmInput
           class="min-h-[var(--eg-control-touch)]"
@@ -183,9 +197,7 @@
           [ngModel]="draft().to"
           (ngModelChange)="updateDraft({ to: $event })"
           [attr.aria-invalid]="invalidRange()"
-          [aria-describedby]="
-            invalidRange() ? 'audit-date-hint audit-range-error' : 'audit-date-hint'
-          "
+          [aria-describedby]="invalidRange() ? 'audit-to-hint audit-range-error' : 'audit-to-hint'"
         />
       </div>
     </div>
@@ -193,7 +205,6 @@
       <p class="text-destructive" id="audit-range-error" role="alert">{{ copy.rangeError }}</p>
     }
     <div class="flex flex-wrap items-center justify-between gap-3">
-      <p id="audit-date-hint" class="text-xs text-muted-foreground">{{ copy.dateHint }}</p>
       <div class="flex flex-wrap items-center gap-2">
         <button
           hlmBtn

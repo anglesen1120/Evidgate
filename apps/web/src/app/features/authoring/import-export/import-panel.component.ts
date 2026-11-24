@@ -1,3 +1,4 @@
+import { FieldHintComponent } from '../../../shared/ui/forms/field-hint.component';
 import {
   afterRenderEffect,
   ChangeDetectionStrategy,
@@ -41,6 +42,7 @@ import { ImportStore } from './import.store';
 @Component({
   selector: 'app-authoring-import-panel',
   imports: [
+    FieldHintComponent,
     FormsModule,
     HlmButton,
     HlmCard,

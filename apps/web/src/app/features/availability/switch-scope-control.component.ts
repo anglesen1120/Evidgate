@@ -1,3 +1,4 @@
+import { FieldHintComponent } from '../../shared/ui/forms/field-hint.component';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -38,6 +39,7 @@ function isSettableMode(value: unknown): value is SettableMode {
 @Component({
   selector: 'app-switch-scope-control',
   imports: [
+    FieldHintComponent,
     HlmButton,
     HlmCardTitle,
     HlmInput,
@@ -102,6 +104,7 @@ export class SwitchScopeControl {
     () => `healing-switch-${this.scope()}-reason-too-long`,
   );
 
+  protected readonly modeAdvisory = computed(() => this.blockedBy() === null && this.editable());
   protected readonly note = computed(() => {
     if (this.scope() === 'system') return '';
     const ancestor = this.blockedBy();

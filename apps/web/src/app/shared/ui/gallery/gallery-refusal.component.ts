@@ -1,3 +1,4 @@
+import { FieldHintComponent } from '../forms/field-hint.component';
 import { ChangeDetectionStrategy, Component, input, signal } from '@angular/core';
 import { HlmButton } from '@evidgate/ui/button';
 import { HlmCheckbox } from '@evidgate/ui/checkbox';
@@ -11,7 +12,15 @@ import { GALLERY_COPY } from './gallery-example-copy';
 @Component({
   selector: 'app-gallery-refusal',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [HlmButton, HlmCheckbox, HlmDialogImports, HlmIcon, HlmInput, HlmLabel],
+  imports: [
+    FieldHintComponent,
+    HlmButton,
+    HlmCheckbox,
+    HlmDialogImports,
+    HlmIcon,
+    HlmInput,
+    HlmLabel,
+  ],
   host: { class: 'block min-w-0' },
   templateUrl: './gallery-refusal.component.html',
 })
@@ -42,6 +51,7 @@ export class GalleryRefusalComponent {
     resubmit: boolean;
   } | null>(null);
   protected readonly title = $localize`:@@shared.gallery.refusal.title:Decline sample request`;
+  protected readonly notifyHint = $localize`:@@shared.gallery.refusal.notify-hint:Email to the sample requester, shown in the preview only.`;
   protected readonly notifyLabel = $localize`:@@shared.gallery.refusal.notify:Include a requester notification`;
   protected readonly resubmitLabel = $localize`:@@shared.gallery.refusal.resubmit:Allow resubmission`;
 
