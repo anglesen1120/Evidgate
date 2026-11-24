@@ -448,6 +448,10 @@
           <context context-type="linenumber">172,177</context>
         </context-group>
         <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/authoring-node-details.component.ts</context>
+          <context context-type="linenumber">75,78</context>
+        </context-group>
+        <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/import-export/import-history-table.component.html</context>
           <context context-type="linenumber">137,142</context>
         </context-group>
@@ -1753,144 +1757,151 @@
           <context context-type="linenumber">15</context>
         </context-group>
       </trans-unit>
-      <trans-unit id="authoring.tree.selected-id" datatype="html">
-        <source>Selected node ID</source>
+      <trans-unit id="authoring.tree.details" datatype="html">
+        <source>Node details</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-tree.copy.ts</context>
           <context context-type="linenumber">16</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.tree.node-id" datatype="html">
+        <source>Node ID</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/authoring-tree.copy.ts</context>
+          <context context-type="linenumber">17</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.tree.loading" datatype="html">
         <source>Loading project hierarchy…</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-tree.copy.ts</context>
-          <context context-type="linenumber">17</context>
+          <context context-type="linenumber">18</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.tree.loading-children" datatype="html">
         <source>Loading child nodes…</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-tree.copy.ts</context>
-          <context context-type="linenumber">18</context>
+          <context context-type="linenumber">19</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.tree.empty" datatype="html">
         <source>This project has no authoring content yet</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-tree.copy.ts</context>
-          <context context-type="linenumber">19</context>
+          <context context-type="linenumber">20</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.tree.no-roots" datatype="html">
         <source>No hierarchy nodes in this project</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-tree.copy.ts</context>
-          <context context-type="linenumber">20</context>
+          <context context-type="linenumber">21</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.tree.empty-description" datatype="html">
         <source>Import a checklist and its manual cases to build the first branch of this tree.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-tree.copy.ts</context>
-          <context context-type="linenumber">21</context>
+          <context context-type="linenumber">22</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.tree.empty-children" datatype="html">
         <source>No child nodes in this scope</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-tree.copy.ts</context>
-          <context context-type="linenumber">22</context>
+          <context context-type="linenumber">23</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.tree.refresh" datatype="html">
         <source>Refresh hierarchy</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-tree.copy.ts</context>
-          <context context-type="linenumber">23</context>
+          <context context-type="linenumber">24</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.tree.stale" datatype="html">
         <source>Hierarchy may be stale</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-tree.copy.ts</context>
-          <context context-type="linenumber">24</context>
+          <context context-type="linenumber">25</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.tree.stale-description" datatype="html">
         <source>Refresh failed; previously loaded hierarchy data is still shown. Retry to refresh this region only.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-tree.copy.ts</context>
-          <context context-type="linenumber">25</context>
+          <context context-type="linenumber">26</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.tree.more-roots" datatype="html">
         <source>Load more root nodes</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-tree.copy.ts</context>
-          <context context-type="linenumber">26</context>
+          <context context-type="linenumber">27</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.tree.more-children" datatype="html">
         <source>Load more child nodes</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-tree.copy.ts</context>
-          <context context-type="linenumber">27</context>
+          <context context-type="linenumber">28</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.tree.browse-capped" datatype="html">
         <source>Hierarchy list is at its load limit</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-tree.copy.ts</context>
-          <context context-type="linenumber">28</context>
+          <context context-type="linenumber">29</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.tree.table" datatype="html">
         <source>Manual cases</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-tree.copy.ts</context>
-          <context context-type="linenumber">29</context>
+          <context context-type="linenumber">30</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.tree.import-export" datatype="html">
         <source>Import and export</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-tree.copy.ts</context>
-          <context context-type="linenumber">30</context>
+          <context context-type="linenumber">31</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.tree.category-cases" datatype="html">
         <source>Category cases</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-tree.copy.ts</context>
-          <context context-type="linenumber">31</context>
+          <context context-type="linenumber">32</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.tree.direct-items" datatype="html">
         <source>Direct checklist items</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-tree.copy.ts</context>
-          <context context-type="linenumber">32</context>
+          <context context-type="linenumber">33</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.tree.loaded-cases" datatype="html">
         <source>Loaded cases</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-tree.copy.ts</context>
-          <context context-type="linenumber">33</context>
+          <context context-type="linenumber">34</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.tree.loaded-scope" datatype="html">
         <source>Loaded in this scope</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-tree.copy.ts</context>
-          <context context-type="linenumber">34</context>
+          <context context-type="linenumber">35</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.tree.browse-capped-help" datatype="html">
         <source>Showing the first <x id="cap" equiv-text="formatNumber(cap, locale)"/> nodes in this list. Open a known node link to inspect a scope outside these results.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-tree.copy.ts</context>
-          <context context-type="linenumber">39</context>
+          <context context-type="linenumber">40</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.tree.announce-selection-failed" datatype="html">

@@ -66,22 +66,6 @@
 .breadcrumb {
   font-size: var(--eg-text-sm);
 }
-.selected-id {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--eg-space-2) var(--eg-space-3);
-  margin: 0;
-  min-inline-size: 0;
-  font-size: var(--eg-text-sm);
-}
-.selected-id dt {
-  color: var(--eg-text-muted);
-}
-.selected-id dd {
-  margin: 0;
-  min-inline-size: 0;
-}
 app-request-state,
 app-inline-feedback {
   margin-block-end: var(--eg-space-3);

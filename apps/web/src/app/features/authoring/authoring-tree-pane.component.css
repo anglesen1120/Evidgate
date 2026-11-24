@@ -35,7 +35,7 @@ ul.indented {
 .node-controls {
   display: flex;
   gap: var(--eg-space-1);
-  align-items: flex-start;
+  align-items: center;
   min-inline-size: 0;
 }
 .disclosure,
@@ -73,31 +73,6 @@ ul.indented {
   font-weight: var(--eg-weight-semibold);
   color: var(--eg-accent-fg);
 }
-.counts {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--eg-space-2) var(--eg-space-3);
-  margin: 0 0 var(--eg-space-2);
-  padding-inline-start: calc(var(--eg-control-sm) + var(--eg-space-2));
-  font-size: var(--eg-text-xs);
-  line-height: var(--eg-leading-xs);
-  color: var(--eg-text-muted);
-}
-.counts div {
-  display: inline-flex;
-  align-items: baseline;
-  gap: var(--eg-space-2);
-  min-inline-size: 0;
-}
-dt {
-  overflow-wrap: anywhere;
-}
-dd {
-  margin: 0;
-  color: var(--eg-text);
-  font-weight: var(--eg-weight-semibold);
-  font-variant-numeric: tabular-nums;
-}
 .branch-state {
   min-inline-size: 0;
   padding-block: var(--eg-space-3);
@@ -113,6 +88,9 @@ button {
   scroll-margin-block-start: calc(var(--eg-space-12) + var(--eg-space-7));
 }
 @media (pointer: coarse) {
+  .node-controls {
+    gap: var(--eg-space-3);
+  }
   .disclosure,
   .leaf-space {
     inline-size: var(--eg-control-touch);
