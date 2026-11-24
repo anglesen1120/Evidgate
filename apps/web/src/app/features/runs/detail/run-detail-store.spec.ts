@@ -275,6 +275,38 @@ describe('RunDetailStore', () => {
       await store.setAttemptsPageSize(200);
       expect(listAttempts).toHaveBeenCalledTimes(3);
     });
+    it.each(['success', 'failure'] as const)(
+      'retains same-run rows and settles pending page-size feedback on %s',
+      async (outcome) => {
+        get.mockResolvedValue(run);
+        const pending = deferred<RunAttemptPage>();
+        listAttempts
+          .mockResolvedValueOnce(first)
+          .mockResolvedValueOnce(second)
+          .mockReturnValueOnce(pending.promise);
+        const store = TestBed.inject(RunDetailStore);
+        await store.load(run.run_id);
+        await store.nextAttempts();
+        const rows = store.attempts();
+        const reading = store.setAttemptsPageSize(50);
+        expect(store.attempts()).toBe(rows);
+        expect(store.attemptsStatus()).toBe('ready');
+        expect(store.attemptsLoadingMore()).toBe(true);
+        expect(store.attemptsPage()).toBe(2);
+        if (outcome === 'success') pending.resolve(first);
+        else pending.reject(refused('unavailable', 503));
+        await reading;
+        expect(store.attemptsLoadingMore()).toBe(false);
+        expect(store.attemptsStatus()).toBe('ready');
+        expect(listAttempts).toHaveBeenLastCalledWith(run.run_id, { limit: 50 });
+        if (outcome === 'success') expect(store.attemptsPage()).toBe(1);
+        else {
+          expect(store.attempts()).toBe(rows);
+          expect(store.attemptsPage()).toBe(2);
+          expect(store.attemptsError()?.status).toBe(503);
+        }
+      },
+    );
     it('resets page and size on run identity changes and ignores an older page response', async () => {
       get.mockResolvedValue(run);
       const old = deferred<RunAttemptPage>();

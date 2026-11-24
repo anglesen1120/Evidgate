@@ -52,6 +52,9 @@ export class DataTablePagerComponent {
   readonly count = input(0);
   readonly hasNext = input(false);
   readonly busy = input(false);
+  /** Retry cooldowns lock controls without claiming that a request is still pending. */
+  readonly fetching = input<boolean | undefined>(undefined);
+  protected readonly pending = computed(() => this.fetching() ?? this.busy());
   /** A loaded-row window has a fixed render cap, not a server page size or total. */
   readonly loadedCaption = input<string | null>(null);
   readonly previous = output<void>();
@@ -63,6 +66,7 @@ export class DataTablePagerComponent {
   protected readonly sizeLabel = $localize`:@@shared.data-table.rows-per-page:Rows per page`;
   protected readonly previousLabel = $localize`:@@shared.data-table.previous:Previous records`;
   protected readonly nextLabel = $localize`:@@shared.data-table.next:Next records`;
+  protected readonly loadingLabel = $localize`:@@shared.states.loading.label:Loading…`;
   protected readonly landmark = computed(() => {
     const caption = this.loadedCaption();
     return caption === null

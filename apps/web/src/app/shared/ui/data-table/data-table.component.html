@@ -5,7 +5,12 @@
   {{ caption() }}
 </p>
 @if (busy() !== undefined) {
-  <app-loading-pattern [layout]="'table'" [busy]="busy() === true" [hasRows]="rows().length > 0" />
+  <app-loading-pattern
+    [layout]="'table'"
+    [busy]="busy() === true"
+    [hasRows]="rows().length > 0"
+    [announceProgress]="!progressAtPager() && !paged()"
+  />
 }
 <span
   #tokenProbe

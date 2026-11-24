@@ -358,6 +358,35 @@ describe('SecurityEventsPage', () => {
     expect(await (await harness.pager()).text()).toContain('Page 2');
     expect(await (await harness.rows())[0]?.getAttribute('data-row-id')).toBe('second');
   });
+  it('locks paging without claiming a pending request during a Retry-After cooldown', async () => {
+    list.mockResolvedValueOnce({ items: [event], next_cursor: 'second' }).mockRejectedValueOnce(
+      new ApiRequestError({
+        kind: 'unavailable',
+        status: 503,
+        code: 'page_unavailable',
+        message: 'Try again later.',
+        requestId: null,
+        retryable: true,
+        details: [],
+        retryAfterSeconds: 60,
+      }),
+    );
+    const { harness } = await render();
+    await (await harness.next()).click();
+    expect(await (await harness.next()).getAttribute('aria-disabled')).toBe('true');
+    expect(await (await harness.previous()).getAttribute('aria-disabled')).toBe('true');
+    expect(await (await harness.pager()).text()).toContain('Page 1');
+    expect(document.querySelector('app-data-table-pager [role="progressbar"]')).toBeNull();
+    expect(document.querySelector('app-data-table-pager nav')?.getAttribute('aria-busy')).toBe(
+      'false',
+    );
+    await (await harness.next()).click();
+    await (await harness.previous()).click();
+    await harness.chooseSize('50');
+    expect(list).toHaveBeenCalledTimes(2);
+    expect(await (await harness.pager()).text()).toContain('Page 1');
+  });
+
   it('keeps the loaded page visible and disables paging while the next request is pending', async () => {
     list.mockResolvedValueOnce({ items: [event], next_cursor: 'second' });
     const { fixture, harness } = await render();

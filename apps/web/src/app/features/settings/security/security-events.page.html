@@ -195,6 +195,7 @@
     <app-request-state
       [status]="tableStatus()"
       [tableLoading]="true"
+      [announceProgress]="false"
       [loadingLabel]="copy.loading"
       [error]="store.loadError()"
       [emptyIcon]="'navShieldAlert'"
@@ -222,7 +223,8 @@
       [pageSize]="store.pageSize()"
       [count]="store.rows().length"
       [hasNext]="store.canNext()"
-      [busy]="store.phase() !== 'ready'"
+      [busy]="store.phase() === 'loading' || !(retryReady.value() ?? true)"
+      [fetching]="store.phase() === 'loading'"
       (previous)="store.previous()"
       (next)="store.next()"
       (pageSizeChange)="store.setPageSize($event)"

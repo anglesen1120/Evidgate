@@ -35,7 +35,12 @@ const summaryCards = [0, 1, 2, 3] as const;
       <app-live-status [text]="announcement()" />
       <div [attr.aria-busy]="busy()">
         @if (visible()) {
-          <span data-table-progress aria-hidden="true"></span>
+          <span
+            data-table-progress
+            [attr.role]="announceProgress() ? 'progressbar' : null"
+            [attr.aria-label]="announceProgress() ? (label() ?? loadingLabel) : null"
+            [attr.aria-hidden]="announceProgress() ? null : true"
+          ></span>
           @if (!hasRows()) {
             <div class="grid gap-(--eg-space-2) p-(--eg-space-3)" aria-hidden="true">
               @for (field of fields; track field) {
@@ -115,6 +120,8 @@ export class LoadingPatternComponent {
   private readonly pendingLabels = inject(pendingLabels);
   readonly busy = input(false);
   readonly hasRows = input(false);
+  /** Cursor-paged tables announce progress beside their controls instead of twice. */
+  readonly announceProgress = input(true);
   protected readonly visible = signal(false);
   protected readonly announcement = signal('');
   protected readonly loadingLabel = $localize`:@@shared.states.loading.label:Loading…`;

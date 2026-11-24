@@ -43,6 +43,13 @@ describe('Data table fetch feedback', () => {
     fixture.detectChanges();
     expect(await table.rows()).toHaveLength(2);
     expect(await table.indicator()).not.toBeNull();
+    expect(await (await table.indicator())?.getAttribute('aria-hidden')).toBeNull();
+    expect(await (await table.indicator())?.getAttribute('role')).toBe('progressbar');
+    expect(await (await table.indicator())?.getAttribute('aria-label')).toBe('Loading…');
+    fixture.componentRef.setInput('progressAtPager', true);
+    fixture.detectChanges();
+    expect(await (await table.indicator())?.getAttribute('aria-hidden')).toBe('true');
+    expect(await (await table.indicator())?.getAttribute('role')).toBeNull();
     expect(await (await table.announcement()).text()).toBe('');
     fixture.componentRef.setInput('busy', false);
     fixture.detectChanges();

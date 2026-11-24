@@ -35,7 +35,12 @@ import { HlmTableImports } from '@evidgate/ui/table';
         <h3 hlmCardTitle [size]="subsectionSize" id="policy-revisions-title">{{ copy.title }}</h3>
         <p hlmCardDescription>{{ copy.order }}</p>
       </header>
-      <app-loading-pattern [layout]="'table'" [busy]="fetching()" [hasRows]="rows().length > 0" />
+      <app-loading-pattern
+        [layout]="'table'"
+        [busy]="fetching()"
+        [hasRows]="rows().length > 0"
+        [announceProgress]="false"
+      />
       <div hlmTableContainer>
         <table
           [attr.aria-busy]="fetching()"

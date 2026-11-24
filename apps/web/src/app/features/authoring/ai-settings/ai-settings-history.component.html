@@ -88,6 +88,7 @@
       @if (rows().length || store.history.isLoading()) {
         <app-data-table
           [busy]="store.history.isLoading()"
+          [progressAtPager]="true"
           class="[--eg-row-default:var(--eg-space-11)]"
           [rows]="rows()"
           [columns]="columns()"

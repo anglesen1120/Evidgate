@@ -93,6 +93,7 @@ interface PreviewRow {
     </ng-template>
     <app-data-table
       [busy]="fetching()"
+      [progressAtPager]="true"
       [rows]="visibleRows()"
       [columns]="columns()"
       [rowId]="rowId"

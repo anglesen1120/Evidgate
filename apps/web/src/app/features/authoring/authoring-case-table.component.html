@@ -274,6 +274,7 @@
       [count]="store.rows().length"
       [hasNext]="store.nextCursor() !== null"
       [busy]="busy() || store.loadingMore() || !store.retryReady()"
+      [fetching]="busy() || store.loadingMore()"
       (previous)="movePage(false)"
       (next)="movePage(true)"
       (pageSizeChange)="setPageSize($event)"

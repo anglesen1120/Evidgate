@@ -429,6 +429,7 @@
             [count]="history()?.page?.items?.length ?? 0"
             [hasNext]="!!history()?.page?.next_cursor"
             [busy]="store.history.isLoading() || !store.historyRetryReady()"
+            [fetching]="store.history.isLoading()"
             (previous)="store.previousHistory()"
             (next)="store.nextHistory()"
             (pageSizeChange)="store.setHistoryPageSize($event)"

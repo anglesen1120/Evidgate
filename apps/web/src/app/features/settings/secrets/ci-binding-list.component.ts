@@ -94,6 +94,7 @@ export const CI_BINDINGS_COPY = {
       <app-loading-pattern
         [layout]="'table'"
         [busy]="!forbidden() && (loading() || loadingMore())"
+        [announceProgress]="false"
         [hasRows]="rows().length > 0"
         [label]="loadingMore() ? copy.loadingMore : copy.loading"
       />

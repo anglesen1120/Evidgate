@@ -124,6 +124,8 @@ export class DataTableComponent<T> {
   readonly rowId = input.required<DataTableRowId<T>>();
   readonly caption = input.required<string>();
   readonly busy = input<boolean>();
+  /** Server pagers own their accessible progress feedback even when outside this table. */
+  readonly progressAtPager = input(false);
   readonly rowHeight = input<DataTableDensity>('default');
   readonly virtualThreshold = input(200);
   /** Opt ordinary tables into record reflow when readable columns cannot fit their container. */

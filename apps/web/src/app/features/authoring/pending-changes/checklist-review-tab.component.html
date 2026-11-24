@@ -48,6 +48,7 @@
         [count]="rows().length"
         [hasNext]="store.nextCursor() !== null"
         [busy]="store.queueing() || store.queueLoading() || !store.retryReady()"
+        [fetching]="store.queueLoading()"
         (previous)="store.previous()"
         (next)="store.next()"
         (pageSizeChange)="store.setPageSize($event)"

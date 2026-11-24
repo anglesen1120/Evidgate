@@ -297,6 +297,7 @@ export const MEMBERS_COPY = {
     </ng-template>
     <app-data-table
       [busy]="fetching()"
+      [progressAtPager]="true"
       class="[&_tbody_td]:align-middle [&_[data-column-role=actions]]:whitespace-nowrap [&_[data-column-role=actions]]:wrap-normal"
       [columns]="columns()"
       [rows]="members()"

@@ -434,9 +434,8 @@ export const RunDetailStore = signalStore(
           return;
         ++attemptsGeneration;
         attemptCursors = [null];
+        // A size change stays in the same run, so keep its committed rows while the first page reads.
         patchState(store, {
-          attempts: null,
-          attemptsPage: 1,
           attemptsPageSize: size,
           attemptsCursor: null,
           attemptsLoadingMore: false,

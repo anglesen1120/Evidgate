@@ -299,6 +299,7 @@
       [count]="store.rows().length"
       [hasNext]="store.hasNext()"
       [busy]="store.paging() || status() !== 'ready' || !retryReady()"
+      [fetching]="store.paging() || status() === 'loading'"
       (previous)="previous()"
       (next)="next()"
       (pageSizeChange)="changePageSize($event)"
