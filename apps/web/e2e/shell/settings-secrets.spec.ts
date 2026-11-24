@@ -6,10 +6,7 @@
 // or assert its headers. These cases observe the real consumer, SDK error mapping and UI only.
 // The static list remains unchanged after a rotate, so focus returns to the still-connected opener;
 // successor/fallback focus after a changed list and stale-response guards are Vitest's subject.
-// The token corpus is six rows with next_cursor:null; that suite asserts the terminal pagination
-// state. The CI-binding track is the one list whose corpus holds two cursor pages
-// (09.7.1-F15 note 4), so ITS Load more is clicked here in a real browser: first page, append,
-// terminal page, focus back on the section heading.
+// The token corpus is one terminal page. CI bindings exercise a two-page cursor walk.
 // Reminder dates are pinned with a browser clock, not compared to the machine's changing calendar.
 // No source-text assertions or mock UI.
 // Project changes during an overlay use the Helm picker's public DOM events: the focus trap
@@ -97,7 +94,10 @@ for (const locale of LOCALES) {
     await expect(page.locator(ROWS).nth(1).locator('[data-reminder="expires-soon"]')).toBeVisible();
     await expect(page.locator(ROWS).nth(2).locator('[data-reminder="expired"]')).toBeVisible();
     await expect(page.locator(ROWS).nth(4).locator('[data-rotation-reminder]')).toHaveCount(0);
-    await expect(page.locator(`${PAGE} [data-load-more]`)).toHaveCount(0);
+    await expect(page.locator('app-secret-reference-list [data-page="next"]')).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
     await expectNoPlaintext(page);
   });
 
@@ -361,10 +361,40 @@ for (const locale of LOCALES) {
             ),
           ).toBeVisible();
           await expect(page.locator(CI_ROWS)).toHaveCount(0);
-          await expect(section.locator('button')).toHaveCount(0);
+          const pager = section.locator('app-data-table-pager');
+          if (variant === 'settings-empty') {
+            // Empty metadata still supports paging, but never exposes row or mutation actions.
+            await expect(section.locator('button:not(app-data-table-pager button)')).toHaveCount(0);
+            await expect(pager).toBeVisible();
+            await expect(pager.getByRole('status')).toHaveText(
+              locale === 'en' ? 'Page 1' : 'Trang 1',
+            );
+            for (const direction of ['previous', 'next']) {
+              await expect(pager.locator(`[data-page="${direction}"]`)).toHaveAttribute(
+                'aria-disabled',
+                'true',
+              );
+            }
+            const size = pager.getByRole('combobox', {
+              name: locale === 'en' ? 'Rows per page' : 'Số hàng mỗi trang',
+            });
+            await expect(size).toContainText('20');
+            await size.click();
+            for (const option of ['20', '50', '100']) {
+              await expect(page.getByRole('option', { name: option, exact: true })).toBeVisible();
+            }
+            await page.keyboard.press('Escape');
+          } else {
+            await expect(pager).toHaveCount(0);
+            await expect(section.locator('button')).toHaveCount(0);
+          }
         }
-        // Current fixture's next_cursor:null is terminal; no fabricated cursor/button.
-        await expect(section.locator('[data-ci-load-more]')).toHaveCount(0);
+        if (variant === 'settings') {
+          await expect(section.locator('[data-page="next"]')).toHaveAttribute(
+            'aria-disabled',
+            'true',
+          );
+        }
         await expectNoBindingChallenge(page);
         await expectNoA11yViolations(page, `CI bindings ${variant} ${locale} ${theme}`);
       });
@@ -409,71 +439,47 @@ for (const locale of LOCALES) {
   });
 }
 
-// 09.7.1-F15: the corpus now holds a real two-page cursor walk for `listCiBindings`, so the
-// section's Load more is exercised here in Chromium instead of only in the store and component
-// specs. `…-page-1` names the cursor the fixture backend answers with `…-page-2`, whose
-// `next_cursor` is null. The walk is locale-independent (the rows, the ids and the focus target are
-// the same in both), so it runs once, in `en`; the axe and 360 px cases above already cover `vi`.
-test('CI bindings Load more appends the cursor page and ends on the section heading (en)', async ({
+test('CI bindings shared pager replaces pages, returns by cursor and resets page size (en)', async ({
   page,
 }) => {
   const firstPageRows = ciBindingsPageOne.body.items;
   const secondPageRows = ciBindingsPageTwo.body.items;
-  expect(
-    ciBindingsPageOne.body.next_cursor,
-    'the first page must name a cursor, or the control never renders',
-  ).toBeTruthy();
-  expect(ciBindingsPageTwo.body.next_cursor, 'the second page must end the walk').toBeNull();
-
+  expect(ciBindingsPageOne.body.next_cursor).toBeTruthy();
+  expect(ciBindingsPageTwo.body.next_cursor).toBeNull();
   await visit(page, 'en', SETTINGS_ADMIN_GRANTS, [
     '?fixture.variant.listCiBindings=settings-page-1',
   ]);
   const section = page.locator(CI_SECTION);
-  await expect(section.locator('section')).toHaveAttribute('aria-busy', 'false');
+  const pager = section.locator('app-data-table-pager');
+  const next = pager.locator('[data-page="next"]');
+  const previous = pager.locator('[data-page="previous"]');
   await expect(page.locator(CI_ROWS)).toHaveCount(firstPageRows.length);
+  await expect(pager.getByRole('status')).toHaveText('Page 1');
+  await expect(previous).toHaveAttribute('aria-disabled', 'true');
+  await next.focus();
+  await page.keyboard.press('Enter');
+  await expect(page.locator(CI_ROWS)).toHaveCount(secondPageRows.length);
+  await expect(page.locator(`${CI_ROWS} h3`)).toHaveText(
+    secondPageRows.map((binding) => binding.repository_full_name),
+  );
+  await expect(pager.getByRole('status')).toHaveText('Page 2');
+  await expect(next).toHaveAttribute('aria-disabled', 'true');
+  await expect(next).toBeFocused();
+  for (const binding of firstPageRows) {
+    await expect(section.locator(`#ci-label-${binding.id}-refs`)).toHaveCount(0);
+  }
+  await previous.click();
+  await expect(pager.getByRole('status')).toHaveText('Page 1');
   await expect(page.locator(`${CI_ROWS} h3`)).toHaveText(
     firstPageRows.map((binding) => binding.repository_full_name),
   );
-
-  // Keyboard: focus the control and press Enter, exactly as a keyboard user reaches it.
-  const more = section.getByRole('button', { name: 'Load more CI bindings' });
-  await expect(more).toHaveCount(1);
-  await more.focus();
-  await expect(more).toBeFocused();
-  await page.keyboard.press('Enter');
-
-  // The second page is appended, in order: page one is still there, page two follows it.
-  await expect(page.locator(CI_ROWS)).toHaveCount(firstPageRows.length + secondPageRows.length);
-  await expect(page.locator(`${CI_ROWS} h3`)).toHaveText(
-    [...firstPageRows, ...secondPageRows].map((binding) => binding.repository_full_name),
-  );
-
-  // No row appears twice: the appended page must add rows, not re-render one of them. A row's id is
-  // the one the header renders in its allowlist labels (`ci-label-<id>-refs`), so the ids read
-  // straight off the DOM are the ids the store de-duplicated by.
-  const rendered = await page.locator(CI_ROWS).evaluateAll((rows) =>
-    rows.map((row) => ({
-      name: row.querySelector('h3')?.textContent?.trim() ?? '',
-      labelIds: Array.from(row.querySelectorAll('dt[id]')).map(
-        (label) => label.getAttribute('id') ?? '',
-      ),
-    })),
-  );
-  const names = rendered.map((row) => row.name);
-  expect(new Set(names).size, 'a repository name was rendered twice').toBe(names.length);
-  const labelIds = rendered.flatMap((row) => row.labelIds);
-  expect(new Set(labelIds).size, 'a row id was rendered twice').toBe(labelIds.length);
-  for (const binding of [...firstPageRows, ...secondPageRows]) {
-    expect(labelIds, `${binding.id} is missing from the rendered rows`).toContain(
-      `ci-label-${binding.id}-refs`,
-    );
-  }
-
-  // The last page removes the control; focus must not be dropped to the document, so the component
-  // restores it to the section heading.
-  await expect(section.locator('[data-ci-load-more]')).toHaveCount(0);
-  await expect(section.locator('#ci-bindings-heading')).toBeFocused();
+  await next.click();
+  await expect(pager.getByRole('status')).toHaveText('Page 2');
+  await pager.getByRole('combobox').click();
+  await page.getByRole('option', { name: '50', exact: true }).click();
+  await expect(pager.getByRole('status')).toHaveText('Page 1');
+  await expect(pager.getByRole('combobox')).toContainText('50');
   await expect(section.locator('section')).toHaveAttribute('aria-busy', 'false');
   await expectNoBindingChallenge(page);
-  await expectNoA11yViolations(page, 'CI bindings after Load more en');
+  await expectNoA11yViolations(page, 'CI binding cursor pager en');
 });

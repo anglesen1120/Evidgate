@@ -28,6 +28,7 @@ import { SectionHeaderComponent } from '../../../shared/ui/page-header/section-h
 import { PageHeaderComponent } from '../../../shared/ui/page-header/page-header.component';
 import { clampTimerDelay } from '../../../shared/time/timer-delay';
 import { RequestStateComponent } from '../../../shared/ui/states/request-state.component';
+import { DataTablePagerComponent } from '../../../shared/ui/data-table/data-table-pager.component';
 import { ShellIconComponent } from '../../../shell/layout/shell-icon.component';
 import { escapeFormatChars } from '../../../shared/ui/values/ref-name-display';
 import {
@@ -59,6 +60,7 @@ import {
     ShellIconComponent,
     RequestStateComponent,
     SecurityEventsTableComponent,
+    DataTablePagerComponent,
     FieldFeedbackComponent,
     FormErrorSummaryComponent,
   ],
@@ -97,7 +99,9 @@ export class SecurityEventsPage {
     value,
     label,
   }));
-  protected readonly pageSizes = [25, 50, 100, 200];
+  protected readonly tableStatus = computed(() =>
+    this.store.hasPage() ? 'ready' : this.store.phase(),
+  );
   protected readonly pageSummary = computed(
     () =>
       $localize`:@@settings.security.page-summary:Page ${formatNumber(this.store.pageIndex() + 1, this.locale)}:page: · ${formatNumber(this.store.rows().length, this.locale)}:rows: visible events on this page.`,
@@ -130,10 +134,6 @@ export class SecurityEventsPage {
     emptyDescription: $localize`:@@settings.security.empty-description:Recorded V1 security events will appear here.`,
     noMatch: $localize`:@@settings.security.no-match:No results match these filters`,
     noMatchDescription: $localize`:@@settings.security.no-match-description:Clear or change the filters to inspect another scope or time range.`,
-    previous: $localize`:@@settings.security.previous:Previous page`,
-    next: $localize`:@@settings.security.next:Next page`,
-    pageSize: $localize`:@@settings.security.page-size:Rows per page`,
-    pagination: $localize`:@@settings.security.pagination:Security activity pages`,
     capped: $localize`:@@settings.security.capped:Browsing limit reached. Narrow the filters to review older activity.`,
     hidden: $localize`:@@settings.security.hidden:Injection-attempt events are not displayed in this V1 view. A page may contain no visible V1 events; continue to the next page when available.`,
   };
@@ -229,10 +229,5 @@ export class SecurityEventsPage {
     this.feedback().reset();
     this.draft.set({ ...EMPTY_SECURITY_FILTERS });
     this.apply();
-  }
-  protected move(next: boolean): void {
-    if (next) this.store.next();
-    else this.store.previous();
-    this.heading()?.nativeElement.focus();
   }
 }

@@ -73,7 +73,12 @@ export function serverFailure(): ApiRequestError {
 
 /** The summary reads the store makes, with the org each one named. */
 export class FakeQuotaDataService {
-  readonly calls: Array<{ readonly orgId: string; readonly signal: AbortSignal | undefined }> = [];
+  readonly calls: Array<{
+    readonly orgId: string;
+    readonly signal: AbortSignal | undefined;
+    readonly limit: number | undefined;
+    readonly cursor: string | undefined;
+  }> = [];
   /** Resolves every call with this value; `null` is the "no summary" answer the badge must hide. */
   answer: UsageSummaryDto | null = summary();
   /** Rejects every call with this failure when set. */
@@ -85,8 +90,13 @@ export class FakeQuotaDataService {
   }> = [];
   hold = false;
 
-  summary(orgId: string, signal?: AbortSignal): Promise<UsageSummaryDto | null> {
-    this.calls.push({ orgId, signal });
+  summary(
+    orgId: string,
+    signal?: AbortSignal,
+    limit?: number,
+    cursor?: string,
+  ): Promise<UsageSummaryDto | null> {
+    this.calls.push({ orgId, signal, limit, cursor });
     if (this.hold) {
       return new Promise<UsageSummaryDto | null>((resolve, reject) => {
         this.held.push({ resolve, reject });

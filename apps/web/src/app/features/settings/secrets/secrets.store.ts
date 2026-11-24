@@ -1,49 +1,5 @@
-// The Settings > Secrets tab's state, as a plain Angular signals service — private `signal`s,
-// public `asReadonly()`/`computed`, no writable state escaping the class — shaped like
-// `members/members.store.ts`, because the workspace does not depend on `@ngrx/signals`.
-//
-// One instance per page (`providers: [SecretsStore]` on the page), because the store owns the
-// cursor of one project's list and a project/project-scope switch must not inherit another list.
-//
-// The token list, its scope and the public surface live here; the two independent flows are
-// composed from siblings: `secrets-rotation.ts` owns one rotation at a time, and
-// `secrets-ci-bindings.ts` owns the read-only CI-binding track.
-//
-// These rules shape every method:
-//
-// 1. Metadata only. `IngestTokenView` is metadata by contract — `name`, `scopes`, `prefix`,
-//    `status`, the timestamps — and the state holds nothing else. The rotation's one-time
-//    plaintext is a RETURN VALUE of `rotate()`, destined for the component-scoped reveal slot and
-//    never written to a signal, a log or a telemetry attribute. The state-shape spec enumerates
-//    the store's own field names and serialises every public signal to prove it.
-// 2. `status` IS the rotation state. The wire has no `rotation_state` or `last_rotated_at`, so the
-//    store derives nothing from them and invents no substitute; the reminder chip is the pure
-//    `rotationReminder` over `status` + `expires_at`.
-// 3. The project is the scope. A generation counter means an older project's read never writes,
-//    and the rows are cleared the moment the scope changes so another project's tokens are never
-//    on screen under this project's heading.
-// 4. The user reads pages, not a dump. The list follows `next_cursor` one page per `loadMore()`,
-//    bounded by {@link MAX_CURSOR_PAGES} and refusing a cursor it already followed — both contract
-//    violations throw a plain `Error`, never a partial list passed off as complete.
-// 5. One rotation at a time. The route takes no caller-owned `Idempotency-Key` (a one-time secret
-//    is never replayed), so the guard cannot be a key: a second `rotate` while one is submitting
-//    is ignored, which stops a double click from minting two successors. A `409`
-//    (`invalid_transition`, `token_revoked`) is surfaced verbatim — the server decides, and no
-//    client-side pre-check could drift from its guard. The same lock is published as `rotating`,
-//    so the guard stays observable after `resetRotation()` cleared the published attempt.
-// 6. A rejection that is not the server's answer always settles its own state, so the rotate
-//    button can never be left submitting by a cancellation or a bug.
-// 7. The caller gets the rotation, the screen gets the refresh: the one-time value resolves as
-//    soon as the server confirms it, and the re-read started behind it can neither delay nor fail
-//    the call. A refusal that proves the row stale re-reads too, so a row that can never rotate
-//    again does not keep its Rotate button.
-// 8. CI-binding metadata is a SECOND track: independent routes, cursors and failure states, so a
-//    refused binding read never turns the token list into an error and vice versa. It is
-//    READ-ONLY — the contract has no `GET /ci-bindings/{b}` and the only writes are `PATCH`/
-//    `DELETE`, so the store offers no create, update or disable method — and LIST-ONLY, one page
-//    per read, bounded by the same page cap. Rows are appended by `id`, so two answers never
-//    render one binding twice. Nothing is read on construction: the page starts the first read
-//    behind its own `project:read` gate, and a server 403 still renders `forbidden`.
+// Token metadata and CI bindings have independent pages and failure states.
+// One-time rotation values remain return values, never stored with list metadata.
 
 import { computed, inject, Injectable, signal } from '@angular/core';
 import type { IngestTokenView } from '@evidgate/sdk';
@@ -73,14 +29,12 @@ export class SecretsStore {
   private readonly loadErrorSignal = signal<ApiError | null>(null);
   private readonly nextCursorSignal = signal<string | null>(null);
   private readonly projectIdSignal = signal<string | null>(null);
+  private readonly pageSignal = signal(1);
+  private readonly pageSizeSignal = signal(20);
+  private readonly pagingSignal = signal(false);
+  private cursors: (string | undefined)[] = [undefined];
+  private failedPage: { cursor: string | undefined; page: number; size: number } | null = null;
 
-  /**
-   * The cursors this store already asked for, so a server that hands one back a second time is a
-   * contract violation instead of an endless list of the same rows.
-   */
-  private readonly followedCursors = new Set<string>();
-  /** Pages read for the current project's list, the first page included; bounded by the page cap. */
-  private pagesRead = 1;
   /** Bumped by every read; a read of an older generation never writes state. */
   private generation = 0;
 
@@ -93,7 +47,7 @@ export class SecretsStore {
   /** The independent, read-only CI-binding track (rule 8). */
   private readonly bindings = new SecretsCiBindingsTrack(this.data);
 
-  /** The project's ingest tokens, in server order, as many cursor pages as have been followed. */
+  /** Only the current server page is retained. */
   readonly rows = this.rowsSignal.asReadonly();
   /** The read state the page renders: loading, the list, or the tab's error state. */
   readonly phase = this.phaseSignal.asReadonly();
@@ -103,15 +57,15 @@ export class SecretsStore {
   readonly hasMore = computed(() => this.nextCursorSignal() !== null);
   /** The project the loaded list belongs to; `null` before the first load. */
   readonly projectId = this.projectIdSignal.asReadonly();
+  readonly page = this.pageSignal.asReadonly();
+  readonly pageSize = this.pageSizeSignal.asReadonly();
+  readonly paging = this.pagingSignal.asReadonly();
   /** The rotate action's state; see {@link SecretsRotationTrack.state} for what each phase means. */
   readonly rotateState = this.rotation.state;
   /** True while a rotate request is out; see {@link SecretsRotationTrack.rotating}. */
   readonly rotating = this.rotation.rotating;
 
-  /**
-   * The project's CI bindings, in server order, as many cursor pages as have been followed.
-   * Metadata only: `CiBindingView` never carries the challenge or its hash.
-   */
+  /** Independent CI-binding metadata page. */
   readonly ciBindings = this.bindings.rows;
   /** The binding list's read state: see {@link CiBindingsPhase} for each phase. */
   readonly ciBindingsPhase = this.bindings.phase;
@@ -124,6 +78,8 @@ export class SecretsStore {
   readonly ciBindingsProjectId = this.bindings.projectId;
   /** True while the server named another binding page, so the page's next control can be offered. */
   readonly hasMoreCiBindings = this.bindings.hasMore;
+  readonly ciBindingsPage = this.bindings.page;
+  readonly ciBindingsPageSize = this.bindings.pageSize;
 
   /**
    * Reads the named project's first token page and becomes `ready`.
@@ -149,6 +105,9 @@ export class SecretsStore {
     if (this.projectIdSignal() !== projectId) {
       this.rowsSignal.set(NO_ROWS);
       this.nextCursorSignal.set(null);
+      this.cursors = [undefined];
+      this.pageSignal.set(1);
+      this.failedPage = null;
       const bindingProjectId = this.bindings.projectId();
       if (bindingProjectId !== null && bindingProjectId !== projectId) {
         this.bindings.reset();
@@ -158,53 +117,63 @@ export class SecretsStore {
     await this.read(projectId);
   }
 
-  /**
-   * Follows `next_cursor` once and appends the page, so the screen keeps the rows it already shows
-   * while the next one is on its way (never "load all").
-   *
-   * A cursor already followed, or a {@link MAX_CURSOR_PAGES}-th page that still names another one,
-   * is a contract violation and throws a plain `Error` — the same two refusals as
-   * `IdentityDataService`, so a broken cursor costs visibility of the bug, not a hung tab. A typed
-   * server refusal is not a bug: it becomes `loadError` and the rows already read stay on screen
-   * (the error state only takes over when there is nothing to show).
-   */
+  /** Follow one opaque cursor without retaining the previous page's rows. */
   async loadMore(): Promise<void> {
-    const projectId = this.projectIdSignal();
     const cursor = this.nextCursorSignal();
-    if (projectId === null || cursor === null) {
-      return;
-    }
-    if (this.followedCursors.has(cursor)) {
+    if (!cursor || this.pagingSignal()) return;
+    if (this.cursors.includes(cursor)) {
       throw new Error(`the ingest-token list repeated cursor "${cursor}"`);
     }
-    if (this.pagesRead >= MAX_CURSOR_PAGES) {
+    if (this.pageSignal() >= MAX_CURSOR_PAGES) {
       throw new Error(`the ingest-token list did not finish within ${MAX_CURSOR_PAGES} pages`);
     }
+    await this.move(cursor, this.pageSignal() + 1);
+  }
 
-    const generation = this.generation;
-    const read = await settledRead(() => this.data.listIngestTokens(projectId, cursor));
-    // A newer read (another project, or a rotation's refresh) owns the state now: this page
-    // belongs to a list nobody renders any more.
-    if (generation !== this.generation) {
+  async previous(): Promise<void> {
+    if (this.pageSignal() <= 1 || this.pagingSignal()) return;
+    const page = this.pageSignal() - 1;
+    await this.move(this.cursors[page - 1], page);
+  }
+
+  async setPageSize(size: number): Promise<void> {
+    if (![20, 50, 100].includes(size) || size === this.pageSizeSignal() || this.pagingSignal())
+      return;
+    await this.move(undefined, 1, size);
+  }
+
+  async retryPage(): Promise<void> {
+    const failed = this.failedPage;
+    if (failed && !this.pagingSignal()) await this.move(failed.cursor, failed.page, failed.size);
+  }
+
+  private async move(
+    cursor: string | undefined,
+    page: number,
+    size = this.pageSizeSignal(),
+  ): Promise<void> {
+    const project = this.projectIdSignal();
+    if (!project) return;
+    const generation = ++this.generation;
+    this.pagingSignal.set(true);
+    this.loadErrorSignal.set(null);
+    const result = await settledRead(() => this.data.listIngestTokens(project, cursor, size));
+    if (generation !== this.generation) return;
+    this.pagingSignal.set(false);
+    this.failedPage = { cursor, page, size };
+    if (!result.ok) {
+      this.phaseSignal.set(this.rowsSignal().length ? 'ready' : 'error');
+      if (!isApiRequestError(result.error)) throw result.error;
+      this.loadErrorSignal.set(result.error.error);
       return;
     }
-    if (!read.ok) {
-      // Only a typed refusal is the server's answer; a contract violation is re-thrown.
-      if (!isApiRequestError(read.error)) {
-        throw read.error;
-      }
-      this.loadErrorSignal.set(read.error.error);
-      if (this.rowsSignal().length === 0) {
-        this.phaseSignal.set('error');
-      }
-      return;
-    }
-
-    this.followedCursors.add(cursor);
-    this.pagesRead += 1;
-    const page = read.value;
-    this.rowsSignal.update((rows) => [...rows, ...page.items]);
-    this.nextCursorSignal.set(page.next_cursor);
+    this.failedPage = null;
+    this.pageSizeSignal.set(size);
+    this.cursors = [...this.cursors.slice(0, page - 1), cursor];
+    this.pageSignal.set(page);
+    this.rowsSignal.set(result.value.items);
+    this.nextCursorSignal.set(result.value.next_cursor || null);
+    this.phaseSignal.set('ready');
   }
 
   /**
@@ -252,9 +221,21 @@ export class SecretsStore {
     await this.bindings.load(projectId);
   }
 
-  /** Follows the CI-binding cursor once and appends; see {@link SecretsCiBindingsTrack.loadMore}. */
+  /** Follows the independent CI-binding cursor. */
   async loadMoreCiBindings(): Promise<void> {
     await this.bindings.loadMore();
+  }
+
+  async previousCiBindings(): Promise<void> {
+    await this.bindings.previous();
+  }
+
+  async setCiBindingsPageSize(size: number): Promise<void> {
+    await this.bindings.setPageSize(size);
+  }
+
+  async retryCiBindingsPage(): Promise<void> {
+    await this.bindings.retryPage();
   }
 
   /** Drops the whole CI-binding track; see {@link SecretsCiBindingsTrack.reset}. */
@@ -268,19 +249,18 @@ export class SecretsStore {
    */
   private async read(projectId: string): Promise<void> {
     const generation = ++this.generation;
+    const size = this.pageSizeSignal();
     this.projectIdSignal.set(projectId);
     this.phaseSignal.set('loading');
     this.loadErrorSignal.set(null);
-    this.followedCursors.clear();
-    this.nextCursorSignal.set(null);
-    this.pagesRead = 1;
-
-    const first = await settledRead(() => this.data.listIngestTokens(projectId));
+    this.pagingSignal.set(false);
+    const first = await settledRead(() => this.data.listIngestTokens(projectId, undefined, size));
     // A newer read owns the state now.
     if (generation !== this.generation) {
       return;
     }
     if (!first.ok) {
+      this.failedPage = { cursor: undefined, page: 1, size };
       if (isApiRequestError(first.error)) {
         this.loadErrorSignal.set(first.error.error);
       }
@@ -295,6 +275,9 @@ export class SecretsStore {
       return;
     }
 
+    this.failedPage = null;
+    this.cursors = [undefined];
+    this.pageSignal.set(1);
     this.rowsSignal.set(first.value.items);
     this.nextCursorSignal.set(first.value.next_cursor);
     this.phaseSignal.set('ready');

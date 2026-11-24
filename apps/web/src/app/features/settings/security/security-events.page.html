@@ -57,6 +57,9 @@
     aria-labelledby="security-filters-heading"
   >
     <span id="security-filters-heading" class="sr-only">{{ copy.filters }}</span>
+    <p class="m-0 text-xs text-muted-foreground" i18n="@@settings.security.filter-scope">
+      Filters apply to all matching security events on the server.
+    </p>
     <app-form-error-summary [summaryId]="'security-filter-errors'" [feedback]="feedback()" />
     @let counted = store.phase() === 'ready' && !store.filters().severity;
     <fieldset class="m-0 min-w-0 border-0 p-0">
@@ -183,7 +186,7 @@
     [attr.aria-busy]="store.phase() === 'loading'"
   >
     <app-request-state
-      [status]="store.phase()"
+      [status]="tableStatus()"
       [loadingLabel]="copy.loading"
       [error]="store.loadError()"
       [emptyIcon]="'navShieldAlert'"
@@ -197,53 +200,25 @@
     >
       <app-security-events-table [rows]="store.rows()" />
     </app-request-state>
-    <footer
-      class="flex min-w-0 flex-wrap items-center justify-between gap-3 border-t border-border px-4 py-3"
-    >
-      @if (store.phase() === 'ready') {
-        <p role="status" class="m-0 text-xs text-muted-foreground">{{ pageSummary() }}</p>
-      }
-      <nav
-        class="ms-auto flex min-w-0 flex-wrap items-center gap-2"
-        [attr.aria-label]="copy.pagination"
-      >
-        <div class="flex flex-wrap items-center gap-2">
-          <label hlmLabel for="security-page-size">{{ copy.pageSize }}</label>
-          <hlm-select [value]="store.pageSize()" (valueChange)="store.setPageSize(+($event ?? 0))">
-            <hlm-select-trigger
-              [buttonId]="'security-page-size'"
-              class="pointer-coarse:min-h-(--eg-control-touch)"
-              ><hlm-select-value
-            /></hlm-select-trigger>
-            <hlm-select-content *hlmSelectPortal [aria-label]="copy.pageSize">
-              @for (size of pageSizes; track size) {
-                <hlm-select-item [value]="size">{{ size }}</hlm-select-item>
-              }
-            </hlm-select-content>
-          </hlm-select>
-        </div>
-        <button
-          hlmBtn
-          [variant]="'outline'"
-          type="button"
-          class="whitespace-normal pointer-coarse:min-h-(--eg-control-touch)"
-          [disabled]="store.phase() !== 'ready' || store.pageIndex() === 0"
-          (click)="move(false)"
-        >
-          {{ copy.previous }}
-        </button>
-        <button
-          hlmBtn
-          [variant]="'outline'"
-          type="button"
-          class="whitespace-normal pointer-coarse:min-h-(--eg-control-touch)"
-          [disabled]="store.phase() !== 'ready' || !store.canNext()"
-          (click)="move(true)"
-        >
-          {{ copy.next }}
-        </button>
-      </nav>
-    </footer>
+    @if (store.hasPage()) {
+      <app-request-state
+        [status]="store.phase() === 'error' ? 'error' : 'ready'"
+        [error]="store.loadError()"
+        [retryEligible]="(store.loadError()?.retryable ?? false) && (retryReady.value() ?? false)"
+        [retryBusy]="store.phase() === 'loading'"
+        (retry)="store.reload()"
+      />
+    }
+    <app-data-table-pager
+      [page]="store.pageIndex() + 1"
+      [pageSize]="store.pageSize()"
+      [count]="store.rows().length"
+      [hasNext]="store.canNext()"
+      [busy]="store.phase() !== 'ready'"
+      (previous)="store.previous()"
+      (next)="store.next()"
+      (pageSizeChange)="store.setPageSize($event)"
+    />
     @if (store.phase() === 'ready') {
       @if (store.capped() && store.nextCursor()) {
         <p class="m-0 px-4 pb-3 text-sm" role="status">{{ copy.capped }}</p>

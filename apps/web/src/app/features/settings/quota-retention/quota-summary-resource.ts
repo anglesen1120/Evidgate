@@ -1,105 +1,161 @@
-// The org's usage summary read: one `resource` keyed on the active organization, and the rule that
-// answers a refusal arriving while a read is in flight. It lives beside the store rather than in
-// it: the store owns the state and the computed views, this owns the request.
-//
-// Nothing is requested until a consumer calls `load()`, and `load()` is idempotent — the badge and
-// the tab both call it. A refusal that lands mid-read asks for one trailing read when that read
-// settles, resolved or failed, and a burst still costs one.
-
-import { resource, type ResourceRef } from '@angular/core';
+import { computed, linkedSignal, resource, type Signal, type WritableSignal } from '@angular/core';
 import type { UsageSummaryDto } from '@evidgate/sdk';
 
 import { QuotaDataService } from '../../../core/data/quota-data.service';
 
-/** One read reported instead of thrown: a failed read still answers a refusal that landed. */
 type ReadOutcome = { readonly value: UsageSummaryDto | null } | { readonly error: unknown };
-
-/** What the read needs from the store: the request key, and the first-call flag it may set. */
-export interface QuotaSummaryReadOptions {
-  /** The organization to read, or `null` while nothing may be read (no tenant, no permission). */
-  readonly scope: () => string | null;
-  /** The active organization, kept with a trailing read so it never runs against the next one. */
-  readonly orgId: () => string | null;
-  /** Whether `load()` or `reload()` already started the read. */
-  readonly started: () => boolean;
-  /** Records that the read started; the store owns the state this sets. */
-  readonly start: () => void;
-  readonly data: QuotaDataService;
+interface ProjectPagingState {
+  readonly orgId: string;
+  readonly limit: number;
+  readonly cursors: readonly (string | undefined)[];
+  readonly navigation: boolean;
+}
+interface ServedPage {
+  readonly request: ProjectPagingState;
+  readonly value: UsageSummaryDto | null;
+  readonly failed: boolean;
+}
+interface ReadResult {
+  readonly request: ProjectPagingState;
+  readonly outcome: ReadOutcome;
+}
+interface PageSource {
+  readonly scope: string | null;
+  readonly request: ProjectPagingState | undefined;
+  readonly result: ReadResult | undefined;
 }
 
-export interface QuotaSummaryRead {
-  readonly summary: ResourceRef<UsageSummaryDto | null | undefined>;
-  /**
-   * Idempotent: the first call starts the read, later calls ask for the same request.
-   */
-  readonly load: () => void;
-  /**
-   * Re-reads the summary. `resource.reload()` refuses while a read is in flight, so that refusal
-   * is not dropped: it asks for exactly one trailing read, and a burst still costs one.
-   */
-  readonly reload: () => void;
-}
-
-/**
- * One read, reported instead of thrown: a failed read still has to answer the refusal that
- * landed while it was in flight, which a throw would skip.
- */
 async function readOnce(
   data: QuotaDataService,
-  params: string,
+  params: ProjectPagingState,
   abortSignal: AbortSignal,
 ): Promise<ReadOutcome> {
   try {
-    return { value: await data.summary(params, abortSignal) };
+    const value = await data.summary(
+      params.orgId,
+      abortSignal,
+      params.limit,
+      params.cursors.at(-1),
+    );
+    if (value?.next_cursor != null && params.cursors.includes(value.next_cursor)) {
+      throw new Error('The usage summary repeated a forward cursor.');
+    }
+    return { value };
   } catch (error) {
     return { error };
   }
 }
 
-/** The summary read and the two entry points that trigger it, in the caller's injection context. */
-export function quotaSummaryRead(options: QuotaSummaryReadOptions): QuotaSummaryRead {
-  const { scope, orgId, started, start, data } = options;
+function retainPage(source: PageSource, old: ServedPage | null | undefined): ServedPage | null {
+  const current = source.request;
+  if (current === undefined || source.scope !== current.orgId) return null;
+  const retained = old?.request.orgId === current.orgId ? old : null;
+  if (source.result?.request !== current) return current.navigation ? retained : null;
+  const outcome = source.result.outcome;
+  if ('error' in outcome) {
+    return current.navigation && retained
+      ? { ...retained, failed: true }
+      : { request: current, value: null, failed: true };
+  }
+  return { request: current, value: outcome.value, failed: false };
+}
 
-  // A refusal that lands while a read is in flight is answered by one more read when that one
-  // settles, resolved or failed. The summary read never reports its own refusal
-  // (`reportQuota: false`), so the trailing read cannot ask for another one by itself. The org is
-  // kept with the request: a refresh asked for by one organization's read never runs against the
-  // next organization's.
+function pageActions(
+  request: WritableSignal<ProjectPagingState | undefined>,
+  served: Signal<ServedPage | null>,
+  paging: Signal<boolean>,
+  scope: () => string | null,
+) {
+  function navigate(forward: boolean): void {
+    const current = served();
+    if (paging() || current?.value == null || scope() !== current.request.orgId) return;
+    const cursors = current.request.cursors;
+    if (forward) {
+      const cursor = current.value.next_cursor;
+      if (cursor === null) return;
+      request.set({ ...current.request, cursors: [...cursors, cursor], navigation: true });
+    } else if (cursors.length > 1) {
+      request.set({ ...current.request, cursors: cursors.slice(0, -1), navigation: true });
+    }
+  }
+  return {
+    next: () => navigate(true),
+    previous: () => navigate(false),
+    setPageSize: (size: number): void => {
+      const current = request();
+      if (current === undefined || ![20, 50, 100].includes(size) || size === current.limit) return;
+      request.set({ ...current, limit: size, cursors: [undefined], navigation: true });
+    },
+  };
+}
+
+export interface QuotaSummaryReadOptions {
+  readonly scope: () => string | null;
+  readonly orgId: () => string | null;
+  readonly started: () => boolean;
+  readonly start: () => void;
+  readonly data: QuotaDataService;
+}
+
+/** A page replacement retains no project-row history, only opaque request cursors. */
+export function quotaSummaryRead(options: QuotaSummaryReadOptions) {
+  const { scope, orgId, started, start, data } = options;
+  const request = linkedSignal((): ProjectPagingState | undefined => {
+    const active = scope();
+    return active === null
+      ? undefined
+      : { orgId: active, limit: 20, cursors: [undefined], navigation: false };
+  });
   let refreshPendingFor: string | null = null;
 
-  const summary = resource<UsageSummaryDto | null, string | undefined>({
-    params: () => scope() ?? undefined,
+  const response = resource({
+    params: request,
     loader: async ({ params, abortSignal }) => {
-      if (refreshPendingFor !== params) {
-        refreshPendingFor = null;
-      }
+      if (refreshPendingFor !== params.orgId) refreshPendingFor = null;
       let outcome = await readOnce(data, params, abortSignal);
-      while (refreshPendingFor === params) {
+      while (!abortSignal.aborted && refreshPendingFor === params.orgId) {
         refreshPendingFor = null;
         outcome = await readOnce(data, params, abortSignal);
       }
-      if ('error' in outcome) {
-        throw outcome.error;
-      }
-      return outcome.value;
+      return { request: params, outcome };
     },
   });
-
-  function load(): void {
-    start();
-  }
-
+  const served = linkedSignal<PageSource, ServedPage | null>({
+    source: () => ({
+      scope: scope(),
+      request: request(),
+      result: response.hasValue() ? response.value() : undefined,
+    }),
+    computation: (source, previous) => retainPage(source, previous?.value),
+  });
+  const summary = computed(() => served()?.value ?? null);
+  const paging = computed(() => response.isLoading());
+  const page = computed(() => served()?.request.cursors.length ?? 1);
+  const pageSize = computed(() => served()?.request.limit ?? request()?.limit ?? 20);
+  const pagingError = computed(() => served()?.failed === true && summary() !== null);
+  const hasNext = computed(() => summary()?.next_cursor != null);
   function reload(): void {
     if (!started()) {
       start();
-      return;
-    }
-    if (summary.isLoading()) {
+    } else if (response.isLoading()) {
       refreshPendingFor = orgId();
-      return;
+    } else {
+      response.reload();
     }
-    summary.reload();
   }
 
-  return { summary, load, reload };
+  return {
+    summary,
+    load: start,
+    reload,
+    paging,
+    page,
+    pageSize,
+    pagingError,
+    hasNext,
+    ...pageActions(request, served, paging, scope),
+    retry: () => {
+      if (pagingError()) response.reload();
+    },
+  };
 }
