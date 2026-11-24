@@ -100,24 +100,8 @@ async function setup() {
 }
 
 describe('RowActionComponent', () => {
-  const originalShow = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'showPopover');
-  const originalHide = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'hidePopover');
-  beforeEach(() => {
-    Object.defineProperty(HTMLElement.prototype, 'showPopover', {
-      configurable: true,
-      value: vi.fn(),
-    });
-    Object.defineProperty(HTMLElement.prototype, 'hidePopover', {
-      configurable: true,
-      value: vi.fn(),
-    });
-  });
   afterEach(() => {
     TestBed.resetTestingModule();
-    if (originalShow) Object.defineProperty(HTMLElement.prototype, 'showPopover', originalShow);
-    else Reflect.deleteProperty(HTMLElement.prototype, 'showPopover');
-    if (originalHide) Object.defineProperty(HTMLElement.prototype, 'hidePopover', originalHide);
-    else Reflect.deleteProperty(HTMLElement.prototype, 'hidePopover');
   });
   it('renders a named native icon button with the compact Helm recipe and keyboard focus', async () => {
     const { action, host } = await setup();
@@ -155,6 +139,7 @@ describe('RowActionComponent', () => {
   it('merges and restores a consumer description across tooltip show and Escape', async () => {
     const { action, host } = await setup();
     host.description.set('row-summary row-status');
+    expect(await action.description()).toBe('row-summary row-status');
     await action.focus();
     expect(await action.description()).toMatch(/^row-summary row-status row-action-tooltip-/);
     await action.escape();
@@ -170,6 +155,14 @@ describe('RowActionComponent', () => {
     const tooltip =
       await TestbedHarnessEnvironment.documentRootLoader(fixture).getHarness(TooltipHarness);
     expect(await tooltip.text()).toBe('View Dev⟨U+202E⟩Project');
+  });
+
+  it('keeps the name escaped when raw labels share the same visible representation', async () => {
+    const { action, host } = await setup();
+    host.label.set('View Dev⟨U+202E⟩Project');
+    expect(await action.name()).toBe('View Dev⟨U+202E⟩Project');
+    host.label.set('View Dev\u202eProject');
+    expect(await action.name()).toBe('View Dev⟨U+202E⟩Project');
   });
 
   it('preserves native disabled semantics', async () => {
@@ -197,5 +190,26 @@ describe('RowActionComponent', () => {
     expect(await link.hasClass('spartan-button-size-icon-sm')).toBe(true);
     await link.focus();
     expect(await link.focused()).toBe(true);
+  });
+});
+
+describe('jsdom Popover API support', () => {
+  it('makes open hosts visible and restores the closed display after repeated show and hide', () => {
+    const panel = document.createElement('div');
+    panel.setAttribute('popover', 'manual');
+    document.body.appendChild(panel);
+    try {
+      expect(getComputedStyle(panel).display).toBe('none');
+      panel.showPopover();
+      panel.showPopover();
+      expect(getComputedStyle(panel).display).toBe('block');
+      panel.hidePopover();
+      expect(panel.style.display).toBe('');
+      expect(getComputedStyle(panel).display).toBe('none');
+      panel.hidePopover();
+      expect(panel.style.display).toBe('');
+    } finally {
+      panel.remove();
+    }
   });
 });
