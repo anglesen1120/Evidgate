@@ -122,7 +122,7 @@ describe('Failure inbox review', () => {
         (id) => `/dev/failure-detail/orgs/org-test/projects/project-test?id=${id}`,
       ),
     );
-    expect(await links[0]?.text()).toContain('View');
+    expect(await links[0]?.text()).toBe('');
     expect(await links[0]?.getAttribute('aria-label')).toContain('Place order returns HTTP 500');
     expect(await (await inbox.status()).text()).toContain('Critical');
     expect(await inbox.icon()).toBeTruthy();
