@@ -202,8 +202,9 @@ describe('AiSettingsPage', () => {
     expect(await harness.attribute(compare, 'disabled')).toBeNull();
     expect(await harness.attribute(select + ' hlm-icon', 'aria-hidden')).toBe('true');
     expect(await harness.attribute(compare + ' hlm-icon', 'aria-hidden')).toBe('true');
-    expect(await harness.text()).not.toContain('Select version 1');
-    expect(await harness.text()).not.toContain('Compare with 2');
+    const visiblePage = await (await harness.host()).text({ exclude: '[popover]' });
+    expect(visiblePage).not.toContain('Select version 1');
+    expect(visiblePage).not.toContain('Compare with 2');
     await harness.click('[data-ai-version-view="1"]');
     expect(await (await harness.dialog())?.text()).toContain(version.settings.writing_style);
     await (await harness.dialogTitle()).sendKeys(TestKey.ESCAPE);
