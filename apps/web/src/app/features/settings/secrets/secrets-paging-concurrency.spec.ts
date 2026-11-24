@@ -257,9 +257,7 @@ describe('Secrets paging independent request boundaries', () => {
     const retained = store.rows();
     const refresh = deferred<IngestTokenListResponse>();
     const resize = deferred<IngestTokenListResponse>();
-    data.listIngestTokens
-      .mockReturnValueOnce(refresh.promise)
-      .mockReturnValueOnce(resize.promise);
+    data.listIngestTokens.mockReturnValueOnce(refresh.promise).mockReturnValueOnce(resize.promise);
     const reset = store.load('project');
     const replacement = store.setPageSize(50);
     resize.reject(new Error('replacement failed'));
