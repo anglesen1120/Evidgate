@@ -124,12 +124,11 @@ for (const locale of LOCALES) {
     await expect(decision.locator('[data-decision-provenance]')).toHaveCount(0);
     await expect(decision.locator('[data-decision-shadow]')).toHaveCount(0);
 
-    // The evidence badge is collection completeness of a revision row, not a decision verdict.
+    // The summary describes the selected revision's collection, not a decision verdict.
     await showEvidence(page, locale);
-    await expect(page.locator('#evidence-panel app-evidence-badge [data-tone]')).toHaveAttribute(
-      'data-tone',
-      'success',
-    );
+    await expect(
+      page.locator('.run-summary [data-evidence-completeness] [data-tone]'),
+    ).toHaveAttribute('data-tone', 'success');
     await expect(page.locator('#evidence-panel [data-evidence-selected]')).toContainText(
       String(NEWEST_REVISION.revision_no),
     );
@@ -165,10 +164,9 @@ for (const locale of LOCALES) {
     await expect(decision.locator('[data-decision-mismatch]')).toHaveCount(0);
 
     await showEvidence(page, locale);
-    await expect(page.locator('#evidence-panel app-evidence-badge [data-tone]')).toHaveAttribute(
-      'data-tone',
-      'warning',
-    );
+    await expect(
+      page.locator('.run-summary [data-evidence-completeness] [data-tone]'),
+    ).toHaveAttribute('data-tone', 'warning');
     await expect(
       page.locator('#evidence-panel [data-evidence-missing] .reason-code code'),
     ).toHaveText(INCOMPLETE_REVISION.missing);
@@ -253,10 +251,11 @@ for (const locale of LOCALES) {
 
     // The pinned row's own completeness, missing reason and evaluation reference stay on screen,
     // and the pending decision region is untouched by the pin.
-    await expect(page.locator('#evidence-panel app-evidence-badge [data-tone]')).toHaveAttribute(
-      'data-tone',
-      'warning',
-    );
+    const completeness = page.locator('.run-summary [data-evidence-completeness]');
+    await expect(completeness.locator('[data-tone]')).toHaveAttribute('data-tone', 'warning');
+    const qualifier =
+      locale === 'vi' ? 'Phiên bản bằng chứng đang xem' : 'Selected evidence revision';
+    await expect(completeness).toContainText(`${qualifier}: ${INCOMPLETE_REVISION.revision_no}`);
     await expect(
       page.locator('#evidence-panel [data-evidence-missing] .reason-code code'),
     ).toHaveText(INCOMPLETE_REVISION.missing);

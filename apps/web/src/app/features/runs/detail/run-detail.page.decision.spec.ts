@@ -65,7 +65,7 @@ describe('RunDetailPage decision and evidence', () => {
     expect(decision.querySelector('[data-decision-evaluator] dd')?.textContent).toBe('1.4.0');
     expect(decision.querySelector('[data-decision-mode] dd')?.textContent).toBe('Live evaluation');
     const evidence = root.querySelector('app-evidence-panel')!;
-    expect(evidence.querySelector('[data-evidence-completeness]')?.textContent).toContain(
+    expect(root.querySelector('.run-summary [data-evidence-completeness]')?.textContent).toContain(
       'Completeness: Incomplete',
     );
     expect(evidence.querySelector('[data-evidence-missing]')?.textContent).toContain(
@@ -132,7 +132,7 @@ describe('RunDetailPage decision and evidence', () => {
     const { root } = await open();
     const evidence = root.querySelector('app-evidence-panel')!;
     expect(evidence.textContent).toContain('No live evaluation recorded for this revision');
-    expect(evidence.querySelector('[data-evidence-completeness]')?.textContent).toContain(
+    expect(root.querySelector('.run-summary [data-evidence-completeness]')?.textContent).toContain(
       'Completeness: Unavailable',
     );
     expect(evidence.querySelector('[data-evidence-missing]')?.textContent).toContain(
@@ -195,7 +195,7 @@ describe('RunDetailPage decision and evidence', () => {
     expect(decision.textContent).not.toContain('critical_not_executed');
 
     const evidence = root.querySelector('app-evidence-panel')!;
-    expect(evidence.querySelector('[data-evidence-completeness]')?.textContent).toContain(
+    expect(root.querySelector('.run-summary [data-evidence-completeness]')?.textContent).toContain(
       'Completeness: Unavailable',
     );
     expect(evidence.querySelector('[data-evidence-missing]')?.textContent).toContain(
@@ -218,9 +218,9 @@ describe('RunDetailPage decision and evidence', () => {
     expect(evidence).not.toBeNull();
     expect(evidence?.querySelector('#evidence-title')?.textContent?.trim()).toBe('Evidence');
     expect(root.querySelector('.run-summary')?.textContent).toContain('Loading live decision');
-    // No decision answer yet: the region shows its own neutral state, never a verdict.
-    expect(evidence?.querySelector('[data-evidence-completeness]')?.textContent).toContain(
-      'Completeness: Unavailable',
+    // The loaded revision provides completeness, but cannot supply a verdict.
+    expect(root.querySelector('.run-summary [data-evidence-completeness]')?.textContent).toContain(
+      'Completeness: Incomplete',
     );
     expect(root.textContent).not.toContain('PASS');
     decision.resolve(pendingBody());

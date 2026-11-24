@@ -147,6 +147,7 @@
     [value]="component.digest"
     [label]="digestLabel(component.componentKey)"
     [copySize]="'lg'"
+    [iconOnlyCopy]="true"
     [compact]="!stacked"
     [truncate]="!stacked"
   />
@@ -156,6 +157,7 @@
     data-release-environment
     [value]="component.environmentRevisionId"
     [label]="copy.environment"
+    [iconOnlyCopy]="true"
     [compact]="!stacked"
     [truncate]="!stacked"
   />

@@ -18,6 +18,7 @@
             [label]="copy.hash"
             [copyLabel]="copy.copyHash"
             [size]="'lg'"
+            [iconOnly]="true"
           />
         } @else {
           <span class="text-muted-foreground">{{ copy.notProvided }}</span>
@@ -30,7 +31,7 @@
         @let suite = summary().suiteRevisionId;
         @if (suite !== null) {
           <bdi>{{ display(suite) }}</bdi>
-          <app-copy-value-button [value]="suite" [label]="copy.suite" />
+          <app-copy-value-button [value]="suite" [label]="copy.suite" [iconOnly]="true" />
         } @else {
           <span class="text-muted-foreground">{{ copy.notProvided }}</span>
         }
@@ -42,7 +43,7 @@
         @let policy = summary().policyRevisionId;
         @if (policy !== null) {
           <bdi>{{ display(policy) }}</bdi>
-          <app-copy-value-button [value]="policy" [label]="copy.policy" />
+          <app-copy-value-button [value]="policy" [label]="copy.policy" [iconOnly]="true" />
         } @else {
           <span class="text-muted-foreground">{{ copy.notProvided }}</span>
         }

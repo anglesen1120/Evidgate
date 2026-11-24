@@ -175,6 +175,20 @@ export class RunDetailPage {
     const latest = this.store.latestRevisionNo();
     return this.store.revisions()?.find((revision) => revision.revision_no === latest) ?? null;
   });
+  protected readonly selectedEvidence = computed(() => {
+    const pin = this.store.pinnedRevision();
+    const decision = this.store.decision();
+    if (decision?.kind === 'evaluated' && (pin === null || pin === decision.evidenceRevision)) {
+      return decision;
+    }
+    return pin === null ? this.latestSnapshot() : this.store.selectedRevision();
+  });
+  protected readonly evidenceQualifier = computed(() => {
+    const pin = this.store.pinnedRevision();
+    return pin !== null && pin !== this.store.latestRevisionNo()
+      ? $localize`:@@runs.evidence.selected-revision:Selected evidence revision: ${pin}:revision:`
+      : null;
+  });
   protected readonly attemptsStatus = computed<'loading' | 'ready' | 'error'>(() => {
     const status = this.store.attemptsStatus();
     return status === 'idle' || status === 'loading' ? 'loading' : status;

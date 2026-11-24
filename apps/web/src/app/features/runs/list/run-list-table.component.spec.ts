@@ -124,10 +124,10 @@ describe('RunListTableComponent', { timeout: 15_000 }, () => {
     expect(root.querySelectorAll('a[href]')).toHaveLength(1);
     expect(link.querySelector('bdi')?.textContent?.trim()).toBe('main');
     expect(link.getAttribute('aria-label')).toBeNull();
-    expect(link.parentElement?.querySelector('time')?.getAttribute('datetime')).toBe(
-      run(1).created_at,
-    );
-    expect(link.textContent?.trim().endsWith(`(${run(1).run_id})`)).toBe(true);
+    // The link name comes from its content, so it contains every visible label (WCAG 2.5.3).
+    expect(link.hasAttribute('aria-labelledby')).toBe(false);
+    expect(link.textContent).toContain(`(${run(1).run_id})`);
+    expect(link.querySelector('time')?.getAttribute('datetime')).toBe(run(1).created_at);
     expect(link.querySelector('bdi')?.classList.contains('truncate')).toBe(true);
     expect(link.closest('.identifier')?.classList.contains('min-w-0')).toBe(true);
   });
@@ -326,6 +326,9 @@ describe('RunListTableComponent', { timeout: 15_000 }, () => {
     expect(ref.textContent).not.toContain('\u202e');
     expect(root.querySelector('script')).toBeNull();
     expect(root.querySelectorAll('[data-run-unverified]')).toHaveLength(1);
+    expect(
+      ref.parentElement?.querySelector('[data-run-unverified]')?.getAttribute('aria-label'),
+    ).toBe('Unverified ref');
     expect(
       root
         .querySelector('[data-run-unverified]')

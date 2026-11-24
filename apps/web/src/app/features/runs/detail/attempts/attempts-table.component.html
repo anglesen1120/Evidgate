@@ -97,6 +97,7 @@
           class="shrink-0"
           [value]="attempt.executionKey"
           [label]="copy.execution"
+          [iconOnly]="true"
         />
       </div>
       <span class="attempt-number block text-xs text-muted-foreground tabular-nums"
@@ -120,7 +121,11 @@
         <bdi
           ><app-data-table-value [value]="display(candidate.candidateHash)" [truncate]="true"
         /></bdi>
-        <app-copy-value-button [value]="candidate.candidateHash" [label]="copy.candidate" />
+        <app-copy-value-button
+          [value]="candidate.candidateHash"
+          [label]="copy.candidate"
+          [iconOnly]="true"
+        />
         <span>{{ candidate.mode === 'shadow' ? copy.shadow : copy.official }}</span>
       </div>
     }

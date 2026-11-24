@@ -102,7 +102,7 @@ test('the list, a row and the way back are keyboard-reachable and identifiable',
 
   await page.keyboard.press('Tab');
   const firstRow = page.locator(`[data-run-id="${FIRST_RUN}"]`).getByRole('link');
-  await expect(firstRow).toHaveAccessibleName(`main (${FIRST_RUN})`);
+  await expect(firstRow).toHaveAccessibleName(new RegExp(`^main .+ \\(${FIRST_RUN}\\)$`));
   await expect(firstRow).toBeFocused();
   expect((await firstRow.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
 

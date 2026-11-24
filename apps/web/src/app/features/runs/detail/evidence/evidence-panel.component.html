@@ -14,19 +14,14 @@
       <app-shell-icon class="size-(--eg-space-6)" [name]="'folder'" />
     </span>
     <div class="min-w-0 flex-1">
-      <div class="flex flex-wrap items-center justify-between gap-(--eg-space-3)">
-        <h2
-          hlmCardTitle
-          [size]="sectionSize"
-          id="evidence-title"
-          tabindex="-1"
-          class="m-0 scroll-mt-[calc(var(--eg-topbar-height,calc(2*var(--eg-space-12)))+var(--eg-space-4))] focus-visible:outline-solid focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-ring focus-visible:outline-offset-(--eg-focus-offset)"
-          [textContent]="copy.title"
-        ></h2>
-        <p class="m-0" data-evidence-completeness>
-          <app-evidence-badge [completeness]="completeness()" />
-        </p>
-      </div>
+      <h2
+        hlmCardTitle
+        [size]="sectionSize"
+        id="evidence-title"
+        tabindex="-1"
+        class="m-0 scroll-mt-[calc(var(--eg-topbar-height,calc(2*var(--eg-space-12)))+var(--eg-space-4))] focus-visible:outline-solid focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-ring focus-visible:outline-offset-(--eg-focus-offset)"
+        [textContent]="copy.title"
+      ></h2>
       @if (pinnedRevision(); as revision) {
         <div
           class="flex flex-wrap items-baseline gap-x-(--eg-space-2) gap-y-(--eg-space-1) text-xs text-muted-foreground"
@@ -129,34 +124,37 @@
   }
 
   <div class="grid min-w-0 gap-(--eg-space-4) @2xl:has-[section+section]:grid-cols-2">
-    <section
-      class="min-w-0 rounded-(--eg-radius-md) border border-border p-(--eg-space-4)"
-      aria-labelledby="evidence-missing-title"
-      data-evidence-missing
-    >
-      @let codes = missing();
-      <h3
-        hlmCardTitle
-        [size]="subsectionSize"
-        class="mb-(--eg-space-4) flex flex-wrap items-center justify-between gap-(--eg-space-3) border-b border-border pb-(--eg-space-3)"
-        id="evidence-missing-title"
+    @let codes = missing();
+    @if (codes === null || codes.length > 0) {
+      <section
+        class="min-w-0 rounded-(--eg-radius-md) border border-border p-(--eg-space-4)"
+        aria-labelledby="evidence-missing-title"
+        data-evidence-missing
       >
-        {{ copy.missingTitle }}
+        <h3
+          hlmCardTitle
+          [size]="subsectionSize"
+          class="mb-(--eg-space-4) flex flex-wrap items-center justify-between gap-(--eg-space-3) border-b border-border pb-(--eg-space-3)"
+          id="evidence-missing-title"
+        >
+          {{ copy.missingTitle }}
+          @if (codes !== null) {
+            <span hlmBadge [variant]="'outline'" class="text-xs tabular-nums" data-missing-count>
+              <app-number-value [value]="codes.length" />
+            </span>
+          }
+        </h3>
         @if (codes !== null) {
-          <span hlmBadge [variant]="'outline'" class="text-xs tabular-nums" data-missing-count>
-            <app-number-value [value]="codes.length" />
-          </span>
+          <app-missing-reason-list
+            class="[&_ul]:ps-0 [&_li+li]:border-t [&_li+li]:border-border [&_li+li]:pt-(--eg-space-3)"
+            [reasons]="reasons()"
+            [iconOnlyCopy]="true"
+          />
+        } @else {
+          <p class="m-0 text-muted-foreground">{{ copy.missingUnavailable }}</p>
         }
-      </h3>
-      @if (codes !== null) {
-        <app-missing-reason-list
-          class="[&_ul]:ps-0 [&_li+li]:border-t [&_li+li]:border-border [&_li+li]:pt-(--eg-space-3)"
-          [reasons]="reasons()"
-        />
-      } @else {
-        <p class="m-0 text-muted-foreground">{{ copy.missingUnavailable }}</p>
-      }
-    </section>
+      </section>
+    }
 
     @if (pinned(); as revision) {
       <section
@@ -175,7 +173,11 @@
         <p class="m-0 flex min-w-0 flex-wrap items-center gap-(--eg-space-2)">
           @if (revision.evaluation_id; as evaluationId) {
             <bdi class="font-mono wrap-anywhere">{{ evaluationId }}</bdi>
-            <app-copy-value-button [value]="evaluationId" [label]="copy.evaluationReference" />
+            <app-copy-value-button
+              [value]="evaluationId"
+              [label]="copy.evaluationReference"
+              [iconOnly]="true"
+            />
           } @else {
             {{ copy.noEvaluation }}
           }

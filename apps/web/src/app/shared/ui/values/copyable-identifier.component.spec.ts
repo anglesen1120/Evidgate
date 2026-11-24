@@ -139,6 +139,26 @@ describe('CopyableIdentifierComponent', () => {
     expect(document.querySelector('[role="dialog"]')).toBeNull();
   });
 
+  it('can use a named copy icon without shortening the identifier or changing the clipboard value', async () => {
+    const host = fixture.nativeElement as HTMLElement;
+    const copy = (root: ParentNode) =>
+      root.querySelector<HTMLButtonElement>('app-copy-value-button button')!;
+    expect(copy(host).getAttribute('title')).toBeNull();
+    fixture.componentRef.setInput('iconOnlyCopy', true);
+    fixture.componentRef.setInput('truncate', false);
+    expect(await harness.previewText()).toBe(value);
+    expect(copy(host).getAttribute('title')).toBe('Copy Policy hash');
+    expect(copy(host).getAttribute('aria-label')).toBe('Copy Policy hash');
+    expect(copy(host).querySelector('hlm-icon')).not.toBeNull();
+    fixture.componentRef.setInput('truncate', true);
+    await harness.showFull();
+    const dialogCopy = copy(document.querySelector('[role="dialog"]')!);
+    expect(dialogCopy.getAttribute('title')).toBe('Copy Policy hash');
+    expect(dialogCopy.querySelector('hlm-icon')).not.toBeNull();
+    dialogCopy.click();
+    expect(writeText).toHaveBeenCalledWith(value);
+  });
+
   it('forwards the requested large copy target to the scan row and full-value dialog', async () => {
     expect(fixture.componentInstance.copySize()).toBe('sm');
     fixture.componentRef.setInput('copySize', 'lg');

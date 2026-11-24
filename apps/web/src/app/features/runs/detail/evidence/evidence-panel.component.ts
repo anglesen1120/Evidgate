@@ -19,8 +19,6 @@ import { ErrorPatternComponent } from '../../../../shared/ui/states/error-patter
 import { LoadingPatternComponent } from '../../../../shared/ui/states/loading-pattern.component';
 import { CopyValueButtonComponent } from '../../../../shared/ui/values/copy-value-button.component';
 import { NumberValueComponent } from '../../../../shared/ui/values/number-value.component';
-import { EvidenceBadgeComponent } from '../../../../shared/ui/verdict/evidence-badge.component';
-import type { Completeness } from '../../../../shared/ui/verdict/verdict-values';
 import { ShellIconComponent } from '../../../../shell/layout/shell-icon.component';
 import type { DecisionViewModel } from '../decision/decision-view-model';
 import type { RevisionsStatus } from '../revision-walk';
@@ -28,16 +26,7 @@ import { EvidenceRevisionSelectorComponent } from './evidence-revision-selector.
 import { missingReasonEntries, type ConfirmedMissingTarget } from './missing-reasons';
 import { resolveEvidenceAnchor } from './run-evidence-anchors';
 
-/**
- * Evidence region for one pinned revision: the immutable revision's completeness, its exact
- * `missing[]` literals and its evaluation reference. Everything rendered is read from the accepted
- * decision body or from one revision row of the list; the panel never computes a verdict, a
- * completeness value or a reason, never invents a revision and never changes the pin itself.
- *
- * The revision list is this region's own read, so the panel renders whether or not the decision
- * read has answered: `decision` is `null` until it does, and no decision-derived copy is shown
- * from that state.
- */
+/** Revision reads and refusals remain visible even when the independent decision read fails. */
 @Component({
   selector: 'app-evidence-panel',
   imports: [
@@ -45,7 +34,6 @@ import { resolveEvidenceAnchor } from './run-evidence-anchors';
     HlmBadge,
     HlmButton,
     HlmCardImports,
-    EvidenceBadgeComponent,
     EvidenceRevisionSelectorComponent,
     LoadingPatternComponent,
     ErrorPatternComponent,
@@ -142,15 +130,6 @@ export class EvidencePanelComponent {
     return (
       decision?.kind === 'evaluated' && pinned !== null && pinned !== decision.evidenceRevision
     );
-  });
-
-  /** The bound revision's completeness, or neutral when no authoritative value is loaded. */
-  protected readonly completeness = computed<Completeness | null>(() => {
-    if (this.decisionBound()) {
-      const decision = this.decision();
-      return decision?.kind === 'evaluated' ? decision.completeness : null;
-    }
-    return this.pinned()?.completeness ?? null;
   });
 
   /**
