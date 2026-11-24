@@ -43,6 +43,7 @@ export interface DashboardTrendPoint {
   template: `
     <figure class="m-0 grid min-w-0 gap-(--eg-space-4)" [attr.aria-label]="label()">
       <div
+        #plot
         class="trend-bars focus-visible:outline-solid focus-visible:outline-ring"
         role="region"
         tabindex="0"
@@ -60,16 +61,21 @@ export interface DashboardTrendPoint {
                   class="trend-trigger"
                   [tabIndex]="tabStop() === point.id ? 0 : -1"
                   [attr.aria-label]="point.summary"
-                  (focus)="focusDay(point.id, bar, point.summary)"
+                  (focus)="focusDay(point.id, bar, segments, point.summary)"
                   (blur)="blurDay(bar)"
-                  (pointerenter)="hoverDay($event, bar, point.summary)"
+                  (pointerenter)="hoverDay($event, bar, segments, point.summary)"
                   (pointerleave)="leave($event, bar)"
                   (pointerdown)="beginTap($event, bar)"
                   (pointercancel)="closingTap = null"
-                  (click)="activate(bar, point.summary)"
+                  (click)="activate(bar, segments, point.summary)"
                   (keydown)="navigate($event, $index)"
                 >
-                  <span class="trend-segments" aria-hidden="true" [style.height.%]="point.height">
+                  <span
+                    #segments
+                    class="trend-segments"
+                    aria-hidden="true"
+                    [style.height.%]="point.height"
+                  >
                     @for (segment of point.segments; track segment.id) {
                       <span
                         data-segment
@@ -268,6 +274,7 @@ export class DecisionTrendComponent {
   protected readonly dateLabel = $localize`:@@shared.dashboard.trend-date:Date (UTC)`;
   private readonly totalLabel = $localize`:@@shared.dashboard.trend-total:Total`;
   private readonly panel = viewChild.required<ElementRef<HTMLElement>>('panel');
+  private readonly plot = viewChild.required<ElementRef<HTMLElement>>('plot');
   private readonly buttons = viewChildren<ElementRef<HTMLButtonElement>>('bar');
   private readonly navigation = new FocusKeyManager<FocusableOption>(
     computed(() =>
@@ -286,7 +293,7 @@ export class DecisionTrendComponent {
   // Never keep a stale day's readout open after the dashboard replaces its sample.
   protected readonly inspection = linkedSignal<
     readonly DashboardTrendPoint[],
-    { trigger: HTMLButtonElement; summary: string } | null
+    { trigger: HTMLButtonElement; above: HTMLElement; summary: string } | null
   >({ source: this.points, computation: () => null });
   protected readonly legend = computed(() =>
     (this.points()[0]?.segments ?? []).map((segment) => ({
@@ -334,7 +341,10 @@ export class DecisionTrendComponent {
       const dismiss = () => {
         if (this.inspection() === current) this.inspection.set(null);
       };
-      const close = openFullValuePopover(current.trigger, panel, dismiss);
+      const close = openFullValuePopover(current.trigger, panel, dismiss, {
+        above: current.above,
+        within: this.plot().nativeElement,
+      });
       const unlisten = this.renderer.listen(
         'document',
         'pointerdown',
@@ -356,28 +366,38 @@ export class DecisionTrendComponent {
       event.pointerType === 'touch' && this.inspection()?.trigger === trigger ? trigger : null;
   }
 
-  protected activate(trigger: HTMLButtonElement, summary: string): void {
+  protected activate(trigger: HTMLButtonElement, above: HTMLElement, summary: string): void {
     if (this.closingTap === trigger) this.blurDay(trigger);
-    else this.inspect(trigger, summary);
+    else this.inspect(trigger, above, summary);
     this.closingTap = null;
   }
 
-  private inspect(trigger: HTMLButtonElement, summary: string): void {
-    if (this.inspection()?.trigger !== trigger) this.inspection.set({ trigger, summary });
+  private inspect(trigger: HTMLButtonElement, above: HTMLElement, summary: string): void {
+    if (this.inspection()?.trigger !== trigger) this.inspection.set({ trigger, above, summary });
   }
 
-  protected focusDay(id: string, trigger: HTMLButtonElement, summary: string): void {
+  protected focusDay(
+    id: string,
+    trigger: HTMLButtonElement,
+    above: HTMLElement,
+    summary: string,
+  ): void {
     this.focusedDay.set(id);
-    this.inspect(trigger, summary);
+    this.inspect(trigger, above, summary);
   }
 
   protected blurDay(trigger: HTMLButtonElement): void {
     if (this.inspection()?.trigger === trigger) this.inspection.set(null);
   }
 
-  protected hoverDay(event: PointerEvent, trigger: HTMLButtonElement, summary: string): void {
+  protected hoverDay(
+    event: PointerEvent,
+    trigger: HTMLButtonElement,
+    above: HTMLElement,
+    summary: string,
+  ): void {
     if (event.pointerType === 'mouse' || event.pointerType === 'pen')
-      this.inspect(trigger, summary);
+      this.inspect(trigger, above, summary);
   }
 
   protected leave(event: PointerEvent, from?: HTMLButtonElement): void {
