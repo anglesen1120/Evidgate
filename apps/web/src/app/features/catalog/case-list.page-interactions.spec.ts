@@ -30,7 +30,7 @@ const owner: MembershipView = {
   version: 1,
 };
 const nextOwner = { ...owner, id: 'next-owner', invited_email: 'next@example.test' };
-const appended = { ...ownedCase, id: 'appended-case', annotation_id: 'appended-identity' };
+const nextPageRow = { ...ownedCase, id: 'next-page-case', annotation_id: 'next-page-identity' };
 
 class FilterHarness extends CatalogPageHarness {
   readonly tiles = this.locatorForAll('[role="group"] button[aria-pressed]');
@@ -235,17 +235,17 @@ describe('Catalog permission and asynchronous interaction boundaries', () => {
     expect(memberships().size).toBe(0);
   });
   it.each(['pending', 'render'] as const)(
-    'keeps Search focused when focus moves during the %s part of Load more',
+    'keeps Search focused when focus moves during the %s part of Next page',
     async (timing) => {
       const pending = new Subject<CaseListResponse>();
       list.mockResolvedValueOnce(CASE_LIST_FIXTURE).mockReturnValueOnce(firstValueFrom(pending));
       const { fixture, harness } = await render();
       await manualChangeDetection(async () => {
-        const more = await harness.more();
-        await more?.focus();
-        await more?.click();
+        const next = await harness.next();
+        await next.focus();
+        await next.click();
         if (timing === 'pending') await (await harness.search()).focus();
-        pending.next({ items: [appended], next_cursor: null });
+        pending.next({ items: [nextPageRow], next_cursor: null });
         if (timing === 'render') {
           await Promise.resolve();
           await Promise.resolve();
@@ -253,12 +253,12 @@ describe('Catalog permission and asynchronous interaction boundaries', () => {
         }
       });
       await fixture.whenStable();
-      expect(await harness.rows()).toHaveLength(3);
+      expect(await harness.rows()).toHaveLength(1);
       expect(await (await harness.search()).isFocused()).toBe(true);
     },
   );
 
-  it('does not focus a row or summary when a reload supersedes Load more', async () => {
+  it('does not focus a row or summary when a reload supersedes Next page', async () => {
     const pending = new Subject<CaseListResponse>();
     list
       .mockResolvedValueOnce(CASE_LIST_FIXTURE)
@@ -266,10 +266,10 @@ describe('Catalog permission and asynchronous interaction boundaries', () => {
       .mockResolvedValueOnce({ items: [ownedCase], next_cursor: null });
     const { fixture, harness, store } = await render();
     await manualChangeDetection(async () => {
-      await (await harness.more())?.focus();
-      await (await harness.more())?.click();
+      await (await harness.next()).focus();
+      await (await harness.next()).click();
       store.reload();
-      pending.next({ items: [appended], next_cursor: null });
+      pending.next({ items: [nextPageRow], next_cursor: null });
     });
     await fixture.whenStable();
     expect(await harness.rows()).toHaveLength(1);

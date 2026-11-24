@@ -1,7 +1,10 @@
-import { Component, signal } from '@angular/core';
+import { ComponentHarness } from '@angular/cdk/testing';
+import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
+import { ChangeDetectionStrategy, Component, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import type { CiBindingView } from '@evidgate/sdk';
 import type { ApiError } from '../../../core/http/api-error';
+import { provideLayoutTestStubs } from '../../../shared/testing/layout.testing';
 import bindings from '../../../../../../../fixtures/web-api/ci-bindings-list-settings/input.json';
 import { CiBindingListComponent } from './ci-binding-list.component';
 import type { CiBindingsPhase } from './secrets.store';
@@ -18,14 +21,29 @@ const failure: ApiError = {
   details: [],
 };
 
+class BindingPagerHarness extends ComponentHarness {
+  static hostSelector = 'app-ci-binding-list';
+  readonly next = this.locatorFor('app-data-table-pager button[data-page="next"]');
+  readonly previous = this.locatorFor('app-data-table-pager button[data-page="previous"]');
+  readonly size = this.locatorFor('app-data-table-pager hlm-select-trigger button');
+  readonly summary = this.locatorFor('app-data-table-pager [role="status"]');
+  readonly section = this.locatorFor('section');
+  readonly retry = this.locatorForOptional('[data-ci-retry]');
+  readonly heading = this.locatorFor('h2');
+}
+
+provideLayoutTestStubs();
+
 @Component({
   imports: [CiBindingListComponent],
+  changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <app-ci-binding-list
       [rows]="rows"
       [phase]="'ready'"
       [hasMore]="hasMore()"
       [loadingMore]="loadingMore()"
+      [page]="page()"
       (loadMore)="loadPage()"
     />
   `,
@@ -34,9 +52,11 @@ class FastPagingHost {
   readonly rows = rows;
   readonly hasMore = signal(true);
   readonly loadingMore = signal(false);
+  readonly page = signal(1);
 
   loadPage(): void {
     this.loadingMore.set(true);
+    this.page.set(2);
     this.hasMore.set(false);
     this.loadingMore.set(false);
   }
@@ -64,11 +84,16 @@ describe('CiBindingListComponent (09.7.1-F15)', () => {
   });
 
   it('renders the onboarding empty guidance without any mutation control', async () => {
-    const { root } = await render('empty', []);
+    const { root, fixture } = await render('empty', []);
     expect(root.querySelector('[data-ci-empty]')?.textContent).toContain(
       'No CI bindings for this project. Bindings are created during onboarding.',
     );
-    expect(root.querySelector('button')).toBeNull();
+    const pager = await TestbedHarnessEnvironment.harnessForFixture(fixture, BindingPagerHarness);
+    expect(await (await pager.size()).getAttribute('role')).toBe('combobox');
+    expect(await (await pager.previous()).getAttribute('aria-disabled')).toBe('true');
+    expect(await (await pager.next()).getAttribute('aria-disabled')).toBe('true');
+    expect(root.querySelector('[data-ci-empty] button')).toBeNull();
+    expect(root.querySelector('button:not(app-data-table-pager button)')).toBeNull();
   });
 
   it('renders only explicit metadata, all verification labels and the pending hint', async () => {
@@ -140,23 +165,34 @@ describe('CiBindingListComponent (09.7.1-F15)', () => {
     expect(root.querySelector('[data-ci-show-all]')).toBeNull();
   });
 
-  it('emits load-more once per click and shows a disabled busy control while loading', async () => {
-    const { fixture, root } = await render();
+  it('emits one Next intent and keeps both shared pager controls focusable while busy', async () => {
+    const { fixture } = await render();
+    const pager = await TestbedHarnessEnvironment.harnessForFixture(fixture, BindingPagerHarness);
     const more = vi.fn();
+    const previous = vi.fn();
     fixture.componentInstance.loadMore.subscribe(more);
+    fixture.componentInstance.previous.subscribe(previous);
     fixture.componentRef.setInput('hasMore', true);
-    fixture.detectChanges();
-    const button = root.querySelector<HTMLButtonElement>('[data-ci-load-more]');
-    button?.click();
+    expect(await (await pager.size()).text()).toBe('20');
+    expect(await (await pager.previous()).text()).toBe('Previous records');
+    await (await pager.previous()).click();
+    expect(previous).not.toHaveBeenCalled();
+    const next = await pager.next();
+    expect(await next.text()).toBe('Next records');
+    await next.focus();
+    await next.click();
     expect(more).toHaveBeenCalledTimes(1);
     fixture.componentRef.setInput('loadingMore', true);
-    fixture.detectChanges();
-    expect(button?.disabled).toBe(true);
-    expect(button?.getAttribute('aria-busy')).toBe('true');
-    expect(root.querySelector('section')?.getAttribute('aria-busy')).toBe('true');
-    expect(button?.textContent).toContain('Loading more CI bindings');
-    button?.click();
+    expect(await next.getAttribute('aria-disabled')).toBe('true');
+    expect(await next.getAttribute('aria-busy')).toBe('true');
+    expect(await (await pager.section()).getAttribute('aria-busy')).toBe('true');
+    expect(await next.isFocused()).toBe(true);
+    await next.click();
     expect(more).toHaveBeenCalledTimes(1);
+    fixture.componentRef.setInput('loadingMore', false);
+    fixture.componentRef.setInput('page', 2);
+    await (await pager.previous()).click();
+    expect(previous).toHaveBeenCalledTimes(1);
   });
 
   it('shows typed errors verbatim as text and offers Retry', async () => {
@@ -199,92 +235,83 @@ describe('CiBindingListComponent (09.7.1-F15)', () => {
     },
   );
 
-  it('keeps loaded rows on a paging failure and offers recovery instead of pretending completion', async () => {
+  it('keeps the current page and Retry on a paging failure without removing the pager', async () => {
     const { fixture, root } = await render();
     fixture.componentRef.setInput('pagingFailure', true);
     fixture.componentRef.setInput('hasMore', true);
     fixture.detectChanges();
+    const pager = await TestbedHarnessEnvironment.harnessForFixture(fixture, BindingPagerHarness);
     expect(root.querySelectorAll('[data-ci-binding]')).toHaveLength(rows.length);
-    expect(root.querySelector('[data-ci-retry]')).not.toBeNull();
-    expect(root.querySelector('[data-ci-load-more]')).toBeNull();
+    expect(await pager.retry()).not.toBeNull();
+    expect(await (await pager.summary()).text()).toBe('Page 1');
+    expect(await (await pager.next()).text()).toBe('Next records');
   });
 
-  it('moves focus to the section heading when the last page removes Load more', async () => {
+  it('retains focus on Next when the replacement last page disables it', async () => {
     const first = rows[0];
     if (!first) throw new Error('Expected binding fixture');
-    const { fixture, root } = await render();
+    const { fixture } = await render();
     fixture.componentRef.setInput('hasMore', true);
-    fixture.detectChanges();
-    const more = root.querySelector<HTMLButtonElement>('[data-ci-load-more]');
-    if (!more) throw new Error('Expected Load more');
-    const emitted = vi.fn();
-    fixture.componentInstance.loadMore.subscribe(emitted);
-    more.click();
-    expect(emitted).toHaveBeenCalledTimes(1);
+    const pager = await TestbedHarnessEnvironment.harnessForFixture(fixture, BindingPagerHarness);
+    const next = await pager.next();
+    await next.focus();
+    await next.click();
     fixture.componentRef.setInput('loadingMore', true);
     fixture.detectChanges();
-    // The read settles as the last page: the focused control is gone, so focus must not fall to body.
-    fixture.componentRef.setInput('rows', [...rows, { ...first, id: 'appended-binding' }]);
+    fixture.componentRef.setInput('rows', [{ ...first, id: 'replacement-binding' }]);
+    fixture.componentRef.setInput('page', 2);
     fixture.componentRef.setInput('hasMore', false);
     fixture.componentRef.setInput('loadingMore', false);
-    fixture.detectChanges();
-    await fixture.whenStable();
-    expect(root.querySelector('[data-ci-load-more]')).toBeNull();
-    expect(document.activeElement).toBe(root.querySelector('h2'));
+    expect(await (await pager.summary()).text()).toBe('Page 2');
+    expect(await next.getAttribute('aria-disabled')).toBe('true');
+    expect(await next.isFocused()).toBe(true);
+    expect(await (await pager.heading()).isFocused()).toBe(false);
   });
 
-  it('restores focus when the last page settles before an intermediate loading render', async () => {
+  it('keeps focus on Next when a last-page response settles before an intermediate render', async () => {
     const fixture = TestBed.createComponent(FastPagingHost);
     fixture.detectChanges();
     await fixture.whenStable();
-    const root = fixture.nativeElement as HTMLElement;
-    const more = root.querySelector<HTMLButtonElement>('[data-ci-load-more]');
-    if (!more) throw new Error('Expected Load more');
-    more.focus();
-    expect(document.activeElement).toBe(more);
-    more.click();
-    fixture.detectChanges();
-    await fixture.whenStable();
-    expect(root.querySelector('[data-ci-load-more]')).toBeNull();
-    expect(document.activeElement).toBe(root.querySelector('#ci-bindings-heading'));
+    const pager = await TestbedHarnessEnvironment.loader(fixture).getHarness(BindingPagerHarness);
+    const next = await pager.next();
+    await next.focus();
+    await next.click();
+    expect(await (await pager.summary()).text()).toBe('Page 2');
+    expect(await next.getAttribute('aria-disabled')).toBe('true');
+    expect(await next.isFocused()).toBe(true);
   });
 
-  it('leaves focus on Load more when another page remains', async () => {
-    const { fixture, root } = await render();
+  it('leaves focus on Next when another page remains', async () => {
+    const { fixture } = await render();
     fixture.componentRef.setInput('hasMore', true);
-    fixture.detectChanges();
-    const more = root.querySelector<HTMLButtonElement>('[data-ci-load-more]');
-    if (!more) throw new Error('Expected Load more');
-    more.focus();
-    more.click();
+    const pager = await TestbedHarnessEnvironment.harnessForFixture(fixture, BindingPagerHarness);
+    const next = await pager.next();
+    await next.focus();
+    await next.click();
     fixture.componentRef.setInput('loadingMore', true);
     fixture.detectChanges();
     fixture.componentRef.setInput('loadingMore', false);
-    fixture.detectChanges();
-    await fixture.whenStable();
-    expect(root.querySelector('[data-ci-load-more]')).toBe(more);
-    expect(document.activeElement).toBe(more);
+    expect(await next.getAttribute('aria-disabled')).toBe('false');
+    expect(await next.isFocused()).toBe(true);
   });
 
-  it('never pulls focus back from an element the user moved to while the page loaded', async () => {
-    const { fixture, root } = await render();
+  it('never pulls focus back after the user leaves the pager while the page loads', async () => {
+    const { fixture } = await render();
     fixture.componentRef.setInput('hasMore', true);
-    fixture.detectChanges();
-    const more = root.querySelector<HTMLButtonElement>('[data-ci-load-more]');
-    if (!more) throw new Error('Expected Load more');
-    more.click();
+    const pager = await TestbedHarnessEnvironment.harnessForFixture(fixture, BindingPagerHarness);
+    const next = await pager.next();
+    await next.focus();
+    await next.click();
     const elsewhere = document.createElement('button');
     document.body.append(elsewhere);
     try {
-      // The user tabbed out of the section while the read was in flight.
       elsewhere.focus();
       fixture.componentRef.setInput('loadingMore', true);
       fixture.detectChanges();
+      fixture.componentRef.setInput('page', 2);
       fixture.componentRef.setInput('hasMore', false);
       fixture.componentRef.setInput('loadingMore', false);
-      fixture.detectChanges();
-      await fixture.whenStable();
-      expect(root.querySelector('[data-ci-load-more]')).toBeNull();
+      expect(await next.getAttribute('aria-disabled')).toBe('true');
       expect(document.activeElement).toBe(elsewhere);
     } finally {
       elsewhere.remove();

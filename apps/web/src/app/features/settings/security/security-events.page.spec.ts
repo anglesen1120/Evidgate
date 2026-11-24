@@ -1,4 +1,4 @@
-import { ComponentHarness, manualChangeDetection } from '@angular/cdk/testing';
+import { ComponentHarness, manualChangeDetection, TestKey } from '@angular/cdk/testing';
 import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { provideZonelessChangeDetection, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
@@ -38,6 +38,23 @@ class SecurityPageHarness extends ComponentHarness {
   readonly correctionLinks = this.locatorForAll('#security-filter-errors a');
   readonly forbidden = this.locatorForOptional('app-forbidden-pattern');
   readonly loading = this.locatorForOptional('app-loading-pattern');
+  readonly pager = this.locatorFor('app-data-table-pager');
+  readonly previous = this.locatorFor('app-data-table-pager [data-page="previous"]');
+  readonly next = this.locatorFor('app-data-table-pager [data-page="next"]');
+  readonly retry = this.locatorFor('app-error-pattern button');
+  readonly sizeTrigger = this.locatorFor('[id^="eg-table-pager-size-"]');
+  readonly sizeOptions = this.documentRootLocatorFactory().locatorForAll('[role="option"]');
+  readonly dialog = this.documentRootLocatorFactory().locatorForOptional('[role="dialog"]');
+  async chooseSize(value: string): Promise<void> {
+    await (await this.sizeTrigger()).click();
+    for (const option of await this.sizeOptions()) {
+      if ((await option.text()).trim() === value) {
+        await option.click();
+        return;
+      }
+    }
+    throw new Error(`Missing page-size option ${value}`);
+  }
   async fill(field: 'project' | 'from' | 'to', value: string): Promise<void> {
     const input = await this[field]();
     await input.setInputValue(value);
@@ -120,7 +137,7 @@ describe('SecurityEventsPage', () => {
     expect(await harness.content()).toContain('No results match these filters');
     expect(list).toHaveBeenLastCalledWith(
       'org1',
-      { limit: 50, project_id: '018f0000-0000-7000-8000-000000000011' },
+      { limit: 20, project_id: '018f0000-0000-7000-8000-000000000011' },
       expect.any(AbortSignal),
     );
     await (await harness.clear()).click();
@@ -234,4 +251,151 @@ describe('SecurityEventsPage', () => {
       expect(list).toHaveBeenCalledTimes(2);
     },
   );
+  it('renders the shared pager with only 20/50/100 choices and unknown-total page text', async () => {
+    const { harness } = await render();
+    expect(list).toHaveBeenLastCalledWith('org1', { limit: 20 }, expect.any(AbortSignal));
+    expect(await (await harness.pager()).text()).toContain('Page 1');
+    expect(await (await harness.pager()).text()).not.toContain('of 1');
+    expect(await (await harness.previous()).getAttribute('aria-disabled')).toBe('true');
+    expect(await (await harness.next()).getAttribute('aria-disabled')).toBe('true');
+    await (await harness.sizeTrigger()).click();
+    expect(await Promise.all((await harness.sizeOptions()).map((option) => option.text()))).toEqual(
+      ['20', '50', '100'],
+    );
+  });
+  it('keeps the shared pager available for an empty page and refuses unavailable navigation', async () => {
+    list.mockResolvedValue({ items: [], next_cursor: null });
+    const { harness } = await render();
+    expect(await (await harness.pager()).text()).toContain('Page 1');
+    await (await harness.next()).click();
+    await (await harness.previous()).click();
+    expect(list).toHaveBeenCalledTimes(1);
+    expect(await harness.content()).toContain('No security events recorded');
+  });
+  it('pages forward and backward while View preserves the current page and request state', async () => {
+    list
+      .mockResolvedValueOnce({ items: [event], next_cursor: 'second' })
+      .mockResolvedValueOnce({ items: [{ ...event, id: 'second' }], next_cursor: 'third' })
+      .mockResolvedValueOnce({ items: [{ ...event, id: 'third' }], next_cursor: null })
+      .mockResolvedValueOnce({ items: [{ ...event, id: 'second' }], next_cursor: 'third' });
+    const { harness } = await render();
+    await (await harness.next()).click();
+    expect(await (await harness.pager()).text()).toContain('Page 2');
+    expect(await harness.rows()).toHaveLength(1);
+    expect(await (await harness.rows())[0]?.getAttribute('data-row-id')).toBe('second');
+    expect(await (await harness.previous()).getAttribute('aria-disabled')).toBe('false');
+    expect(await (await harness.next()).getAttribute('aria-disabled')).toBe('false');
+    await (await harness.details()).click();
+    expect(await harness.dialog()).not.toBeNull();
+    expect(list).toHaveBeenCalledTimes(2);
+    await (await harness.dialog())?.sendKeys(TestKey.ESCAPE);
+    await vi.waitFor(async () => expect(await harness.dialog()).toBeNull());
+    expect(await (await harness.pager()).text()).toContain('Page 2');
+    expect(list).toHaveBeenCalledTimes(2);
+    await (await harness.next()).click();
+    expect(await (await harness.pager()).text()).toContain('Page 3');
+    expect(await (await harness.next()).getAttribute('aria-disabled')).toBe('true');
+    await (await harness.previous()).click();
+    expect(await (await harness.pager()).text()).toContain('Page 2');
+    expect(list).toHaveBeenLastCalledWith(
+      'org1',
+      { limit: 20, cursor: 'second' },
+      expect.any(AbortSignal),
+    );
+  });
+  it('resets paging for size and applied filters without discarding the project filter', async () => {
+    list.mockResolvedValue({ items: [event], next_cursor: 'second' });
+    const { harness } = await render();
+    await harness.fill('project', 'project1');
+    await (await harness.apply()).click();
+    await (await harness.next()).click();
+    expect(await (await harness.pager()).text()).toContain('Page 2');
+    await harness.chooseSize('50');
+    expect(await (await harness.pager()).text()).toContain('Page 1');
+    expect(list).toHaveBeenLastCalledWith(
+      'org1',
+      { limit: 50, project_id: 'project1' },
+      expect.any(AbortSignal),
+    );
+    await (await harness.next()).click();
+    await harness.fill('project', 'project2');
+    await (await harness.apply()).click();
+    expect(await (await harness.pager()).text()).toContain('Page 1');
+    expect(list).toHaveBeenLastCalledWith(
+      'org1',
+      { limit: 50, project_id: 'project2' },
+      expect.any(AbortSignal),
+    );
+  });
+  it('retains the prior page and exposes Retry when a later-page request fails', async () => {
+    const error: ApiError = {
+      kind: 'unavailable',
+      status: 503,
+      code: 'page_unavailable',
+      message: 'The next page is unavailable.',
+      requestId: null,
+      retryable: true,
+      details: [],
+      retryAfterSeconds: null,
+    };
+    list
+      .mockResolvedValueOnce({ items: [event], next_cursor: 'second' })
+      .mockRejectedValueOnce(new ApiRequestError(error))
+      .mockResolvedValueOnce({ items: [{ ...event, id: 'second' }], next_cursor: null });
+    const { harness } = await render();
+    await (await harness.next()).click();
+    expect(await harness.rows()).toHaveLength(1);
+    expect(await (await harness.rows())[0]?.getAttribute('data-row-id')).toBe('event1');
+    expect(await (await harness.pager()).text()).toContain('Page 1');
+    expect(await harness.content()).toContain(error.message);
+    await (await harness.retry()).click();
+    expect(list).toHaveBeenLastCalledWith(
+      'org1',
+      { limit: 20, cursor: 'second' },
+      expect.any(AbortSignal),
+    );
+    expect(await (await harness.pager()).text()).toContain('Page 2');
+    expect(await (await harness.rows())[0]?.getAttribute('data-row-id')).toBe('second');
+  });
+  it('keeps the loaded page visible and disables paging while the next request is pending', async () => {
+    list.mockResolvedValueOnce({ items: [event], next_cursor: 'second' });
+    const { fixture, harness } = await render();
+    let finish: (value: { items: SecurityEventItem[]; next_cursor: null }) => void = () =>
+      undefined;
+    list.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    await manualChangeDetection(async () => {
+      await (await harness.next()).click();
+      fixture.detectChanges();
+      TestBed.tick();
+      expect(await harness.rows()).toHaveLength(1);
+      expect(await (await harness.pager()).text()).toContain('Page 1');
+      expect(await (await harness.next()).getAttribute('aria-disabled')).toBe('true');
+      expect(await (await harness.previous()).getAttribute('aria-disabled')).toBe('true');
+      expect(await (await harness.results()).getAttribute('aria-busy')).toBe('true');
+      finish({ items: [{ ...event, id: 'second' }], next_cursor: null });
+    });
+    await fixture.whenStable();
+    expect(await (await harness.pager()).text()).toContain('Page 2');
+    expect(await (await harness.rows())[0]?.getAttribute('data-row-id')).toBe('second');
+  });
+  it('can advance a page containing only hidden V1 events without claiming an empty organization', async () => {
+    list
+      .mockResolvedValueOnce({
+        items: [{ ...event, type: 'injection_attempt' }],
+        next_cursor: 'visible',
+      })
+      .mockResolvedValueOnce({ items: [event], next_cursor: null });
+    const { harness } = await render();
+    expect(await harness.rows()).toHaveLength(0);
+    expect(await harness.content()).not.toContain('No security events recorded');
+    expect(await (await harness.next()).getAttribute('aria-disabled')).toBe('false');
+    await (await harness.next()).click();
+    expect(await harness.rows()).toHaveLength(1);
+    expect(await (await harness.pager()).text()).toContain('Page 2');
+  });
 });

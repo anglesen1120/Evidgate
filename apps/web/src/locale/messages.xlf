@@ -511,7 +511,7 @@
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/secret-reference-list.component.html</context>
-          <context context-type="linenumber">165,167</context>
+          <context context-type="linenumber">166,168</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/studio/gallery/studio-gallery.copy.ts</context>
@@ -5231,7 +5231,7 @@
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/security/security-events.page.ts</context>
-          <context context-type="linenumber">113</context>
+          <context context-type="linenumber">117</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/settings-shell.page.html</context>
@@ -5391,7 +5391,7 @@
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/catalog/case-list.page.ts</context>
-          <context context-type="linenumber">154</context>
+          <context context-type="linenumber">156</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/catalog/case-record.copy.ts</context>
@@ -5406,7 +5406,7 @@
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/catalog/case-list.page.ts</context>
-          <context context-type="linenumber">153</context>
+          <context context-type="linenumber">155</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/catalog/case-record.copy.ts</context>
@@ -5443,7 +5443,7 @@
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/catalog/case-list.page.ts</context>
-          <context context-type="linenumber">158</context>
+          <context context-type="linenumber">160</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/catalog/case-record.copy.ts</context>
@@ -5458,7 +5458,7 @@
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/catalog/case-list.page.ts</context>
-          <context context-type="linenumber">159</context>
+          <context context-type="linenumber">161</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/catalog/case-record.copy.ts</context>
@@ -5473,7 +5473,7 @@
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/catalog/case-list.page.ts</context>
-          <context context-type="linenumber">160</context>
+          <context context-type="linenumber">162</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/catalog/case-record.copy.ts</context>
@@ -5572,242 +5572,200 @@
           <context context-type="linenumber">155,157</context>
         </context-group>
       </trans-unit>
-      <trans-unit id="catalog.loaded-count" datatype="html">
-        <source><x id="INTERPOLATION" equiv-text="{{ store.rows().length | number }}"/> loaded</source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/catalog/case-list.page.html</context>
-          <context context-type="linenumber">259,260</context>
-        </context-group>
-      </trans-unit>
-      <trans-unit id="catalog.matches-loaded" datatype="html">
-        <source>Matches in loaded results: <x id="INTERPOLATION" equiv-text="{{ store.visibleRows().length | number }}"/></source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/catalog/case-list.page.html</context>
-          <context context-type="linenumber">262,263</context>
-        </context-group>
-      </trans-unit>
       <trans-unit id="catalog.title" datatype="html">
         <source>Test catalog</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/catalog/case-list.page.ts</context>
-          <context context-type="linenumber">148</context>
+          <context context-type="linenumber">150</context>
         </context-group>
       </trans-unit>
       <trans-unit id="catalog.description" datatype="html">
         <source>Browse stable automated test identities in this project. A missing identity is not a failed test.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/catalog/case-list.page.ts</context>
-          <context context-type="linenumber">149</context>
+          <context context-type="linenumber">151</context>
         </context-group>
       </trans-unit>
-      <trans-unit id="catalog.results-title" datatype="html">
-        <source>Catalog results</source>
+      <trans-unit id="catalog.results-oldest-first" datatype="html">
+        <source>Catalog results (oldest first)</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/catalog/case-list.page.ts</context>
-          <context context-type="linenumber">150</context>
+          <context context-type="linenumber">152</context>
         </context-group>
       </trans-unit>
       <trans-unit id="catalog.filters" datatype="html">
         <source>Filter test identities</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/catalog/case-list.page.ts</context>
-          <context context-type="linenumber">151</context>
+          <context context-type="linenumber">153</context>
         </context-group>
       </trans-unit>
-      <trans-unit id="catalog.loaded-filter-hint" datatype="html">
-        <source>Status and framework filter the server list. Search matches name or ID in loaded results only; it never loads more results.</source>
+      <trans-unit id="catalog.page-filter-hint" datatype="html">
+        <source>Status and framework filter the server list. Search matches name or ID on the current page only.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/catalog/case-list.page.ts</context>
-          <context context-type="linenumber">152</context>
+          <context context-type="linenumber">154</context>
         </context-group>
       </trans-unit>
       <trans-unit id="catalog.framework-hint" datatype="html">
         <source>Exact framework name, for example playwright. Leave blank for all frameworks.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/catalog/case-list.page.ts</context>
-          <context context-type="linenumber">155</context>
+          <context context-type="linenumber">157</context>
         </context-group>
       </trans-unit>
-      <trans-unit id="catalog.loaded-search" datatype="html">
-        <source>Search name or ID in loaded results</source>
+      <trans-unit id="catalog.page-search" datatype="html">
+        <source>Search name or ID on this page</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/catalog/case-list.page.ts</context>
-          <context context-type="linenumber">156</context>
+          <context context-type="linenumber">158</context>
         </context-group>
       </trans-unit>
       <trans-unit id="catalog.all" datatype="html">
         <source>Active and missing</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/catalog/case-list.page.ts</context>
-          <context context-type="linenumber">157</context>
+          <context context-type="linenumber">159</context>
         </context-group>
       </trans-unit>
       <trans-unit id="catalog.apply" datatype="html">
         <source>Apply filters</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/catalog/case-list.page.ts</context>
-          <context context-type="linenumber">161</context>
+          <context context-type="linenumber">163</context>
         </context-group>
       </trans-unit>
       <trans-unit id="catalog.clear" datatype="html">
         <source>Clear filters</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/catalog/case-list.page.ts</context>
-          <context context-type="linenumber">162</context>
+          <context context-type="linenumber">164</context>
         </context-group>
       </trans-unit>
       <trans-unit id="catalog.loading" datatype="html">
         <source>Loading test identities…</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/catalog/case-list.page.ts</context>
-          <context context-type="linenumber">163</context>
+          <context context-type="linenumber">165</context>
         </context-group>
       </trans-unit>
       <trans-unit id="catalog.empty-title" datatype="html">
         <source>No test identities in this project</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/catalog/case-list.page.ts</context>
-          <context context-type="linenumber">164</context>
+          <context context-type="linenumber">166</context>
         </context-group>
       </trans-unit>
       <trans-unit id="catalog.empty-description" datatype="html">
         <source>Test identities appear here after catalog ingestion. No test outcome is inferred from an empty catalog.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/catalog/case-list.page.ts</context>
-          <context context-type="linenumber">165</context>
+          <context context-type="linenumber">167</context>
         </context-group>
       </trans-unit>
       <trans-unit id="catalog.loaded-no-match-title" datatype="html">
         <source>No matching identities in loaded results</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/catalog/case-list.page.ts</context>
-          <context context-type="linenumber">166</context>
+          <context context-type="linenumber">168</context>
         </context-group>
       </trans-unit>
-      <trans-unit id="catalog.loaded-no-match-description" datatype="html">
-        <source>Clear the filters to return to loaded results, or load more identities below. Local search does not inspect unloaded results.</source>
+      <trans-unit id="catalog.page-no-match-description" datatype="html">
+        <source>Clear the filters or browse another page. Local search only checks the current page.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/catalog/case-list.page.ts</context>
-          <context context-type="linenumber">167</context>
+          <context context-type="linenumber">169</context>
         </context-group>
       </trans-unit>
       <trans-unit id="catalog.available-fields-note" datatype="html">
         <source>This list does not supply revision, platform, level, purpose or rename history; these columns are not displayed.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/catalog/case-list.page.ts</context>
-          <context context-type="linenumber">168</context>
+          <context context-type="linenumber">170</context>
         </context-group>
       </trans-unit>
       <trans-unit id="catalog.browse-capped" datatype="html">
         <source>Case list is at its load limit</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/catalog/case-list.page.ts</context>
-          <context context-type="linenumber">169</context>
+          <context context-type="linenumber">171</context>
         </context-group>
       </trans-unit>
       <trans-unit id="catalog.browse-capped-help" datatype="html">
         <source>Narrow the status or framework filters to reach cases beyond the <x id="cap" equiv-text="formatNumber(this.cap, this.locale)"/> loaded here. Search only checks loaded results.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/catalog/case-list.page.ts</context>
-          <context context-type="linenumber">170</context>
-        </context-group>
-      </trans-unit>
-      <trans-unit id="catalog.pagination" datatype="html">
-        <source>Catalog pagination</source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/catalog/case-list.page.ts</context>
-          <context context-type="linenumber">171</context>
-        </context-group>
-      </trans-unit>
-      <trans-unit id="catalog.page-size" datatype="html">
-        <source>Page size</source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/catalog/case-list.page.ts</context>
           <context context-type="linenumber">172</context>
         </context-group>
       </trans-unit>
-      <trans-unit id="catalog.load-more" datatype="html">
-        <source>Load more</source>
+      <trans-unit id="catalog.page-load-failed" datatype="html">
+        <source>The requested page could not be loaded. The displayed page is unchanged.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/catalog/case-list.page.ts</context>
           <context context-type="linenumber">173</context>
         </context-group>
       </trans-unit>
-      <trans-unit id="catalog.loading-more" datatype="html">
-        <source>Loading more identities…</source>
+      <trans-unit id="catalog.retry-page" datatype="html">
+        <source>Retry page</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/catalog/case-list.page.ts</context>
           <context context-type="linenumber">174</context>
-        </context-group>
-      </trans-unit>
-      <trans-unit id="catalog.load-more-failed" datatype="html">
-        <source>More identities could not be loaded. Loaded results are unchanged.</source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/catalog/case-list.page.ts</context>
-          <context context-type="linenumber">175</context>
-        </context-group>
-      </trans-unit>
-      <trans-unit id="catalog.retry-more" datatype="html">
-        <source>Retry loading more</source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/catalog/case-list.page.ts</context>
-          <context context-type="linenumber">176</context>
         </context-group>
       </trans-unit>
       <trans-unit id="catalog.owners-loading" datatype="html">
         <source>Loading owner choices…</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/catalog/case-list.page.ts</context>
-          <context context-type="linenumber">177</context>
+          <context context-type="linenumber">175</context>
         </context-group>
       </trans-unit>
       <trans-unit id="catalog.owners-failed" datatype="html">
         <source>Owner choices could not be loaded. Existing ownership is unchanged.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/catalog/case-list.page.ts</context>
-          <context context-type="linenumber">178</context>
+          <context context-type="linenumber">176</context>
         </context-group>
       </trans-unit>
       <trans-unit id="catalog.retry-owners" datatype="html">
         <source>Retry owner choices</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/catalog/case-list.page.ts</context>
-          <context context-type="linenumber">179</context>
+          <context context-type="linenumber">177</context>
         </context-group>
       </trans-unit>
       <trans-unit id="catalog.owners-empty" datatype="html">
         <source>No active members are available to assign. Existing ownership is unchanged.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/catalog/case-list.page.ts</context>
-          <context context-type="linenumber">180</context>
+          <context context-type="linenumber">178</context>
         </context-group>
       </trans-unit>
       <trans-unit id="catalog.owner-permission-reason" datatype="html">
         <source>case:write is required to assign an owner.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/catalog/case-list.page.ts</context>
-          <context context-type="linenumber">181</context>
+          <context context-type="linenumber">179</context>
         </context-group>
       </trans-unit>
       <trans-unit id="catalog.owner-narrow-reason" datatype="html">
         <source>Assign owners on a screen at least 768 pixels wide. Owner details remain readable here.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/catalog/case-list.page.ts</context>
-          <context context-type="linenumber">182</context>
+          <context context-type="linenumber">180</context>
         </context-group>
       </trans-unit>
       <trans-unit id="catalog.owner-choices-hint" datatype="html">
         <source>Choose an active member by email. Clearing an owner is not supported.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/catalog/case-list.page.ts</context>
-          <context context-type="linenumber">183</context>
+          <context context-type="linenumber">181</context>
         </context-group>
       </trans-unit>
       <trans-unit id="catalog.case-view.loaded-count" datatype="html">
         <source>Loaded identities: <x id="count" equiv-text="formatNumber(this.store.rows().length, this.locale)"/></source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/catalog/case-list.page.ts</context>
-          <context context-type="linenumber">208</context>
+          <context context-type="linenumber">206</context>
         </context-group>
       </trans-unit>
       <trans-unit id="catalog.case-view.name" datatype="html">
@@ -13200,7 +13158,7 @@
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/quota-retention/quota-panel.component.ts</context>
-          <context context-type="linenumber">128</context>
+          <context context-type="linenumber">136</context>
         </context-group>
       </trans-unit>
       <trans-unit id="quota.panel.limit" datatype="html">
@@ -13211,7 +13169,7 @@
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/quota-retention/quota-panel.component.ts</context>
-          <context context-type="linenumber">129</context>
+          <context context-type="linenumber">137</context>
         </context-group>
       </trans-unit>
       <trans-unit id="quota.panel.unavailable" datatype="html">
@@ -13222,7 +13180,7 @@
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/quota-retention/quota-panel.component.ts</context>
-          <context context-type="linenumber">130</context>
+          <context context-type="linenumber">138</context>
         </context-group>
       </trans-unit>
       <trans-unit id="orgoverview.latest-unavailable" datatype="html">
@@ -18531,151 +18489,123 @@
           <context context-type="linenumber">57</context>
         </context-group>
       </trans-unit>
-      <trans-unit id="runs.detail.attempts.page" datatype="html">
-        <source>Page <x id="page" equiv-text="page"/> / <x id="pages" equiv-text="pages"/></source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/runs/detail/attempts/attempts-table.component.ts</context>
-          <context context-type="linenumber">121</context>
-        </context-group>
-      </trans-unit>
       <trans-unit id="runs.detail.attempts.title" datatype="html">
         <source>Attempts</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/detail/attempts/attempts-table.component.ts</context>
-          <context context-type="linenumber">124</context>
+          <context context-type="linenumber">101</context>
         </context-group>
       </trans-unit>
       <trans-unit id="runs.detail.attempts.scroll-region" datatype="html">
         <source>Attempts table</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/detail/attempts/attempts-table.component.ts</context>
-          <context context-type="linenumber">125</context>
+          <context context-type="linenumber">102</context>
         </context-group>
       </trans-unit>
-      <trans-unit id="runs.detail.attempts.pagination" datatype="html">
-        <source>Attempts pagination</source>
+      <trans-unit id="runs.detail.attempts.server-order" datatype="html">
+        <source>Server order: execution key ascending, then attempt number ascending.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/detail/attempts/attempts-table.component.ts</context>
-          <context context-type="linenumber">126</context>
+          <context context-type="linenumber">103</context>
         </context-group>
       </trans-unit>
       <trans-unit id="runs.detail.attempts.execution" datatype="html">
         <source>Execution</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/detail/attempts/attempts-table.component.ts</context>
-          <context context-type="linenumber">127</context>
+          <context context-type="linenumber">104</context>
         </context-group>
       </trans-unit>
       <trans-unit id="runs.detail.attempts.attempt" datatype="html">
         <source>Attempt</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/detail/attempts/attempts-table.component.ts</context>
-          <context context-type="linenumber">128</context>
+          <context context-type="linenumber">105</context>
         </context-group>
       </trans-unit>
       <trans-unit id="runs.detail.attempts.raw" datatype="html">
         <source>Raw status</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/detail/attempts/attempts-table.component.ts</context>
-          <context context-type="linenumber">129</context>
+          <context context-type="linenumber">106</context>
         </context-group>
       </trans-unit>
       <trans-unit id="runs.detail.attempts.normalised" datatype="html">
         <source>Normalised status</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/detail/attempts/attempts-table.component.ts</context>
-          <context context-type="linenumber">130</context>
+          <context context-type="linenumber">107</context>
         </context-group>
       </trans-unit>
       <trans-unit id="runs.detail.attempts.duration" datatype="html">
         <source>Duration</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/detail/attempts/attempts-table.component.ts</context>
-          <context context-type="linenumber">131</context>
+          <context context-type="linenumber">108</context>
         </context-group>
       </trans-unit>
       <trans-unit id="runs.detail.attempts.artifacts" datatype="html">
         <source>Artifacts</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/detail/attempts/attempts-table.component.ts</context>
-          <context context-type="linenumber">132</context>
+          <context context-type="linenumber">109</context>
         </context-group>
       </trans-unit>
       <trans-unit id="runs.detail.attempts.healing-candidates" datatype="html">
         <source>Healing candidates</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/detail/attempts/attempts-table.component.ts</context>
-          <context context-type="linenumber">133</context>
+          <context context-type="linenumber">110</context>
         </context-group>
       </trans-unit>
-      <trans-unit id="runs.detail.attempts.more" datatype="html">
-        <source>Load more attempts</source>
+      <trans-unit id="runs.detail.attempts.page-loading" datatype="html">
+        <source>Loading attempts page</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/detail/attempts/attempts-table.component.ts</context>
-          <context context-type="linenumber">135</context>
+          <context context-type="linenumber">112</context>
         </context-group>
       </trans-unit>
-      <trans-unit id="runs.detail.attempts.loading-more" datatype="html">
-        <source>Loading more attempts</source>
+      <trans-unit id="runs.detail.attempts.page-loaded" datatype="html">
+        <source>Attempts page loaded</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/detail/attempts/attempts-table.component.ts</context>
-          <context context-type="linenumber">136</context>
-        </context-group>
-      </trans-unit>
-      <trans-unit id="runs.detail.attempts.more-loaded" datatype="html">
-        <source>More attempts loaded</source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/runs/detail/attempts/attempts-table.component.ts</context>
-          <context context-type="linenumber">137</context>
+          <context context-type="linenumber">113</context>
         </context-group>
       </trans-unit>
       <trans-unit id="runs.detail.attempts.empty" datatype="html">
         <source>No attempts recorded</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/detail/attempts/attempts-table.component.ts</context>
-          <context context-type="linenumber">138</context>
+          <context context-type="linenumber">114</context>
         </context-group>
       </trans-unit>
       <trans-unit id="runs.detail.attempts.pre-healing" datatype="html">
         <source>Pre-healing failure</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/detail/attempts/attempts-table.component.ts</context>
-          <context context-type="linenumber">139</context>
+          <context context-type="linenumber">115</context>
         </context-group>
       </trans-unit>
       <trans-unit id="runs.detail.attempts.candidate" datatype="html">
         <source>Healing candidate</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/detail/attempts/attempts-table.component.ts</context>
-          <context context-type="linenumber">140</context>
+          <context context-type="linenumber">116</context>
         </context-group>
       </trans-unit>
       <trans-unit id="runs.detail.attempts.shadow" datatype="html">
         <source>Shadow evaluation</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/detail/attempts/attempts-table.component.ts</context>
-          <context context-type="linenumber">141</context>
+          <context context-type="linenumber">117</context>
         </context-group>
       </trans-unit>
       <trans-unit id="runs.detail.attempts.official" datatype="html">
         <source>Official evaluation</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/detail/attempts/attempts-table.component.ts</context>
-          <context context-type="linenumber">142</context>
-        </context-group>
-      </trans-unit>
-      <trans-unit id="runs.detail.attempts.previous" datatype="html">
-        <source>Previous page</source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/runs/detail/attempts/attempts-table.component.ts</context>
-          <context context-type="linenumber">143</context>
-        </context-group>
-      </trans-unit>
-      <trans-unit id="runs.detail.attempts.next" datatype="html">
-        <source>Next page</source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/runs/detail/attempts/attempts-table.component.ts</context>
-          <context context-type="linenumber">144</context>
+          <context context-type="linenumber">118</context>
         </context-group>
       </trans-unit>
       <trans-unit id="runs.decision.title" datatype="html">
@@ -18686,7 +18616,7 @@
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/detail/run-detail.page.ts</context>
-          <context context-type="linenumber">213</context>
+          <context context-type="linenumber">218</context>
         </context-group>
       </trans-unit>
       <trans-unit id="runs.detail.evidence-completeness" datatype="html">
@@ -18867,7 +18797,7 @@
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/detail/run-detail.page.ts</context>
-          <context context-type="linenumber">212</context>
+          <context context-type="linenumber">217</context>
         </context-group>
       </trans-unit>
       <trans-unit id="runs.evidence.loading" datatype="html">
@@ -19098,200 +19028,172 @@
           <context context-type="linenumber">29</context>
         </context-group>
       </trans-unit>
-      <trans-unit id="runs.detail.producers.page" datatype="html">
-        <source>Page <x id="page" equiv-text="page"/> of <x id="pages" equiv-text="pages"/></source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/runs/detail/producers/producer-status-table.component.ts</context>
-          <context context-type="linenumber">103</context>
-        </context-group>
-      </trans-unit>
       <trans-unit id="runs.detail.producers.title" datatype="html">
         <source>Producers</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/detail/producers/producer-status-table.component.ts</context>
-          <context context-type="linenumber">111</context>
+          <context context-type="linenumber">127</context>
         </context-group>
       </trans-unit>
       <trans-unit id="runs.detail.producers.loading" datatype="html">
         <source>Loading producers</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/detail/producers/producer-status-table.component.ts</context>
-          <context context-type="linenumber">112</context>
+          <context context-type="linenumber">128</context>
         </context-group>
       </trans-unit>
       <trans-unit id="runs.detail.producers.empty" datatype="html">
         <source>No declared producers</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/detail/producers/producer-status-table.component.ts</context>
-          <context context-type="linenumber">113</context>
+          <context context-type="linenumber">129</context>
         </context-group>
       </trans-unit>
       <trans-unit id="runs.detail.producers.empty-description" datatype="html">
         <source>This run declares no producer slots. This is not a collection result.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/detail/producers/producer-status-table.component.ts</context>
-          <context context-type="linenumber">114</context>
+          <context context-type="linenumber">130</context>
         </context-group>
       </trans-unit>
       <trans-unit id="runs.detail.producers.producer" datatype="html">
         <source>Producer slot</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/detail/producers/producer-status-table.component.ts</context>
-          <context context-type="linenumber">115</context>
+          <context context-type="linenumber">131</context>
         </context-group>
       </trans-unit>
       <trans-unit id="runs.detail.producers.identity" datatype="html">
         <source>Bound identity state</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/detail/producers/producer-status-table.component.ts</context>
-          <context context-type="linenumber">116</context>
+          <context context-type="linenumber">132</context>
         </context-group>
       </trans-unit>
       <trans-unit id="runs.detail.producers.finalize" datatype="html">
         <source>Finalize status</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/detail/producers/producer-status-table.component.ts</context>
-          <context context-type="linenumber">117</context>
+          <context context-type="linenumber">133</context>
         </context-group>
       </trans-unit>
       <trans-unit id="runs.detail.producers.last-sequence" datatype="html">
         <source>Last sequence</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/detail/producers/producer-status-table.component.ts</context>
-          <context context-type="linenumber">118</context>
+          <context context-type="linenumber">134</context>
         </context-group>
       </trans-unit>
       <trans-unit id="runs.detail.producers.count" datatype="html">
         <source>Count / expected</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/detail/producers/producer-status-table.component.ts</context>
-          <context context-type="linenumber">119</context>
+          <context context-type="linenumber">135</context>
         </context-group>
       </trans-unit>
       <trans-unit id="runs.detail.producers.expected-unset" datatype="html">
         <source>Expected unset</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/detail/producers/producer-status-table.component.ts</context>
-          <context context-type="linenumber">120</context>
+          <context context-type="linenumber">136</context>
         </context-group>
       </trans-unit>
       <trans-unit id="runs.detail.producers.mismatch" datatype="html">
         <source>Count does not match expected</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/detail/producers/producer-status-table.component.ts</context>
-          <context context-type="linenumber">121</context>
+          <context context-type="linenumber">137</context>
         </context-group>
       </trans-unit>
       <trans-unit id="runs.detail.producers.count-mismatch-short" datatype="html">
         <source>Mismatch</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/detail/producers/producer-status-table.component.ts</context>
-          <context context-type="linenumber">122</context>
+          <context context-type="linenumber">138</context>
         </context-group>
       </trans-unit>
       <trans-unit id="runs.detail.producers.events" datatype="html">
         <source>Informational events</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/detail/producers/producer-status-table.component.ts</context>
-          <context context-type="linenumber">123</context>
+          <context context-type="linenumber">139</context>
         </context-group>
       </trans-unit>
       <trans-unit id="runs.detail.producers.no-events" datatype="html">
         <source>No informational events</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/detail/producers/producer-status-table.component.ts</context>
-          <context context-type="linenumber">124</context>
+          <context context-type="linenumber">140</context>
         </context-group>
       </trans-unit>
       <trans-unit id="runs.detail.producers.stale-epoch-short" datatype="html">
         <source>Stale epoch</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/detail/producers/producer-status-table.component.ts</context>
-          <context context-type="linenumber">125</context>
+          <context context-type="linenumber">141</context>
         </context-group>
       </trans-unit>
       <trans-unit id="runs.detail.producers.after-cancel-short" datatype="html">
         <source>After cancel</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/detail/producers/producer-status-table.component.ts</context>
-          <context context-type="linenumber">126</context>
+          <context context-type="linenumber">142</context>
         </context-group>
       </trans-unit>
       <trans-unit id="runs.detail.producers.event-note" datatype="html">
         <source>After-cancel event counts are informational only; a stale-epoch event on a closed shard makes the evidence incomplete.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/detail/producers/producer-status-table.component.ts</context>
-          <context context-type="linenumber">127</context>
-        </context-group>
-      </trans-unit>
-      <trans-unit id="runs.detail.producers.previous" datatype="html">
-        <source>Previous producers</source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/runs/detail/producers/producer-status-table.component.ts</context>
-          <context context-type="linenumber">128</context>
-        </context-group>
-      </trans-unit>
-      <trans-unit id="runs.detail.producers.next" datatype="html">
-        <source>Next producers</source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/runs/detail/producers/producer-status-table.component.ts</context>
-          <context context-type="linenumber">129</context>
-        </context-group>
-      </trans-unit>
-      <trans-unit id="runs.detail.producers.pagination" datatype="html">
-        <source>Producer pages</source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/runs/detail/producers/producer-status-table.component.ts</context>
-          <context context-type="linenumber">130</context>
+          <context context-type="linenumber">143</context>
         </context-group>
       </trans-unit>
       <trans-unit id="runs.detail.producers.open-count" datatype="html">
         <source><x id="count" equiv-text="count"/> served, expected count not set yet</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/detail/producers/producer-status-table.component.ts</context>
-          <context context-type="linenumber">213</context>
+          <context context-type="linenumber">231</context>
         </context-group>
       </trans-unit>
       <trans-unit id="runs.detail.producers.stale-epoch-one" datatype="html">
         <source>1 stale-epoch event</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/detail/producers/producer-status-table.component.ts</context>
-          <context context-type="linenumber">218</context>
+          <context context-type="linenumber">236</context>
         </context-group>
       </trans-unit>
       <trans-unit id="runs.detail.producers.stale-epoch" datatype="html">
         <source><x id="count" equiv-text="count"/> stale-epoch events</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/detail/producers/producer-status-table.component.ts</context>
-          <context context-type="linenumber">219</context>
+          <context context-type="linenumber">237</context>
         </context-group>
       </trans-unit>
       <trans-unit id="runs.detail.producers.after-cancel-one" datatype="html">
         <source>1 after-cancel event</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/detail/producers/producer-status-table.component.ts</context>
-          <context context-type="linenumber">224</context>
+          <context context-type="linenumber">242</context>
         </context-group>
       </trans-unit>
       <trans-unit id="runs.detail.producers.after-cancel" datatype="html">
         <source><x id="count" equiv-text="count"/> after-cancel events</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/detail/producers/producer-status-table.component.ts</context>
-          <context context-type="linenumber">225</context>
+          <context context-type="linenumber">243</context>
         </context-group>
       </trans-unit>
       <trans-unit id="runs.detail.producers.run-after-cancel-one" datatype="html">
         <source>1 after-cancel event for this run</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/detail/producers/producer-status-table.component.ts</context>
-          <context context-type="linenumber">230</context>
+          <context context-type="linenumber">248</context>
         </context-group>
       </trans-unit>
       <trans-unit id="runs.detail.producers.run-after-cancel" datatype="html">
         <source><x id="count" equiv-text="count"/> after-cancel events for this run</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/detail/producers/producer-status-table.component.ts</context>
-          <context context-type="linenumber">231</context>
+          <context context-type="linenumber">249</context>
         </context-group>
       </trans-unit>
       <trans-unit id="runs.evidence.reason.missing-shard" datatype="html">
@@ -19536,28 +19438,28 @@
         <source>Version <x id="version" equiv-text="version"/></source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/detail/run-detail.page.ts</context>
-          <context context-type="linenumber">167</context>
+          <context context-type="linenumber">172</context>
         </context-group>
       </trans-unit>
       <trans-unit id="runs.evidence.announcement-selected" datatype="html">
         <source>Viewing evidence revision <x id="SELECTED" equiv-text="state.selected"/></source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/detail/run-detail.page.ts</context>
-          <context context-type="linenumber">201</context>
+          <context context-type="linenumber">206</context>
         </context-group>
       </trans-unit>
       <trans-unit id="runs.evidence.announcement-newer" datatype="html">
         <source>Viewing evidence revision <x id="SELECTED" equiv-text="state.selected"/>. Newer revision <x id="NEWER" equiv-text="state.newer"/> is available.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/detail/run-detail.page.ts</context>
-          <context context-type="linenumber">202</context>
+          <context context-type="linenumber">207</context>
         </context-group>
       </trans-unit>
       <trans-unit id="runs.detail.title" datatype="html">
         <source>Run detail</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/detail/run-detail.page.ts</context>
-          <context context-type="linenumber">209</context>
+          <context context-type="linenumber">214</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/list/run-list-table.component.ts</context>
@@ -19568,28 +19470,28 @@
         <source>Run sections</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/detail/run-detail.page.ts</context>
-          <context context-type="linenumber">210</context>
+          <context context-type="linenumber">215</context>
         </context-group>
       </trans-unit>
       <trans-unit id="runs.detail.back" datatype="html">
         <source>Back to runs</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/detail/run-detail.page.ts</context>
-          <context context-type="linenumber">211</context>
+          <context context-type="linenumber">216</context>
         </context-group>
       </trans-unit>
       <trans-unit id="runs.detail.inspect-evidence" datatype="html">
         <source>Inspect evidence</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/detail/run-detail.page.ts</context>
-          <context context-type="linenumber">214</context>
+          <context context-type="linenumber">219</context>
         </context-group>
       </trans-unit>
       <trans-unit id="runs.detail.decision-tab-compact" datatype="html">
         <source>Live decision</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/detail/run-detail.page.ts</context>
-          <context context-type="linenumber">215</context>
+          <context context-type="linenumber">220</context>
         </context-group>
       </trans-unit>
       <trans-unit id="runs.detail.id" datatype="html">
@@ -22703,7 +22605,7 @@
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/security/security-events.page.ts</context>
-          <context context-type="linenumber">121</context>
+          <context context-type="linenumber">125</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/settings-page-counts.component.ts</context>
@@ -22956,7 +22858,7 @@
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/quota-retention/quota-panel.component.ts</context>
-          <context context-type="linenumber">118</context>
+          <context context-type="linenumber">126</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/security/security-events-table.component.ts</context>
@@ -24609,7 +24511,7 @@
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/quota-retention/quota-panel.component.ts</context>
-          <context context-type="linenumber">119</context>
+          <context context-type="linenumber">127</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.policy.revisions-empty" datatype="html">
@@ -24675,186 +24577,207 @@
           <context context-type="linenumber">155,156</context>
         </context-group>
       </trans-unit>
+      <trans-unit id="quota.panel.project-order" datatype="html">
+        <source> Projects ordered oldest first </source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/settings/quota-retention/quota-panel.component.html</context>
+          <context context-type="linenumber">158,162</context>
+        </context-group>
+      </trans-unit>
       <trans-unit id="quota.panel.counter-details" datatype="html">
         <source>Quota counter</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/quota-retention/quota-panel.component.ts</context>
-          <context context-type="linenumber">120</context>
+          <context context-type="linenumber">128</context>
         </context-group>
       </trans-unit>
       <trans-unit id="quota.panel.retry-after-seconds" datatype="html">
         <source>Retry after (seconds)</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/quota-retention/quota-panel.component.ts</context>
-          <context context-type="linenumber">121</context>
+          <context context-type="linenumber">129</context>
         </context-group>
       </trans-unit>
       <trans-unit id="quota.panel.counters" datatype="html">
         <source>Usage counters</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/quota-retention/quota-panel.component.ts</context>
-          <context context-type="linenumber">122</context>
+          <context context-type="linenumber">130</context>
         </context-group>
       </trans-unit>
       <trans-unit id="quota.panel.title" datatype="html">
         <source>Usage and AI credits</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/quota-retention/quota-panel.component.ts</context>
-          <context context-type="linenumber">123</context>
+          <context context-type="linenumber">131</context>
         </context-group>
       </trans-unit>
       <trans-unit id="quota.panel.description" datatype="html">
         <source>Review organization usage, quota limits and project retention windows.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/quota-retention/quota-panel.component.ts</context>
-          <context context-type="linenumber">124</context>
+          <context context-type="linenumber">132</context>
         </context-group>
       </trans-unit>
       <trans-unit id="quota.panel.loading" datatype="html">
         <source>Loading usage summary…</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/quota-retention/quota-panel.component.ts</context>
-          <context context-type="linenumber">125</context>
+          <context context-type="linenumber">133</context>
         </context-group>
       </trans-unit>
       <trans-unit id="quota.panel.period" datatype="html">
         <source>Billing period</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/quota-retention/quota-panel.component.ts</context>
-          <context context-type="linenumber">126</context>
+          <context context-type="linenumber">134</context>
         </context-group>
       </trans-unit>
       <trans-unit id="quota.panel.empty" datatype="html">
         <source>No usage counters were supplied for this period.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/quota-retention/quota-panel.component.ts</context>
-          <context context-type="linenumber">127</context>
+          <context context-type="linenumber">135</context>
         </context-group>
       </trans-unit>
       <trans-unit id="quota.panel.not-measured" datatype="html">
         <source>Not measured yet.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/quota-retention/quota-panel.component.ts</context>
-          <context context-type="linenumber">131</context>
+          <context context-type="linenumber">139</context>
         </context-group>
       </trans-unit>
       <trans-unit id="quota.panel.blocked" datatype="html">
         <source>Limit reached</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/quota-retention/quota-panel.component.ts</context>
-          <context context-type="linenumber">132</context>
+          <context context-type="linenumber">140</context>
         </context-group>
       </trans-unit>
       <trans-unit id="quota.panel.warned-short" datatype="html">
         <source>Near limit</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/quota-retention/quota-panel.component.ts</context>
-          <context context-type="linenumber">133</context>
+          <context context-type="linenumber">141</context>
         </context-group>
       </trans-unit>
       <trans-unit id="quota.panel.warned-at" datatype="html">
         <source>Warning recorded</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/quota-retention/quota-panel.component.ts</context>
-          <context context-type="linenumber">134</context>
+          <context context-type="linenumber">142</context>
         </context-group>
       </trans-unit>
       <trans-unit id="quota.panel.blocked-at" datatype="html">
         <source>Block recorded</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/quota-retention/quota-panel.component.ts</context>
-          <context context-type="linenumber">135</context>
+          <context context-type="linenumber">143</context>
         </context-group>
       </trans-unit>
       <trans-unit id="quota.panel.project" datatype="html">
         <source>Project</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/quota-retention/quota-panel.component.ts</context>
-          <context context-type="linenumber">136</context>
+          <context context-type="linenumber">144</context>
         </context-group>
       </trans-unit>
       <trans-unit id="quota.panel.project-caption" datatype="html">
         <source>Returned project counters. Organization totals are supplied separately, not calculated from these rows.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/quota-retention/quota-panel.component.ts</context>
-          <context context-type="linenumber">137</context>
+          <context context-type="linenumber">145</context>
         </context-group>
       </trans-unit>
       <trans-unit id="quota.panel.recorded-state" datatype="html">
         <source>Recorded quota state</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/quota-retention/quota-panel.component.ts</context>
-          <context context-type="linenumber">138</context>
+          <context context-type="linenumber">146</context>
         </context-group>
       </trans-unit>
       <trans-unit id="quota.panel.metric" datatype="html">
         <source>Metric</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/quota-retention/quota-panel.component.ts</context>
-          <context context-type="linenumber">139</context>
+          <context context-type="linenumber">147</context>
         </context-group>
       </trans-unit>
       <trans-unit id="quota.panel.state-description" datatype="html">
         <source>Warnings and blocks are reported by the service, not inferred from usage.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/quota-retention/quota-panel.component.ts</context>
-          <context context-type="linenumber">140</context>
+          <context context-type="linenumber">148</context>
         </context-group>
       </trans-unit>
       <trans-unit id="quota.panel.no-alert" datatype="html">
         <source>No alert recorded</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/quota-retention/quota-panel.component.ts</context>
-          <context context-type="linenumber">141</context>
+          <context context-type="linenumber">149</context>
         </context-group>
       </trans-unit>
       <trans-unit id="quota.panel.incomplete" datatype="html">
         <source>More project counters exist on the service. All counters returned in this response are available below; this is not the complete organization breakdown.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/quota-retention/quota-panel.component.ts</context>
-          <context context-type="linenumber">142</context>
+          <context context-type="linenumber">150</context>
         </context-group>
       </trans-unit>
       <trans-unit id="quota.panel.summary-unavailable" datatype="html">
         <source>Usage summary unavailable. Try loading it again.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/quota-retention/quota-panel.component.ts</context>
-          <context context-type="linenumber">143</context>
+          <context context-type="linenumber">151</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="quota.panel.project-page-failed" datatype="html">
+        <source>Project page unavailable. The previous page is still shown.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/settings/quota-retention/quota-panel.component.ts</context>
+          <context context-type="linenumber">152</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="quota.panel.retry-project-page" datatype="html">
+        <source>Retry project page</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/settings/quota-retention/quota-panel.component.ts</context>
+          <context context-type="linenumber">153</context>
         </context-group>
       </trans-unit>
       <trans-unit id="quota.panel.retry" datatype="html">
         <source>Reload usage</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/quota-retention/quota-panel.component.ts</context>
-          <context context-type="linenumber">144</context>
+          <context context-type="linenumber">154</context>
         </context-group>
       </trans-unit>
       <trans-unit id="quota.panel.storage-title" datatype="html">
         <source>Daily storage counters</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/quota-retention/quota-panel.component.ts</context>
-          <context context-type="linenumber">145</context>
+          <context context-type="linenumber">155</context>
         </context-group>
       </trans-unit>
       <trans-unit id="quota.panel.storage-reason" datatype="html">
         <source>Daily storage and egress counters are unavailable because the service does not expose a read for them.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/quota-retention/quota-panel.component.ts</context>
-          <context context-type="linenumber">146</context>
+          <context context-type="linenumber">156</context>
         </context-group>
       </trans-unit>
       <trans-unit id="quota.panel.storage-bytes" datatype="html">
         <source>Stored bytes</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/quota-retention/quota-panel.component.ts</context>
-          <context context-type="linenumber">147</context>
+          <context context-type="linenumber">157</context>
         </context-group>
       </trans-unit>
       <trans-unit id="quota.panel.egress-bytes" datatype="html">
         <source>Egress bytes</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/quota-retention/quota-panel.component.ts</context>
-          <context context-type="linenumber">148</context>
+          <context context-type="linenumber">158</context>
         </context-group>
       </trans-unit>
       <trans-unit id="retention.title" datatype="html">
@@ -27204,168 +27127,179 @@
         <source>CI bindings</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/ci-binding-list.component.ts</context>
-          <context context-type="linenumber">27</context>
+          <context context-type="linenumber">28</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="settings.secrets.order" datatype="html">
+        <source>Oldest first</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/settings/secrets/ci-binding-list.component.ts</context>
+          <context context-type="linenumber">29</context>
+        </context-group>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/settings/secrets/secrets.copy.ts</context>
+          <context context-type="linenumber">37</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.ci.description" datatype="html">
         <source>Repository bindings and allowed CI references. Metadata only; bindings are managed during onboarding.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/ci-binding-list.component.ts</context>
-          <context context-type="linenumber">28</context>
+          <context context-type="linenumber">30</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.ci.provider" datatype="html">
         <source>Provider</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/ci-binding-list.component.ts</context>
-          <context context-type="linenumber">29</context>
+          <context context-type="linenumber">31</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.ci.status" datatype="html">
         <source>Verification state</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/ci-binding-list.component.ts</context>
-          <context context-type="linenumber">30</context>
+          <context context-type="linenumber">32</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.ci.active" datatype="html">
         <source>Active</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/ci-binding-list.component.ts</context>
-          <context context-type="linenumber">31</context>
+          <context context-type="linenumber">33</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.ci.pending" datatype="html">
         <source>Pending verification</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/ci-binding-list.component.ts</context>
-          <context context-type="linenumber">32</context>
+          <context context-type="linenumber">34</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.ci.disabled" datatype="html">
         <source>Disabled</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/ci-binding-list.component.ts</context>
-          <context context-type="linenumber">33</context>
+          <context context-type="linenumber">35</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.ci.pending-hint" datatype="html">
         <source>Waiting for the first CI exchange.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/ci-binding-list.component.ts</context>
-          <context context-type="linenumber">34</context>
+          <context context-type="linenumber">36</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.ci.refs" datatype="html">
         <source>Allowed ref patterns</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/ci-binding-list.component.ts</context>
-          <context context-type="linenumber">35</context>
+          <context context-type="linenumber">37</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.ci.workflows" datatype="html">
         <source>Allowed workflow references</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/ci-binding-list.component.ts</context>
-          <context context-type="linenumber">36</context>
+          <context context-type="linenumber">38</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.ci.activated" datatype="html">
         <source>Activated · UTC</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/ci-binding-list.component.ts</context>
-          <context context-type="linenumber">37</context>
+          <context context-type="linenumber">39</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.ci.created" datatype="html">
         <source>Created · UTC</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/ci-binding-list.component.ts</context>
-          <context context-type="linenumber">38</context>
+          <context context-type="linenumber">40</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.ci.not-activated" datatype="html">
         <source>Not activated</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/ci-binding-list.component.ts</context>
-          <context context-type="linenumber">39</context>
+          <context context-type="linenumber">41</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.ci.none" datatype="html">
         <source>None configured</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/ci-binding-list.component.ts</context>
-          <context context-type="linenumber">40</context>
+          <context context-type="linenumber">42</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.ci.show-all" datatype="html">
         <source>Show all</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/ci-binding-list.component.ts</context>
-          <context context-type="linenumber">41</context>
+          <context context-type="linenumber">43</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.ci.show-fewer" datatype="html">
         <source>Show fewer</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/ci-binding-list.component.ts</context>
-          <context context-type="linenumber">42</context>
+          <context context-type="linenumber">44</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.ci.loading" datatype="html">
         <source>Loading CI bindings…</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/ci-binding-list.component.ts</context>
-          <context context-type="linenumber">43</context>
+          <context context-type="linenumber">45</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.ci.empty" datatype="html">
         <source>No CI bindings for this project. Bindings are created during onboarding.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/ci-binding-list.component.ts</context>
-          <context context-type="linenumber">44</context>
+          <context context-type="linenumber">46</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.ci.forbidden" datatype="html">
         <source>You are not permitted to view CI bindings for this project.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/ci-binding-list.component.ts</context>
-          <context context-type="linenumber">45</context>
+          <context context-type="linenumber">47</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.ci.unavailable" datatype="html">
         <source>CI bindings are unavailable. Check your connection and try again.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/ci-binding-list.component.ts</context>
-          <context context-type="linenumber">46</context>
+          <context context-type="linenumber">48</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.ci.retry" datatype="html">
         <source>Retry CI bindings</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/ci-binding-list.component.ts</context>
-          <context context-type="linenumber">47</context>
+          <context context-type="linenumber">49</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.ci.more" datatype="html">
         <source>Load more CI bindings</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/ci-binding-list.component.ts</context>
-          <context context-type="linenumber">48</context>
+          <context context-type="linenumber">50</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.ci.loading-more" datatype="html">
         <source>Loading more CI bindings…</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/ci-binding-list.component.ts</context>
-          <context context-type="linenumber">49</context>
+          <context context-type="linenumber">51</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.ci.records" datatype="html">
         <source>CI binding records</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/ci-binding-list.component.ts</context>
-          <context context-type="linenumber">143,147</context>
+          <context context-type="linenumber">147,151</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.confirm-title" datatype="html">
@@ -27460,7 +27394,7 @@
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/secrets.copy.ts</context>
-          <context context-type="linenumber">42</context>
+          <context context-type="linenumber">39</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.expired" datatype="html">
@@ -27471,28 +27405,28 @@
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/secrets.copy.ts</context>
-          <context context-type="linenumber">43</context>
+          <context context-type="linenumber">40</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.page-shown" datatype="html">
         <source> Showing <x id="INTERPOLATION" equiv-text="{{ filtered().length | number }}"/> of <x id="INTERPOLATION_1" equiv-text="{{ rows().length | number }}"/> on this page </source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/secret-reference-list.component.html</context>
-          <context context-type="linenumber">211,213</context>
+          <context context-type="linenumber">212,214</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.inspect-named" datatype="html">
         <source>Inspect reference <x id="name" equiv-text="name"/></source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/secret-reference-list.component.ts</context>
-          <context context-type="linenumber">146</context>
+          <context context-type="linenumber">155</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.rotate-named" datatype="html">
         <source>Rotate credential <x id="name" equiv-text="name"/></source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/secret-reference-list.component.ts</context>
-          <context context-type="linenumber">149</context>
+          <context context-type="linenumber">158</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.title" datatype="html">
@@ -27628,207 +27562,179 @@
           <context context-type="linenumber">22</context>
         </context-group>
       </trans-unit>
-      <trans-unit id="settings.secrets.more" datatype="html">
-        <source>Load more references</source>
+      <trans-unit id="settings.secrets.paging-failure" datatype="html">
+        <source>The requested page could not be loaded. References already shown are unchanged.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/secrets.copy.ts</context>
           <context context-type="linenumber">23</context>
-        </context-group>
-      </trans-unit>
-      <trans-unit id="settings.secrets.previous" datatype="html">
-        <source>Previous references</source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/settings/secrets/secrets.copy.ts</context>
-          <context context-type="linenumber">24</context>
-        </context-group>
-      </trans-unit>
-      <trans-unit id="settings.secrets.next" datatype="html">
-        <source>Next references</source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/settings/secrets/secrets.copy.ts</context>
-          <context context-type="linenumber">25</context>
-        </context-group>
-      </trans-unit>
-      <trans-unit id="settings.secrets.paging-failure" datatype="html">
-        <source>The next page could not be loaded. References already shown are unchanged.</source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/settings/secrets/secrets.copy.ts</context>
-          <context context-type="linenumber">26</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.saved" datatype="html">
         <source>Rotation recorded. Update your downstream CI with the new credential and verify it there.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/secrets.copy.ts</context>
-          <context context-type="linenumber">27</context>
-        </context-group>
-      </trans-unit>
-      <trans-unit id="settings.secrets.pages-label" datatype="html">
-        <source>Secret references pages</source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/settings/secrets/secrets.copy.ts</context>
-          <context context-type="linenumber">28</context>
+          <context context-type="linenumber">24</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.rotate-unavailable-hint" datatype="html">
         <source>The rotation may have been applied. Reload the list and check the status before rotating again.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/secrets.copy.ts</context>
-          <context context-type="linenumber">29</context>
+          <context context-type="linenumber">25</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.reload" datatype="html">
         <source>Reload</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/secrets.copy.ts</context>
-          <context context-type="linenumber">30</context>
+          <context context-type="linenumber">26</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.search" datatype="html">
         <source>Search name or prefix</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/secrets.copy.ts</context>
-          <context context-type="linenumber">31</context>
+          <context context-type="linenumber">27</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.loaded-only" datatype="html">
         <source>Search and state filters apply to this loaded page only. Complete project totals are not available.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/secrets.copy.ts</context>
-          <context context-type="linenumber">32</context>
+          <context context-type="linenumber">28</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.no-matches" datatype="html">
         <source>No references match these filters</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/secrets.copy.ts</context>
-          <context context-type="linenumber">33</context>
+          <context context-type="linenumber">29</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.clear" datatype="html">
         <source>Clear filters</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/secrets.copy.ts</context>
-          <context context-type="linenumber">34</context>
+          <context context-type="linenumber">30</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.inspect" datatype="html">
         <source>Inspect</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/secrets.copy.ts</context>
-          <context context-type="linenumber">35</context>
+          <context context-type="linenumber">31</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.metadata" datatype="html">
         <source>Metadata only. A prefix identifies a reference; it does not authenticate.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/secrets.copy.ts</context>
-          <context context-type="linenumber">36</context>
+          <context context-type="linenumber">32</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.all-states" datatype="html">
         <source>All states</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/secrets.copy.ts</context>
-          <context context-type="linenumber">37</context>
+          <context context-type="linenumber">33</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.count-hint" datatype="html">
         <source>Counts use this page before filtering. An active reference can be past its expiry date.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/secrets.copy.ts</context>
-          <context context-type="linenumber">38</context>
+          <context context-type="linenumber">34</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.page-summary" datatype="html">
         <source>References on this page</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/secrets.copy.ts</context>
-          <context context-type="linenumber">39</context>
+          <context context-type="linenumber">35</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.directory" datatype="html">
         <source>Reference directory</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/secrets.copy.ts</context>
-          <context context-type="linenumber">40</context>
+          <context context-type="linenumber">36</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.reference-column" datatype="html">
         <source>Reference</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/secrets.copy.ts</context>
-          <context context-type="linenumber">41</context>
+          <context context-type="linenumber">38</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.references" datatype="html">
         <source>References</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/secrets.copy.ts</context>
-          <context context-type="linenumber">44</context>
+          <context context-type="linenumber">41</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.read-only" datatype="html">
         <source>Read-only access</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/secrets.copy.ts</context>
-          <context context-type="linenumber">45</context>
+          <context context-type="linenumber">42</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.active-hint" datatype="html">
         <source>Source-reported state</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/secrets.copy.ts</context>
-          <context context-type="linenumber">46</context>
+          <context context-type="linenumber">43</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.soon-hint" datatype="html">
         <source>Within 14 days</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/secrets.copy.ts</context>
-          <context context-type="linenumber">47</context>
+          <context context-type="linenumber">44</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.expired-hint" datatype="html">
         <source>Expired state or past expiry</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/secrets.copy.ts</context>
-          <context context-type="linenumber">48</context>
+          <context context-type="linenumber">45</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.actions" datatype="html">
         <source>Actions</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/secrets.copy.ts</context>
-          <context context-type="linenumber">49</context>
+          <context context-type="linenumber">46</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.status-active" datatype="html">
         <source>Active</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/secrets.copy.ts</context>
-          <context context-type="linenumber">55</context>
+          <context context-type="linenumber">52</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.status-rotated" datatype="html">
         <source>Rotated</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/secrets.copy.ts</context>
-          <context context-type="linenumber">57</context>
+          <context context-type="linenumber">54</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.status-revoked" datatype="html">
         <source>Revoked</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/secrets.copy.ts</context>
-          <context context-type="linenumber">59</context>
+          <context context-type="linenumber">56</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.status-expired" datatype="html">
         <source>Expired</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/secrets.copy.ts</context>
-          <context context-type="linenumber">61</context>
+          <context context-type="linenumber">58</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.security.caption" datatype="html">
@@ -27846,7 +27752,7 @@
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/security/security-events.page.ts</context>
-          <context context-type="linenumber">117</context>
+          <context context-type="linenumber">121</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.security.severity" datatype="html">
@@ -27857,7 +27763,7 @@
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/security/security-events.page.ts</context>
-          <context context-type="linenumber">118</context>
+          <context context-type="linenumber">122</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.security.time" datatype="html">
@@ -27896,7 +27802,7 @@
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/security/security-events.page.ts</context>
-          <context context-type="linenumber">115</context>
+          <context context-type="linenumber">119</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.security.request" datatype="html">
@@ -27997,190 +27903,169 @@
           <context context-type="linenumber">21</context>
         </context-group>
       </trans-unit>
+      <trans-unit id="settings.security.filter-scope" datatype="html">
+        <source> Filters apply to all matching security events on the server. </source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/settings/security/security-events.page.html</context>
+          <context context-type="linenumber">61,63</context>
+        </context-group>
+      </trans-unit>
       <trans-unit id="settings.security.page-summary" datatype="html">
         <source>Page <x id="page" equiv-text="formatNumber(this.store.pageIndex() + 1, this.locale)"/> · <x id="rows" equiv-text="formatNumber(this.store.rows().length, this.locale)"/> visible events on this page.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/security/security-events.page.ts</context>
-          <context context-type="linenumber">103</context>
+          <context context-type="linenumber">107</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.security.title" datatype="html">
         <source>Security events</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/security/security-events.page.ts</context>
-          <context context-type="linenumber">106</context>
+          <context context-type="linenumber">110</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.security.intro" datatype="html">
         <source>Inspect authorized event metadata without exposing request bodies or foreign targets.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/security/security-events.page.ts</context>
-          <context context-type="linenumber">107</context>
+          <context context-type="linenumber">111</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.security.boundary" datatype="html">
         <source>Metadata only. Severity is supplied by the server, not a security certification. Cross-tenant targets and attempted secrets are not disclosed.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/security/security-events.page.ts</context>
-          <context context-type="linenumber">108</context>
+          <context context-type="linenumber">112</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.security-activity" datatype="html">
         <source>Recent activity</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/security/security-events.page.ts</context>
-          <context context-type="linenumber">109</context>
+          <context context-type="linenumber">113</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.security-safe-data" datatype="html">
         <source>Safe event data</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/security/security-events.page.ts</context>
-          <context context-type="linenumber">110</context>
+          <context context-type="linenumber">114</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.security.newest-first" datatype="html">
         <source>Newest first</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/security/security-events.page.ts</context>
-          <context context-type="linenumber">111</context>
+          <context context-type="linenumber">115</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.security.read-only" datatype="html">
         <source>Read only</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/security/security-events.page.ts</context>
-          <context context-type="linenumber">112</context>
+          <context context-type="linenumber">116</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.security.filters" datatype="html">
         <source>Filter activity</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/security/security-events.page.ts</context>
-          <context context-type="linenumber">114</context>
+          <context context-type="linenumber">118</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.security.project-hint" datatype="html">
         <source>Optional exact project UUID. Leave blank for all projects.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/security/security-events.page.ts</context>
-          <context context-type="linenumber">116</context>
+          <context context-type="linenumber">120</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.security.all-types" datatype="html">
         <source>All V1 event types</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/security/security-events.page.ts</context>
-          <context context-type="linenumber">119</context>
+          <context context-type="linenumber">123</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.security.all-severities" datatype="html">
         <source>All severities</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/security/security-events.page.ts</context>
-          <context context-type="linenumber">120</context>
+          <context context-type="linenumber">124</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.security.from" datatype="html">
         <source>From (inclusive)</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/security/security-events.page.ts</context>
-          <context context-type="linenumber">122</context>
+          <context context-type="linenumber">126</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.security.to" datatype="html">
         <source>To (exclusive)</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/security/security-events.page.ts</context>
-          <context context-type="linenumber">123</context>
+          <context context-type="linenumber">127</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.security.time-hint" datatype="html">
         <source>Enter local times; results use UTC. The upper bound is exclusive.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/security/security-events.page.ts</context>
-          <context context-type="linenumber">124</context>
+          <context context-type="linenumber">128</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.security.invalid" datatype="html">
         <source>Enter valid dates with From earlier than To.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/security/security-events.page.ts</context>
-          <context context-type="linenumber">125</context>
+          <context context-type="linenumber">129</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.security.apply" datatype="html">
         <source>Apply filters</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/security/security-events.page.ts</context>
-          <context context-type="linenumber">126</context>
+          <context context-type="linenumber">130</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.security.clear" datatype="html">
         <source>Clear filters</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/security/security-events.page.ts</context>
-          <context context-type="linenumber">127</context>
+          <context context-type="linenumber">131</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.security.loading" datatype="html">
         <source>Loading security events…</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/security/security-events.page.ts</context>
-          <context context-type="linenumber">128</context>
+          <context context-type="linenumber">132</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.security.empty" datatype="html">
         <source>No security events recorded</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/security/security-events.page.ts</context>
-          <context context-type="linenumber">129</context>
+          <context context-type="linenumber">133</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.security.empty-description" datatype="html">
         <source>Recorded V1 security events will appear here.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/security/security-events.page.ts</context>
-          <context context-type="linenumber">130</context>
+          <context context-type="linenumber">134</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.security.no-match" datatype="html">
         <source>No results match these filters</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/security/security-events.page.ts</context>
-          <context context-type="linenumber">131</context>
+          <context context-type="linenumber">135</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.security.no-match-description" datatype="html">
         <source>Clear or change the filters to inspect another scope or time range.</source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/settings/security/security-events.page.ts</context>
-          <context context-type="linenumber">132</context>
-        </context-group>
-      </trans-unit>
-      <trans-unit id="settings.security.previous" datatype="html">
-        <source>Previous page</source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/settings/security/security-events.page.ts</context>
-          <context context-type="linenumber">133</context>
-        </context-group>
-      </trans-unit>
-      <trans-unit id="settings.security.next" datatype="html">
-        <source>Next page</source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/settings/security/security-events.page.ts</context>
-          <context context-type="linenumber">134</context>
-        </context-group>
-      </trans-unit>
-      <trans-unit id="settings.security.page-size" datatype="html">
-        <source>Rows per page</source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/settings/security/security-events.page.ts</context>
-          <context context-type="linenumber">135</context>
-        </context-group>
-      </trans-unit>
-      <trans-unit id="settings.security.pagination" datatype="html">
-        <source>Security activity pages</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/security/security-events.page.ts</context>
           <context context-type="linenumber">136</context>
@@ -30441,21 +30326,21 @@
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/suites/composition/suite-composition.component.ts</context>
-          <context context-type="linenumber">105</context>
+          <context context-type="linenumber">108</context>
         </context-group>
       </trans-unit>
       <trans-unit id="suites.composition.variant-hash" datatype="html">
         <source>Variant hash</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/suites/composition/suite-composition.component.ts</context>
-          <context context-type="linenumber">69</context>
+          <context context-type="linenumber">72</context>
         </context-group>
       </trans-unit>
       <trans-unit id="suites.composition.suite-composition" datatype="html">
         <source>Suite composition</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/suites/composition/suite-composition.component.ts</context>
-          <context context-type="linenumber">70</context>
+          <context context-type="linenumber">73</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/suites/suites.routes.ts</context>
@@ -30466,329 +30351,329 @@
         <source>Composition identity</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/suites/composition/suite-composition.component.ts</context>
-          <context context-type="linenumber">71</context>
+          <context context-type="linenumber">74</context>
         </context-group>
       </trans-unit>
       <trans-unit id="suites.composition.suite" datatype="html">
         <source>Suite</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/suites/composition/suite-composition.component.ts</context>
-          <context context-type="linenumber">72</context>
+          <context context-type="linenumber">75</context>
         </context-group>
       </trans-unit>
       <trans-unit id="suites.composition.revision" datatype="html">
         <source>Revision</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/suites/composition/suite-composition.component.ts</context>
-          <context context-type="linenumber">73</context>
+          <context context-type="linenumber">76</context>
         </context-group>
       </trans-unit>
       <trans-unit id="suites.composition.status" datatype="html">
         <source>Status</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/suites/composition/suite-composition.component.ts</context>
-          <context context-type="linenumber">74</context>
+          <context context-type="linenumber">77</context>
         </context-group>
       </trans-unit>
       <trans-unit id="suites.composition.revision-hash" datatype="html">
         <source>Revision hash</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/suites/composition/suite-composition.component.ts</context>
-          <context context-type="linenumber">75</context>
+          <context context-type="linenumber">78</context>
         </context-group>
       </trans-unit>
       <trans-unit id="suites.composition.this-published-revision-is-immutable-and-read-on" datatype="html">
         <source>This published revision is immutable and read-only.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/suites/composition/suite-composition.component.ts</context>
-          <context context-type="linenumber">76</context>
+          <context context-type="linenumber">79</context>
         </context-group>
       </trans-unit>
       <trans-unit id="suites.composition.this-draft-is-shown-read-only" datatype="html">
         <source>This draft is shown read-only.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/suites/composition/suite-composition.component.ts</context>
-          <context context-type="linenumber">77</context>
+          <context context-type="linenumber">80</context>
         </context-group>
       </trans-unit>
       <trans-unit id="suites.composition.shard-strategy" datatype="html">
         <source>Shard strategy</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/suites/composition/suite-composition.component.ts</context>
-          <context context-type="linenumber">78</context>
+          <context context-type="linenumber">81</context>
         </context-group>
       </trans-unit>
       <trans-unit id="suites.composition.strategy-is-read-only-in-this-view" datatype="html">
         <source>Strategy is read-only in this view.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/suites/composition/suite-composition.component.ts</context>
-          <context context-type="linenumber">79</context>
+          <context context-type="linenumber">82</context>
         </context-group>
       </trans-unit>
       <trans-unit id="suites.composition.no-sharding" datatype="html">
         <source>No sharding</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/suites/composition/suite-composition.component.ts</context>
-          <context context-type="linenumber">80</context>
+          <context context-type="linenumber">83</context>
         </context-group>
       </trans-unit>
       <trans-unit id="suites.composition.shard-count" datatype="html">
         <source>Shard count</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/suites/composition/suite-composition.component.ts</context>
-          <context context-type="linenumber">81</context>
+          <context context-type="linenumber">84</context>
         </context-group>
       </trans-unit>
       <trans-unit id="suites.composition.balance-by" datatype="html">
         <source>Balance by</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/suites/composition/suite-composition.component.ts</context>
-          <context context-type="linenumber">82</context>
+          <context context-type="linenumber">85</context>
         </context-group>
       </trans-unit>
       <trans-unit id="suites.composition.duration" datatype="html">
         <source>Duration</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/suites/composition/suite-composition.component.ts</context>
-          <context context-type="linenumber">83</context>
+          <context context-type="linenumber">86</context>
         </context-group>
       </trans-unit>
       <trans-unit id="suites.composition.member-count" datatype="html">
         <source>Member count</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/suites/composition/suite-composition.component.ts</context>
-          <context context-type="linenumber">84</context>
+          <context context-type="linenumber">87</context>
         </context-group>
       </trans-unit>
       <trans-unit id="suites.composition.no-balancing-specified" datatype="html">
         <source>No balancing specified</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/suites/composition/suite-composition.component.ts</context>
-          <context context-type="linenumber">85</context>
+          <context context-type="linenumber">88</context>
         </context-group>
       </trans-unit>
       <trans-unit id="suites.composition.strategy-unavailable-this-revision-has-an-unreco" datatype="html">
         <source>Strategy unavailable: this revision has an unrecognized shard strategy.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/suites/composition/suite-composition.component.ts</context>
-          <context context-type="linenumber">86</context>
+          <context context-type="linenumber">89</context>
         </context-group>
       </trans-unit>
       <trans-unit id="suites.composition.composition-matrix" datatype="html">
         <source>Composition matrix</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/suites/composition/suite-composition.component.ts</context>
-          <context context-type="linenumber">87</context>
+          <context context-type="linenumber">90</context>
         </context-group>
       </trans-unit>
       <trans-unit id="suites.composition.case-revisions-by-variant-each-populated-cell-sh" datatype="html">
         <source>Case revisions by variant. Each populated cell shows its member identifier, requirement and ordinal.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/suites/composition/suite-composition.component.ts</context>
-          <context context-type="linenumber">88</context>
+          <context context-type="linenumber">91</context>
         </context-group>
       </trans-unit>
       <trans-unit id="suites.composition.case-revision" datatype="html">
         <source>Case revision</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/suites/composition/suite-composition.component.ts</context>
-          <context context-type="linenumber">89</context>
+          <context context-type="linenumber">92</context>
         </context-group>
       </trans-unit>
       <trans-unit id="suites.composition.no-parameters" datatype="html">
         <source>No parameters</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/suites/composition/suite-composition.component.ts</context>
-          <context context-type="linenumber">90</context>
+          <context context-type="linenumber">93</context>
         </context-group>
       </trans-unit>
       <trans-unit id="suites.composition.member" datatype="html">
         <source>Member</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/suites/composition/suite-composition.component.ts</context>
-          <context context-type="linenumber">91</context>
+          <context context-type="linenumber">94</context>
         </context-group>
       </trans-unit>
       <trans-unit id="suites.composition.required" datatype="html">
         <source>Required</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/suites/composition/suite-composition.component.ts</context>
-          <context context-type="linenumber">92</context>
+          <context context-type="linenumber">95</context>
         </context-group>
       </trans-unit>
       <trans-unit id="suites.composition.optional" datatype="html">
         <source>Optional</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/suites/composition/suite-composition.component.ts</context>
-          <context context-type="linenumber">93</context>
+          <context context-type="linenumber">96</context>
         </context-group>
       </trans-unit>
       <trans-unit id="suites.composition.ordinal" datatype="html">
         <source>Ordinal</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/suites/composition/suite-composition.component.ts</context>
-          <context context-type="linenumber">94</context>
+          <context context-type="linenumber">97</context>
         </context-group>
       </trans-unit>
       <trans-unit id="suites.composition.no-member" datatype="html">
         <source>No member</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/suites/composition/suite-composition.component.ts</context>
-          <context context-type="linenumber">95</context>
+          <context context-type="linenumber">98</context>
         </context-group>
       </trans-unit>
       <trans-unit id="suites.composition.variant-params" datatype="html">
         <source>Variant parameters</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/suites/composition/suite-composition.component.ts</context>
-          <context context-type="linenumber">96</context>
+          <context context-type="linenumber">99</context>
         </context-group>
       </trans-unit>
       <trans-unit id="suites.composition.flat-matrix-note" datatype="html">
         <source>This revision has more cells than a matrix can show, so its members are listed as a flat table.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/suites/composition/suite-composition.component.ts</context>
-          <context context-type="linenumber">97</context>
+          <context context-type="linenumber">100</context>
         </context-group>
       </trans-unit>
       <trans-unit id="suites.composition.repeated-variant-cells" datatype="html">
         <source>Repeated variant members: <x id="count" equiv-text="count"/>; the matrix keeps only the first member of each cell.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/suites/composition/suite-composition.component.ts</context>
-          <context context-type="linenumber">99</context>
+          <context context-type="linenumber">102</context>
         </context-group>
       </trans-unit>
       <trans-unit id="suites.composition.show-more" datatype="html">
         <source>Show more</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/suites/composition/suite-composition.component.ts</context>
-          <context context-type="linenumber">100</context>
+          <context context-type="linenumber">103</context>
         </context-group>
       </trans-unit>
       <trans-unit id="suites.composition.members-shown" datatype="html">
         <source>Showing <x id="shown" equiv-text="shown"/> of <x id="total" equiv-text="total"/> members.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/suites/composition/suite-composition.component.ts</context>
-          <context context-type="linenumber">102</context>
+          <context context-type="linenumber">105</context>
         </context-group>
       </trans-unit>
       <trans-unit id="suites.composition.dependencies-shown" datatype="html">
         <source>Showing <x id="shown" equiv-text="shown"/> of <x id="total" equiv-text="total"/> dependencies.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/suites/composition/suite-composition.component.ts</context>
-          <context context-type="linenumber">104</context>
+          <context context-type="linenumber">107</context>
         </context-group>
       </trans-unit>
       <trans-unit id="suites.composition.each-child-member-depends-on-the-parent-member-s" datatype="html">
         <source>Each child member depends on the parent member shown beside it.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/suites/composition/suite-composition.component.ts</context>
-          <context context-type="linenumber">106</context>
+          <context context-type="linenumber">109</context>
         </context-group>
       </trans-unit>
       <trans-unit id="suites.composition.parent-member" datatype="html">
         <source>Parent member</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/suites/composition/suite-composition.component.ts</context>
-          <context context-type="linenumber">107</context>
+          <context context-type="linenumber">110</context>
         </context-group>
       </trans-unit>
       <trans-unit id="suites.composition.child-member" datatype="html">
         <source>Child member</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/suites/composition/suite-composition.component.ts</context>
-          <context context-type="linenumber">108</context>
+          <context context-type="linenumber">111</context>
         </context-group>
       </trans-unit>
       <trans-unit id="suites.composition.no-dependencies-declared" datatype="html">
         <source>No dependencies declared</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/suites/composition/suite-composition.component.ts</context>
-          <context context-type="linenumber">109</context>
+          <context context-type="linenumber">112</context>
         </context-group>
       </trans-unit>
       <trans-unit id="suites.composition.no-members-in-this-revision" datatype="html">
         <source>No members in this revision</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/suites/composition/suite-composition.component.ts</context>
-          <context context-type="linenumber">110</context>
+          <context context-type="linenumber">113</context>
         </context-group>
       </trans-unit>
       <trans-unit id="suites.composition.this-revision-has-no-members-so-there-is-no-comp" datatype="html">
         <source>This revision has no members, so there is no composition matrix to display.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/suites/composition/suite-composition.component.ts</context>
-          <context context-type="linenumber">111</context>
+          <context context-type="linenumber">114</context>
         </context-group>
       </trans-unit>
       <trans-unit id="suites.composition.loading-suite-composition" datatype="html">
         <source>Loading suite composition</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/suites/composition/suite-composition.component.ts</context>
-          <context context-type="linenumber">112</context>
+          <context context-type="linenumber">115</context>
         </context-group>
       </trans-unit>
       <trans-unit id="suites.composition.reading-the-pinned-members-variants-and-dependen" datatype="html">
         <source>Reading the pinned members, variants and dependencies.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/suites/composition/suite-composition.component.ts</context>
-          <context context-type="linenumber">113</context>
+          <context context-type="linenumber">116</context>
         </context-group>
       </trans-unit>
       <trans-unit id="suites.composition.suite-revision-not-found" datatype="html">
         <source>Suite revision not found</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/suites/composition/suite-composition.component.ts</context>
-          <context context-type="linenumber">114</context>
+          <context context-type="linenumber">117</context>
         </context-group>
       </trans-unit>
       <trans-unit id="suites.composition.this-revision-does-not-exist-or-is-not-available" datatype="html">
         <source>This revision does not exist or is not available in this project. Check the revision link.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/suites/composition/suite-composition.component.ts</context>
-          <context context-type="linenumber">115</context>
+          <context context-type="linenumber">118</context>
         </context-group>
       </trans-unit>
       <trans-unit id="suites.composition.suite-revision-access-denied" datatype="html">
         <source>Suite revision access denied</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/suites/composition/suite-composition.component.ts</context>
-          <context context-type="linenumber">116</context>
+          <context context-type="linenumber">119</context>
         </context-group>
       </trans-unit>
       <trans-unit id="suites.composition.you-do-not-have-permission-to-view-this-revision" datatype="html">
         <source>You do not have permission to view this revision. Ask a project administrator for access.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/suites/composition/suite-composition.component.ts</context>
-          <context context-type="linenumber">117</context>
+          <context context-type="linenumber">120</context>
         </context-group>
       </trans-unit>
       <trans-unit id="suites.composition.suite-composition-unavailable" datatype="html">
         <source>Suite composition unavailable</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/suites/composition/suite-composition.component.ts</context>
-          <context context-type="linenumber">118</context>
+          <context context-type="linenumber">121</context>
         </context-group>
       </trans-unit>
       <trans-unit id="suites.composition.the-suite-service-is-temporarily-unavailable-rel" datatype="html">
         <source>The suite service is temporarily unavailable. Reload this page later.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/suites/composition/suite-composition.component.ts</context>
-          <context context-type="linenumber">119</context>
+          <context context-type="linenumber">122</context>
         </context-group>
       </trans-unit>
       <trans-unit id="suites.composition.suite-composition-could-not-be-loaded" datatype="html">
         <source>Suite composition could not be loaded</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/suites/composition/suite-composition.component.ts</context>
-          <context context-type="linenumber">120</context>
+          <context context-type="linenumber">123</context>
         </context-group>
       </trans-unit>
       <trans-unit id="suites.composition.the-revision-could-not-be-read-check-your-connec" datatype="html">
         <source>The revision could not be read. Check your connection and reload this page.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/suites/composition/suite-composition.component.ts</context>
-          <context context-type="linenumber">121</context>
+          <context context-type="linenumber">124</context>
         </context-group>
       </trans-unit>
       <trans-unit id="suites.warnings.suite-warnings" datatype="html">

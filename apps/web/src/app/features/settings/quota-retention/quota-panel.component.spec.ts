@@ -7,8 +7,8 @@ import type { UsageSummaryDto, UsageSummaryMetricDto, UsageSummaryProjectDto } f
 import { By } from '@angular/platform-browser';
 import { ActivatedRoute } from '@angular/router';
 import { provideLayoutTestStubs } from '../../../shared/testing/layout.testing';
+import { DataTableCellComponent } from '../../../shared/ui/data-table/data-table-cell.component';
 import { DataTableComponent } from '../../../shared/ui/data-table/data-table.component';
-import { useLightweightTablePresentation } from '../../../shared/ui/data-table/data-table-volume.testing';
 import { QuotaPanelComponent } from './quota-panel.component';
 import { QuotaStore, type QuotaLoadState } from './quota.store';
 
@@ -24,6 +24,14 @@ class QuotaPanelHarness extends ComponentHarness {
   readonly projectRows = this.locatorForAll('app-data-table [data-row-id]');
   readonly viewActions = this.locatorForAll('button[data-quota-view]');
   readonly viewIcons = this.locatorForAll('button[data-quota-view] hlm-icon');
+  readonly recordedRows = this.locatorForAll('table[aria-labelledby="quota-state-title"] tbody tr');
+  readonly pagers = this.locatorForAll('app-data-table-pager');
+  readonly pagerNext = this.locatorFor('app-data-table-pager [data-page="next"]');
+  readonly pagerPrevious = this.locatorFor('app-data-table-pager [data-page="previous"]');
+  readonly pageError = this.locatorForOptional('[data-quota-page-error]');
+  readonly retryPage = this.locatorFor('[data-quota-page-error] button');
+  readonly sizeTrigger = this.locatorFor('app-data-table-pager hlm-select-trigger button');
+  readonly sizeOptions = this.documentRootLocatorFactory().locatorForAll('[role="option"]');
   readonly retry = this.locatorFor('button');
 }
 
@@ -62,6 +70,14 @@ describe('QuotaPanelComponent', () => {
   const loadState = signal<QuotaLoadState>('ready');
   const load = vi.fn();
   const reload = vi.fn();
+  const projectPage = signal(1);
+  const projectPageSize = signal(20);
+  const projectPaging = signal(false);
+  const projectPagingError = signal(false);
+  const nextProjectPage = vi.fn();
+  const previousProjectPage = vi.fn();
+  const setProjectPageSize = vi.fn();
+  const retryProjectPage = vi.fn();
 
   beforeEach(() => {
     usageSummary.set({
@@ -71,6 +87,10 @@ describe('QuotaPanelComponent', () => {
       next_cursor: null,
     });
     loadState.set('ready');
+    projectPage.set(1);
+    projectPageSize.set(20);
+    projectPaging.set(false);
+    projectPagingError.set(false);
     vi.clearAllMocks();
     TestBed.configureTestingModule({
       imports: [QuotaPanelComponent],
@@ -78,7 +98,21 @@ describe('QuotaPanelComponent', () => {
         provideZonelessChangeDetection(),
         {
           provide: QuotaStore,
-          useValue: { usageSummary, loadState, load, reload },
+          useValue: {
+            usageSummary,
+            loadState,
+            load,
+            reload,
+            projectPage,
+            projectPageSize,
+            projectPaging,
+            projectPagingError,
+            hasNextProjectPage: () => usageSummary()?.next_cursor != null,
+            nextProjectPage,
+            previousProjectPage,
+            setProjectPageSize,
+            retryProjectPage,
+          },
         },
       ],
     });
@@ -325,6 +359,9 @@ describe('QuotaPanelComponent', () => {
       .componentInstance as DataTableComponent<UsageSummaryProjectDto>;
     expect(table.rows()).toHaveLength(7);
     expect(root.textContent).not.toContain('additional projects');
+    expect(nextProjectPage).not.toHaveBeenCalled();
+    expect(previousProjectPage).not.toHaveBeenCalled();
+    expect(setProjectPageSize).not.toHaveBeenCalled();
   });
 
   it('derives the metric ids from the row index rather than the served metric key', async () => {
@@ -356,7 +393,8 @@ describe('QuotaPanelComponent', () => {
     expect(root.querySelector('[data-quota-limit]')?.textContent?.trim()).toBe('987,654,321');
   });
   it('passes every row beyond the 200-row rendering boundary to the shared bounded renderer', async () => {
-    useLightweightTablePresentation();
+    // Keep the real table and both pagers; rich cell presentation is covered by the smaller cases.
+    TestBed.overrideComponent(DataTableCellComponent, { set: { template: '{{ value() }}' } });
     const projects = Array.from({ length: 201 }, (_unused, index) =>
       project({ project_id: `project-${index}` }),
     );
@@ -370,6 +408,8 @@ describe('QuotaPanelComponent', () => {
     const table = fixture.debugElement.query(By.directive(DataTableComponent))
       .componentInstance as DataTableComponent<UsageSummaryProjectDto>;
     expect(table.rows()).toHaveLength(201);
+    expect(root.querySelectorAll('app-data-table [data-row-id]')).toHaveLength(200);
+    expect(root.querySelector('[data-row-id="project-200"]')).toBeNull();
     expect(root.querySelector('[data-quota-projects-more]')?.textContent).toContain(
       'All counters returned',
     );
@@ -380,5 +420,73 @@ describe('QuotaPanelComponent', () => {
     next?.click();
     await fixture.whenStable();
     expect(root.querySelector('[data-row-id="project-200"]')).not.toBeNull();
+    expect(root.querySelectorAll('app-data-table [data-row-id]')).toHaveLength(1);
+  });
+
+  it('uses one coordinated server pager after all project tables without paging recorded metric state', async () => {
+    usageSummary.set({
+      period: '2026-11',
+      project: null,
+      next_cursor: 'next',
+      metrics: [
+        metric({ metric: 'results', used: 900, projects: [project()] }),
+        metric({ metric: 'ai_tokens', used: 800, projects: [project()] }),
+      ],
+    });
+    const { harness } = await render();
+    expect(await harness.pagers()).toHaveLength(1);
+    expect(await harness.projectRows()).toHaveLength(2);
+    expect(await harness.recordedRows()).toHaveLength(2);
+    expect(await (await harness.pagers())[0]?.text()).toContain('Page 1');
+    await (await harness.pagerNext()).click();
+    expect(nextProjectPage).toHaveBeenCalledOnce();
+    expect(reload).not.toHaveBeenCalled();
+  });
+
+  it('retains project rows with explicit page-error recovery and preserves pager state on View', async () => {
+    projectPage.set(2);
+    projectPageSize.set(50);
+    projectPagingError.set(true);
+    usageSummary.set({
+      period: '2026-11',
+      project: null,
+      next_cursor: null,
+      metrics: [metric({ projects: [project()] })],
+    });
+    const { harness } = await render();
+    expect(await harness.projectRows()).toHaveLength(1);
+    expect(await (await harness.pageError())?.text()).toContain('previous page is still shown');
+    expect(await (await harness.pagers())[0]?.text()).toContain('Page 2');
+    await (await harness.retryPage()).click();
+    expect(retryProjectPage).toHaveBeenCalledOnce();
+    await (await harness.viewActions())[0]?.click();
+    expect(projectPage()).toBe(2);
+    expect(projectPageSize()).toBe(50);
+    expect(setProjectPageSize).not.toHaveBeenCalled();
+    expect(reload).not.toHaveBeenCalled();
+  });
+
+  it('keeps one pager available on an empty final project page and exposes Previous', async () => {
+    projectPage.set(2);
+    const { harness } = await render();
+    expect(await harness.projectRows()).toHaveLength(0);
+    expect(await harness.pagers()).toHaveLength(1);
+    expect(await (await harness.pagerNext()).getAttribute('aria-disabled')).toBe('true');
+    await (await harness.pagerPrevious()).click();
+    expect(previousProjectPage).toHaveBeenCalledOnce();
+  });
+
+  it.each([50, 100])('passes selected size %s to the coordinated store control', async (size) => {
+    const { harness } = await render();
+    expect(await (await harness.sizeTrigger()).text()).toBe('20');
+    await (await harness.sizeTrigger()).click();
+    const options = await harness.sizeOptions();
+    const labels = await Promise.all(options.map((option) => option.text()));
+    expect(labels).toEqual(['20', '50', '100']);
+    const option = options[labels.indexOf(String(size))];
+    if (!option) throw new Error('Missing requested page size');
+    await option.click();
+    expect(setProjectPageSize).toHaveBeenCalledExactlyOnceWith(size);
+    expect(nextProjectPage).not.toHaveBeenCalled();
   });
 });

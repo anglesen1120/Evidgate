@@ -13,6 +13,7 @@
   >
     {{ copy.title }}
   </h2>
+  <p class="text-xs text-muted-foreground" data-attempts-order>{{ copy.serverOrder }}</p>
   @if (status() === 'loading') {
     <app-loading-pattern />
   } @else if (status() === 'error') {
@@ -253,55 +254,21 @@
         }
       </table>
     </div>
-    @if (pages().length > 1) {
-      <nav
-        class="flex flex-wrap items-center gap-(--eg-space-3)"
-        [attr.aria-label]="copy.pagination"
-      >
-        <button
-          hlmBtn
-          [variant]="'outline'"
-          class="min-h-(--eg-control-touch) h-auto whitespace-normal transition-none"
-          #previous
-          type="button"
-          data-attempts-previous
-          [disabled]="page() === 0"
-          (click)="turnPage(-1)"
-        >
-          {{ copy.previous }}
-        </button>
-        <p role="status">{{ pageLabel() }}</p>
-        <button
-          hlmBtn
-          [variant]="'outline'"
-          class="min-h-(--eg-control-touch) h-auto whitespace-normal transition-none"
-          #next
-          type="button"
-          data-attempts-next
-          [disabled]="page() + 1 === pages().length"
-          (click)="turnPage(1)"
-        >
-          {{ copy.next }}
-        </button>
-      </nav>
-    }
+  }
+  @if (status() === 'ready' && attempts() !== null) {
     @if (error(); as failure) {
       <app-error-pattern [error]="failure" [headingLevel]="3" (retry)="requestFollowUpRetry()" />
     }
-    @if (hasMore()) {
-      <button
-        hlmBtn
-        [variant]="'outline'"
-        class="min-h-(--eg-control-touch) h-auto self-start whitespace-normal transition-none"
-        #loadMore
-        type="button"
-        data-attempts-load-more
-        [attr.aria-busy]="loadingMore()"
-        (click)="requestLoadMore()"
-      >
-        {{ loadingMore() ? copy.loadingMore : copy.more }}
-      </button>
-    }
+    <app-data-table-pager
+      [page]="page()"
+      [pageSize]="pageSize()"
+      [count]="attempts()?.length ?? 0"
+      [hasNext]="hasMore()"
+      [busy]="loadingMore()"
+      (previous)="requestPage(false)"
+      (next)="requestPage(true)"
+      (pageSizeChange)="pageSizeChange.emit($event)"
+    />
   }
   <!-- Keep announcements outside the busy region so assistive technology does not defer them. -->
   <p class="text-muted-foreground empty:hidden" role="status" data-attempts-status>

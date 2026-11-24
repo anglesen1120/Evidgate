@@ -33,6 +33,16 @@ export class FakeSecretsStore {
   readonly phase = signal<'loading' | 'ready' | 'error'>('ready');
   readonly loadError = signal<ApiError | null>(null);
   readonly hasMore = signal(false);
+  readonly page = signal(1);
+  readonly pageSize = signal(20);
+  readonly ciBindingsPage = signal(1);
+  readonly ciBindingsPageSize = signal(20);
+  readonly previous = vi.fn(() => Promise.resolve());
+  readonly previousCiBindings = vi.fn(() => Promise.resolve());
+  readonly setPageSize = vi.fn(() => Promise.resolve());
+  readonly setCiBindingsPageSize = vi.fn(() => Promise.resolve());
+  readonly retryPage = vi.fn(() => Promise.resolve());
+  readonly retryCiBindingsPage = vi.fn(() => Promise.resolve());
   readonly projectId = signal<string | null>(null);
   readonly rotateState = signal<RotationState>({ phase: 'idle', tokenId: null, error: null });
   readonly rotating = signal(false);

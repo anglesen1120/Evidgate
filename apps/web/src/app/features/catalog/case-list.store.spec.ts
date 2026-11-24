@@ -71,7 +71,7 @@ describe('CaseListStore', () => {
       expect(list).toHaveBeenCalledTimes(2);
       expect(list).toHaveBeenLastCalledWith(
         'next-project',
-        { status: 'missing', limit: 50 },
+        { status: 'missing', limit: 20 },
         expect.any(AbortSignal),
       );
       expect(store.status()).toBe('loading');
@@ -109,7 +109,7 @@ describe('CaseListStore', () => {
       framework: 'playwright',
       q: 'checkout',
       cursor: 'opaque+/=',
-      limit: '25',
+      limit: '50',
     };
     store.init('project', query);
     await settle();
@@ -120,7 +120,7 @@ describe('CaseListStore', () => {
     });
     expect(list).toHaveBeenLastCalledWith(
       'project',
-      { status: 'missing', framework: 'playwright', limit: 25 },
+      { status: 'missing', framework: 'playwright', limit: 50 },
       expect.any(AbortSignal),
     );
     store.init('project', { ...query, ...caseFiltersToQuery(store.filters()) });
@@ -153,23 +153,25 @@ describe('CaseListStore', () => {
     store.init('project', { status: 'success', limit: '201' });
     await settle();
     expect(caseFiltersToQuery(store.filters())).toEqual({});
-    expect(list).toHaveBeenCalledWith('project', { limit: 50 }, expect.any(AbortSignal));
+    expect(list).toHaveBeenCalledWith('project', { limit: 20 }, expect.any(AbortSignal));
   });
 
-  it('accumulates the opaque next page once and preserves rows while loading', async () => {
+  it('replaces the opaque next page once and preserves the current page while loading', async () => {
     const next = new Subject<CaseListResponse>();
     list.mockResolvedValueOnce(CASE_LIST_FIXTURE).mockReturnValueOnce(firstValueFrom(next));
     const store = TestBed.inject(CaseListStore);
     store.init('project', {});
     await settle();
-    void store.loadMore();
-    void store.loadMore();
+    void store.nextPage();
+    void store.nextPage();
     TestBed.tick();
     expect(store.loadingMore()).toBe(true);
     expect(store.rows()).toEqual(CASE_LIST_FIXTURE.items);
+    expect(store.page()).toBe(1);
+    expect(list).toHaveBeenCalledTimes(2);
     expect(list).toHaveBeenLastCalledWith(
       'project',
-      { limit: 50, cursor: 'catalog-more-opaque' },
+      { limit: 20, cursor: 'catalog-more-opaque' },
       expect.any(AbortSignal),
     );
     const row = CASE_LIST_FIXTURE.items[0];
@@ -177,7 +179,8 @@ describe('CaseListStore', () => {
     const fresh = { ...row, id: '018f0000-0000-7000-8000-00000000ca03' };
     next.next({ items: [row, fresh], next_cursor: null });
     await settle();
-    expect(store.rows()).toEqual([...CASE_LIST_FIXTURE.items, fresh]);
+    expect(store.rows()).toEqual([fresh]);
+    expect(store.page()).toBe(2);
     expect(store.hasMore()).toBe(false);
   });
 
@@ -202,7 +205,7 @@ describe('CaseListStore', () => {
       expect(store.rows().at(-1)?.id).toBe('9999');
       expect(store.browseCapped()).toBe(capped);
       expect(store.hasMore()).toBe(false);
-      expect(await store.loadMore()).toBe(false);
+      expect(await store.nextPage()).toBe(false);
       expect(list).toHaveBeenCalledTimes(1);
     },
   );
@@ -234,32 +237,27 @@ describe('CaseListStore', () => {
     expect(store.hasMore()).toBe(false);
   });
 
-  it('caps accumulated catalog rows at 10000 and never follows the discarded cursor', async () => {
+  it('bounds the current page at the injected cap without counting previous-page rows', async () => {
+    TestBed.overrideProvider(RETAINED_ROWS_CAP, { useValue: 3 });
     const first = CASE_LIST_FIXTURE.items[0];
     if (!first) throw new Error('Missing case fixture');
-    list.mockResolvedValueOnce({
-      items: Array.from({ length: 9_999 }, (_, index) => ({ ...first, id: String(index) })),
-      next_cursor: 'last-page',
-    });
     const store = TestBed.inject(CaseListStore);
     store.init('project', {});
     await settle();
+    expect(store.rows()).toEqual(CASE_LIST_FIXTURE.items);
     expect(store.browseCapped()).toBe(false);
     expect(store.hasMore()).toBe(true);
     list.mockResolvedValueOnce({
-      items: [
-        { ...first, id: '9999' },
-        { ...first, id: '10000' },
-      ],
+      items: Array.from({ length: 4 }, (_, index) => ({ ...first, id: `next-${index}` })),
       next_cursor: 'discarded',
     });
 
-    expect(await store.loadMore()).toBe(true);
-    expect(store.rows()).toHaveLength(10_000);
-    expect(store.rows().at(-1)?.id).toBe('9999');
+    expect(await store.nextPage()).toBe(true);
+    expect(store.rows().map((row) => row.id)).toEqual(['next-0', 'next-1', 'next-2']);
+    expect(store.page()).toBe(2);
     expect(store.browseCapped()).toBe(true);
     expect(store.hasMore()).toBe(false);
-    expect(await store.loadMore()).toBe(false);
+    expect(await store.nextPage()).toBe(false);
     expect(list).toHaveBeenCalledTimes(2);
 
     list.mockResolvedValueOnce(CASE_LIST_FIXTURE);
@@ -295,23 +293,31 @@ describe('CaseListStore', () => {
     expect(store.hasMore()).toBe(false);
   });
 
-  it('retains loaded rows and retry cursor after a typed load-more refusal', async () => {
+  it('retains the current page and retries its opaque cursor after a typed refusal', async () => {
     const store = TestBed.inject(CaseListStore);
     store.init('project', {});
     await settle();
     list.mockRejectedValueOnce(new ApiRequestError(CATALOG_FAILURE));
-    void store.loadMore();
+    void store.nextPage();
     await settle();
     expect(store.rows()).toEqual(CASE_LIST_FIXTURE.items);
     expect(store.status()).toBe('ready');
     expect(store.loadMoreFailure()).toEqual(CATALOG_FAILURE);
-    void store.loadMore();
+    expect(store.page()).toBe(1);
+    const first = CASE_LIST_FIXTURE.items[0];
+    if (!first) throw new Error('Missing case fixture');
+    const next = { ...first, id: 'retry-page-case' };
+    list.mockResolvedValueOnce({ items: [next], next_cursor: null });
+    void store.retryPage();
     await settle();
     expect(list).toHaveBeenLastCalledWith(
       'project',
-      { limit: 50, cursor: 'catalog-more-opaque' },
+      { limit: 20, cursor: 'catalog-more-opaque' },
       expect.any(AbortSignal),
     );
+    expect(store.rows()).toEqual([next]);
+    expect(store.page()).toBe(2);
+    expect(store.loadMoreFailure()).toBeNull();
   });
 
   it('ignores a late continuation after a server filter resets the list', async () => {
@@ -320,7 +326,7 @@ describe('CaseListStore', () => {
     store.init('project', {});
     await settle();
     list.mockReturnValueOnce(firstValueFrom(next));
-    void store.loadMore();
+    void store.nextPage();
     TestBed.tick();
     list.mockResolvedValueOnce({ items: [], next_cursor: null });
     store.init('project', { status: 'archived' });
@@ -332,28 +338,35 @@ describe('CaseListStore', () => {
     expect(store.rows()).toEqual([]);
     expect(list).toHaveBeenLastCalledWith(
       'project',
-      { limit: 50, status: 'archived' },
+      { limit: 20, status: 'archived' },
       expect.any(AbortSignal),
     );
   });
 
-  it('resets cursor and rows for supported page sizes and ignores unsupported sizes', async () => {
-    const store = TestBed.inject(CaseListStore);
-    store.init('project', {});
-    await settle();
-    void store.loadMore();
-    await settle();
-    store.setPageSize(200);
-    TestBed.tick();
-    expect(store.rows()).toEqual([]);
-    await settle();
-    expect(store.pageSize()).toBe(200);
-    expect(list).toHaveBeenLastCalledWith('project', { limit: 200 }, expect.any(AbortSignal));
-    const calls = list.mock.calls.length;
-    store.setPageSize(30);
-    await settle();
-    expect(list).toHaveBeenCalledTimes(calls);
-  });
+  it.each([25, 30, 200])(
+    'resets the current page for a supported size and ignores %s',
+    async (size) => {
+      const store = TestBed.inject(CaseListStore);
+      store.init('project', {});
+      await settle();
+      const first = CASE_LIST_FIXTURE.items[0];
+      if (!first) throw new Error('Missing case fixture');
+      list.mockResolvedValueOnce({ items: [{ ...first, id: 'next-case' }], next_cursor: null });
+      await store.nextPage();
+      expect(store.page()).toBe(2);
+      store.setPageSize(100);
+      TestBed.tick();
+      expect(store.rows()).toEqual([]);
+      await settle();
+      expect(store.pageSize()).toBe(100);
+      expect(store.page()).toBe(1);
+      expect(list).toHaveBeenLastCalledWith('project', { limit: 100 }, expect.any(AbortSignal));
+      const calls = list.mock.calls.length;
+      store.setPageSize(size);
+      await settle();
+      expect(list).toHaveBeenCalledTimes(calls);
+    },
+  );
 
   it('optimistically assigns one owner and replaces the row with the server confirmation', async () => {
     const store = TestBed.inject(CaseListStore);

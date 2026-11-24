@@ -1,10 +1,13 @@
 import { TestBed } from '@angular/core/testing';
 import type { CiBindingView } from '@evidgate/sdk';
 import bindings from '../../../../../../../fixtures/web-api/ci-bindings-list-settings/input.json';
+import { provideLayoutTestStubs } from '../../../shared/testing/layout.testing';
 import { CiBindingListComponent } from './ci-binding-list.component';
 
 const rows = bindings.body.items as CiBindingView[];
 const SECRET = 'tok_QA3_SECRET_NEVER_RENDER';
+
+provideLayoutTestStubs();
 
 describe('CiBindingListComponent negatives (QA S86)', () => {
   beforeEach(() => {
