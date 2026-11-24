@@ -7,7 +7,7 @@
 // belongs to `core/data/runs-data.service.spec.ts` and is not retested here.
 
 import { TestBed } from '@angular/core/testing';
-import type { RunPage } from '@evidgate/sdk';
+import type { ListRunsData, RunPage } from '@evidgate/sdk';
 
 import { RunsDataService } from '../../../core/data/runs-data.service';
 import { ApiRequestError, type ApiError } from '../../../core/http/api-error';
@@ -32,7 +32,7 @@ function typedFailure(): ApiRequestError {
 class FakeRunsDataService {
   readonly calls: Array<{
     readonly projectId: string;
-    readonly query: { cursor?: string; limit?: number; ref_name?: string };
+    readonly query: NonNullable<ListRunsData['query']>;
   }> = [];
   /** Rejects the next call with this value when set. */
   failure: Error | null = null;
@@ -41,7 +41,7 @@ class FakeRunsDataService {
   /** The value the decision read answers, served by the gateway untyped. */
   decision: unknown = null;
 
-  list(projectId: string, query: { cursor?: string; limit?: number; ref_name?: string }) {
+  list(projectId: string, query: NonNullable<ListRunsData['query']>) {
     this.calls.push({ projectId, query });
     if (this.failure !== null) {
       return Promise.reject(this.failure);
@@ -147,6 +147,39 @@ describe('RunDataService (09.3.1-T1)', () => {
       });
     },
   );
+
+  it.each([
+    'created',
+    'queued',
+    'running',
+    'collecting',
+    'complete',
+    'incomplete',
+    'canceled',
+  ] as const)('forwards the exact %s state on first and cursor pages', async (state) => {
+    await service.listRuns('p-1', { state, limit: 20 });
+    await service.listRuns('p-1', {
+      state,
+      cursor: 'next',
+      limit: 50,
+      refName: 'main',
+      decision: 'FAIL',
+    });
+    expect(runs.calls.map(({ query }) => query)).toEqual([
+      { state, limit: 20 },
+      { state, cursor: 'next', limit: 50, ref_name: 'main', decision: 'fail' },
+    ]);
+  });
+
+  it('omits State entirely when the request has no State filter', async () => {
+    await service.listRuns('p-1', { limit: 20 });
+    await service.listRuns('p-1', { cursor: 'next', limit: 20 });
+    expect(runs.calls.map(({ query }) => query)).toEqual([
+      { limit: 20 },
+      { cursor: 'next', limit: 20 },
+    ]);
+    expect(runs.calls.every(({ query }) => !Object.hasOwn(query, 'state'))).toBe(true);
+  });
 
   it('omits an empty or absent ref filter instead of sending ref_name=', async () => {
     await service.listRuns('p-1', { refName: '' });

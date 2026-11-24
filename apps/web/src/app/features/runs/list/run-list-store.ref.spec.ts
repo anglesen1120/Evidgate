@@ -51,7 +51,7 @@ describe('RunListStore ref validation', () => {
 
     it('refuses a ref name carrying a control character and drops the previous one', async () => {
       data.all = rows(2);
-      await store.init('p-1', { ref: 'refs/heads/main' });
+      await store.init('p-1', { ref: 'refs/heads/main', state: 'complete' });
       expect(data.calls).toHaveLength(1);
 
       await store.setFilters({ refName: 'refs/heads/\u0000main' });
@@ -59,10 +59,10 @@ describe('RunListStore ref validation', () => {
       // The accepted filter is gone: the list restarts unfiltered instead of keeping the old value
       // while the field shows the refused one.
       expect(data.calls).toHaveLength(2);
-      expect(data.calls[1]?.request).toEqual({ limit: RUN_LIST_PAGE_LIMIT });
+      expect(data.calls[1]?.request).toEqual({ limit: RUN_LIST_PAGE_LIMIT, state: 'complete' });
       expect(store.filters().refName).toBe('');
       expect(store.refRejected()).toBe(true);
-      expect(store.toQuery()).toEqual({});
+      expect(store.toQuery()).toEqual({ state: 'complete' });
     });
 
     it('treats a whitespace-only ref name as a cleared filter, not a refusal', async () => {
@@ -126,5 +126,24 @@ describe('RunListStore ref validation', () => {
       expect(store.refRejected()).toBe(false);
       expect(store.toQuery()).toEqual({});
     });
+
+    it.each([undefined, 'restored'])(
+      'clears cursor history even when no filter is selected (initial cursor %s)',
+      async (cursor) => {
+        data.all = rows(60);
+        await store.init('p-1', { cursor });
+        await store.next();
+        expect(store.page()).toBe(2);
+        await store.setFilters({ state: '', decision: '', scope: '', refName: '' });
+        expect(data.calls.at(-1)?.request).toEqual({ limit: 20 });
+        expect(store.requestCursors()).toEqual([null]);
+        expect(store.page()).toBe(1);
+        expect(store.rows()).toEqual(data.all.slice(0, 20));
+        expect(store.toQuery()).toEqual({});
+        const calls = data.calls.length;
+        await store.previous();
+        expect(data.calls).toHaveLength(calls);
+      },
+    );
   });
 });

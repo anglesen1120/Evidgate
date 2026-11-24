@@ -1,11 +1,8 @@
-// 09.8.1-T1.2 (story 09.8.1 AC2): the Runs flow with the keyboard alone, on the real fixtures
-// build. Every step is a `page.keyboard` press — no `click`, no `force` — and every assertion names
-// the element that holds focus by its own identity (role + accessible name, id, data hook), never by
-// counting Tab stops.
-//
-// Runs uses named local scrollers only when content actually overflows, bounded rich-row
-// pages, and explicit copy/full-value controls. The walk keeps those approved controls in
-// DOM order, verifies their exact navigation/copy budget, and never permits anonymous stops.
+// The Runs flow uses the keyboard alone on the real fixtures build: no click or force.
+// Each assertion identifies focus by role/name, id or data hook, never by counting Tab stops.
+// Keep overflowing local scrollers, row copy/full-value actions and every shared pager in DOM
+// order, including focusable disabled boundaries, without permitting anonymous stops.
+// Attempts use server pages; producers expose a known-total range.
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import runList from '../../../../fixtures/web-api/run-list/input.json';
 import runList250 from '../../../../fixtures/web-api/run-list-250/input.json';
@@ -139,10 +136,29 @@ test('the list, a row and the way back are keyboard-reachable and identifiable',
   const attemptsRegion = page.getByRole('region', { name: 'Attempts table' });
   await expect(attemptsRegion).toBeFocused();
   await expect(page.locator('app-attempts-table [data-attempt-row]')).toHaveCount(7);
-  await tabThroughRunControls(page, page.locator('app-attempts-table tbody'), 7);
-  // The producer table follows the attempts table in the page flow.
-  await tabThroughTableScroller(page, page.locator('#producers'));
-  await tabThroughRunControls(page, page.locator('#producers'), 2);
+  for (const [selector, rows, copies, summary] of [
+    ['app-attempts-table', 'tbody', 7, 'Page 1'],
+    ['#producers', 'app-data-table', 2, '1–2 of 2'],
+  ] as const) {
+    const root = page.locator(selector);
+    if (selector === '#producers') await tabThroughTableScroller(page, root);
+    await tabThroughRunControls(page, root.locator(rows), copies);
+    const pager = root.getByRole('navigation', { name: 'Table pagination' });
+    const size = pager.getByRole('combobox', { name: 'Rows per page', exact: true });
+    await page.keyboard.press('Tab');
+    await expect(size).toBeFocused();
+    await expectFocusRing(size, '2px');
+    for (const name of ['Previous records', 'Next records']) {
+      const button = pager.getByRole('button', { name, exact: true });
+      await page.keyboard.press('Tab');
+      await expect(button).toBeFocused();
+      await expectFocusRing(button, '2px');
+      await expect(button).toHaveAttribute('aria-disabled', 'true');
+      await page.keyboard.press('Enter');
+      await expect(button).toBeFocused();
+      await expect(pager.getByRole('status')).toHaveText(summary);
+    }
+  }
 
   // Evidence and the latest live decision are tabs: only the selected tab is a Tab stop, the arrow
   // keys move inside the list, and the selected panel is the next stop. The hidden panel leaves the

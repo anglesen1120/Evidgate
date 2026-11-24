@@ -1,7 +1,7 @@
 import { BreakpointObserver } from '@angular/cdk/layout';
 import { ComponentHarness } from '@angular/cdk/testing';
 import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
-import { provideZonelessChangeDetection } from '@angular/core';
+import { computed, provideZonelessChangeDetection, signal } from '@angular/core';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import {
   ActivatedRoute,
@@ -161,7 +161,7 @@ describe('RunListPage', () => {
     expect((root.querySelector('#run-ref') as HTMLInputElement).value).toBe('release/việt');
     // The URL narrows the list, so the count says so and the element reports the filtered mode.
     const loaded = root.querySelector('[data-run-loaded-count]')!;
-    expect(loaded.textContent).toContain('Filtered from 1 runs on this page');
+    expect(loaded.textContent).toContain('On this page before filtering by scope: 1');
     expect(loaded.getAttribute('data-run-loaded-filtered')).toBe('true');
     expect(root.querySelector('[name="completeness"]')).toBeNull();
   });
@@ -180,8 +180,8 @@ describe('RunListPage', () => {
     expect(root.querySelector('[data-run-loaded-count]')?.textContent).toContain('Showing 3');
     root.querySelector<HTMLButtonElement>('#run-state')?.click();
     await fixture.whenStable();
-    expect(document.querySelector('#run-state-count-collecting')?.textContent?.trim()).toBe('1');
-    expect(document.querySelector('#run-state-count-running')?.textContent?.trim()).toBe('0');
+    const running = document.querySelector('[role="option"][data-value="running"]');
+    expect(running?.textContent?.trim()).toBe('Running');
     root.querySelector<HTMLButtonElement>('#run-state')?.click();
     store.status.set('loading');
     await fixture.whenStable();
@@ -234,14 +234,16 @@ describe('RunListPage', () => {
       }),
     );
   });
-  it('renders a plain loaded count when nothing is filtered', async () => {
-    const { root } = await render();
-
-    const loaded = root.querySelector('[data-run-loaded-count]')!;
-    expect(loaded.textContent).toContain('Fetched 1 runs on this page.');
-    expect(loaded.textContent).not.toContain('Filtered');
-    expect(loaded.getAttribute('data-run-loaded-filtered')).toBe('false');
-  });
+  it.each([{}, { state: 'complete', decision: 'PASS', ref: 'main' }])(
+    'does not describe a server result count as locally filtered: %j',
+    async (params) => {
+      query.next(convertToParamMap(params));
+      const { root } = await render();
+      const loaded = root.querySelector('[data-run-loaded-count]');
+      expect(loaded?.textContent).toContain('Returned on this page: 1');
+      expect(loaded?.getAttribute('data-run-loaded-filtered')).toBe('false');
+    },
+  );
   it('marks a refused ref name as invalid and explains it inline', async () => {
     const { fixture, root } = await render();
     const refInput = root.querySelector<HTMLInputElement>('#run-ref')!;
@@ -373,18 +375,34 @@ describe('RunListPage', () => {
   });
   it('keeps Next reachable when no rows on this page match local filters', async () => {
     store.rows.set([]);
+    store.visibleRows = signal(store.rows());
+    store.isEmpty = computed(() => store.visibleRows().length === 0);
     const { fixture, root } = await render();
     expect(root.textContent).toContain('No runs recorded');
-    store.filters.set({ ...emptyFilters, state: 'queued' });
     store.hasNext.set(true);
     await fixture.whenStable();
+    expect(root.textContent).toContain('No runs on this page');
+    store.filters.set({ ...emptyFilters, scope: 'rerun' });
+    store.rows.set([run]);
+    await fixture.whenStable();
     expect(root.textContent).toContain('No matching runs on this page');
-    expect(root.textContent).toContain('Next searches further');
+    expect(root.textContent).toContain('Check another page if available');
     const pager = await TestbedHarnessEnvironment.loader(fixture).getHarness(RunPagerHarness);
     await pager.press('Next');
     expect(store.next).toHaveBeenCalledTimes(1);
   });
-
+  it.each(['', 'rerun'])('does not blame scope %j for an empty server response', async (scope) => {
+    query.next(convertToParamMap({ state: 'queued', ref: 'main', scope }));
+    store.rows.set([]);
+    const { fixture, root } = await render();
+    const empty = root.querySelector('app-empty-pattern');
+    expect(empty?.querySelector('h2')?.textContent?.trim()).toBe('No matching runs');
+    expect(empty?.textContent).toContain('Change or clear the filters');
+    expect(empty?.textContent).not.toContain('selected run scope');
+    store.page.set(2);
+    await fixture.whenStable();
+    expect(empty?.querySelector('h2')?.textContent?.trim()).toBe('No runs on this page');
+  });
   it('keeps pager focus through pending and terminal-page results', async () => {
     store.hasNext.set(true);
     const { fixture, root } = await render();

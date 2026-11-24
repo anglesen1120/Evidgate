@@ -38,6 +38,8 @@ class RunInspectionHarness extends ComponentHarness {
   static hostSelector = 'app-run-list-table';
   readonly view = this.locatorFor('button[aria-haspopup="dialog"]');
   readonly viewIcon = this.locatorFor('button[aria-haspopup="dialog"] hlm-icon');
+  readonly rerunLabel = this.locatorFor('td [data-run-rerun] app-data-table-value');
+  readonly rerunText = this.locatorFor('td [data-run-rerun] app-data-table-value .value');
   viewFor(id: string) {
     return this.locatorFor(`button[aria-label="View ${id}"]`)();
   }
@@ -98,6 +100,9 @@ describe('RunListTableComponent', { timeout: 15_000 }, () => {
       }
     }
     expect(root.querySelector<HTMLElement>('th.cdk-column-id')?.style.inlineSize).toBe('1%');
+    expect(root.querySelector<HTMLElement>('th.cdk-column-scope')?.style.inlineSize).toBe(
+      'max-content',
+    );
     expect(root.querySelectorAll('[role="columnheader"]')).toHaveLength(7);
     expect(
       root.querySelector('[data-run-row] [data-run-created] time')?.getAttribute('datetime'),
@@ -199,7 +204,16 @@ describe('RunListTableComponent', { timeout: 15_000 }, () => {
     ]);
     expect(
       [...root.querySelectorAll('[role="columnheader"]')].map((cell) => cell.textContent?.trim()),
-    ).toEqual(['Run id', 'State', 'Evidence', 'Decision', 'Ref', 'Run scope', 'Actions']);
+    ).toEqual([
+      'Run (oldest first)',
+      'State',
+      'Evidence',
+      'Decision',
+      'Ref',
+      'Run scope',
+      'Actions',
+    ]);
+    expect(root.querySelector('th.cdk-column-id button')).toBeNull();
     expect(root.querySelectorAll('[data-run-evidence] .status-pill--neutral')).toHaveLength(5);
     expect(root.querySelector('[data-run-evidence] .status-pill--success')).toBeNull();
     expect(root.querySelectorAll('[data-run-evidence-hint]')).toHaveLength(1);
@@ -352,18 +366,24 @@ describe('RunListTableComponent', { timeout: 15_000 }, () => {
     // Both are wrapped in `<bdi>`, so even a label without a Cf character cannot reorder columns.
     expect(rerun.querySelector('bdi')).not.toBeNull();
     expect(reprocess.querySelector('bdi')).not.toBeNull();
-    // The shared overflow renderer receives the escaped text, so its popover copy is escaped too.
-    expect(rerun.querySelector('app-data-table-value')?.textContent).toContain('⟨U+202E⟩');
+    expect(rerun.querySelector('[title]')?.getAttribute('title')).toBe('failed⟨U+202E⟩_subset');
+    expect(reprocess.querySelector('[title]')?.getAttribute('title')).toBe(
+      'evidence⟨U+202E⟩:reprocess',
+    );
   });
   it('renders rerun and reprocess as visibly distinct labels without treating either as full regression', async () => {
-    const { root } = await render([
+    const { fixture, root } = await render([
       run(1, { rerun_label: 'failed_subset', parent_run_id: run(9).run_id }),
       run(2, { reprocess_label: 'reprocessed', parent_run_id: run(9).run_id }),
       run(3),
       run(4, { parent_run_id: run(9).run_id }),
     ]);
     expect(root.querySelector('[data-run-rerun] strong')?.textContent).toBe('Rerun');
-    expect(root.querySelector('[data-run-rerun]')?.textContent).toContain('failed_subset');
+    const table = await TestbedHarnessEnvironment.harnessForFixture(fixture, RunInspectionHarness);
+    expect(await (await table.rerunLabel()).getAttribute('title')).toBe('failed_subset');
+    const label = await table.rerunText();
+    expect(await label.text()).toBe('failed_subset');
+    expect(await label.hasClass('truncate')).toBe(false);
     expect(root.querySelector('[data-run-reprocess] strong')?.textContent).toBe('Reprocessed');
     expect(root.querySelector('[data-run-reprocess]')?.textContent).toContain('reprocessed');
     expect(root.querySelector('[data-run-rerun]')?.classList.contains('scope-rerun')).toBe(true);

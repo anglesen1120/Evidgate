@@ -68,8 +68,8 @@ describe('cursor paging', () => {
   it.each(['next', 'previous'] as const)(
     'retains page and rows after failed %s and retries its target',
     async (direction) => {
-      data.all = rows(60);
-      await store.init('p-1');
+      data.all = rows(60, () => ({ state: 'running' }));
+      await store.init('p-1', { state: 'running' });
       await store.next();
       const before = store.rows();
       const query = store.toQuery();
@@ -77,6 +77,8 @@ describe('cursor paging', () => {
       data.failure = failure;
       await store[direction]();
       const failedCursor = data.calls.at(-1)?.request.cursor;
+      const failedRequest = data.calls.at(-1)?.request;
+      expect(failedRequest?.state).toBe('running');
       expect(store.rows()).toBe(before);
       expect(store.page()).toBe(2);
       expect(store.toQuery()).toEqual(query);
@@ -86,6 +88,7 @@ describe('cursor paging', () => {
       data.failure = null;
       await store.retryPage();
       expect(data.calls.at(-1)?.request.cursor).toBe(failedCursor);
+      expect(data.calls.at(-1)?.request).toEqual(failedRequest);
       expect(store.page()).toBe(direction === 'next' ? 3 : 1);
       expect(store.pagingError()).toBeNull();
     },
@@ -350,59 +353,117 @@ describe('cursor paging', () => {
     expect(store.toQuery()['cursor']).toBe(current?.cursor);
   });
 
-  it.each(['state', 'scope'] as const)(
-    'retains first-page rows when only local %s changes and clears',
-    async (filter) => {
-      data.all = [run(0), run(1, { state: 'running', rerun_label: 'retry' })];
-      await store.init('p-1');
-      const retained = store.rows();
-      await store.setFilters(filter === 'state' ? { state: 'running' } : { scope: 'rerun' });
-      expect(store.rows()).toBe(retained);
-      expect(store.visibleRows()).toEqual([data.all[1]]);
-      expect(data.calls).toHaveLength(1);
-      await store.setFilters({ [filter]: '' });
-      expect(store.rows()).toBe(retained);
-      expect(store.visibleRows()).toEqual(data.all);
-      expect(data.calls).toHaveLength(1);
-    },
-  );
-
-  it.each(['state', 'scope'] as const)(
-    'restarts later pages when local %s changes',
-    async (filter) => {
-      data.all = rows(60);
-      await store.init('p-1');
-      await store.next();
-      await store.setFilters(filter === 'state' ? { state: 'running' } : { scope: 'rerun' });
-      expect(data.calls).toHaveLength(3);
-      expect(data.calls.at(-1)?.request.cursor).toBeUndefined();
-      expect(store.page()).toBe(1);
-      expect(store.rows()).toEqual(rows(20));
-    },
-  );
-
-  it('does not refetch or clear the cursor when a restored known first page changes local state', async () => {
-    data.manual = true;
-    const first = store.init('p-1', { cursor: 'restored' });
-    data.pending[0]?.resolve({ items: [run(1)], next_cursor: null });
-    await first;
+  it('retains first-page rows when only local Scope changes and clears', async () => {
+    data.all = [run(0), run(1, { state: 'running', rerun_label: 'retry' })];
+    await store.init('p-1');
     const retained = store.rows();
-    await store.setFilters({ state: 'running' });
-    expect(data.calls).toHaveLength(1);
+    await store.setFilters({ scope: 'rerun' });
     expect(store.rows()).toBe(retained);
-    expect(store.visibleRows()).toEqual([]);
-    expect(store.toQuery()).toEqual({ cursor: 'restored', state: 'running' });
+    expect(store.visibleRows()).toEqual([data.all[1]]);
+    expect(data.calls).toHaveLength(1);
+    await store.setFilters({ scope: '' });
+    expect(store.rows()).toBe(retained);
+    expect(store.visibleRows()).toEqual(data.all);
+    expect(data.calls).toHaveLength(1);
   });
 
-  it('refetches first-page rows when a local filter and a server filter both change', async () => {
+  it('restarts later pages when local Scope changes without sending Scope to the server', async () => {
+    data.all = rows(60);
+    await store.init('p-1');
+    await store.next();
+    await store.setFilters({ scope: 'rerun' });
+    expect(data.calls).toHaveLength(3);
+    expect(data.calls.at(-1)?.request).toEqual({ limit: 20 });
+    expect(store.page()).toBe(1);
+    expect(store.rows()).toEqual(rows(20));
+  });
+
+  it('discards a restored cursor when State changes even on the first displayed page', async () => {
+    data.manual = true;
+    const first = store.init('p-1', { cursor: 'restored', pageSize: '50' });
+    data.pending[0]?.resolve({ items: [run(1)], next_cursor: null });
+    await first;
+    const changed = store.setFilters({ state: 'running' });
+    expect(data.calls.at(-1)?.request).toEqual({ limit: 50, state: 'running' });
+    data.pending[1]?.resolve({ items: [run(2, { state: 'running' })], next_cursor: null });
+    await changed;
+    expect(store.rows()).toEqual([run(2, { state: 'running' })]);
+    expect(store.requestCursors()).toEqual([null]);
+    expect(store.toQuery()).toEqual({ pageSize: '50', state: 'running' });
+  });
+
+  it('sends State on every first, next, previous and retry request', async () => {
+    data.all = rows(90, (index) => ({ state: index % 2 === 0 ? 'running' : 'complete' }));
+    await store.init('p-1', { state: 'running' });
+    expect(store.rows()).toHaveLength(20);
+    await store.next();
+    expect(store.rows()[0]?.run_id).toBe('run-40');
+    expect(store.requestCursors()).toHaveLength(2);
+    await store.previous();
+    expect(store.rows()[0]?.run_id).toBe('run-0');
+    data.failure = typedFailure();
+    await store.next();
+    const failed = data.calls.at(-1)?.request;
+    expect(store.rows()[0]?.run_id).toBe('run-0');
+    data.failure = null;
+    await store.retryPage();
+    expect(data.calls.at(-1)?.request).toEqual(failed);
+    expect(data.calls.every(({ request }) => request.state === 'running')).toBe(true);
+    expect(store.rows()[0]?.run_id).toBe('run-40');
+  });
+
+  it('resets State at a middle cursor and clears all filters to the original first 20', async () => {
+    data.all = rows(120, (index) => ({ state: index % 2 === 0 ? 'running' : 'complete' }));
+    await store.init('p-1');
+    await store.next();
+    await store.next();
+    await store.setFilters({ state: 'running' });
+    expect(data.calls.at(-1)?.request).toEqual({ limit: 20, state: 'running' });
+    expect(store.page()).toBe(1);
+    expect(store.requestCursors()).toEqual([null]);
+    expect(store.rows()[0]?.run_id).toBe('run-0');
+    await store.next();
+    await store.setFilters({ state: '', decision: '', scope: '', refName: '' });
+    expect(data.calls.at(-1)?.request).toEqual({ limit: 20 });
+    expect(store.page()).toBe(1);
+    expect(store.requestCursors()).toEqual([null]);
+    expect(store.rows()).toEqual(data.all.slice(0, 20));
+    expect(store.toQuery()).toEqual({});
+    const calls = data.calls.length;
+    await store.previous();
+    expect(data.calls).toHaveLength(calls);
+  });
+
+  it('ignores a stale Previous response after State changes', async () => {
+    data.all = rows(60);
+    await store.init('p-1');
+    await store.next();
+    data.manual = true;
+    const previous = store.previous();
+    const changed = store.setFilters({ state: 'running' });
+    expect(data.calls.at(-1)?.request).toEqual({ limit: 20, state: 'running' });
+    const currentRows = [run(99, { state: 'running' })];
+    data.pending[1]?.resolve({ items: currentRows, next_cursor: null });
+    await changed;
+    data.pending[0]?.resolve({ items: [run(0)], next_cursor: 'obsolete' });
+    await previous;
+    expect(store.rows()).toEqual(currentRows);
+    expect(store.visibleRows()).toEqual(currentRows);
+    expect(store.page()).toBe(1);
+    expect(store.requestCursors()).toEqual([null]);
+    expect(store.toQuery()).toEqual({ state: 'running' });
+    expect(store.pagingError()).toBeNull();
+  });
+
+  it('refetches first-page rows when State and decision both change', async () => {
     data.all = rows(30);
     await store.init('p-1');
     await store.setFilters({ state: 'running', decision: 'PASS' });
     expect(data.calls).toHaveLength(2);
-    expect(data.calls.at(-1)?.request).toEqual({ limit: 20, decision: 'PASS' });
+    expect(data.calls.at(-1)?.request).toEqual({ limit: 20, state: 'running', decision: 'PASS' });
   });
 
-  it('restarts a failed first load when a local filter changes', async () => {
+  it('restarts a failed first load when State changes', async () => {
     data.failure = typedFailure();
     await store.init('p-1');
     data.failure = null;

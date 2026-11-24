@@ -98,6 +98,7 @@ export class RunListTableComponent {
   protected readonly copy = {
     caption: $localize`:@@runs.list.table-caption:Project runs`,
     id: $localize`:@@runs.list.column-id:Run id`,
+    orderedRun: $localize`:@@runs.list.column-run-order:Run (oldest first)`,
     actions: $localize`:@@runs.list.column-actions:Actions`,
     view: $localize`:@@runs.list.view:View`,
     details: $localize`:@@runs.detail.title:Run detail`,
@@ -121,7 +122,7 @@ export class RunListTableComponent {
   protected readonly columns = computed<readonly DataTableColumn<RunSummary>[]>(() => [
     {
       id: 'id',
-      header: this.copy.id,
+      header: this.copy.orderedRun,
       cell: this.rowId,
       role: 'identity',
       kind: 'identifier',
@@ -181,8 +182,8 @@ export class RunListTableComponent {
       cell: (row) => this.displayLabel(row.rerun_label ?? row.reprocess_label ?? ''),
       role: 'text',
       priority: 'secondary',
-      overflow: 'truncate',
-      width: { min: 'calc(13ch + var(--eg-space-4) * 2)' },
+      overflow: 'wrap',
+      width: { min: 'calc(13ch + var(--eg-space-4) * 2)', preferred: 'max-content' },
       cellTemplate: this.scopeCell(),
     },
     {

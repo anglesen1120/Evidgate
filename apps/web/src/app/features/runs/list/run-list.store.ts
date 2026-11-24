@@ -1,4 +1,4 @@
-// State and scope narrow only the current server page; ref and decision travel on every request.
+// Scope narrows only the current server page; State, ref and decision travel on every request.
 
 import { computed, inject } from '@angular/core';
 import { patchState, signalStore, withComputed, withMethods, withState } from '@ngrx/signals';
@@ -19,7 +19,7 @@ export type RunDecisionFilter = NonNullable<RunListQuery['decision']> | '';
 /** Labels are independent; original requires no parent and neither label. */
 export type RunScopeFilter = '' | 'original' | 'rerun' | 'reprocess';
 
-/** State and scope filter loaded rows; refName and decision filter the server list. */
+/** Scope filters loaded rows; State, refName and decision filter the server list. */
 export interface RunListFilters {
   readonly state: RunStateFilter;
   readonly decision: RunDecisionFilter;
@@ -158,6 +158,7 @@ function normalizeRefName(value: string | null | undefined): {
 function pageQuery(filters: RunListFilters, limit: number): RunListQuery {
   return {
     limit,
+    ...(filters.state === '' ? {} : { state: filters.state }),
     ...(filters.refName === '' ? {} : { refName: filters.refName }),
     ...(filters.decision === '' ? {} : { decision: filters.decision }),
   };
@@ -165,9 +166,6 @@ function pageQuery(filters: RunListFilters, limit: number): RunListQuery {
 
 // Scope labels are independent: one run may match both rerun and reprocess.
 function matchesFilters(filters: RunListFilters, row: RunSummary): boolean {
-  if (filters.state !== '' && row.state !== filters.state) {
-    return false;
-  }
   if (filters.scope !== '') {
     const hasRerun = typeof row.rerun_label === 'string' && row.rerun_label !== '';
     const hasReprocess = typeof row.reprocess_label === 'string' && row.reprocess_label !== '';
@@ -308,12 +306,20 @@ export const RunListStore = signalStore(
           ([key, value]) => store.filters()[key as keyof RunListFilters] !== value,
         );
         const serverChanged =
+          applied.state !== store.filters().state ||
           applied.refName !== store.filters().refName ||
           applied.decision !== store.filters().decision;
         const recoverCursor = store.status() === 'error' && store.requestCursors()[0] !== null;
+        const clearCursor =
+          patch.state === '' &&
+          patch.decision === '' &&
+          patch.scope === '' &&
+          patch.refName === '' &&
+          (store.page() > 1 || store.requestCursors()[0] !== null || store.busy());
         patchState(store, { filters: applied, refRejected: ref.rejected });
         if (
           recoverCursor ||
+          clearCursor ||
           (changed &&
             (serverChanged || store.page() > 1 || store.busy() || store.status() !== 'ready'))
         ) {
