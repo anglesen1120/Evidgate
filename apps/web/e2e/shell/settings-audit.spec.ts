@@ -182,6 +182,19 @@ test.describe('AC7: an audit:read session reads the log and exports it', () => {
         await page
           .locator(`${AUDIT_ROWS} [data-column-priority="primary"] .value`)
           .evaluateAll((cells) => cells.map((cell) => (cell as HTMLElement).innerText.trim())),
+      ).toEqual(
+        DEFAULT_ROWS.map((row) =>
+          row.action === 'run.cancel'
+            ? locale === 'vi'
+              ? 'Hủy lượt chạy'
+              : 'Run canceled'
+            : row.action,
+        ),
+      );
+      expect(
+        await page
+          .locator(`${AUDIT_ROWS} [data-column-priority="primary"] app-data-table-value`)
+          .evaluateAll((cells) => cells.map((cell) => cell.getAttribute('title'))),
       ).toEqual(DEFAULT_ROWS.map((row) => row.action));
       await expect(page.locator(SUPPORT_ROWS_SELECTOR)).toHaveCount(0);
       await expect(page.locator(SUPPORT_CHIPS)).toHaveCount(0);
