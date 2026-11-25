@@ -154,6 +154,7 @@ export class AttemptsTableComponent {
       id: 'actions',
       header: this.copy.actions,
       role: 'actions',
+      width: { min: 'calc(10ch + var(--eg-space-4) * 2)' },
       priority: 'secondary',
       cell: ({ attempt }) =>
         $localize`:@@runs.detail.attempts.view:View attempt ${attempt.attemptNo}:number:: ${this.display(attempt.executionKey)}:execution:`,
