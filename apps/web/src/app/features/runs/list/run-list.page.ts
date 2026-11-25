@@ -134,6 +134,7 @@ export class RunListPage {
     original: $localize`:@@runs.list.original:Original run`,
     rerun: $localize`:@@runs.list.rerun:Rerun`,
     reprocess: $localize`:@@runs.list.reprocess:Reprocessed`,
+    filters: $localize`:@@runs.list.filter-toggle:Filters`,
     apply: $localize`:@@runs.list.apply:Apply filters`,
     clear: $localize`:@@runs.list.clear:Clear filters`,
     emptyProject: {
@@ -272,7 +273,7 @@ export class RunListPage {
   }
 
   protected quick(decision: 'FAIL' | 'pending' | ''): void {
-    this.draft = decision ? { ...this.store.filters(), decision } : { ...EMPTY_RUN_LIST_FILTERS };
+    this.draft = { ...this.store.filters(), decision };
     this.apply();
   }
 

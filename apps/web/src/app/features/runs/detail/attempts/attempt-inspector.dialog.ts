@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component } from '@angular/core';
 import { HlmDialogHeader, HlmDialogService, HlmDialogTitle } from '@evidgate/ui/dialog';
-import { injectBrnDialogContext } from '@spartan-ng/brain/dialog';
+import { type BrnDialogRef, injectBrnDialogContext } from '@spartan-ng/brain/dialog';
 import { CopyableIdentifierComponent } from '../../../../shared/ui/values/copyable-identifier.component';
 import { escapeFormatChars } from '../../../../shared/ui/values/ref-name-display';
 import { runValueLabel } from '../run-value-label';
@@ -17,13 +17,33 @@ const TITLE = $localize`:@@runs.detail.attempts.inspector:Attempt details`;
 export function openAttemptInspector(
   dialogs: HlmDialogService,
   input: AttemptInspectorInput,
-): void {
-  dialogs.open(AttemptInspectorDialog, {
+): BrnDialogRef<unknown> {
+  return dialogs.open(AttemptInspectorDialog, {
     ariaLabel: TITLE,
     size: 'lg',
     restoreFocus: true,
     context: input,
   });
+}
+
+// Holds the open inspector so the page can close it on run change or destroy.
+export class AttemptInspectorHandle {
+  private readonly dialogs: HlmDialogService;
+  private ref: BrnDialogRef<unknown> | null = null;
+
+  constructor(dialogs: HlmDialogService) {
+    this.dialogs = dialogs;
+  }
+
+  open(input: AttemptInspectorInput): void {
+    this.close();
+    this.ref = openAttemptInspector(this.dialogs, input);
+  }
+
+  close(): void {
+    this.ref?.close();
+    this.ref = null;
+  }
 }
 
 @Component({

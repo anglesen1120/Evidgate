@@ -54,7 +54,7 @@
         hlmTabs
         [tab]="detailTab()"
         (tabActivated)="activateTab($event)"
-        class="min-w-0 gap-(--eg-space-4) [&_:is(button,a,input,summary,[tabindex])]:scroll-mt-[calc(min(50dvh,var(--eg-topbar-height,0px)+var(--run-verdict-height,0px))+var(--eg-space-2))]"
+        class="min-w-0 gap-(--eg-space-4) [&_:is(button,a,input,summary,[tabindex])]:scroll-mt-[min(50dvh,var(--eg-topbar-height,0px)+var(--run-verdict-height,0px))]"
         data-run-inspection
       >
         <div
@@ -137,6 +137,8 @@
                       [status]="'ready'"
                       [runAfterCancelEvents]="run.after_cancel_events"
                       [targetAnchor]="producerTargetAnchor()"
+                      [paging]="producerPaging()"
+                      (pagingChange)="producerPaging.set($event)"
                     />
                   }
                   @case ('decision') {

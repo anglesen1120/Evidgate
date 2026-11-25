@@ -2389,6 +2389,14 @@
 <trans-unit id="settings.audit.from" datatype="html"><source>From (inclusive)</source><target>Từ (bao gồm)</target></trans-unit>
 <trans-unit id="settings.audit.to" datatype="html"><source>To (exclusive)</source><target>Đến (không bao gồm)</target></trans-unit>
 <trans-unit id="settings.audit.date-hint" datatype="html"><source>Enter times in your local time zone; results and exports use UTC.</source><target>Nhập thời gian theo múi giờ địa phương; kết quả và bản xuất sử dụng UTC.</target></trans-unit>
+      <trans-unit id="settings.audit.filter-toggle" datatype="html">
+        <source>Filters</source>
+        <target>Bộ lọc</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/settings/audit/audit.page.ts</context>
+          <context context-type="linenumber">147</context>
+        </context-group>
+      </trans-unit>
 <trans-unit id="settings.audit.apply" datatype="html"><source>Apply filters</source><target>Áp dụng bộ lọc</target></trans-unit>
 <trans-unit id="settings.audit.clear" datatype="html"><source>Clear filters</source><target>Xóa bộ lọc</target></trans-unit>
 <trans-unit id="settings.audit.range-error" datatype="html"><source>Enter a valid time range with From no later than To.</source><target>Nhập khoảng thời gian hợp lệ với mốc Từ không muộn hơn mốc Đến.</target></trans-unit>

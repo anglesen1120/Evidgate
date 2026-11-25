@@ -4,8 +4,9 @@ import {
   computed,
   input,
   linkedSignal,
-  signal,
+  output,
   TemplateRef,
+  untracked,
   viewChild,
 } from '@angular/core';
 import { HlmCard, HlmCardTitle } from '@evidgate/ui/card';
@@ -27,6 +28,11 @@ import { escapeFormatChars } from '../../../../shared/ui/values/ref-name-display
 import { producerAnchorId } from '../evidence/run-evidence-anchors';
 import { RUN_DETAIL_NOT_PROVIDED, runValueLabel } from '../run-value-label';
 import type { ProducerSlot, ProducerStatus } from './producer-slots';
+
+export interface ProducerPaging {
+  readonly size: number;
+  readonly index: number;
+}
 
 @Component({
   selector: 'app-producer-status-table',
@@ -52,6 +58,8 @@ export class ProducerStatusTableComponent {
   readonly status = input<ProducerStatus>('ready');
   readonly runAfterCancelEvents = input<number | null>(null);
   readonly targetAnchor = input<string | null>(null);
+  readonly paging = input<ProducerPaging | null>(null);
+  readonly pagingChange = output<ProducerPaging>();
   protected readonly sectionSize = 'section' as const;
   protected readonly rowId = (slot: ProducerSlot) => slot.producerId;
   private readonly producerCell =
@@ -67,7 +75,7 @@ export class ProducerStatusTableComponent {
   private readonly eventsCell =
     viewChild.required<TemplateRef<DataTableCellContext<ProducerSlot>>>('eventsCell');
 
-  protected readonly pageSize = signal(20);
+  protected readonly pageSize = linkedSignal(() => this.paging()?.size ?? 20);
   protected readonly pageCount = computed(() =>
     Math.max(1, Math.ceil((this.slots()?.length ?? 0) / this.pageSize())),
   );
@@ -92,11 +100,14 @@ export class ProducerStatusTableComponent {
         if (index >= 0) return Math.floor(index / size);
         return 0;
       }
-      if (
-        previous === undefined ||
-        previous.source.size !== size ||
-        previous.source.anchor !== anchor
-      ) {
+      if (previous === undefined) {
+        const lastPage = Math.max(0, Math.ceil((slots?.length ?? 0) / size) - 1);
+        return Math.min(
+          untracked(() => this.paging()?.index ?? 0),
+          lastPage,
+        );
+      }
+      if (previous.source.size !== size || previous.source.anchor !== anchor) {
         return 0;
       }
       const priorSlots = previous.source.slots;
@@ -220,11 +231,17 @@ export class ProducerStatusTableComponent {
 
   protected movePage(delta: number): void {
     this.pageIndex.update((page) => Math.max(0, Math.min(page + delta, this.pageCount() - 1)));
+    this.emitPaging();
   }
 
   protected changePageSize(size: number): void {
     if (![20, 50, 100].includes(size) || size === this.pageSize()) return;
     this.pageSize.set(size);
+    this.emitPaging();
+  }
+
+  private emitPaging(): void {
+    this.pagingChange.emit({ size: this.pageSize(), index: this.pageIndex() });
   }
 
   protected openCountLabel(count: number): string {

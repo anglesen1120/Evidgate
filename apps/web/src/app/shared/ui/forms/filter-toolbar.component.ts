@@ -43,11 +43,15 @@ import { ShellIconComponent } from '../../../shell/layout/shell-icon.component';
         <app-shell-icon class="size-4" [name]="'search'" />
       </button>
     </form>
-    <hlm-popover #options [panelId]="panelId()" [label]="filters + ' (' + (count() | number) + ')'">
+    <hlm-popover
+      #options
+      [panelId]="panelId()"
+      [label]="filtersLabel() + ' (' + (count() | number) + ')'"
+    >
       <ng-template>
         <form
           class="grid min-w-0 gap-2"
-          [attr.aria-label]="filters"
+          [attr.aria-label]="filtersLabel()"
           (ngSubmit)="!busy() && apply.emit()"
         >
           <ng-container [ngTemplateOutlet]="secondary()" />
@@ -89,10 +93,10 @@ export class FilterToolbarComponent {
   readonly busy = input.required<boolean>();
   readonly applyLabel = input.required<string>();
   readonly clearLabel = input.required<string>();
+  readonly filtersLabel = input.required<string>();
   readonly submitted = output<void>();
   readonly apply = output<void>();
   readonly clear = output<void>();
-  protected readonly filters = $localize`:@@runs.list.filter-toggle:Filters`;
   protected readonly secondary = contentChild.required<TemplateRef<unknown>>('filterOptions');
   private readonly options = viewChild.required(HlmPopover);
   close(): void {

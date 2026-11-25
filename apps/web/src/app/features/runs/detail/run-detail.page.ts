@@ -5,6 +5,7 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
+  DestroyRef,
   effect,
   ElementRef,
   inject,
@@ -34,14 +35,17 @@ import { EvidencePanelComponent } from './evidence/evidence-panel.component';
 import { decodeEvidenceAnchor, resolveEvidenceAnchor } from './evidence/run-evidence-anchors';
 import { ManifestPanelComponent } from './manifest-panel.component';
 import { producerSlotsFromRun } from './producers/producer-slots';
-import { ProducerStatusTableComponent } from './producers/producer-status-table.component';
+import {
+  type ProducerPaging,
+  ProducerStatusTableComponent,
+} from './producers/producer-status-table.component';
 import { ReleasePanelComponent } from './release/release-panel.component';
 import { releaseFromDetail } from './release/release-summary';
 import { parsePinnedRevision } from './revision-pin';
 import { RunContextComponent } from './run-context.component';
 import { NumberValueComponent } from '../../../shared/ui/values/number-value.component';
 import { RunBreadcrumbItem } from '../../../shell/layout/shell-breadcrumbs.run-item';
-import { openAttemptInspector } from './attempts/attempt-inspector.dialog';
+import { AttemptInspectorHandle } from './attempts/attempt-inspector.dialog';
 import type { AttemptRow } from './attempts/attempt-summary';
 import { observeVerdictHeight, revealSelectedTab } from './run-detail-layout';
 import { RunHeaderComponent } from './run-header.component';
@@ -97,9 +101,11 @@ export class RunDetailPage {
   private readonly injector = inject(Injector);
   private readonly locale = inject(LOCALE_ID);
 
-  private readonly dialogs = inject(HlmDialogService);
+  private readonly attemptInspector = new AttemptInspectorHandle(inject(HlmDialogService));
+  private readonly destroyRef = inject(DestroyRef);
   private readonly breadcrumb = inject(RunBreadcrumbItem);
   private readonly query = toSignal(this.route.queryParamMap, { requireSync: true });
+  protected readonly producerPaging = signal<ProducerPaging | null>(null);
   protected readonly countStatuses = [
     'passed',
     'failed',
@@ -285,12 +291,15 @@ export class RunDetailPage {
       this.attemptAnchorCanceled = false;
       this.anchorFocus = this.document.activeElement;
     });
+    this.destroyRef.onDestroy(() => this.attemptInspector.close());
     combineLatest([this.route.paramMap, this.route.queryParamMap])
       .pipe(takeUntilDestroyed())
       .subscribe(([params, query]) => {
         const runId = params.get('runId');
         if (runId && runId !== this.runId) {
+          this.attemptInspector.close();
           this.runId = runId;
+          this.producerPaging.set(null);
           this.landed = false;
           this.attemptAnchorCanceled = false;
           this.anchorFocus = this.document.activeElement;
@@ -378,7 +387,7 @@ export class RunDetailPage {
   }
 
   protected inspectAttempt(attempt: AttemptRow): void {
-    openAttemptInspector(this.dialogs, { attempt, attempts: this.store.attempts() ?? [] });
+    this.attemptInspector.open({ attempt, attempts: this.store.attempts() ?? [] });
   }
 
   protected cancelPendingAttemptAnchor(): void {

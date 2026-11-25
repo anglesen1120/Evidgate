@@ -257,8 +257,9 @@ describe('ProducerStatusTableComponent', () => {
       'status',
       'runAfterCancelEvents',
       'targetAnchor',
+      'paging',
     ]);
-    expect(metadata?.outputs).toEqual([]);
+    expect(metadata?.outputs.map((output) => output.templateName)).toEqual(['pagingChange']);
     const { fixture, root } = await render();
     const originalFacts = factSnapshots(root);
     const originalNote = root.querySelector('#producers-event-note')?.outerHTML;

@@ -18,6 +18,7 @@ import {
 } from '../run-detail-store.fixtures';
 import { routes } from '../../runs.routes';
 import { RunDetailPage } from '../run-detail.page';
+import { selectTab } from '../run-detail.page.test-support';
 import { stubScopeBrowserApis } from '../../../../shell/layout/scope.fixture';
 import { DENY_CANCEL_SESSION } from '../../actions/cancel/cancel-run.test-support';
 import { EvidenceRevisionSelectorHarness } from './evidence-revision-selector.test-support';
@@ -72,7 +73,8 @@ describe('Run detail evidence revision', () => {
     vi.unstubAllGlobals();
   });
 
-  async function open(query = '') {
+  // The evidence panel mounts only on its tab, so every case opens there unless it names another.
+  async function open(query = '?tab=evidence') {
     const harness = await RouterTestingHarness.create();
     await harness.navigateByUrl(`/projects/project-1/runs/${run.run_id}${query}`, RunDetailPage);
     await settle(harness);
@@ -124,11 +126,13 @@ describe('Run detail evidence revision', () => {
     expect(panel(root).querySelector('[data-evidence-historical]')).not.toBeNull();
 
     // The decision region keeps its own latest-live revision and explains the mismatch.
+    await selectTab(harness, 'decision');
     const decision = root.querySelector('app-decision-view')!;
     expect(decision.querySelector('[data-decision-revision] dd')?.textContent).toBe('4');
     expect(decision.querySelector('[data-decision-mismatch]')).not.toBeNull();
 
-    (banner?.querySelector('button') as HTMLButtonElement).click();
+    await selectTab(harness, 'evidence');
+    (panel(root).querySelector('[data-evidence-newer] button') as HTMLButtonElement).click();
     await settle(harness);
     expect(TestBed.inject(Location).path()).toContain('evidence_revision=4');
     expect(panel(root).querySelector('[data-evidence-newer]')).toBeNull();
@@ -142,7 +146,7 @@ describe('Run detail evidence revision', () => {
       .mockReset()
       .mockResolvedValueOnce(revisionPage([newest, older], 'cursor-1'))
       .mockResolvedValueOnce(revisionPage([oldest], null));
-    const { harness, root } = await open('?evidence_revision=2');
+    const { harness, root } = await open('?tab=evidence&evidence_revision=2');
 
     expect(TestBed.inject(Location).path()).toContain('evidence_revision=2');
     expect(panel(root).querySelector('[data-evidence-search-older]')).not.toBeNull();
@@ -169,7 +173,7 @@ describe('Run detail evidence revision', () => {
 
   it('says the pinned revision is unavailable once every page is loaded, without substituting', async () => {
     listEvidenceRevisions.mockReset().mockResolvedValue(revisionPage([newest, older]));
-    const { root } = await open('?evidence_revision=9');
+    const { root } = await open('?tab=evidence&evidence_revision=9');
     expect(
       panel(root).querySelector('[data-evidence-selected-unavailable]')?.textContent,
     ).toContain('Selected revision unavailable');
@@ -190,11 +194,15 @@ describe('Run detail evidence revision', () => {
 
   it('a failed revision list leaves the run, manifest, attempts and decision readable', async () => {
     listEvidenceRevisions.mockReset().mockRejectedValue(refused('unavailable'));
-    const { root } = await open();
+    const { harness, root } = await open();
     expect(root.querySelector('app-run-header')).not.toBeNull();
-    expect(root.querySelector('app-manifest-panel')).not.toBeNull();
+    await selectTab(harness, 'attempts');
     expect(root.querySelector('app-attempts-table')).not.toBeNull();
+    await selectTab(harness, 'context');
+    expect(root.querySelector('app-manifest-panel')).not.toBeNull();
+    await selectTab(harness, 'decision');
     expect(root.querySelector('app-decision-chip')?.textContent).toContain('FAIL');
+    await selectTab(harness, 'evidence');
     const evidence = panel(root);
     expect(evidence.querySelector('app-error-pattern')?.textContent).toContain('request-detail');
     // The decision's revision is still pinnable, so its own evidence stays available.
@@ -207,15 +215,15 @@ describe('Run detail evidence revision', () => {
   });
 
   it('a URL pin change restores that revision and keeps unrelated query state', async () => {
-    const { harness, root } = await open('?tab=attempts#evidence-missing');
-    const path = `/projects/project-1/runs/${run.run_id}?tab=attempts`;
+    const { harness, root } = await open('?tab=evidence#evidence-missing');
+    const path = `/projects/project-1/runs/${run.run_id}?tab=evidence`;
     await harness.navigateByUrl(`${path}&evidence_revision=3#evidence-missing`, RunDetailPage);
     await settle(harness);
     expect(panel(root).querySelector('[data-evidence-selected]')?.textContent).toContain(
       'Selected evidence revision: 3',
     );
     // The pin's write-back merges into the URL instead of replacing the other query state.
-    expect(TestBed.inject(Location).path()).toContain('tab=attempts');
+    expect(TestBed.inject(Location).path()).toContain('tab=evidence');
     expect(TestBed.inject(Router).routerState.snapshot.root.fragment).toBe('evidence-missing');
 
     // Back/Forward restore a pin the same way: the URL is the only source of an explicit pin.
@@ -229,7 +237,7 @@ describe('Run detail evidence revision', () => {
 
   it('keeps an explicit URL pin when the run read is retried', async () => {
     get.mockReset().mockRejectedValueOnce(refused('unavailable')).mockResolvedValue(run);
-    const { harness, root } = await open('?evidence_revision=3');
+    const { harness, root } = await open('?tab=evidence&evidence_revision=3');
     const retry = root.querySelector<HTMLButtonElement>('app-request-state button');
     expect(retry).not.toBeNull();
     retry!.click();
@@ -247,7 +255,7 @@ describe('Run detail evidence revision', () => {
   });
 
   it('ignores a query value that is not a positive revision number', async () => {
-    const { harness, root } = await open('?evidence_revision=ev-3');
+    const { harness, root } = await open('?tab=evidence&evidence_revision=ev-3');
     expect(panel(root).querySelector('[data-evidence-selected-unavailable]')).toBeNull();
     expect(panel(root).querySelector('[data-evidence-selected]')?.textContent).toContain(
       'Selected evidence revision: 4',

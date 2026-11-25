@@ -96,6 +96,7 @@
     [busy]="status() === 'loading' || store.paging()"
     [applyLabel]="copy.apply"
     [clearLabel]="copy.clear"
+    [filtersLabel]="copy.filters"
     (submitted)="searchAction()"
     (apply)="apply()"
     (clear)="clear()"

@@ -144,6 +144,7 @@ export class AuditPage {
     from: $localize`:@@settings.audit.from:From (inclusive)`,
     to: $localize`:@@settings.audit.to:To (exclusive)`,
     dateHint: $localize`:@@settings.audit.date-hint:Enter times in your local time zone; results and exports use UTC.`,
+    filters: $localize`:@@settings.audit.filter-toggle:Filters`,
     apply: $localize`:@@settings.audit.apply:Apply filters`,
     clear: $localize`:@@settings.audit.clear:Clear filters`,
     rangeError: $localize`:@@settings.audit.range-error:Enter a valid time range with From no later than To.`,
@@ -352,8 +353,7 @@ function auditFiltersFromQuery(query: ParamMap): AuditFilters {
       : '',
     action: (query.get('action') ?? '').slice(0, 128),
     objectType: (query.get('object_type') ?? '').slice(0, 64),
-    from: canonicalDate(query.get('from')),
-    to: canonicalDate(query.get('to')),
+    ...canonicalRange(query.get('from'), query.get('to')),
   };
 }
 
@@ -370,7 +370,14 @@ function sameFilters(a: AuditFilters, b: AuditFilters): boolean {
 function canonicalDate(value: string | null): string {
   if (!value) return '';
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toISOString();
+  return Number.isNaN(date.getTime()) ? '' : date.toISOString();
+}
+
+// apply() refuses a reversed range; dropping it here keeps the URL from seeding a query apply() would reject.
+function canonicalRange(from: string | null, to: string | null): { from: string; to: string } {
+  const start = canonicalDate(from);
+  const end = canonicalDate(to);
+  return start && end && start > end ? { from: '', to: '' } : { from: start, to: end };
 }
 
 function localDateTime(value: string): string {

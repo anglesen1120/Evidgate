@@ -94,6 +94,18 @@ describe('Run list filters', () => {
     expect(await (await harness.all()).getAttribute('aria-pressed')).toBe('false');
   });
 
+  it('All clears only the decision filter and keeps the other committed filters', async () => {
+    const { store, harness } = await render();
+    store.filters.update((filters) => ({ ...filters, decision: 'FAIL', refName: 'main' }));
+    await (await harness.all()).click();
+    expect(store.setFilters).toHaveBeenLastCalledWith({
+      state: '',
+      scope: '',
+      refName: 'main',
+      decision: '',
+    });
+  });
+
   it.each(['apply', 'clear'] as const)(
     'retains %s focus and refuses repeated intents while busy',
     async (action) => {

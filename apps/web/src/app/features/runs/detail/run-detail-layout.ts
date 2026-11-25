@@ -19,7 +19,10 @@ export function observeVerdictHeight(
 /** Scroll only the tab strip. Selecting a tab never scrolls the page horizontally. */
 export function revealSelectedTab(selected: string, strip?: HTMLElement): void {
   if (!strip || strip.scrollWidth <= strip.clientWidth) return;
-  const tab = strip.querySelector<HTMLElement>(`[data-run-tab="${selected}"]`);
+  // The selected id is data, not a selector: an interpolated value breaks on quotes and escapes.
+  const tab = Array.from(strip.querySelectorAll<HTMLElement>('[data-run-tab]')).find(
+    (element) => element.dataset['runTab'] === selected,
+  );
   if (!tab) return;
   const box = strip.getBoundingClientRect();
   const inset = strip.clientLeft + Number.parseFloat(getComputedStyle(strip).paddingInlineStart);

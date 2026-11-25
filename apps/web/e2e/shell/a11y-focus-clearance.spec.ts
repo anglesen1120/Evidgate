@@ -75,24 +75,36 @@ async function expectShiftTabBackClearsBar(page: Page): Promise<void> {
   const measured = await page.evaluate(() => {
     const tab = document.querySelector('[role="tab"][aria-selected="true"]');
     const bar = document.querySelector<HTMLElement>('header.topbar');
-    if (tab === null || bar === null) throw new Error('the selected tab or the bar is missing');
+    const verdict = document.querySelector<HTMLElement>('app-run-header.sticky');
+    if (tab === null || bar === null || verdict === null) {
+      throw new Error('the selected tab, the bar or the verdict is missing');
+    }
+    // The offset is capped at half the viewport, but the painted verdict is not: it covers the tab
+    // wherever its box sits, so live coverage uses its real bottom edge.
+    const cap = window.innerHeight / 2;
     return {
       focused: document.activeElement === tab,
       top: tab.getBoundingClientRect().top,
-      barBottom: bar.getBoundingClientRect().bottom,
-      barHeight: bar.getBoundingClientRect().height,
+      stackBottom: Math.max(
+        bar.getBoundingClientRect().bottom,
+        verdict.getBoundingClientRect().bottom,
+      ),
+      // The sticky verdict pins at min(topbar, cap - verdict) and spans its own height, so its
+      // pinned bottom is min(topbar + verdict, cap). Using the live bottom would measure the
+      // in-flow position at the page end, which the offset does not describe.
+      pinnedStack: Math.min(bar.offsetHeight + verdict.offsetHeight, cap),
       marginTop: Number.parseFloat(getComputedStyle(tab).scrollMarginTop),
     };
   });
 
   // The tab, not the panel or a skip link: focus moved back along the tab order as intended.
   expect(measured.focused).toBe(true);
-  // The bar's bottom edge is the line the tab has to clear.
-  expect(measured.top).toBeGreaterThanOrEqual(measured.barBottom - 0.5);
-  // And the offset itself is the bar's measured height: Chromium centres a focus target it has to
-  // reveal, so the geometry above holds even without the offset — this line is what pins the fix.
-  expect(measured.marginTop).toBeGreaterThanOrEqual(measured.barHeight - 0.5);
-  expect(measured.marginTop).toBeLessThanOrEqual(Math.ceil(measured.barHeight));
+  // The tab clears the whole sticky stack: the topbar and the verdict header under it.
+  expect(measured.top).toBeGreaterThanOrEqual(measured.stackBottom - 0.5);
+  // The offset is that stack's pinned height. The topbar token rounds up to whole pixels, so the
+  // margin may run up to a pixel and a half past the stack's bottom edge.
+  expect(measured.marginTop).toBeGreaterThanOrEqual(measured.pinnedStack - 0.5);
+  expect(measured.marginTop).toBeLessThanOrEqual(measured.pinnedStack + 1.5);
 }
 
 /**
@@ -108,9 +120,10 @@ async function expectCoveredStopClearsBar(page: Page): Promise<void> {
   const placed = await page.evaluate(() => {
     const tab = document.querySelector('[role="tab"][aria-selected="true"]');
     const bar = document.querySelector<HTMLElement>('header.topbar');
+    const verdict = document.querySelector<HTMLElement>('app-run-header.sticky');
     const scroller = document.scrollingElement;
-    if (tab === null || bar === null || scroller === null) {
-      throw new Error('the selected tab, the bar or the scroller is missing');
+    if (tab === null || bar === null || verdict === null || scroller === null) {
+      throw new Error('the selected tab, the bar, the verdict or the scroller is missing');
     }
     const barBox = bar.getBoundingClientRect();
     // Rest the tab wholly behind the bar: its bottom edge a few pixels above the bar's bottom.
@@ -121,7 +134,7 @@ async function expectCoveredStopClearsBar(page: Page): Promise<void> {
       top: rect.top,
       bottom: rect.bottom,
       barBottom: barBox.bottom,
-      barHeight: barBox.height,
+      stackBottom: Math.max(barBox.bottom, verdict.getBoundingClientRect().bottom),
       marginTop: Number.parseFloat(getComputedStyle(tab).scrollMarginTop),
       scrollY: scroller.scrollTop,
     };
@@ -130,20 +143,24 @@ async function expectCoveredStopClearsBar(page: Page): Promise<void> {
   expect(placed.top).toBeGreaterThanOrEqual(0);
   expect(placed.bottom, JSON.stringify(placed)).toBeLessThanOrEqual(placed.barBottom - 1);
   // And the stop must carry the offset this case is about, else the reveal could not come from it.
-  expect(placed.marginTop).toBeGreaterThanOrEqual(placed.barHeight - 0.5);
+  expect(placed.marginTop).toBeGreaterThanOrEqual(placed.stackBottom - 0.5);
 
   await page.keyboard.press('Shift+Tab');
   const measured = await page.evaluate(() => {
     const tab = document.querySelector('[role="tab"][aria-selected="true"]');
     const bar = document.querySelector<HTMLElement>('header.topbar');
+    const verdict = document.querySelector<HTMLElement>('app-run-header.sticky');
     const scroller = document.scrollingElement;
-    if (tab === null || bar === null || scroller === null) {
-      throw new Error('the selected tab, the bar or the scroller is missing');
+    if (tab === null || bar === null || verdict === null || scroller === null) {
+      throw new Error('the selected tab, the bar, the verdict or the scroller is missing');
     }
     return {
       focused: document.activeElement === tab,
       top: tab.getBoundingClientRect().top,
-      barBottom: bar.getBoundingClientRect().bottom,
+      stackBottom: Math.max(
+        bar.getBoundingClientRect().bottom,
+        verdict.getBoundingClientRect().bottom,
+      ),
       scrollY: scroller.scrollTop,
     };
   });
@@ -151,8 +168,8 @@ async function expectCoveredStopClearsBar(page: Page): Promise<void> {
   expect(measured.focused).toBe(true);
   // The reveal is a scroll of the document, not only a geometry read.
   expect(measured.scrollY).not.toBe(placed.scrollY);
-  // Geometric clearance: the revealed tab's top edge sits at or below the bar's bottom edge.
-  expect(measured.top).toBeGreaterThanOrEqual(measured.barBottom - 0.5);
+  // Geometric clearance: the revealed tab's top edge sits at or below the sticky stack's bottom edge.
+  expect(measured.top).toBeGreaterThanOrEqual(measured.stackBottom - 0.5);
 }
 
 test.describe('focus scrolls clear of the sticky topbar (WCAG 2.4.11)', () => {
