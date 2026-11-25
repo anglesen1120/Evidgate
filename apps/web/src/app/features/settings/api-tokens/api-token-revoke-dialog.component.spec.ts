@@ -1,6 +1,15 @@
+import { ComponentHarness } from '@angular/cdk/testing';
+import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
+import { NarrowMutationPolicy } from '../../../shared/ui/narrow/narrow-mutation-policy';
 import { TestBed } from '@angular/core/testing';
 import { control, writeFailure } from './api-token-dialog.test-support';
 import { mount, ROW, deferred } from './api-tokens.test-support';
+
+class RevokeFlowHarness extends ComponentHarness {
+  static hostSelector = 'app-api-tokens-page';
+  readonly open = this.locatorFor('[data-api-revoke]');
+  readonly confirm = this.documentRootLocatorFactory().locatorFor('[data-api-revoke-submit]');
+}
 
 describe('API token revocation confirmation', () => {
   afterEach(() => {
@@ -55,6 +64,27 @@ describe('API token revocation confirmation', () => {
     expect(document.querySelector('[role="alertdialog"]')).toBeNull();
     expect(h.revoke).not.toHaveBeenCalled();
     expect(document.activeElement).toBe(opener);
+  });
+
+  it('rechecks the live revoke policy on confirm after opening at desktop width', async () => {
+    const h = mount();
+    await h.settle();
+    const flow = await TestbedHarnessEnvironment.harnessForFixture(h.fixture, RevokeFlowHarness);
+    await (await flow.open()).click();
+    const confirm = await flow.confirm();
+    const live = vi.spyOn(TestBed.inject(NarrowMutationPolicy), 'allowsMutation');
+    live.mockReturnValueOnce(false);
+    await confirm.click();
+    expect(live).toHaveBeenCalledWith('revoke-api-token');
+    expect(h.revoke).not.toHaveBeenCalled();
+    live.mockImplementation((action) => action === 'revoke-api-token');
+    await confirm.click();
+    await h.settle();
+    expect(h.revoke).toHaveBeenCalledTimes(1);
+    expect(h.revoke).toHaveBeenCalledWith(
+      ROW.id,
+      expect.objectContaining({ idempotencyKey: expect.any(String) as string }),
+    );
   });
 
   it('confirms once on double click, freezes cancel while pending, and displays only refreshed row state', async () => {

@@ -3605,7 +3605,6 @@
       <trans-unit id="runs.actions.cancel.submitting" datatype="html"><source>Recording cancel request…</source><target>Đang ghi nhận yêu cầu hủy…</target></trans-unit>
       <trans-unit id="runs.actions.cancel.no-permission" datatype="html"><source>Canceling this run requires run:cancel permission in this project.</source><target>Bạn cần quyền run:cancel trong dự án này để hủy lượt chạy.</target></trans-unit>
       <trans-unit id="runs.actions.cancel.terminal" datatype="html"><source>This run is already terminal. No cancellation is needed.</source><target>Lượt chạy này đã ở trạng thái kết thúc. Không cần hủy.</target></trans-unit>
-      <trans-unit id="runs.actions.cancel.desktop" datatype="html"><source>Use a desktop-sized window to cancel a run.</source><target>Hãy dùng cửa sổ có kích thước máy tính để bàn để hủy lượt chạy.</target></trans-unit>
       <trans-unit id="runs.actions.cancel.recorded" datatype="html"><source>202 · Cancel request recorded. Waiting for collection state; this does not mean execution has stopped.</source><target>202 · Đã ghi nhận yêu cầu hủy. Đang chờ trạng thái thu thập; điều này không có nghĩa là quá trình thực thi đã dừng.</target></trans-unit>
       <trans-unit id="runs.actions.cancel.canceled" datatype="html"><source>202 · Cancel request recorded. Collection state is canceled; execution may still be stopping.</source><target>202 · Đã ghi nhận yêu cầu hủy. Trạng thái thu thập là đã hủy; quá trình thực thi có thể vẫn đang dừng lại.</target></trans-unit>
       <trans-unit id="runs.actions.cancel.completed" datatype="html"><source>202 · Cancel request recorded. The run reached a terminal collection state other than canceled. No further automatic refresh is needed.</source><target>202 · Đã ghi nhận yêu cầu hủy. Lượt chạy đã đạt trạng thái thu thập kết thúc khác với đã hủy. Không cần tiếp tục tự động làm mới.</target></trans-unit>
@@ -22248,6 +22247,54 @@
 <trans-unit id="healingswitch.server-snapshot" datatype="html"><source>Server snapshot</source><target>Dữ liệu máy chủ</target></trans-unit>
 <trans-unit id="healingswitch.project-setting" datatype="html"><source>Project setting</source><target>Cài đặt dự án</target></trans-unit>
 <trans-unit id="healingswitch.stored-setting" datatype="html"><source>Stored setting</source><target>Cài đặt đã lưu</target></trans-unit>
+      <trans-unit id="healingswitch.disable-title" datatype="html">
+        <source>Disable healing for this scope?</source>
+        <target>Tắt tự sửa cho phạm vi này?</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/availability/switch-scope-control.component.ts</context>
+          <context context-type="linenumber">92</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="healingswitch.disable-consequence" datatype="html">
+        <source>All shadow healing proposals for this scope will stop right away. Existing PRs and original failures stay as they are.</source>
+        <target>Mọi đề xuất tự sửa chế độ bóng của phạm vi này sẽ dừng ngay. Các PR hiện có và lỗi gốc được giữ nguyên.</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/availability/switch-scope-control.component.ts</context>
+          <context context-type="linenumber">93</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="healingswitch.disable-hint" datatype="html">
+        <source>Emergency stop only. Turning healing on or changing other modes needs a desktop screen.</source>
+        <target>Chỉ dùng để dừng khẩn cấp. Bật lại tự sửa hoặc đổi chế độ khác cần màn hình máy tính.</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/availability/switch-scope-control.component.ts</context>
+          <context context-type="linenumber">94</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="healingswitch.disable" datatype="html">
+        <source>Disable healing</source>
+        <target>Tắt tự sửa</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/availability/switch-scope-control.component.ts</context>
+          <context context-type="linenumber">95</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="healingswitch.disable-keep" datatype="html">
+        <source>Keep enabled</source>
+        <target>Giữ bật</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/availability/switch-scope-control.component.ts</context>
+          <context context-type="linenumber">96</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="healingswitch.disable-confirm" datatype="html">
+        <source>Confirm disable</source>
+        <target>Xác nhận tắt</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/availability/switch-scope-control.component.ts</context>
+          <context context-type="linenumber">97</context>
+        </context-group>
+      </trans-unit>
 <trans-unit id="healingswitch.runtime-approvals" datatype="html"><source>Runtime and approvals</source><target>Thực thi và xét duyệt</target></trans-unit>
 <trans-unit id="healingswitch.auto-apply-off" datatype="html"><source>Auto-apply off</source><target>Tắt tự động áp dụng</target></trans-unit>
 <trans-unit id="healingswitch.original-failure" datatype="html"><source>Healing never hides the original failure.</source><target>Tự sửa kiểm thử không bao giờ che giấu lỗi gốc.</target></trans-unit>

@@ -1,102 +1,19 @@
-import { provideZonelessChangeDetection, signal } from '@angular/core';
-import { ComponentHarness } from '@angular/cdk/testing';
 import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { TestBed } from '@angular/core/testing';
 import type { ComponentFixture } from '@angular/core/testing';
-import { By } from '@angular/platform-browser';
-import type { HealingSwitchView } from '@evidgate/sdk';
 
-import type { ApiError } from '../../core/http/api-error';
-import { SessionStore } from '../../core/session/session.store';
-import { NarrowMutationPolicy } from '../../shared/ui/narrow/narrow-mutation-policy';
 import { stubScopeBrowserApis } from '../../shell/layout/scope.fixture';
 import { refusal, switchRow } from './healing-switch.test-support';
 import { SwitchScopeControl } from './switch-scope-control.component';
-
-class ModeHarness extends ComponentHarness {
-  static hostSelector = 'app-switch-scope-control';
-  readonly trigger = this.locatorFor('button[role="combobox"]');
-  readonly options = this.documentRootLocatorFactory().locatorForAll('[role="option"]');
-
-  async choose(label: string): Promise<void> {
-    await (await this.trigger()).click();
-    for (const option of await this.options()) {
-      if ((await option.text()).trim() === label) {
-        await option.click();
-        return;
-      }
-    }
-    throw new Error(`Missing mode ${label}`);
-  }
-}
-
-function changeMode(fixture: ComponentFixture<SwitchScopeControl>, value: unknown): void {
-  fixture.debugElement.query(By.css('hlm-select')).triggerEventHandler('valueChange', value);
-}
-
-function modeTrigger(root: HTMLElement): HTMLButtonElement | null {
-  return root.querySelector<HTMLButtonElement>('button[role="combobox"]');
-}
-
-function mount(inputs: {
-  scope?: 'system' | 'tenant' | 'project';
-  row?: HealingSwitchView | null;
-  blockedBy?: 'system' | 'tenant' | 'project' | null;
-  editable?: boolean;
-  saving?: boolean;
-  error?: ApiError | null;
-  saved?: boolean;
-}) {
-  // The page names the project scope after the current project, so the fake session carries a
-  // name; the shared fake session keeps ids only and is not enough for that label.
-  const currentProject = signal({ id: 'p-1', name: 'Storefront' });
-  const desktop = signal(true);
-  const policy = {
-    canMutate: desktop,
-    narrow: () => !desktop(),
-    allowsMutation: () => desktop(),
-  };
-  TestBed.configureTestingModule({
-    imports: [SwitchScopeControl],
-    providers: [
-      provideZonelessChangeDetection(),
-      { provide: NarrowMutationPolicy, useValue: policy },
-      {
-        provide: SessionStore,
-        useValue: { currentProject, has: () => true },
-      },
-    ],
-  });
-  const fixture = TestBed.createComponent(SwitchScopeControl);
-  fixture.componentRef.setInput('scope', inputs.scope ?? 'tenant');
-  fixture.componentRef.setInput('row', inputs.row ?? null);
-  fixture.componentRef.setInput('blockedBy', inputs.blockedBy ?? null);
-  fixture.componentRef.setInput('editable', inputs.editable ?? false);
-  fixture.componentRef.setInput('saving', inputs.saving ?? false);
-  fixture.componentRef.setInput('error', inputs.error ?? null);
-  fixture.componentRef.setInput('saved', inputs.saved ?? false);
-  fixture.detectChanges();
-  const emitted: { mode: string; reason: string | null }[] = [];
-  fixture.componentInstance.submitted.subscribe((event) => emitted.push(event));
-  return { fixture, root: fixture.nativeElement as HTMLElement, emitted, desktop };
-}
-
-function scopeCard(root: HTMLElement): HTMLElement {
-  const element = root.querySelector<HTMLElement>('[data-healing-editor]');
-  if (element === null) throw new Error('the scope card did not render');
-  return element;
-}
-
-function field(root: HTMLElement, hook: string): HTMLElement | null {
-  return root.querySelector<HTMLElement>(`[data-healing-${hook}]`);
-}
-
-function enterReason(root: HTMLElement, text: string): void {
-  const reason = root.querySelector<HTMLTextAreaElement>('textarea');
-  if (reason === null) throw new Error('the reason field did not render');
-  reason.value = text;
-  reason.dispatchEvent(new Event('input'));
-}
+import {
+  ModeHarness,
+  changeMode,
+  enterReason,
+  field,
+  modeTrigger,
+  mount,
+  scopeCard,
+} from './switch-scope-control.test-support';
 
 describe('SwitchScopeControl', () => {
   let restoreBrowserApis: () => void;
@@ -191,7 +108,7 @@ describe('SwitchScopeControl', () => {
     expect(field(root, 'save')).toBeNull();
   });
 
-  it('submits the chosen mode and the trimmed reason', async () => {
+  it('saves a desktop disable straight away with the trimmed reason', async () => {
     const { fixture, root, emitted } = mount({
       scope: 'tenant',
       row: switchRow('tenant', 'shadow'),
@@ -208,6 +125,102 @@ describe('SwitchScopeControl', () => {
     field(root, 'save')?.click();
 
     expect(emitted).toEqual([{ mode: 'disabled', reason: 'Holding repairs during the release' }]);
+  });
+
+  describe('narrow containment', () => {
+    function openDisable(
+      fixture: ComponentFixture<SwitchScopeControl>,
+      desktop: { set(value: boolean): void },
+    ): void {
+      desktop.set(false);
+      fixture.detectChanges();
+      field(fixture.nativeElement as HTMLElement, 'disable')?.click();
+      fixture.detectChanges();
+    }
+
+    function confirmButton(): HTMLElement | null {
+      return document.querySelector<HTMLElement>('[data-healing-confirm]');
+    }
+
+    it('offers the containment disable only at narrow width and hides the mode editor and save', () => {
+      const { fixture, root, desktop } = mount({
+        scope: 'tenant',
+        row: switchRow('tenant', 'shadow'),
+        editable: true,
+      });
+      expect(field(root, 'disable')).toBeNull();
+
+      desktop.set(false);
+      fixture.detectChanges();
+
+      expect(field(root, 'disable')).not.toBeNull();
+      expect(modeTrigger(root)).toBeNull();
+      expect(field(root, 'save')).toBeNull();
+    });
+
+    it('opens an alertdialog with Cancel focused and sends nothing until the operator confirms', async () => {
+      const { fixture, emitted, desktop } = mount({
+        scope: 'tenant',
+        row: switchRow('tenant', 'shadow'),
+        editable: true,
+      });
+      openDisable(fixture, desktop);
+      await fixture.whenStable();
+
+      expect(document.querySelector('[role="alertdialog"]')).not.toBeNull();
+      expect(document.activeElement).toBe(document.querySelector('[data-healing-cancel]'));
+      expect(emitted).toEqual([]);
+
+      confirmButton()?.click();
+      expect(emitted).toEqual([{ mode: 'disabled', reason: null, action: 'healing-kill-switch' }]);
+    });
+
+    it('cancels on Escape with no request', async () => {
+      const { fixture, emitted, desktop } = mount({
+        scope: 'tenant',
+        row: switchRow('tenant', 'shadow'),
+        editable: true,
+      });
+      openDisable(fixture, desktop);
+      await fixture.whenStable();
+
+      document.activeElement?.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
+      );
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      expect(emitted).toEqual([]);
+    });
+
+    it('re-checks the kill-switch id at confirm time and sends nothing once it is revoked', () => {
+      const { fixture, emitted, desktop, killSwitchAllowed } = mount({
+        scope: 'tenant',
+        row: switchRow('tenant', 'shadow'),
+        editable: true,
+      });
+      openDisable(fixture, desktop);
+
+      killSwitchAllowed.set(false);
+      confirmButton()?.click();
+
+      expect(emitted).toEqual([]);
+    });
+
+    it('still sends the confirmed disable when the viewport widens mid-dialog', () => {
+      const { fixture, emitted, desktop } = mount({
+        scope: 'tenant',
+        row: switchRow('tenant', 'shadow'),
+        editable: true,
+      });
+      openDisable(fixture, desktop);
+
+      desktop.set(true);
+      fixture.detectChanges();
+      confirmButton()?.click();
+
+      expect(emitted).toEqual([{ mode: 'disabled', reason: null, action: 'healing-kill-switch' }]);
+    });
   });
 
   it('sends null when the reason is blank', () => {
@@ -384,7 +397,7 @@ describe('SwitchScopeControl', () => {
       editable: true,
       error: refusal('validation', 422, 'Review the stored scope.').error,
     });
-    changeMode(fixture, 'disabled');
+    changeMode(fixture, 'enabled');
     enterReason(root, 'Giữ nguyên bản nháp trong khi đổi kích thước');
     fixture.detectChanges();
     const staleSave = field(root, 'save');
@@ -398,14 +411,14 @@ describe('SwitchScopeControl', () => {
     expect(field(root, 'error')?.textContent).toContain('Review the stored scope.');
     desktop.set(true);
     fixture.detectChanges();
-    expect(modeTrigger(root)?.textContent).toContain('Disabled');
+    expect(modeTrigger(root)?.textContent).toContain('Enabled');
     expect(root.querySelector('textarea')?.value).toBe(
       'Giữ nguyên bản nháp trong khi đổi kích thước',
     );
     expect(emitted).toEqual([]);
     field(root, 'save')?.click();
     expect(emitted).toEqual([
-      { mode: 'disabled', reason: 'Giữ nguyên bản nháp trong khi đổi kích thước' },
+      { mode: 'enabled', reason: 'Giữ nguyên bản nháp trong khi đổi kích thước' },
     ]);
   });
 

@@ -12,6 +12,7 @@ import {
 import type { HealingSwitchView } from '@evidgate/sdk';
 import { HlmButton } from '@evidgate/ui/button';
 import { HlmCardTitle } from '@evidgate/ui/card';
+import { HlmDialogImports } from '@evidgate/ui/dialog';
 import { HlmInput } from '@evidgate/ui/input';
 import { HlmLabel } from '@evidgate/ui/label';
 import { HlmSelectImports } from '@evidgate/ui/select';
@@ -42,6 +43,7 @@ function isSettableMode(value: unknown): value is SettableMode {
     FieldHintComponent,
     HlmButton,
     HlmCardTitle,
+    HlmDialogImports,
     HlmInput,
     HlmLabel,
     HlmSelectImports,
@@ -63,7 +65,11 @@ export class SwitchScopeControl {
   readonly saving = input(false);
   readonly error = input<ApiError | null>(null);
   readonly saved = input(false);
-  readonly submitted = output<{ mode: SettableMode; reason: string | null }>();
+  readonly submitted = output<{
+    mode: SettableMode;
+    reason: string | null;
+    action?: 'healing-kill-switch' | undefined;
+  }>();
 
   protected readonly copy = HEALING_SWITCH_COPY;
   protected readonly modeLabel = healingModeLabel;
@@ -78,6 +84,21 @@ export class SwitchScopeControl {
     computation: (row) => row?.mode ?? 'shadow',
   });
   protected readonly reason = signal('');
+
+  protected readonly confirmOpen = signal(false);
+  /** Containment is the one mutation a narrow screen may send, so it is offered only there. */
+  protected readonly containmentVisible = computed(
+    () =>
+      !this.narrowPolicy.canMutateFor() &&
+      this.writable() &&
+      this.narrowPolicy.canMutateFor('healing-kill-switch'),
+  );
+  protected readonly disableTitle = $localize`:@@healingswitch.disable-title:Disable healing for this scope?`;
+  protected readonly disableConsequence = $localize`:@@healingswitch.disable-consequence:All shadow healing proposals for this scope will stop right away. Existing PRs and original failures stay as they are.`;
+  protected readonly disableHint = $localize`:@@healingswitch.disable-hint:Emergency stop only. Turning healing on or changing other modes needs a desktop screen.`;
+  protected readonly disableButton = $localize`:@@healingswitch.disable:Disable healing`;
+  protected readonly disableKeep = $localize`:@@healingswitch.disable-keep:Keep enabled`;
+  protected readonly disableConfirm = $localize`:@@healingswitch.disable-confirm:Confirm disable`;
 
   /** Measured on the trimmed value, so trailing whitespace never blocks a save. */
   protected readonly reasonTooLong = computed(() =>
@@ -145,9 +166,9 @@ export class SwitchScopeControl {
     this.reason.set(value);
   }
 
-  protected submit(): void {
+  private emit(mode: SettableMode, action?: 'healing-kill-switch'): void {
     if (
-      !this.narrowPolicy.allowsMutation() ||
+      !this.narrowPolicy.allowsMutation(action) ||
       !this.writable() ||
       this.saving() ||
       this.reasonTooLong()
@@ -155,6 +176,33 @@ export class SwitchScopeControl {
       return;
     }
     const reason = this.reason().trim();
-    this.submitted.emit({ mode: this.selectedMode(), reason: reason.length === 0 ? null : reason });
+    this.submitted.emit({ mode, reason: reason.length === 0 ? null : reason, action });
+  }
+
+  /** Desktop save keeps its existing path; only the containment confirm passes the kill-switch id. */
+  protected submit(): void {
+    this.emit(this.selectedMode());
+  }
+
+  /** Containment opens the confirm first; nothing is sent until the operator confirms. */
+  protected openDisableConfirm(): void {
+    if (
+      !this.narrowPolicy.allowsMutation('healing-kill-switch') ||
+      !this.writable() ||
+      this.saving() ||
+      this.reasonTooLong()
+    ) {
+      return;
+    }
+    this.confirmOpen.set(true);
+  }
+
+  protected confirmDisable(): void {
+    this.confirmOpen.set(false);
+    this.emit('disabled', 'healing-kill-switch');
+  }
+
+  protected dialogStateChanged(state: 'open' | 'closed'): void {
+    if (state === 'closed') this.confirmOpen.set(false);
   }
 }

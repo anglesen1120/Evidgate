@@ -6,7 +6,12 @@ import { HlmInput } from '@evidgate/ui/input';
 import { BehaviorSubject } from 'rxjs';
 import { DesktopMutationDirective } from './desktop-mutation.directive';
 import { DesktopRequiredNoticeComponent } from './desktop-required-notice.component';
-import { DESKTOP_MUTATION_QUERY, NarrowMutationPolicy } from './narrow-mutation-policy';
+import {
+  DESKTOP_MUTATION_QUERY,
+  EMERGENCY_ACTIONS,
+  NarrowMutationPolicy,
+  type EmergencyAction,
+} from './narrow-mutation-policy';
 
 @Component({
   selector: 'app-narrow-policy-test',
@@ -118,6 +123,24 @@ describe('shared narrow mutation policy', () => {
     fixture.componentInstance.authorized.set(true);
     root.querySelector('form')!.dispatchEvent(new Event('submit', { cancelable: true }));
     expect(fixture.componentInstance.mutations).toBe(1);
+  });
+
+  it('unlocks exactly the three emergency actions at 390px and nothing else', async () => {
+    await render(390);
+    const { policy } = fixture.componentInstance;
+    expect([...EMERGENCY_ACTIONS]).toEqual([
+      'healing-kill-switch',
+      'revoke-api-token',
+      'cancel-run',
+    ]);
+    for (const action of EMERGENCY_ACTIONS) {
+      expect(policy.allowsMutation(action)).toBe(true);
+      expect(policy.canMutateFor(action)).toBe(true);
+    }
+    expect(policy.allowsMutation()).toBe(false);
+    expect(policy.canMutateFor()).toBe(false);
+    expect(policy.allowsMutation('create-api-token' as EmergencyAction)).toBe(false);
+    expect(policy.canMutateFor('rerun-run' as EmergencyAction)).toBe(false);
   });
 
   it('uses the existing 768px boundary without a second mobile breakpoint', async () => {

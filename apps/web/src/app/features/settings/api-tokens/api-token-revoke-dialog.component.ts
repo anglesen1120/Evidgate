@@ -71,6 +71,7 @@ import { NarrowMutationPolicy } from '../../../shared/ui/narrow/narrow-mutation-
             [variant]="'outline'"
             type="button"
             data-api-revoke-cancel
+            class="max-md:min-h-(--eg-control-touch)"
             [disabled]="store.revoking()"
             (click)="close()"
           >
@@ -81,9 +82,10 @@ import { NarrowMutationPolicy } from '../../../shared/ui/narrow/narrow-mutation-
             [variant]="'destructive'"
             type="button"
             data-api-revoke-submit
+            class="max-md:min-h-(--eg-control-touch)"
             [disabled]="
               store.revoking() ||
-              !viewport.canMutate() ||
+              !viewport.canMutateFor('revoke-api-token') ||
               !store.canWrite() ||
               !retryReady() ||
               (store.revokeError() !== null && !store.revokeError()?.retryable)
@@ -126,7 +128,7 @@ export class ApiTokenRevokeDialogComponent {
   protected async submit(): Promise<void> {
     if (
       !this.opened() ||
-      !this.viewport.allowsMutation() ||
+      !this.viewport.allowsMutation('revoke-api-token') ||
       !this.store.canWrite() ||
       this.store.revoking() ||
       !this.retryReady()

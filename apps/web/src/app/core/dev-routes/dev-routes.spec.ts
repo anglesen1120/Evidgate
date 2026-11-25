@@ -10,6 +10,8 @@
 import { describe, expect, it } from 'vitest';
 
 import { UiGalleryComponent } from '../../shared/ui/gallery';
+// eslint-disable-next-line evidgate/no-feature-cross-import -- checks the fixture route mounts the real phase-gated page.
+import { HealingSwitchPage } from '../../features/availability/healing-switch.page';
 // eslint-disable-next-line evidgate/no-feature-cross-import -- verifies the dev-only route's real component identity; production core never imports this page.
 import { RunListPage } from '../../features/runs/list/run-list.page';
 // eslint-disable-next-line evidgate/no-feature-cross-import -- verifies the review-only route loads the real product detail page.
@@ -102,6 +104,18 @@ describe('dev routes (review only)', () => {
     const loadComponent = orgRoute?.loadComponent;
     if (loadComponent === undefined) throw new Error('no lazy Policy review route');
     expect(await loadComponent()).toBe(PolicyPage);
+  });
+
+  it('mounts the real healing controls behind the project scope and triage gates', async () => {
+    const route = devRoutes().find((entry) => entry.path === 'dev/healing-switch');
+    expect(route?.component).toBe(ShellComponent);
+    const org = route?.children?.[0];
+    expect(org?.canMatch).toEqual([authGuard, orgScopeGuard]);
+    const project = org?.children?.[0];
+    expect(project?.path).toBe('projects/:projectId');
+    expect(project?.canMatch?.[0]).toBe(projectScopeGuard);
+    expect(project?.canMatch).toHaveLength(2);
+    expect(await project?.loadComponent?.()).toBe(HealingSwitchPage);
   });
 
   it('mounts the real Run list page under the project scope shell, review-only', async () => {

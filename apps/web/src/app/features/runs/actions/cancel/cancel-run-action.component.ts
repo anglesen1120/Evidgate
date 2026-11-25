@@ -125,7 +125,6 @@ export class CancelRunActionComponent {
   protected readonly disabledReason = computed(() => {
     if (this.store.scope() === null) return this.copy.noPermission;
     if (this.terminal()) return this.copy.terminal;
-    if (!this.store.viewport.canMutate()) return this.copy.desktop;
     return this.store.phase() === 'submitting' ? this.copy.submitting : '';
   });
 }

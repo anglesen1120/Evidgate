@@ -4,6 +4,7 @@
 
 import apiTokenCreate from '../../../../../../fixtures/web-api/api-token-create/input.json';
 import apiTokensList from '../../../../../../fixtures/web-api/api-tokens-list/input.json';
+import apiTokenRevokeOk from '../../../../../../fixtures/web-api/api-token-revoke-ok/input.json';
 import permissionsRunActions from '../../../../../../fixtures/web-api/permissions-list-run-actions/input.json';
 import ciBindingCreate from '../../../../../../fixtures/web-api/ci-binding-create/input.json';
 import ciBindingCreateConflict from '../../../../../../fixtures/web-api/ci-binding-create-conflict/input.json';
@@ -140,6 +141,7 @@ export const FIXTURE_CATALOG_SESSION_ROWS: readonly FixtureCatalogRow[] = [
   },
   { name: 'api-token-create', document: apiTokenCreate },
   { name: 'api-tokens-list', document: apiTokensList },
+  { name: 'api-token-revoke-ok', document: apiTokenRevokeOk },
   { name: 'ingest-token-create', document: ingestTokenCreate },
   { name: 'ingest-token-create-name-invalid', document: ingestTokenCreateNameInvalid },
   { name: 'ingest-token-rotate', document: ingestTokenRotate },

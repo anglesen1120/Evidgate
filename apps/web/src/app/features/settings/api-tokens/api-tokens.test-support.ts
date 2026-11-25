@@ -42,7 +42,12 @@ provideLayoutTestStubs();
 
 export const TOKEN_DESKTOP_PROVIDER = {
   provide: NarrowMutationPolicy,
-  useValue: { canMutate: () => true, narrow: () => false, allowsMutation: () => true },
+  useValue: {
+    canMutate: () => true,
+    canMutateFor: () => true,
+    narrow: () => false,
+    allowsMutation: () => true,
+  },
 };
 
 /** A component-output seam also exercises the page's refusal of unlisted project ids. */
