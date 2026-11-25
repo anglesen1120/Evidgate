@@ -20,7 +20,7 @@
     border: var(--eg-border-width) solid var(--eg-border-control);
     border-radius: var(--eg-radius-lg);
     background: var(--eg-surface);
-    box-shadow: var(--eg-elevation-2);
+    box-shadow: var(--eg-elevation-overlay);
     color: var(--eg-text);
     font-size: var(--eg-text-sm);
     line-height: var(--eg-leading-sm);

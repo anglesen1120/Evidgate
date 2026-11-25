@@ -11,6 +11,7 @@
     background: var(--eg-text);
     color: var(--eg-surface);
     font: var(--eg-text-xs) / var(--eg-leading-xs) var(--eg-font-body);
+    box-shadow: var(--eg-elevation-overlay);
     z-index: var(--eg-z-menu);
     overflow-wrap: anywhere;
   }

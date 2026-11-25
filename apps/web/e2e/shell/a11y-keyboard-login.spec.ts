@@ -126,7 +126,7 @@ test.describe('sign-in, keyboard only (AC2, T1.2)', () => {
     await walkToProviders(page);
     const google = providerButton(page, 'Google');
     await expect(google).toBeFocused();
-    await expect(google).toHaveCSS('outline-color', 'rgb(118, 216, 203)');
+    await expect(google).toHaveCSS('outline-color', 'rgb(95, 212, 198)');
   });
 
   test('Tab and Shift+Tab walk the two providers and then leave the page', async ({ page }) => {

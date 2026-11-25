@@ -11,6 +11,7 @@
     border-radius: var(--eg-radius-md);
     background: var(--eg-surface);
     color: var(--eg-text);
+    box-shadow: var(--eg-elevation-overlay);
   }
 
   .spartan-dropdown-menu-item,

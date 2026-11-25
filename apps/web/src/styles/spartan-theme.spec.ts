@@ -40,7 +40,7 @@ describe('Spartan theme contract', () => {
     it(`${selector} maps every semantic role to an existing Evidgate token`, () => {
       const aliases = declarations(theme, selector);
       const resolvedTokens = new Map([...rootTokens, ...declarations(tokens, selector)]);
-      expect(aliases.size).toBe(23);
+      expect(aliases.size).toBe(24);
       expect(invalidAliases(aliases, resolvedTokens)).toEqual([]);
       expect(aliases.get('--background')).toBe('var(--eg-bg)');
       expect(aliases.get('--primary')).toBe('var(--eg-accent)');

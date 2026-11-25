@@ -59,7 +59,11 @@
     background: transparent;
   }
 
-  .spartan-button-variant-default:hover,
+  .spartan-button-variant-default:hover {
+    background: var(--eg-accent-hover);
+    border-color: var(--eg-accent-hover);
+  }
+
   .spartan-button-variant-destructive:hover,
   .spartan-button-variant-link:hover {
     text-decoration: underline;

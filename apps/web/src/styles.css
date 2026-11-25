@@ -44,6 +44,19 @@ body {
   h4 {
     font-family: var(--eg-font-display);
   }
+
+  h1,
+  h2,
+  h3 {
+    letter-spacing: -0.02em;
+    text-wrap: balance;
+  }
+
+  table,
+  time,
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
 }
 
 @layer layout {
