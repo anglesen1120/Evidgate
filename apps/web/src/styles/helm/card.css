@@ -85,22 +85,11 @@
 }
 
 @layer utilities {
-  .eg-type-page-title,
   .eg-type-section-title,
   .eg-type-subsection-title {
     margin: var(--eg-space-0);
     font-family: var(--eg-font-display);
     font-weight: var(--eg-weight-semibold);
-  }
-
-  .eg-type-page-title {
-    font-weight: var(--eg-weight-bold);
-    font-size: var(--eg-text-2xl);
-    line-height: var(--eg-leading-2xl);
-  }
-
-  .eg-type-section-title,
-  .eg-type-subsection-title {
     font-size: var(--eg-text-lg);
     line-height: var(--eg-leading-lg);
   }
@@ -123,19 +112,9 @@
   }
 
   .eg-header-action {
-    min-inline-size: 0;
     max-inline-size: 100%;
     block-size: auto;
-    min-block-size: var(--eg-control-md);
-    padding-block: var(--eg-space-2);
     white-space: normal;
     overflow-wrap: anywhere;
-  }
-
-  @media (pointer: coarse) {
-    .eg-header-action {
-      min-inline-size: var(--eg-control-touch);
-      min-block-size: var(--eg-control-touch);
-    }
   }
 }

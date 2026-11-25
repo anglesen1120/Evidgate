@@ -80,10 +80,12 @@ for (const locale of LOCALES) {
         if (!scopeBox || !titleBox || !infoBox) throw new Error('Missing deep node controls.');
         expect(scopeBox.height).toBeGreaterThanOrEqual(24);
         expect(titleBox.width).toBeGreaterThanOrEqual(64);
-        expect(titleBox.height).toBeGreaterThan(24);
-        expect(titleBox.height).toBeLessThanOrEqual(
-          2 * (await title.evaluate((el) => parseFloat(getComputedStyle(el).lineHeight))) + 1,
+        // Compact controls let a long title fit one line at 1280; it may still wrap, but never past two.
+        const lineHeight = await title.evaluate((el) =>
+          parseFloat(getComputedStyle(el).lineHeight),
         );
+        expect(titleBox.height).toBeGreaterThanOrEqual(lineHeight - 1);
+        expect(titleBox.height).toBeLessThanOrEqual(2 * lineHeight + 1);
         expect(Math.min(infoBox.width, infoBox.height)).toBeGreaterThanOrEqual(24);
         await info.click();
         await expect(dialog.getByText(fullTitle, { exact: true })).toBeVisible();

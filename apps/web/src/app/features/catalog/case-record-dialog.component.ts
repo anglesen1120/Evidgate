@@ -23,6 +23,7 @@ import { HlmDialogImports } from '@evidgate/ui/dialog';
 import { HlmIcon } from '@evidgate/ui/icon';
 import { HlmLabel } from '@evidgate/ui/label';
 import { HlmSelectImports } from '@evidgate/ui/select';
+import { HlmTooltip } from '@evidgate/ui/tooltip';
 import { StatusPillComponent } from '../../shared/ui/chips/status-pill.component';
 import { escapeFormatChars } from '../../shared/ui/values/ref-name-display';
 import { NarrowMutationPolicy } from '../../shared/ui/narrow/narrow-mutation-policy';
@@ -46,6 +47,7 @@ export type SaveCatalogOwner = (row: CaseDto, membershipId: string) => Promise<b
     HlmIcon,
     HlmLabel,
     HlmSelectImports,
+    HlmTooltip,
     StatusPillComponent,
     CaseRecordFactsComponent,
   ],

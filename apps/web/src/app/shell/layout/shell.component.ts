@@ -36,7 +36,7 @@ import { QuotaBadgeComponent } from './quota-badge.component';
 import { ShellIconComponent } from './shell-icon.component';
 import { ThemeService } from './theme.service';
 import { trackTopbarHeight } from './topbar-height';
-import { LocaleSwitcherComponent, localeBundlePath } from './locale-switcher.component';
+import { localeBundlePath } from './locale-switcher.component';
 
 @Component({
   selector: 'app-shell',
@@ -47,7 +47,6 @@ import { LocaleSwitcherComponent, localeBundlePath } from './locale-switcher.com
     ScopeSwitcherComponent,
     ShellIconComponent,
     QuotaBadgeComponent,
-    LocaleSwitcherComponent,
     HlmButton,
     ShellAccountComponent,
     ShellBreadcrumbsComponent,

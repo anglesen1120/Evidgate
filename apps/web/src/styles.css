@@ -59,6 +59,18 @@ body {
   }
 }
 
+@layer utilities {
+  h1,
+  .eg-type-page-title {
+    margin: var(--eg-space-0);
+    font-family: var(--eg-font-display);
+    font-size: clamp(var(--eg-text-xl), 2vw, var(--eg-text-2xl));
+    line-height: var(--eg-leading-2xl);
+    font-weight: var(--eg-weight-bold);
+    @apply tracking-tight;
+  }
+}
+
 @layer layout {
   /*
    * WCAG 2.4.11 (focus not obscured): the shell's topbar is sticky, so a control that scrolls into

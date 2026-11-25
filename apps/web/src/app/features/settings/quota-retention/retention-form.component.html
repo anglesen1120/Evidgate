@@ -4,7 +4,7 @@
   aria-labelledby="retention-title"
 >
   <header
-    class="flex min-w-0 flex-wrap items-end justify-between gap-4 border-b border-border px-5 py-4"
+    class="flex min-w-0 flex-wrap items-end justify-between gap-4 border-b border-border p-(--eg-space-5) md:p-(--eg-space-6)"
   >
     <div class="grid min-w-0 gap-1">
       <h2 hlmCardTitle [size]="subsectionSize" id="retention-title">{{ copy.title }}</h2>
@@ -34,7 +34,7 @@
       </div>
     }
   </header>
-  <div class="grid min-w-0 gap-4 px-5 py-4">
+  <div class="grid min-w-0 gap-4 p-(--eg-space-5) md:p-(--eg-space-6)">
     @if (!store.readable()) {
       <app-inline-feedback data-retention-forbidden [title]="copy.forbidden" />
     } @else if (store.session.projects().length === 0) {
@@ -135,7 +135,7 @@
               #submitButton
               type="submit"
               data-retention-save
-              class="min-h-(--eg-control-touch) w-fit max-w-full whitespace-normal"
+              class="w-fit max-w-full whitespace-normal"
               [disabled]="store.saving()"
             >
               {{
@@ -213,7 +213,7 @@
         [variant]="'outline'"
         data-retention-cancel
         (click)="cancel()"
-        class="min-h-(--eg-control-touch) whitespace-normal"
+        class="whitespace-normal"
         [disabled]="store.saving()"
       >
         {{ copy.cancel }}
@@ -224,7 +224,7 @@
         [variant]="'destructive'"
         data-retention-confirm
         (click)="confirm()"
-        class="min-h-(--eg-control-touch) whitespace-normal"
+        class="whitespace-normal"
         [disabled]="store.saving() || !mutationPolicy.canMutate()"
         [attr.aria-busy]="store.saving()"
       >

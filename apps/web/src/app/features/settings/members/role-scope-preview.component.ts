@@ -13,7 +13,7 @@ import { memberRoleLabel } from './member-role-label';
   template: `
     <section
       hlmCard
-      class="gap-3 bg-secondary p-3 wrap-anywhere [&_p]:m-0 [&_p]:text-muted-foreground [&_ul]:m-0 [&_ul]:ps-4 [&_code]:font-mono"
+      class="gap-3 bg-secondary p-(--eg-space-5) md:p-(--eg-space-6) wrap-anywhere [&_p]:m-0 [&_p]:text-muted-foreground [&_ul]:m-0 [&_ul]:ps-4 [&_code]:font-mono"
       data-role-preview
       [attr.data-preview-kind]="preview()?.kind ?? 'empty'"
       [attr.aria-live]="'polite'"

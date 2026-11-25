@@ -111,13 +111,6 @@
         [collapsed]="collapsed()"
         (itemSelected)="onNavigationSelected($event)"
       />
-      @if (mobile() && canSwitchLocale) {
-        <div
-          class="drawer-preferences flex shrink-0 flex-wrap gap-(--eg-space-3) border-0 border-t-(length:--eg-border-width) border-solid border-border p-(--eg-space-4)"
-        >
-          <app-locale-switcher [variant]="'ghost'" (switchRequested)="switchLocale()" />
-        </div>
-      }
     </div>
   </aside>
   <div class="main-stack flex min-w-0 flex-col" [attr.inert]="mobile() && drawerOpen() ? '' : null">
@@ -139,33 +132,31 @@
       >
         <app-shell-icon [name]="'menu'" />
       </button>
-      <app-shell-breadcrumbs [interactiveScope]="!mobile()">
-        @if (!mobile()) {
-          <li class="topbar-scope min-w-0">
-            @defer (on idle) {
-              <app-scope-switcher
-                class="grid-cols-2 gap-(--eg-space-2) [&_[data-slot=select-trigger]]:text-xs [&_[data-slot=select-trigger]:enabled:not(:hover,:focus-visible,[aria-expanded=true])]:border-transparent"
-                [compact]="true"
-                [organizations]="session.organizations()"
-                [projects]="session.projects()"
-                [currentOrg]="session.currentOrg()"
-                [currentProject]="session.currentProject()"
-                (orgSelected)="selectOrganization($event)"
-                (projectSelected)="selectProject($event)"
-              />
-            } @placeholder {
-              <div class="grid min-w-0 grid-cols-2 gap-(--eg-space-2)" aria-hidden="true">
-                @for (scope of [session.currentOrg(), session.currentProject()]; track $index) {
-                  <span
-                    class="box-border flex h-(--eg-control-touch) min-w-0 items-center rounded-sm bg-muted px-(--eg-space-3)"
-                    ><span class="truncate">{{ scope?.name }}</span></span
-                  >
-                }
-              </div>
-            }
-          </li>
-        }
-      </app-shell-breadcrumbs>
+      @if (!mobile()) {
+        <div class="topbar-scope min-w-0">
+          @defer (on idle) {
+            <app-scope-switcher
+              class="grid-cols-2 gap-(--eg-space-2) [&_[data-slot=select-trigger]]:text-xs [&_[data-slot=select-trigger]:enabled:not(:hover,:focus-visible,[aria-expanded=true])]:border-transparent"
+              [compact]="true"
+              [organizations]="session.organizations()"
+              [projects]="session.projects()"
+              [currentOrg]="session.currentOrg()"
+              [currentProject]="session.currentProject()"
+              (orgSelected)="selectOrganization($event)"
+              (projectSelected)="selectProject($event)"
+            />
+          } @placeholder {
+            <div class="grid min-w-0 grid-cols-2 gap-(--eg-space-2)" aria-hidden="true">
+              @for (scope of [session.currentOrg(), session.currentProject()]; track $index) {
+                <span
+                  class="box-border flex h-(--eg-control-touch) min-w-0 items-center rounded-sm bg-muted px-(--eg-space-3)"
+                  ><span class="truncate">{{ scope?.name }}</span></span
+                >
+              }
+            </div>
+          }
+        </div>
+      }
       <div
         class="topbar-tools flex min-w-0 flex-wrap items-center justify-end gap-(--eg-space-2) pointer-coarse:gap-(--eg-space-3)"
       >
@@ -183,18 +174,16 @@
         >
           <app-shell-icon [name]="dark() ? 'moon' : 'sun'" />
         </button>
-        @if (!mobile() && canSwitchLocale) {
-          <app-locale-switcher [variant]="'ghost'" (switchRequested)="switchLocale()" />
-        }
-        <app-shell-account />
+        <app-shell-account [canSwitchLocale]="canSwitchLocale" (switchRequested)="switchLocale()" />
       </div>
     </header>
     <main
       #mainContent
       id="main-content"
-      class="mx-auto box-border flex w-full min-w-0 max-w-[calc(22.5*var(--eg-space-12))] flex-col gap-(--eg-space-5) p-(--eg-space-4) [overflow-wrap:anywhere] scroll-mt-[calc(2*var(--eg-space-12))] focus-visible:-outline-offset-(--eg-focus-offset) focus-visible:outline-solid focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-ring min-[421px]:p-(--eg-space-5) min-[768px]:gap-(--eg-space-7) min-[768px]:p-(--eg-space-6) min-[1280px]:p-(--eg-space-7) [&>router-outlet]:hidden"
+      class="mx-auto box-border flex w-full min-w-0 max-w-[calc(25*var(--eg-space-12))] flex-col gap-(--eg-space-5) p-(--eg-space-4) [overflow-wrap:anywhere] scroll-mt-[calc(2*var(--eg-space-12))] focus-visible:-outline-offset-(--eg-focus-offset) focus-visible:outline-solid focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-ring min-[421px]:p-(--eg-space-5) min-[768px]:gap-(--eg-space-7) min-[768px]:p-(--eg-space-6) min-[1280px]:p-(--eg-space-7) [&>router-outlet]:hidden"
       tabindex="-1"
     >
+      <app-shell-breadcrumbs />
       <router-outlet />
     </main>
   </div>

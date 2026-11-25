@@ -8,7 +8,10 @@ import { EmptyPatternComponent } from '../../shared/ui/states/empty-pattern.comp
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'block min-w-0' },
   template: `
-    <section hlmCard class="min-w-0 min-h-60 justify-start rounded-xl p-5">
+    <section
+      hlmCard
+      class="min-w-0 min-h-60 justify-start rounded-xl p-(--eg-space-5) md:p-(--eg-space-6)"
+    >
       <app-empty-pattern
         [icon]="'navSettings'"
         [bare]="true"

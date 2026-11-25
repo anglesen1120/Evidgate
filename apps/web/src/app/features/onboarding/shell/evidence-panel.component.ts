@@ -53,14 +53,14 @@ interface LedgerRow {
     >
       <header
         hlmCardHeader
-        class="min-w-0 border-b border-border p-(--eg-space-5) md:px-(--eg-space-6)"
+        class="min-w-0 border-b border-border p-(--eg-space-5) md:p-(--eg-space-6)"
       >
         <h2 hlmCardTitle [size]="sectionHeadingSize" id="onboarding-evidence-title">{{ title }}</h2>
         <p hlmCardDescription class="m-0 text-sm">{{ sourceLabel }}</p>
       </header>
       <div
         hlmCardContent
-        class="grid min-w-0 gap-(--eg-space-4) p-(--eg-space-5) md:px-(--eg-space-6)"
+        class="grid min-w-0 gap-(--eg-space-4) p-(--eg-space-5) md:p-(--eg-space-6)"
       >
         @if (progress(); as resources) {
           @if (resources.project; as createdProject) {

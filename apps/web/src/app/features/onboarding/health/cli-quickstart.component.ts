@@ -82,7 +82,7 @@ let nextQuickstartId = 0;
   template: `
     <section
       hlmCard
-      class="min-w-0 gap-(--eg-space-4) p-(--eg-space-4) md:p-(--eg-space-5)"
+      class="min-w-0 gap-(--eg-space-4) p-(--eg-space-5) md:p-(--eg-space-6)"
       [attr.aria-labelledby]="headingId"
     >
       <header class="grid min-w-0 gap-(--eg-space-2) border-b border-border pb-(--eg-space-4)">
@@ -103,7 +103,7 @@ let nextQuickstartId = 0;
           type="button"
           hlmBtn
           [variant]="outlineVariant"
-          class="min-h-(--eg-control-touch) max-w-full whitespace-normal aria-disabled:cursor-default aria-disabled:border-border aria-disabled:bg-muted aria-disabled:text-muted-foreground"
+          class="max-w-full whitespace-normal aria-disabled:cursor-default aria-disabled:border-border aria-disabled:bg-muted aria-disabled:text-muted-foreground"
           data-testid="cli-quickstart-copy"
           [attr.aria-disabled]="copying()"
           [attr.aria-busy]="copying()"

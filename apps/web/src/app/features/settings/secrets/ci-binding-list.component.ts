@@ -78,7 +78,7 @@ export const CI_BINDINGS_COPY = {
     >
       <header
         [attr.aria-busy]="loading() || loadingMore()"
-        class="grid min-w-0 gap-(--eg-space-2) border-0 border-b border-solid border-border p-(--eg-space-5)"
+        class="grid min-w-0 gap-(--eg-space-2) border-0 border-b border-solid border-border p-(--eg-space-5) md:p-(--eg-space-6)"
       >
         <h2
           #heading
@@ -256,6 +256,7 @@ export const CI_BINDINGS_COPY = {
                               <button
                                 hlmBtn
                                 [variant]="'outline'"
+                                [size]="'sm'"
                                 class="mt-2"
                                 type="button"
                                 data-ci-show-all
@@ -277,7 +278,9 @@ export const CI_BINDINGS_COPY = {
             </table>
           </div>
         }
-        <div class="border-0 border-t border-solid border-border p-(--eg-space-5)">
+        <div
+          class="border-0 border-t border-solid border-border p-(--eg-space-5) md:p-(--eg-space-6)"
+        >
           <app-data-table-pager
             [page]="page()"
             [pageSize]="pageSize()"

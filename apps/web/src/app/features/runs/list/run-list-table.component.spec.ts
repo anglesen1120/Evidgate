@@ -8,6 +8,7 @@ import { provideRouter, Router } from '@angular/router';
 import { By } from '@angular/platform-browser';
 import { DataTableComponent } from '../../../shared/ui/data-table/data-table.component';
 import { useLightweightTablePresentation } from '../../../shared/ui/data-table/data-table-volume.testing';
+import { CopyValueButtonHarness } from '../../../shared/ui/values/values.harness';
 import type { RunSummary } from '@evidgate/sdk';
 import { RunListTableComponent } from './run-list-table.component';
 
@@ -192,22 +193,31 @@ describe('RunListTableComponent', { timeout: 15_000 }, () => {
     expect(root.querySelector('app-data-table-pager')).toBeNull();
     expect(root.querySelector('[data-table-pagination]')).toBeNull();
   });
-  it('keeps collection state, evidence unavailable and stored decisions independent; no outcome column', async () => {
+  it('keeps stored evidence independent from lifecycle and release decisions', async () => {
     const unavailable = run(5);
     delete unavailable.decision;
     const { root, fixture } = await render([
       run(1, { decision: 'PASS' }),
-      run(2, { state: 'incomplete', decision: 'FAIL' }),
+      run(2, { state: 'incomplete', completeness: 'complete', decision: 'FAIL' }),
       run(3, { decision: 'INCONCLUSIVE' }),
-      run(4, { decision: null }),
+      run(4, { completeness: null, decision: null }),
       unavailable,
     ]);
     expect(
       [...root.querySelectorAll('[role="columnheader"]')].map((cell) => cell.textContent?.trim()),
     ).toEqual(['Run (oldest first)', 'Decision', 'State', 'Evidence', 'Run scope', 'Actions']);
     expect(root.querySelector('th.cdk-column-id button')).toBeNull();
-    expect(root.querySelectorAll('[data-run-evidence] .status-pill--neutral')).toHaveLength(5);
-    expect(root.querySelector('[data-run-evidence] .status-pill--success')).toBeNull();
+    expect(
+      [...root.querySelectorAll('[data-run-evidence] [role="img"]')].map((badge) =>
+        badge.getAttribute('aria-label'),
+      ),
+    ).toEqual([
+      'Completeness: Complete',
+      'Completeness: Complete',
+      'Completeness: Complete',
+      'Completeness: Unavailable',
+      'Completeness: Complete',
+    ]);
     expect(root.querySelectorAll('[data-run-evidence-hint]')).toHaveLength(1);
     expect(root.querySelector('[data-run-evidence-hint]')?.textContent).toContain(
       'Open the run for evidence completeness.',
@@ -221,7 +231,7 @@ describe('RunListTableComponent', { timeout: 15_000 }, () => {
       { dimension: 'Decision:', value: 'PASS' },
       { dimension: 'Decision:', value: 'FAIL' },
       { dimension: 'Decision:', value: 'INCONCLUSIVE' },
-      { dimension: 'Decision:', value: 'Not evaluated' },
+      { dimension: 'Decision:', value: 'Pending' },
       { dimension: 'Decision:', value: 'Unavailable' },
     ]);
     expect(root.querySelector('app-outcome-pill')).toBeNull();
@@ -239,15 +249,13 @@ describe('RunListTableComponent', { timeout: 15_000 }, () => {
     expect(await (await table.dialog()).text({ exclude: '.sr-only' })).toContain(reason);
   });
   it('keeps dense state and evidence labels short with the explanation outside the badge', async () => {
-    const { root } = await render([run(1)]);
+    const { root } = await render([run(1, { completeness: 'incomplete' })]);
     expect(root.querySelector('app-run-state-pill')?.textContent?.trim()).toBe('Complete');
     const evidence = root.querySelector('[data-run-evidence]');
-    expect(evidence?.querySelector('app-status-pill')?.textContent?.trim()).toBe('Unavailable');
-    expect(root.querySelector('[data-run-evidence-hint]')?.textContent).toContain(
-      'Open the run for evidence completeness.',
-    );
+    expect(evidence?.querySelector('[role="img"]')?.textContent?.trim()).toBe('Incomplete');
+    expect(root.querySelector('[data-run-evidence-hint]')).toBeNull();
     expect(evidence?.textContent).not.toContain('Open the run for evidence completeness.');
-    expect(evidence?.querySelector('app-status-pill')?.textContent).not.toContain('Open the run');
+    expect(evidence?.querySelector('[role="img"]')?.textContent).not.toContain('Open the run');
   });
   it('uses the shared UTC absolute-time format without losing the server instant', async () => {
     const instant = '2026-11-02T18:47:05.130948+07:00';
@@ -437,11 +445,20 @@ describe('RunListTableComponent', { timeout: 15_000 }, () => {
       }
     },
   );
-  it('copies the original full id from the named icon action in View', async () => {
+  it('copies the full id beside its row preview or from View without navigating', async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     vi.stubGlobal('navigator', { clipboard: { writeText } });
     try {
-      const { fixture } = await render([run(1)]);
+      const { fixture, root } = await render([run(1)]);
+      expect(root.querySelector('[data-run-id-preview]')?.textContent?.trim()).toBe('018f0…00001');
+      const rowCopy =
+        await TestbedHarnessEnvironment.loader(fixture).getHarness(CopyValueButtonHarness);
+      expect(await rowCopy.actionName()).toBe('Copy Run id');
+      await rowCopy.copy();
+      expect(writeText).toHaveBeenCalledExactlyOnceWith(run(1).run_id);
+      expect(await rowCopy.result()).toBe('Run id copied.');
+      expect(root.querySelector('[role="dialog"]')).toBeNull();
+      writeText.mockClear();
       const table = await TestbedHarnessEnvironment.harnessForFixture(
         fixture,
         RunInspectionHarness,

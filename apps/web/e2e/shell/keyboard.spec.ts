@@ -115,26 +115,19 @@ test.describe('mobile drawer (AC6)', () => {
     await expect(closeButton).toBeFocused();
 
     // Shift+Tab off the first control wraps to the last, and Tab off the last wraps back.
-    const lastNavigationStop = aside.locator('app-shell-nav nav a').last();
-    const lastStop = aside.locator('button.locale-toggle');
+    const lastStop = aside.locator('app-shell-nav nav a').last();
     const lastStopText = (await lastStop.textContent())?.trim() ?? '';
     expect(lastStopText).not.toBe('');
-    await expect(lastStop).toHaveAccessibleName(
-      'EN / VI: Switch language between English and Vietnamese',
-    );
+    await expect(lastStop).toHaveAccessibleName(/\S/);
     await page.keyboard.press('Shift+Tab');
     const last = await activeElement(page);
-    expect(last.tag).toBe('button');
+    expect(last.tag).toBe('a');
     expect(last.className).not.toContain('close-button');
     expect(last.text, "the wrap target is the drawer's last stop").toBe(lastStopText);
     expect(
       await page.evaluate(() => document.activeElement?.closest('#shell-navigation') !== null),
       'the wrap target is inside the drawer',
     ).toBe(true);
-    await expect(lastStop).toBeFocused();
-    await page.keyboard.press('Shift+Tab');
-    await expect(lastNavigationStop).toBeFocused();
-    await page.keyboard.press('Tab');
     await expect(lastStop).toBeFocused();
     await page.keyboard.press('Tab');
     await expect(closeButton).toBeFocused();

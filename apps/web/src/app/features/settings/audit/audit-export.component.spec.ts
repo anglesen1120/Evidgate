@@ -137,7 +137,6 @@ describe('AuditExportComponent', () => {
     expect(action.classList.contains('w-fit')).toBe(true);
     expect(action.classList.contains('max-w-full')).toBe(true);
     expect(action.classList.contains('@xl:col-start-2')).toBe(true);
-    expect(action.classList.contains('min-h-(--eg-control-touch)')).toBe(true);
     expect(action.getAttribute('aria-describedby')).toBe('audit-export-scope-title');
     expect(data.list).not.toHaveBeenCalled();
   });

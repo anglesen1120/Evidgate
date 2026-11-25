@@ -12,7 +12,7 @@
   aria-labelledby="catalog-results-heading"
 >
   <app-section-header
-    class="border-b border-border px-(--eg-space-5) py-(--eg-space-5) md:px-(--eg-space-6)"
+    class="border-b border-border p-(--eg-space-5) md:p-(--eg-space-6)"
     [titleId]="'catalog-results-heading'"
     [title]="copy.results"
   />
@@ -30,7 +30,7 @@
           hlmBtn
           [variant]="'ghost'"
           type="button"
-          class="h-auto min-h-(--eg-control-touch) shrink-0 flex-col items-start rounded-none border-e border-border px-(--eg-space-4) aria-pressed:bg-(--eg-accent-soft)"
+          class="h-auto shrink-0 flex-col items-start rounded-none border-e border-border px-(--eg-space-4) aria-pressed:bg-(--eg-accent-soft)"
           [attr.aria-pressed]="store.filters().status === option.value"
           [attr.aria-disabled]="quickStatusBusy() ? 'true' : null"
           (click)="quickStatus(option.value)"
@@ -52,7 +52,7 @@
     </div>
   }
   <section
-    class="grid min-w-0 gap-(--eg-space-3) border-b border-border px-(--eg-space-5) py-(--eg-space-3) md:px-(--eg-space-6)"
+    class="grid min-w-0 gap-(--eg-space-3) border-b border-border p-(--eg-space-5) md:p-(--eg-space-6)"
     aria-labelledby="catalog-filters-heading"
   >
     <div class="grid min-w-0 gap-(--eg-space-2)">
@@ -129,7 +129,7 @@
         <button
           hlmBtn
           type="submit"
-          class="min-h-(--eg-control-touch) whitespace-normal"
+          class="whitespace-normal"
           [disabled]="store.status() === 'loading' || store.loadingMore()"
           [attr.aria-busy]="store.status() === 'loading' || store.loadingMore()"
           data-catalog-apply
@@ -140,7 +140,7 @@
           hlmBtn
           type="button"
           [variant]="'outline'"
-          class="min-h-(--eg-control-touch) whitespace-normal"
+          class="whitespace-normal"
           (click)="!(store.status() === 'loading' || store.loadingMore()) && clear()"
           [disabled]="store.status() === 'loading' || store.loadingMore()"
           [attr.aria-busy]="store.status() === 'loading' || store.loadingMore()"
@@ -169,7 +169,10 @@
     }
   </p>
   @if (recordUnavailable()) {
-    <div class="flex items-center gap-(--eg-space-4) p-(--eg-space-4)" role="status">
+    <div
+      class="flex items-center gap-(--eg-space-4) p-(--eg-space-5) md:p-(--eg-space-6)"
+      role="status"
+    >
       <p>{{ recordCopy.unavailable }}</p>
       <button hlmBtn type="button" [variant]="'outline'" (click)="setRecord(null)">
         {{ recordCopy.close }}
@@ -235,7 +238,7 @@
   }
   @if (showLoadedSummary()) {
     <app-data-table-pager
-      class="block border-t border-border px-(--eg-space-5) py-(--eg-space-4) md:px-(--eg-space-6)"
+      class="block border-t border-border p-(--eg-space-5) md:p-(--eg-space-6)"
       [page]="store.page()"
       [pageSize]="store.pageSize() ?? 20"
       [count]="store.rows().length"

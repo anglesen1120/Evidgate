@@ -16,7 +16,10 @@
   @case ('ready') {
     @if (revision(); as revision) {
       <section hlmCard class="min-w-0 gap-0 rounded-lg py-0" aria-labelledby="policy-values-title">
-        <header hlmCardHeader class="border-0 border-b border-solid border-border p-(--eg-space-5)">
+        <header
+          hlmCardHeader
+          class="border-0 border-b border-solid border-border p-(--eg-space-5) md:p-(--eg-space-6)"
+        >
           <h3 hlmCardTitle [size]="subsectionSize" id="policy-values-title">{{ copy.values }}</h3>
         </header>
         @if (fields().length === 0) {
@@ -54,12 +57,15 @@
         aria-labelledby="policy-selected-title"
         data-policy-selected-metadata
       >
-        <header hlmCardHeader class="border-0 border-b border-solid border-border p-(--eg-space-5)">
+        <header
+          hlmCardHeader
+          class="border-0 border-b border-solid border-border p-(--eg-space-5) md:p-(--eg-space-6)"
+        >
           <h3 hlmCardTitle [size]="subsectionSize" id="policy-selected-title">
             {{ copy.title }} · {{ copy.revision }} {{ revision.revision_no }}
           </h3>
         </header>
-        <dl class="hlm-field-grid p-(--eg-space-5) [&_dt]:text-xs">
+        <dl class="hlm-field-grid p-(--eg-space-5) md:p-(--eg-space-6) [&_dt]:text-xs">
           <div class="hlm-field-wide">
             <dt>{{ copy.id }}</dt>
             <dd>
@@ -110,7 +116,7 @@
       @for (group of groups(); track group.key) {
         <section
           hlmCard
-          class="min-w-0 gap-(--eg-space-4) rounded-lg p-(--eg-space-5)"
+          class="min-w-0 gap-(--eg-space-4) rounded-lg p-(--eg-space-5) md:p-(--eg-space-6)"
           [attr.aria-labelledby]="'policy-' + group.key"
           [attr.data-policy-reference-group]="group.key"
         >

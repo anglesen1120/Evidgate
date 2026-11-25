@@ -1,5 +1,5 @@
 .topbar {
-  /* Leave the breadcrumb a readable measure even when a quota warning joins the tools. */
+  /* Scope names yield to the persistent navigation and account actions. */
   grid-template-columns: auto minmax(0, 1fr) fit-content(50%);
   gap: var(--eg-space-3);
   padding: var(--eg-space-2) var(--eg-space-7);
@@ -26,6 +26,7 @@ app-quota-badge {
 
 @media (max-width: 767px) {
   .topbar {
+    grid-template-columns: auto minmax(0, 1fr);
     gap: var(--eg-space-2);
     padding: var(--eg-space-2) var(--eg-space-4);
   }

@@ -1,14 +1,23 @@
-import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  inject,
+  input,
+  LOCALE_ID,
+} from '@angular/core';
 import type { RunStateDto } from '@evidgate/sdk';
 import { HlmCard, HlmCardTitle } from '@evidgate/ui/card';
 import { HlmAlert } from '@evidgate/ui/alert';
 import { AbsoluteTimeComponent } from '../../../../shared/time/absolute-time.component';
+import { formatDuration } from '../../../../shared/time/format-duration';
+import { rfc3339InstantMs } from '../../../../shared/time/rfc3339-instant';
 import {
   StatusPillComponent,
   type StatusTone,
 } from '../../../../shared/ui/chips/status-pill.component';
 import { RUN_STATE_TONES, type RunState } from '../../../../shared/ui/chips/run-state-tone';
-import { runTimelineSteps, type TimelineStepStatus } from './run-timeline-steps';
+import { runTimelineSteps, type TimelineStep, type TimelineStepStatus } from './run-timeline-steps';
 import { RUN_DETAIL_NOT_PROVIDED } from '../run-value-label';
 
 /** Served transitions supply step times; legacy runs retain an explicitly unknown history. */
@@ -17,44 +26,34 @@ import { RUN_DETAIL_NOT_PROVIDED } from '../run-value-label';
   imports: [AbsoluteTimeComponent, StatusPillComponent, HlmCard, HlmCardTitle, HlmAlert],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './run-timeline.component.html',
-  styles: `
-    li::after {
-      content: '';
-      position: absolute;
-      inset-inline-start: 0;
-      inset-block-start: var(--eg-space-4);
-      inline-size: var(--eg-space-3);
-      block-size: var(--eg-space-3);
-      border-radius: var(--eg-radius-pill);
-      background: var(--eg-border-control);
-    }
-    li:not(:last-child)::before {
-      content: '';
-      position: absolute;
-      inset-inline-start: var(--eg-space-2);
-      inset-block: var(--eg-space-4) calc(-1 * var(--eg-space-4));
-      border-inline-start: var(--eg-border-width) solid var(--eg-border-control);
-    }
-    li[aria-current='step']::after {
-      background: var(--eg-accent);
-    }
-  `,
   host: { class: 'block min-w-0 text-foreground wrap-anywhere' },
 })
 export class RunTimelineComponent {
+  private readonly locale = inject(LOCALE_ID);
   readonly state = input.required<RunStateDto['state']>();
   readonly stateHistory = input<RunStateDto['state_history']>(null);
   /** Events stored with `after_cancel = true`; null when the response does not serve a count. */
   readonly afterCancelEvents = input<number | null>(null);
   protected readonly sectionSize = 'section' as const;
 
-  // With no recorded arrival, a historical step is not an observed event.
-  protected readonly steps = computed(() =>
-    runTimelineSteps(this.state(), this.stateHistory()).filter(
-      (step) =>
-        step.status !== 'reached' || (step.state !== 'created' && this.stateHistory() !== null),
-    ),
-  );
+  protected readonly steps = computed(() => {
+    const history = this.stateHistory();
+    const milestones: (TimelineStep & { elapsed: string | null })[] = [];
+    let previous: number | null = null;
+    for (const step of runTimelineSteps(this.state(), history)) {
+      // An inferred prior state is not an observed transition.
+      if (step.status === 'reached' && (step.state === 'created' || history === null)) continue;
+      const instant = step.at === null ? null : rfc3339InstantMs(step.at);
+      const elapsed =
+        previous !== null && instant !== null
+          ? formatDuration(instant - previous, this.locale)
+          : null;
+      milestones.push({ ...step, elapsed });
+      // Skipped states aren't transitions; a reached state without a time breaks the chain.
+      if (step.status === 'reached' || step.status === 'current') previous = instant;
+    }
+    return milestones;
+  });
   protected readonly canceled = computed(() => this.state() === 'canceled');
 
   // Same custom ids as the shared run-state pill so both surfaces share one translation.
@@ -81,6 +80,7 @@ export class RunTimelineComponent {
     notProvided: RUN_DETAIL_NOT_PROVIDED,
     historyUnavailable: $localize`:@@runs.detail.timeline.history-unavailable:History unavailable for this run`,
     historyEmpty: $localize`:@@runs.detail.timeline.history-empty:No state changes recorded yet`,
+    elapsed: $localize`:@@runs.detail.timeline.since-previous:Since the previous transition:`,
     afterCancelNote: $localize`:@@runs.detail.timeline.after-cancel-note:Events that arrive after cancel are kept as evidence and never complete the run.`,
     afterCancelEvents: $localize`:@@runs.detail.timeline.after-cancel-events:After-cancel events`,
     afterCancelNone: $localize`:@@runs.detail.timeline.after-cancel-none:No events after cancel`,

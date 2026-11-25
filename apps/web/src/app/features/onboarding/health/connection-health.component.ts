@@ -54,7 +54,7 @@ import type {
   template: `
     <section
       hlmCard
-      class="min-w-0 gap-(--eg-space-4) p-(--eg-space-4) wrap-anywhere md:p-(--eg-space-5) [&_p]:m-0 [&_p]:text-sm [&_p]:text-muted-foreground"
+      class="min-w-0 gap-(--eg-space-4) p-(--eg-space-5) md:p-(--eg-space-6) wrap-anywhere [&_p]:m-0 [&_p]:text-sm [&_p]:text-muted-foreground"
       aria-labelledby="connection-health-title"
     >
       <header

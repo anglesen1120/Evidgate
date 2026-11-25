@@ -21,7 +21,7 @@ export function localeBundlePath(baseURI: string, locale: string, route: string)
     <button
       type="button"
       hlmBtn
-      [variant]="variant()"
+      [variant]="'outline'"
       [size]="'sm'"
       class="locale-toggle min-h-(--eg-control-touch) min-w-(--eg-control-touch) gap-(--eg-space-2)"
       [disabled]="disabled()"
@@ -36,7 +36,6 @@ export function localeBundlePath(baseURI: string, locale: string, route: string)
   `,
 })
 export class LocaleSwitcherComponent {
-  readonly variant = input<'outline' | 'ghost'>('outline');
   readonly disabled = input(false);
   readonly switchRequested = output<void>();
   readonly localeLabel = $localize`:@@auth.login.switch-language:EN / VI: Switch language between English and Vietnamese`;

@@ -42,7 +42,7 @@ import { PolicyStore } from './policy.store';
   host: { class: 'block min-w-0' },
   template: `
     <section hlmCard class="min-w-0 gap-0 rounded-lg py-0" aria-labelledby="policy-diff-title">
-      <header hlmCardHeader class="p-(--eg-space-5)">
+      <header hlmCardHeader class="p-(--eg-space-5) md:p-(--eg-space-6)">
         <h3 hlmCardTitle [size]="subsectionSize" id="policy-diff-title">{{ copy.title }}</h3>
       </header>
       <div
@@ -114,7 +114,7 @@ import { PolicyStore } from './policy.store';
             <button
               hlmBtn
               [variant]="'outline'"
-              class="min-h-[var(--eg-control-touch)] whitespace-normal"
+              class="whitespace-normal"
               type="button"
               (click)="load()"
             >

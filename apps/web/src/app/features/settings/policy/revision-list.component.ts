@@ -30,7 +30,7 @@ import { HlmTableImports } from '@evidgate/ui/table';
       <header
         [attr.aria-busy]="busy()"
         hlmCardHeader
-        class="border-0 border-b border-solid border-border p-(--eg-space-5)"
+        class="border-0 border-b border-solid border-border p-(--eg-space-5) md:p-(--eg-space-6)"
       >
         <h3 hlmCardTitle [size]="subsectionSize" id="policy-revisions-title">{{ copy.title }}</h3>
         <p hlmCardDescription>{{ copy.order }}</p>
@@ -131,7 +131,7 @@ import { HlmTableImports } from '@evidgate/ui/table';
       </div>
       <footer
         hlmCardFooter
-        class="block min-w-0 border-0 border-t border-solid border-border p-(--eg-space-5)"
+        class="block min-w-0 border-0 border-t border-solid border-border p-(--eg-space-5) md:p-(--eg-space-6)"
       >
         <app-data-table-pager
           [page]="page()"

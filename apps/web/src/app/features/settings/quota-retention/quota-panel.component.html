@@ -13,21 +13,11 @@
     </span>
     <div class="grid min-w-0 gap-1">
       @if (ownsPageHeading) {
-        <h1
-          hlmCardTitle
-          [size]="pageSize"
-          id="quota-title"
-          class="text-[length:var(--eg-leading-md)]!"
-        >
+        <h1 hlmCardTitle [size]="pageSize" id="quota-title">
           {{ copy.title }}
         </h1>
       } @else {
-        <h2
-          hlmCardTitle
-          [size]="pageSize"
-          id="quota-title"
-          class="text-[length:var(--eg-leading-md)]!"
-        >
+        <h2 hlmCardTitle [size]="pageSize" id="quota-title">
           {{ copy.title }}
         </h2>
       }
@@ -62,7 +52,7 @@
       @for (metric of summary.metrics; track metric.metric; let index = $index) {
         <section
           hlmCard
-          class="min-w-0 content-start gap-3 rounded-xl p-4"
+          class="min-w-0 content-start gap-3 rounded-xl p-(--eg-space-5) md:p-(--eg-space-6)"
           [attr.data-quota-metric]="metric.metric"
           [attr.aria-labelledby]="'quota-metric-' + index"
         >
@@ -147,7 +137,9 @@
     @if (quota.loadState() === 'ready' && quota.usageSummary(); as summary) {
       @for (metric of projectMetrics(); track metric.metric) {
         <section hlmCard class="min-w-0 gap-0 overflow-visible rounded-xl p-0" data-quota-projects>
-          <header class="grid min-w-0 gap-1 border-b border-border px-5 py-4">
+          <header
+            class="grid min-w-0 gap-1 border-b border-border p-(--eg-space-5) md:p-(--eg-space-6)"
+          >
             <h3
               hlmCardTitle
               [size]="subsectionSize"
@@ -209,7 +201,7 @@
       }
       @if (summary.metrics.length) {
         <section hlmCard class="min-w-0 gap-0 rounded-xl p-0" aria-labelledby="quota-state-title">
-          <header class="grid gap-1 border-b border-border px-5 py-4">
+          <header class="grid gap-1 border-b border-border p-(--eg-space-5) md:p-(--eg-space-6)">
             <h3
               hlmCardTitle
               [size]="subsectionSize"
@@ -301,7 +293,7 @@
         </h3>
         <p class="m-0 max-w-[65ch] text-sm text-muted-foreground">{{ copy.storageReason }}</p>
       </header>
-      <dl class="m-0 grid min-w-0 gap-0 px-5 py-3 text-sm">
+      <dl class="m-0 grid min-w-0 gap-0 p-(--eg-space-5) md:p-(--eg-space-6) text-sm">
         <div
           class="grid grid-cols-[minmax(0,1fr)_minmax(0,1.45fr)] gap-2 border-b border-border py-2"
         >

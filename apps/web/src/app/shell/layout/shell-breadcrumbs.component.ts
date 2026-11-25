@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
 import { PRIMARY_OUTLET, Router } from '@angular/router';
 import { HlmIcon } from '@evidgate/ui/icon';
 import { SessionStore } from '../../core/session/session.store';
@@ -9,23 +9,17 @@ import { NavViewService } from '../nav/nav-view';
   selector: 'app-shell-breadcrumbs',
   imports: [HlmIcon],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  host: { class: 'block min-w-0' },
+  host: { class: 'block min-w-0', '[class.hidden]': '!trail().parts.length' },
   template: `
-    @if (interactiveScope() || trail().parts.length) {
+    @if (trail().parts.length) {
       <nav aria-label="Breadcrumb" i18n-aria-label="@@shell.breadcrumb.label">
         <ol
           class="m-0 flex min-w-0 list-none flex-wrap items-center gap-x-(--eg-space-2) gap-y-(--eg-space-1) p-0 text-xs leading-(--eg-leading-xs) text-muted-foreground"
         >
-          <ng-content />
           @for (part of trail().parts; track $index; let first = $first, last = $last) {
-            <li
-              class="flex min-w-0 max-w-full items-baseline gap-(--eg-space-2) max-[767px]:not-last:sr-only"
-            >
-              @if (interactiveScope() || !first) {
-                <hlm-icon
-                  [name]="'lucideChevronRight'"
-                  class="size-(--eg-text-xs) self-center max-[767px]:hidden"
-                />
+            <li class="flex min-w-0 max-w-full items-baseline gap-(--eg-space-2)">
+              @if (!first) {
+                <hlm-icon [name]="'lucideChevronRight'" class="size-(--eg-text-xs) self-center" />
               }
               <bdi
                 class="min-w-0 [overflow-wrap:anywhere] aria-[current=page]:font-bold aria-[current=page]:text-foreground"
@@ -43,10 +37,13 @@ export class ShellBreadcrumbsComponent {
   private readonly router = inject(Router);
   private readonly session = inject(SessionStore);
   private readonly nav = inject(NavViewService);
-  readonly interactiveScope = input(false);
 
   protected readonly trail = computed(() => {
     const url = this.router.lastSuccessfulNavigation()?.finalUrl;
+    let leaf = this.router.routerState.snapshot.root;
+    while (leaf.firstChild) leaf = leaf.firstChild;
+    // An unresolved address has no hierarchy; even a valid prefix must not distinguish one 404 from another.
+    if (leaf.data['hideBreadcrumbs'] === true) return { hasPage: false, parts: [] };
     const path = url?.root.children[PRIMARY_OUTLET]?.segments.map((segment) => segment.path) ?? [];
     const items = this.nav.groups().flatMap((group) => group.items);
     const current = items.find((item) =>
@@ -58,8 +55,6 @@ export class ShellBreadcrumbsComponent {
         page.path.length === tail.length &&
         page.path.every((part, index) => part.startsWith(':') || tail[index] === part),
     );
-    let leaf = this.router.routerState.snapshot.root;
-    while (leaf.firstChild) leaf = leaf.firstChild;
     // A settings tab uses its own route guard, not the sidebar row's permission. Never infer a
     // tab from user-controlled URL text: only an activated tab can contribute its label.
     const tab: unknown = current?.id === 'settings' ? leaf.data['settingsTabId'] : undefined;
@@ -72,8 +67,8 @@ export class ShellBreadcrumbsComponent {
     return {
       hasPage: !!(current || page),
       parts: [
-        this.interactiveScope() ? undefined : this.session.currentOrg()?.name,
-        this.interactiveScope() ? undefined : this.session.currentProject()?.name,
+        this.session.currentOrg()?.name,
+        this.session.currentProject()?.name,
         parent?.label,
         current?.label,
         page === current?.label ? undefined : page,

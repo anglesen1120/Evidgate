@@ -44,7 +44,7 @@
 @if (status() === 'ready' && (store.rows().length > 0 || filtered())) {
   <dl data-audit-summary class="m-0 grid min-w-0 gap-3 @sm:grid-cols-2 @2xl:grid-cols-4">
     @for (card of summary(); track card.icon) {
-      <div hlmCard class="min-w-0 gap-3 rounded-xl p-4">
+      <div hlmCard class="min-w-0 gap-3 rounded-xl p-(--eg-space-5) md:p-(--eg-space-6)">
         <dt class="flex items-center gap-2 text-sm font-semibold @2xl:min-h-10 @4xl:min-h-7">
           <span
             class="grid size-7 shrink-0 place-items-center rounded-lg"
@@ -78,7 +78,7 @@
 }
 <div hlmCard class="min-w-0 gap-0 overflow-visible rounded-xl p-0">
   <header
-    class="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-4"
+    class="flex flex-wrap items-center justify-between gap-3 border-b border-border p-(--eg-space-5) md:p-(--eg-space-6)"
   >
     <app-section-header
       [title]="activity"
@@ -90,7 +90,7 @@
     }
   </header>
   <form
-    class="grid min-w-0 gap-3 border-b border-border px-5 py-4"
+    class="grid min-w-0 gap-3 border-b border-border p-(--eg-space-5) md:p-(--eg-space-6)"
     (ngSubmit)="!(status() === 'loading' || store.paging()) && apply()"
     aria-labelledby="audit-filters-title"
   >
@@ -209,7 +209,7 @@
         <button
           hlmBtn
           [variant]="'secondary'"
-          class="min-h-[var(--eg-control-touch)] whitespace-normal"
+          class="whitespace-normal"
           type="submit"
           [disabled]="status() === 'loading' || store.paging()"
           [attr.aria-busy]="status() === 'loading' || store.paging()"
@@ -220,7 +220,7 @@
         <button
           hlmBtn
           [variant]="'outline'"
-          class="min-h-[var(--eg-control-touch)] whitespace-normal"
+          class="whitespace-normal"
           type="button"
           [disabled]="status() === 'loading' || store.paging()"
           [attr.aria-busy]="status() === 'loading' || store.paging()"
@@ -283,7 +283,7 @@
       <button
         hlmBtn
         [variant]="'outline'"
-        class="min-h-[var(--eg-control-touch)] whitespace-normal"
+        class="whitespace-normal"
         type="button"
         [disabled]="store.paging() || !retryReady()"
         (click)="retryPage()"

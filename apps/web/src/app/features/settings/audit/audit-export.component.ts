@@ -32,7 +32,7 @@ function revokeDeferred(url: string): void {
       <button
         type="button"
         hlmBtn
-        class="min-h-(--eg-control-touch) w-fit max-w-full whitespace-normal @xl:col-start-2 @xl:row-start-1"
+        class="w-fit max-w-full whitespace-normal @xl:col-start-2 @xl:row-start-1"
         data-audit-export
         [disabled]="running() || !orgId() || hasDraftChanges()"
         [attr.aria-describedby]="
@@ -131,7 +131,7 @@ function revokeDeferred(url: string): void {
             <button
               hlmBtn
               [variant]="'outline'"
-              class="min-h-[var(--eg-control-touch)] whitespace-normal"
+              class="whitespace-normal"
               type="button"
               (click)="download()"
               [disabled]="hasDraftChanges()"

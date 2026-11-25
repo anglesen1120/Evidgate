@@ -21,8 +21,9 @@
       hlmBtn
       [variant]="'ghost'"
       [size]="'icon'"
-      class="theme-toggle min-h-(--eg-control-touch) min-w-(--eg-control-touch) aria-pressed:bg-accent aria-pressed:text-accent-foreground"
+      class="theme-toggle aria-pressed:bg-accent aria-pressed:text-accent-foreground"
       [attr.aria-label]="darkLabel"
+      [hlmTooltip]="darkLabel"
       [attr.aria-pressed]="isDark()"
       (click)="toggleTheme()"
     >
@@ -55,7 +56,7 @@
           #loginHeading
           hlmCardTitle
           [size]="pageHeadingSize"
-          class="tracking-tight focus-visible:outline-solid focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-offset-(--eg-focus-offset) focus-visible:outline-ring"
+          class="focus-visible:outline-solid focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-offset-(--eg-focus-offset) focus-visible:outline-ring"
           id="login-heading"
           tabindex="-1"
           [textContent]="heading"
@@ -97,7 +98,7 @@
         >
           <button
             hlmBtn
-            class="primary-provider h-auto min-h-(--eg-control-touch) w-full whitespace-normal"
+            class="primary-provider h-auto w-full whitespace-normal"
             type="button"
             [disabled]="auth.redirecting()"
             (click)="auth.start('google')"
@@ -107,7 +108,7 @@
           <button
             hlmBtn
             [variant]="'outline'"
-            class="h-auto min-h-(--eg-control-touch) w-full whitespace-normal"
+            class="h-auto w-full whitespace-normal"
             type="button"
             [disabled]="auth.redirecting()"
             (click)="auth.start('github')"

@@ -3068,7 +3068,6 @@
 <trans-unit id="runs.detail.not-provided" datatype="html"><source>Not provided</source><target>Chưa được cung cấp</target></trans-unit>
 <trans-unit id="runs.list.active-filters" datatype="html"><source>Active filters: <x id="count" equiv-text="count"/></source><target>Bộ lọc đang áp dụng: <x id="count"/></target></trans-unit>
 <trans-unit id="runs.list.evidence-hint" datatype="html"><source>Open the run for evidence completeness.</source><target>Mở lượt chạy để xem độ đầy đủ của bằng chứng.</target></trans-unit>
-<trans-unit id="runs.list.evidence-unavailable" datatype="html"><source>Unavailable</source><target>Chưa có thông tin</target></trans-unit>
 <trans-unit id="runs.value.decision-evaluated" datatype="html"><source>Evaluated</source><target>Đã đánh giá</target></trans-unit>
 <trans-unit id="runs.value.decision-live" datatype="html"><source>Live evaluation</source><target>Đánh giá trực tiếp</target></trans-unit>
 <trans-unit id="runs.value.decision-pending" datatype="html"><source>Not evaluated</source><target>Chưa đánh giá</target></trans-unit>
@@ -3168,9 +3167,9 @@
 <trans-unit id="shared.data-table.previous" datatype="html"><source>Previous page</source><target>Trang trước</target></trans-unit>
 <trans-unit id="shared.decision-chip.short-unavailable" datatype="html"><source>Unavailable</source><target>Không khả dụng</target></trans-unit>
 <trans-unit id="shared.decision-chip.unknown-detail" datatype="html"><source>Unknown release decision: <x id="state" equiv-text="state"/></source><target>Quyết định phát hành chưa rõ: <x id="state" equiv-text="state"/></target></trans-unit>
-<trans-unit id="shared.evidence-badge.short.complete" datatype="html"><source>Complete</source><target>Đủ</target></trans-unit>
-<trans-unit id="shared.evidence-badge.short.incomplete" datatype="html"><source>Incomplete</source><target>Thiếu</target></trans-unit>
-<trans-unit id="shared.evidence-badge.short.unavailable" datatype="html"><source>Unavailable</source><target>Không khả dụng</target></trans-unit>
+<trans-unit id="shared.evidence-badge.short.complete" datatype="html"><source>Complete</source><target>Đủ bằng chứng</target></trans-unit>
+<trans-unit id="shared.evidence-badge.short.incomplete" datatype="html"><source>Incomplete</source><target>Thiếu bằng chứng</target></trans-unit>
+<trans-unit id="shared.evidence-badge.short.unavailable" datatype="html"><source>Unavailable</source><target>Chưa có</target></trans-unit>
 <trans-unit id="shared.evidence-badge.unknown-detail" datatype="html"><source>Unknown evidence status: <x id="state" equiv-text="state"/></source><target>Trạng thái bằng chứng chưa rõ: <x id="state" equiv-text="state"/></target></trans-unit>
 <trans-unit id="shared.hash-chip.copy" datatype="html"><source>Copy hash</source><target>Sao chép mã băm</target></trans-unit>
 <trans-unit id="shared.hash-chip.label" datatype="html"><source>Hash</source><target>Mã băm</target></trans-unit>
@@ -4354,14 +4353,6 @@
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/auth/login/login.page.ts</context>
           <context context-type="linenumber">138</context>
-        </context-group>
-      </trans-unit>
-<trans-unit id="shell.account.menu" datatype="html">
-        <source>Account menu</source>
-        <target>Menu tài khoản</target>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/shell/layout/shell-account.component.ts</context>
-          <context context-type="linenumber">19,22</context>
         </context-group>
       </trans-unit>
 <trans-unit id="shell.account.label" datatype="html">
@@ -22775,6 +22766,15 @@
 <trans-unit id="runs.list.filter-toggle" datatype="html"><source>Filters</source><target>Bộ lọc</target></trans-unit>
 <trans-unit id="runs.detail.context-details" datatype="html"><source>Additional execution context</source><target>Thông tin thực thi bổ sung</target></trans-unit>
 <trans-unit id="runs.detail.run-version" datatype="html"><source>Run version</source><target>Phiên bản lượt chạy</target></trans-unit>
+<trans-unit id="runs.detail.timeline.since-previous" datatype="html"><source>Since the previous transition:</source><target>Kể từ lần chuyển trạng thái trước:</target></trans-unit>
+<trans-unit id="shared.decision-chip.short-pending" datatype="html"><source>Pending</source><target>Chờ đánh giá</target></trans-unit>
+<trans-unit id="shared.decision-chip.compact-name" datatype="html"><source>Decision: <x id="value" equiv-text="this.compactLabel()"/></source><target>Quyết định: <x id="value" equiv-text="this.compactLabel()"/></target></trans-unit>
+<trans-unit id="shared.evidence-badge.compact-name" datatype="html"><source>Completeness: <x id="value" equiv-text="this.compactLabel()"/></source><target>Độ đầy đủ: <x id="value" equiv-text="this.compactLabel()"/></target></trans-unit>
+<trans-unit id="shell.account.theme" datatype="html"><source>Theme</source><target>Giao diện</target></trans-unit>
+<trans-unit id="shell.account.preferences" datatype="html"><source>Account and preferences</source><target>Tài khoản và tùy chọn</target></trans-unit>
+<trans-unit id="shell.theme.light" datatype="html"><source>Light</source><target>Sáng</target></trans-unit>
+<trans-unit id="shell.theme.dark" datatype="html"><source>Dark</source><target>Tối</target></trans-unit>
+<trans-unit id="shell.theme.system" datatype="html"><source>System</source><target>Theo hệ thống</target></trans-unit>
 </body>
   </file>
 </xliff>

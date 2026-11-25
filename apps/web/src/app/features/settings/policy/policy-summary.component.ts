@@ -34,7 +34,12 @@ import type { PolicyReadView } from './policy-reads';
   host: { class: 'block min-w-0' },
   template: `
     @if (activation().phase !== 'idle' || head().phase !== 'idle') {
-      <section hlmCard class="gap-4 p-4" aria-labelledby="policy-summary-title" data-policy-summary>
+      <section
+        hlmCard
+        class="gap-4 p-(--eg-space-5) md:p-(--eg-space-6)"
+        aria-labelledby="policy-summary-title"
+        data-policy-summary
+      >
         <h3 hlmCardTitle [size]="subsectionSize" id="policy-summary-title">{{ copy.title }}</h3>
         <dl
           class="m-0 grid gap-4 [&_dd]:m-0 [&_dd]:wrap-anywhere [&_dt]:text-xs [&_dt]:text-muted-foreground sm:grid-cols-2"
@@ -130,7 +135,7 @@ import type { PolicyReadView } from './policy-reads';
               #retryButton
               hlmBtn
               [variant]="'outline'"
-              class="min-h-[var(--eg-control-touch)] whitespace-normal"
+              class="whitespace-normal"
               type="button"
               data-policy-reads-retry
               [attr.aria-disabled]="blocked()"

@@ -116,7 +116,7 @@ import type { ApiError } from '../../../core/http/api-error';
           <button
             hlmBtn
             [variant]="'outline'"
-            class="state-panel__action h-auto min-h-(--eg-control-md) min-w-0 max-w-full whitespace-normal py-(--eg-space-2) pointer-coarse:min-h-(--eg-control-touch) pointer-coarse:min-w-(--eg-control-touch)"
+            class="state-panel__action h-auto min-w-0 max-w-full whitespace-normal py-(--eg-space-2) pointer-coarse:min-h-(--eg-control-touch) pointer-coarse:min-w-(--eg-control-touch)"
             type="button"
             [disabled]="retryDisabled()"
             (click)="retry.emit()"

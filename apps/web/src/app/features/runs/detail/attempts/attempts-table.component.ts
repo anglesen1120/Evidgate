@@ -1,4 +1,4 @@
-import { DOCUMENT, formatNumber } from '@angular/common';
+import { DOCUMENT } from '@angular/common';
 import {
   afterRenderEffect,
   ChangeDetectionStrategy,
@@ -18,6 +18,7 @@ import { HlmAlert } from '@evidgate/ui/alert';
 import { HlmCard, HlmCardTitle } from '@evidgate/ui/card';
 import { DataTableComponent } from '../../../../shared/ui/data-table/data-table.component';
 import type { ApiError } from '../../../../core/http/api-error';
+import { formatDuration } from '../../../../shared/time/format-duration';
 import {
   StatusPillComponent,
   type StatusTone,
@@ -138,7 +139,7 @@ export class AttemptsTableComponent {
       header: this.copy.duration,
       role: 'number',
       width: { min: 'calc(12ch + var(--eg-space-4) * 2)' },
-      cell: (row) => this.duration(row.attempt.durationMs) ?? this.copy.notProvided,
+      cell: (row) => formatDuration(row.attempt.durationMs, this.locale) ?? this.copy.notProvided,
       cellTemplate: this.durationCell(),
     },
     {
@@ -287,12 +288,5 @@ export class AttemptsTableComponent {
 
   protected knownArtifactCount(count: number | null | undefined): boolean {
     return typeof count === 'number' && Number.isInteger(count) && count >= 0;
-  }
-
-  protected duration(milliseconds: number | null | undefined): string | null {
-    if (milliseconds == null || !Number.isFinite(milliseconds) || milliseconds < 0) return null;
-    return milliseconds < 1000
-      ? `${formatNumber(milliseconds, this.locale, '1.0-20')} ms`
-      : `${formatNumber(milliseconds / 1000, this.locale, '1.0-2')} s`;
   }
 }

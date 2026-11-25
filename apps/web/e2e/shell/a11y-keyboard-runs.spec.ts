@@ -1,7 +1,5 @@
-// The Runs flow uses the keyboard alone on the real fixtures build: no click or force.
-// Each assertion identifies focus by role/name, id or data hook, never by counting Tab stops.
-// Keep overflowing scrollers, row copy/full-value actions and every shared pager in DOM order,
-// including focusable disabled boundaries, with no anonymous stops. Attempts use server pages.
+// Runs flow by keyboard alone on the fixtures build (no click or force); focus is identified by
+// role/name, id or data hook, never by Tab count. Scrollers, row copy and pagers keep DOM order.
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import runList from '../../../../fixtures/web-api/run-list/input.json';
 import runList250 from '../../../../fixtures/web-api/run-list-250/input.json';
@@ -381,6 +379,8 @@ test('the narrow server pages keep every fact reachable and preserve focus on a 
   await page.keyboard.press('Escape');
   await expect(lastView).toBeFocused();
   await page.keyboard.press('Shift+Tab');
+  await expect(records.last().getByRole('button', { name: 'Copy Run ID' })).toBeFocused();
+  await page.keyboard.press('Shift+Tab');
   await expect(records.last().getByRole('link')).toBeFocused();
   await expect(records.last()).toBeInViewport();
   await expectNoA11yViolations(page, 'run list, 250 labelled records');
@@ -440,7 +440,7 @@ test('Next replaces the page and retains its keyboard focus while busy and at th
   }
   await tabThroughTableScroller(page, page.locator('app-run-list-table'));
   for (let row = 0; row < FULL_PAGE_ROWS; row++) {
-    await tabThroughRunControls(page, rows.nth(row), 0, true);
+    await tabThroughRunControls(page, rows.nth(row), 1, true);
   }
   const pager = page.locator('app-data-table-pager');
   const previous = pager.getByRole('button', { name: 'Previous page', exact: true });

@@ -89,6 +89,20 @@ describe('IdentityDataService (09.1.1-T4.1)', () => {
     httpMock.verify();
   });
 
+  it('reads only the signed-in profile from GET /me', async () => {
+    const result = service.getMyProfile(new AbortController().signal);
+    const request = await takeRequest(httpMock, `${API_BASE_URL}/me`);
+    expect(request.request.method).toBe('GET');
+    const profile = {
+      id: 'u',
+      email: 'linh@example.com',
+      display_name: 'Linh',
+      preferred_locale: 'vi',
+    };
+    flushPage(request, profile);
+    await expect(result).resolves.toEqual(profile);
+  });
+
   it('listPermissions() follows next_cursor to the last page and keeps server order', async () => {
     const catalogue = service.listPermissions();
 

@@ -211,6 +211,7 @@ export const routes: Routes = [
       // project id and a phase-hidden entry all land here, with the shell around them.
       {
         path: '**',
+        data: { hideBreadcrumbs: true },
         loadComponent: () => import('./shell/pages/not-found.page').then((m) => m.NotFoundPage),
       },
     ],

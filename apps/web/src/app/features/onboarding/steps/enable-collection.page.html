@@ -24,7 +24,7 @@
   @if (enabled(); as activation) {
     <section
       hlmCard
-      class="min-w-0 gap-(--eg-space-3) overflow-visible border border-solid border-(--eg-success-fg) bg-(--eg-success-bg) p-(--eg-space-4) text-(--eg-success-fg) min-[768px]:p-(--eg-space-5)"
+      class="min-w-0 gap-(--eg-space-3) overflow-visible border border-solid border-(--eg-success-fg) bg-(--eg-success-bg) p-(--eg-space-5) md:p-(--eg-space-6) text-(--eg-success-fg)"
       role="status"
       aria-labelledby="enable-enabled-heading"
       data-testid="enable-collection-enabled"
@@ -138,7 +138,7 @@
   @if (enabled() === null && readFailure() === null) {
     <section
       hlmCard
-      class="min-w-0 gap-(--eg-space-4) overflow-visible p-(--eg-space-4) md:p-(--eg-space-5)"
+      class="min-w-0 gap-(--eg-space-4) overflow-visible p-(--eg-space-5) md:p-(--eg-space-6)"
       aria-labelledby="enable-preview-heading"
       data-testid="enable-collection-policy-preview"
     >
@@ -205,7 +205,7 @@
         <button
           hlmBtn
           [variant]="'outline'"
-          class="h-auto min-h-(--eg-control-touch) max-w-full justify-self-start whitespace-normal wrap-anywhere focus-visible:outline-solid focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-ring focus-visible:outline-offset-(--eg-focus-offset)"
+          class="h-auto max-w-full justify-self-start whitespace-normal wrap-anywhere focus-visible:outline-solid focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-ring focus-visible:outline-offset-(--eg-focus-offset)"
           data-testid="enable-collection-read-again"
           type="button"
           #readAgainControl
@@ -221,7 +221,7 @@
       <button
         *appDesktopMutation
         hlmBtn
-        class="h-auto min-h-(--eg-control-touch) max-w-full justify-self-start whitespace-normal wrap-anywhere focus-visible:outline-solid focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-ring focus-visible:outline-offset-(--eg-focus-offset)"
+        class="h-auto max-w-full justify-self-start whitespace-normal wrap-anywhere focus-visible:outline-solid focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-ring focus-visible:outline-offset-(--eg-focus-offset)"
         data-testid="enable-collection-confirm"
         type="submit"
         [disabled]="confirmDisabled()"
@@ -279,7 +279,7 @@
         <button
           hlmBtn
           [variant]="'outline'"
-          class="h-auto min-h-(--eg-control-touch) max-w-full justify-self-start whitespace-normal wrap-anywhere focus-visible:outline-solid focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-ring focus-visible:outline-offset-(--eg-focus-offset)"
+          class="h-auto max-w-full justify-self-start whitespace-normal wrap-anywhere focus-visible:outline-solid focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-ring focus-visible:outline-offset-(--eg-focus-offset)"
           data-testid="enable-collection-retry-read"
           type="button"
           [disabled]="retryDisabled()"

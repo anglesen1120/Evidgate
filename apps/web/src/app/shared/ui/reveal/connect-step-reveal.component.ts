@@ -58,7 +58,7 @@ let nextRevealId = 0;
         <button
           hlmBtn
           [variant]="'outline'"
-          class="h-auto min-h-(--eg-control-md) min-w-0 max-w-full whitespace-normal wrap-anywhere py-(--eg-space-3) pointer-coarse:min-h-(--eg-control-touch) aria-disabled:cursor-default aria-disabled:bg-muted aria-disabled:text-muted-foreground aria-disabled:shadow-none"
+          class="h-auto min-w-0 max-w-full whitespace-normal wrap-anywhere py-(--eg-space-3) pointer-coarse:min-h-(--eg-control-touch) aria-disabled:cursor-default aria-disabled:bg-muted aria-disabled:text-muted-foreground aria-disabled:shadow-none"
           [attr.data-testid]="'reveal-copy'"
           type="button"
           [attr.aria-disabled]="copying()"
@@ -70,7 +70,7 @@ let nextRevealId = 0;
         <button
           hlmBtn
           [variant]="'ghost'"
-          class="h-auto min-h-(--eg-control-md) min-w-0 max-w-full whitespace-normal wrap-anywhere py-(--eg-space-3) pointer-coarse:min-h-(--eg-control-touch)"
+          class="h-auto min-w-0 max-w-full whitespace-normal wrap-anywhere py-(--eg-space-3) pointer-coarse:min-h-(--eg-control-touch)"
           [attr.data-testid]="'reveal-dismiss'"
           type="button"
           (click)="dismissed.emit()"

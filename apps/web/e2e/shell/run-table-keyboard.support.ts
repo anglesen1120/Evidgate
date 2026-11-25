@@ -96,7 +96,7 @@ export async function tabThroughNarrowRunRecords(
   await expect(records.locator('li[data-row-id]')).toHaveCount(count);
   await expect(records.locator('a[href]')).toHaveCount(count);
   await expect(records.locator('button[aria-haspopup="dialog"]')).toHaveCount(count);
-  await expect(records.locator('app-copy-value-button button')).toHaveCount(0);
+  await expect(records.locator('app-copy-value-button button')).toHaveCount(count);
   await expect(records.locator('[role="button"]')).toHaveCount(0);
   const walk = await records.evaluateHandle((root) => {
     const expected = [...root.querySelectorAll('a[href], button, [tabindex="0"]')];
@@ -109,7 +109,7 @@ export async function tabThroughNarrowRunRecords(
   });
   try {
     const total = await walk.evaluate((state) => state.expected.length);
-    expect(total).toBe(count * 2);
+    expect(total).toBe(count * 3);
     for (let step = 0; step < total; step++) await page.keyboard.press('Tab');
     const result = await walk.evaluate((state) => ({
       count: state.actual.length,

@@ -32,7 +32,7 @@ class OverviewHarness extends ComponentHarness {
   readonly projectTable = this.locatorFor('.projects app-data-table');
   readonly tableRole = this.locatorFor('.projects [role="table"]');
   readonly tableCaption = this.locatorFor('.projects app-data-table > .caption');
-  readonly decisionPrefix = this.locatorFor('app-decision-chip .verdict__label');
+  readonly decisionBadge = this.locatorFor('app-decision-chip [role="img"]');
   readonly memberValues = this.locatorForAll('.members dt + dd');
   readonly memberTerms = this.locatorForAll('.members dt');
   readonly usageTerms = this.locatorForAll('app-dashboard-meter dt');
@@ -272,10 +272,8 @@ describe('OrgOverviewPage', () => {
     expect(await harness.text()).not.toContain('Latest decision');
     expect(await harness.text()).not.toContain('Not evaluated');
     grants.set(new Set(['project:read', 'run:read', 'decision:read']));
-    const prefix = await harness.decisionPrefix();
-    expect(await prefix.hasClass('sr-only')).toBe(true);
-    expect(await prefix.getAttribute('aria-hidden')).toBeNull();
-    expect(await prefix.text()).toBe('Decision:');
+    const badge = await harness.decisionBadge();
+    expect(await badge.getAttribute('aria-label')).toBe(`Decision: ${await badge.text()}`);
     expect(await harness.decisions()).toHaveLength(1);
     expect(await harness.text()).toContain('Latest decision');
   });

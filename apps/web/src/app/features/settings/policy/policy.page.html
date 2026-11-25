@@ -38,7 +38,7 @@
       *appDesktopMutation
       type="button"
       hlmBtn
-      class="min-h-(--eg-control-touch) w-fit max-w-full justify-self-start whitespace-normal md:justify-self-end"
+      class="w-fit max-w-full justify-self-start whitespace-normal md:justify-self-end"
       data-policy-publish-open
       [disabled]="store.phase() !== 'ready' || store.publishing() || !selectedRevisionId()"
       (click)="openPublish($event)"
@@ -50,7 +50,7 @@
 </header>
 @if (store.phase() === 'ready' && (activation.phase === 'ready' || head.phase === 'ready')) {
   <dl
-    class="m-0 mb-(--eg-space-6) grid min-w-0 gap-(--eg-space-4) sm:grid-cols-[repeat(auto-fit,minmax(min(100%,12rem),1fr))] [&>div]:min-w-0 [&>div]:gap-(--eg-space-4) [&>div]:rounded-lg [&>div]:p-(--eg-space-5) [&_dt]:flex [&_dt]:items-center [&_dt]:gap-(--eg-space-3) [&_dt]:font-semibold [&_dd]:m-0 [&_dd]:grid [&_dd]:gap-(--eg-space-2)"
+    class="m-0 mb-(--eg-space-6) grid min-w-0 gap-(--eg-space-4) sm:grid-cols-[repeat(auto-fit,minmax(min(100%,12rem),1fr))] [&>div]:min-w-0 [&>div]:gap-(--eg-space-4) [&>div]:rounded-lg [&>div]:p-(--eg-space-5) md:[&>div]:p-(--eg-space-6) [&_dt]:flex [&_dt]:items-center [&_dt]:gap-(--eg-space-3) [&_dt]:font-semibold [&_dd]:m-0 [&_dd]:grid [&_dd]:gap-(--eg-space-2)"
   >
     @if (activation.phase === 'ready' && activation.value; as current) {
       <div hlmCard [size]="'sm'" data-overview-active>
@@ -138,7 +138,7 @@
   <button
     hlmBtn
     [variant]="'outline'"
-    class="min-h-[var(--eg-control-touch)] whitespace-normal"
+    class="whitespace-normal"
     type="submit"
     data-policy-open
     [disabled]="store.publishing() || store.phase() === 'loading'"
@@ -184,7 +184,7 @@
   <button
     hlmBtn
     [variant]="'outline'"
-    class="min-h-[var(--eg-control-touch)] whitespace-normal"
+    class="whitespace-normal"
     type="button"
     [disabled]="store.publishing() || store.paging() || store.phase() === 'loading'"
     (click)="retryPage()"
@@ -198,7 +198,7 @@
     <button
       hlmBtn
       [variant]="'outline'"
-      class="min-h-[var(--eg-control-touch)] whitespace-normal"
+      class="whitespace-normal"
       type="button"
       data-policy-retry
       [disabled]="store.publishing() || store.phase() === 'loading'"

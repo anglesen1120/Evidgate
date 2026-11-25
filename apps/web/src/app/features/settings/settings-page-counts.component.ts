@@ -20,7 +20,7 @@ export interface SettingsPageCount {
   template: `
     <dl class="m-0 grid min-w-0 grid-cols-[repeat(auto-fit,minmax(min(100%,9rem),1fr))] gap-3">
       @for (metric of metrics(); track metric.label; let first = $first) {
-        <div hlmCard class="min-w-0 gap-3 rounded-xl p-4">
+        <div hlmCard class="min-w-0 gap-3 rounded-xl p-(--eg-space-5) md:p-(--eg-space-6)">
           <dt class="flex min-w-0 items-center gap-2 font-semibold wrap-anywhere">
             @if (metric.icon; as icon) {
               <span

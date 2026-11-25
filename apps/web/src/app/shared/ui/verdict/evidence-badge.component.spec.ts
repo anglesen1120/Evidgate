@@ -111,5 +111,9 @@ describe('EvidenceBadgeComponent', () => {
     fixture.componentRef.setInput('compact', true);
     await fixture.whenStable();
     expect(dimension.classList.contains('sr-only')).toBe(true);
+    expect(root.querySelector('[role="img"]')?.getAttribute('aria-label')).toBe(
+      'Completeness: Unavailable',
+    );
+    expect(root.querySelector('[role="img"]')?.textContent?.trim()).toBe('Unavailable');
   });
 });

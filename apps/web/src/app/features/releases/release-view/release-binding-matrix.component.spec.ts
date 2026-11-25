@@ -39,7 +39,7 @@ describe('ReleaseBindingMatrixComponent', () => {
     expect(worker).toContain('No eligible run');
     expect(worker).not.toMatch(/run-\d|PASS/i);
     expect(await matrix.workerIcon()).toBeDefined();
-    expect(await (await matrix.pending()).text()).toContain('Not evaluated');
+    expect(await (await matrix.pending()).text()).toContain('Pending');
     expect(await (await matrix.row('web')).text()).toMatch(/run-1844.*ev-4.*Fresh.*PASS/s);
     expect(await (await matrix.row('api')).text()).toMatch(/run-1837.*ev-2.*Predates build.*PASS/s);
   });
@@ -48,7 +48,7 @@ describe('ReleaseBindingMatrixComponent', () => {
     const matrix = await render('partial');
     const worker = await (await matrix.row('worker')).text();
     expect(worker).toContain('Unavailable');
-    expect(worker).not.toMatch(/sha256|Not evaluated|No eligible run/);
+    expect(worker).not.toMatch(/sha256|Pending|No eligible run/);
     expect(await (await matrix.row('api')).text()).toContain('ev-2');
   });
 

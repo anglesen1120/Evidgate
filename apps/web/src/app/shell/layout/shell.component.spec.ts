@@ -100,16 +100,13 @@ describe('ShellComponent', () => {
   it('keeps the topbar keyboard stops in the order the header reads', () => {
     const topbar = root.querySelector<HTMLElement>('header.topbar')!;
     const stops = Array.from(topbar.querySelectorAll<HTMLElement>('button'));
-    expect(stops).toHaveLength(fixture.componentInstance.canSwitchLocale ? 7 : 6);
+    expect(stops).toHaveLength(6);
     expect(stops[0]?.classList.contains('nav-toggle')).toBe(true);
     expect(stops[1]?.getAttribute('role')).toBe('combobox');
     expect(stops[2]?.getAttribute('role')).toBe('combobox');
     expect(stops[3]?.classList.contains('screen-search')).toBe(true);
     expect(stops[4]?.classList.contains('theme-toggle')).toBe(true);
-    expect(stops.at(-1)?.getAttribute('aria-label')).toBe('Account menu');
-    if (fixture.componentInstance.canSwitchLocale) {
-      expect(stops[5]?.classList.contains('locale-toggle')).toBe(true);
-    }
+    expect(stops.at(-1)?.getAttribute('aria-label')).toBe('Account and preferences');
 
     const theme = topbar.querySelector<HTMLElement>('button.theme-toggle')!;
     const scope = topbar.querySelector<HTMLElement>('app-scope-switcher')!;
@@ -122,7 +119,7 @@ describe('ShellComponent', () => {
       '/orgs/org-one/projects/project-one/overview/child?q=1',
     );
     await fixture.whenStable();
-    const crumb = root.querySelector('header nav [aria-current="page"]');
+    const crumb = root.querySelector('main app-shell-breadcrumbs [aria-current="page"]');
     expect(crumb?.textContent?.trim()).toBe('Overview');
   });
 

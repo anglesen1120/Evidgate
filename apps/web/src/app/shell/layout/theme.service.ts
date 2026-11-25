@@ -1,14 +1,17 @@
 import { DOCUMENT } from '@angular/common';
 import { DestroyRef, Injectable, computed, inject, signal } from '@angular/core';
 
+type ThemeChoice = 'light' | 'dark' | 'system';
+
 /** An explicit choice overrides the OS; absence deliberately leaves data-theme unset. */
 @Injectable({ providedIn: 'root' })
 export class ThemeService {
   private readonly document = inject(DOCUMENT);
-  private readonly preference = signal<'light' | 'dark' | null>(null);
+  private readonly preference = signal<ThemeChoice>('system');
+  readonly choice = this.preference.asReadonly();
   private readonly systemDark = signal(false);
   readonly isDark = computed(
-    () => this.preference() === 'dark' || (this.preference() === null && this.systemDark()),
+    () => this.choice() === 'dark' || (this.choice() === 'system' && this.systemDark()),
   );
 
   constructor() {
@@ -28,10 +31,16 @@ export class ThemeService {
   }
 
   toggle(): void {
-    this.preference.set(this.isDark() ? 'light' : 'dark');
+    this.choose(this.isDark() ? 'light' : 'dark');
+  }
+
+  choose(choice: ThemeChoice): void {
+    this.preference.set(choice);
     this.apply();
     try {
-      this.document.defaultView?.localStorage.setItem('evidgate-theme', this.preference()!);
+      const storage = this.document.defaultView?.localStorage;
+      if (choice === 'system') storage?.removeItem('evidgate-theme');
+      else storage?.setItem('evidgate-theme', choice);
     } catch {
       // Persistence is optional, never a prerequisite to changing the visible theme.
     }
@@ -39,7 +48,7 @@ export class ThemeService {
 
   private apply(): void {
     const choice = this.preference();
-    if (choice === null) this.document.documentElement.removeAttribute('data-theme');
+    if (choice === 'system') this.document.documentElement.removeAttribute('data-theme');
     else this.document.documentElement.setAttribute('data-theme', choice);
   }
 }

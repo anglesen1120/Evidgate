@@ -65,7 +65,7 @@ import { API_TOKENS_COPY } from './api-tokens.copy';
     <section hlmCard class="min-w-0 gap-0 rounded-xl p-0" aria-labelledby="api-directory-title">
       <header
         hlmCardHeader
-        class="flex min-w-0 flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-4"
+        class="flex min-w-0 flex-wrap items-center justify-between gap-3 border-b border-border p-(--eg-space-5) md:p-(--eg-space-6)"
       >
         <h3 hlmCardTitle [size]="'subsection'" id="api-directory-title" class="m-0">
           {{ copy.directory }}
@@ -121,7 +121,8 @@ import { API_TOKENS_COPY } from './api-tokens.copy';
                         hlmBtn
                         hlmDialogTrigger
                         [variant]="'link'"
-                        class="h-auto max-w-full justify-start px-0 py-1 text-start whitespace-normal pointer-coarse:min-h-(--eg-control-touch)"
+                        [size]="'sm'"
+                        class="h-auto max-w-full justify-start px-0 text-start whitespace-normal"
                         type="button"
                         data-api-inspect
                         [attr.aria-label]="inspectLabel(row.name)"
@@ -218,7 +219,7 @@ import { API_TOKENS_COPY } from './api-tokens.copy';
           </table>
         </div>
       } @else if (!fetching()) {
-        <div class="grid justify-items-start gap-3 px-5 py-4">
+        <div class="grid justify-items-start gap-3 p-(--eg-space-5) md:p-(--eg-space-6)">
           <app-empty-pattern
             [icon]="'navKey'"
             [bare]="true"
@@ -231,7 +232,7 @@ import { API_TOKENS_COPY } from './api-tokens.copy';
         </div>
       }
       <footer
-        class="flex min-w-0 flex-wrap items-center justify-between gap-2 border-t border-border px-4 py-3"
+        class="flex min-w-0 flex-wrap items-center justify-between gap-2 border-t border-border p-(--eg-space-5) md:p-(--eg-space-6)"
       >
         <p class="m-0 text-xs tabular-nums text-muted-foreground">{{ pageSummary() }}</p>
         <ng-content />

@@ -195,5 +195,11 @@ describe('DecisionChipComponent', () => {
     fixture.componentRef.setInput('compact', true);
     await fixture.whenStable();
     expect(dimension.classList.contains('sr-only')).toBe(true);
+    const badge = root.querySelector('[role="img"]');
+    expect(badge?.getAttribute('aria-label')).toBe('Decision: Unavailable');
+    fixture.componentRef.setInput('decision', null);
+    await fixture.whenStable();
+    expect(badge?.getAttribute('aria-label')).toBe('Decision: Pending');
+    expect(badge?.textContent?.trim()).toBe('Pending');
   });
 });

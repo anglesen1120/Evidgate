@@ -27,8 +27,10 @@ import type {
 import { DataTableValueComponent } from '../../../shared/ui/data-table/data-table-value.component';
 import { RowActionComponent } from '../../../shared/ui/data-table/row-action.component';
 import { CopyValueButtonComponent } from '../../../shared/ui/values/copy-value-button.component';
-import { DecisionChipComponent } from '../../../shared/ui/verdict/decision-chip.component';
+import { middleTruncate } from '../../../shared/ui/values/middle-truncate';
 import { escapeFormatChars, escapeFormatLabel } from '../../../shared/ui/values/ref-name-display';
+import { DecisionChipComponent } from '../../../shared/ui/verdict/decision-chip.component';
+import { EvidenceBadgeComponent } from '../../../shared/ui/verdict/evidence-badge.component';
 
 type RunCell = TemplateRef<DataTableCellContext<RunSummary>>;
 
@@ -49,6 +51,7 @@ type RunCell = TemplateRef<DataTableCellContext<RunSummary>>;
     RowActionComponent,
     CopyValueButtonComponent,
     DecisionChipComponent,
+    EvidenceBadgeComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './run-list-table.component.html',
@@ -78,6 +81,10 @@ export class RunListTableComponent {
   protected readonly rowId = (row: RunSummary) => row.run_id;
   protected readonly displayRef = escapeFormatChars;
   protected readonly displayLabel = escapeFormatLabel;
+  protected readonly shortId = middleTruncate;
+  protected readonly hasMissingEvidence = computed(() =>
+    this.rows().some((row) => !row.completeness),
+  );
   private readonly identityCell = viewChild.required<RunCell>('identityCell');
   private readonly stateCell = viewChild.required<RunCell>('stateCell');
   private readonly evidenceCell = viewChild.required<RunCell>('evidenceCell');
@@ -104,7 +111,6 @@ export class RunListTableComponent {
     close: $localize`:@@ui.close:Close`,
     state: $localize`:@@runs.list.column-state:State`,
     evidence: $localize`:@@runs.list.column-evidence:Evidence`,
-    evidenceUnavailable: $localize`:@@runs.list.evidence-unavailable:Unavailable`,
     evidenceHint: $localize`:@@runs.list.evidence-hint:Open the run for evidence completeness.`,
     decision: $localize`:@@runs.list.column-decision:Decision`,
     ref: $localize`:@@runs.list.column-ref:Ref`,
@@ -153,7 +159,7 @@ export class RunListTableComponent {
     {
       id: 'evidence',
       header: this.copy.evidence,
-      cell: () => this.copy.evidenceUnavailable,
+      cell: (row) => row.completeness ?? '',
       role: 'status',
       priority: 'primary',
       overflow: 'wrap',

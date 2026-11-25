@@ -9,16 +9,18 @@
   [rowHeight]="'compact'"
   [fitToContainer]="true"
 />
-<p
-  class="eg-type-caption px-(--eg-space-5) py-(--eg-space-3) text-muted-foreground wrap-anywhere"
-  data-run-evidence-hint
->
-  {{ copy.evidenceHint }}
-</p>
+@if (hasMissingEvidence()) {
+  <p
+    class="eg-type-caption px-(--eg-space-5) py-(--eg-space-3) text-muted-foreground wrap-anywhere"
+    data-run-evidence-hint
+  >
+    {{ copy.evidenceHint }}
+  </p>
+}
 
 <ng-template #identityCell let-row let-stacked="stacked">
   <div
-    class="identifier grid min-w-0 justify-items-start"
+    class="identifier flex min-w-0 flex-wrap items-center gap-x-(--eg-space-3)"
     data-run-row
     [attr.data-run-id]="row.run_id"
   >
@@ -58,15 +60,19 @@
       <!-- The link name comes from its content, so it always contains the visible subject and time (WCAG 2.5.3). -->
       <span class="sr-only">({{ displayRef(row.run_id) }})</span>
     </a>
+    <span class="inline-flex min-w-0 max-w-full items-center gap-(--eg-space-1)">
+      <bdi class="eg-type-caption font-mono text-muted-foreground" data-run-id-preview>{{
+        shortId(displayRef(row.run_id), 11)
+      }}</bdi>
+      <app-copy-value-button [value]="row.run_id" [label]="copy.id" [iconOnly]="true" />
+    </span>
   </div>
 </ng-template>
 <ng-template #stateCell let-row>
   <app-run-state-pill [state]="row.state" [compact]="true" />
 </ng-template>
-<ng-template #evidenceCell>
-  <div class="grid min-w-0 justify-items-start gap-(--eg-space-2)" data-run-evidence>
-    <app-status-pill [tone]="'neutral'" [label]="copy.evidenceUnavailable" />
-  </div>
+<ng-template #evidenceCell let-row>
+  <app-evidence-badge data-run-evidence [completeness]="row.completeness" [compact]="true" />
 </ng-template>
 <ng-template #decisionCell let-row let-inspecting="inspecting">
   <div data-run-decision>
