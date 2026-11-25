@@ -1,8 +1,9 @@
-import { expect, test } from '@playwright/test';
+import { chromium, expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
 import {
   LIMITED_GRANTS,
   LOCALES,
+  fixturesBaseUrl,
   localePath,
   ORG_ACME,
   overviewPath,
@@ -16,6 +17,8 @@ for (const locale of LOCALES) {
     [900, 'light'],
     [900, 'dark'],
     [1024, 'light'],
+    [1279, 'light'],
+    [1280, 'light'],
     [1440, 'light'],
     [1440, 'dark'],
   ] as const) {
@@ -24,8 +27,15 @@ for (const locale of LOCALES) {
       await page.setViewportSize({ width, height: 900 });
       await page.goto(withVariant(overviewPath(locale), LIMITED_GRANTS));
       const header = page.locator('header.topbar');
-      const scopes = header.getByRole('combobox');
+      const breadcrumb = header.locator('app-shell-breadcrumbs nav');
+      const scopes = breadcrumb.getByRole('combobox');
       await expect(scopes).toHaveCount(2);
+      await expect(header.getByRole('combobox')).toHaveCount(2);
+      for (const scope of await scopes.all()) {
+        const selected = (await scope.innerText()).trim();
+        expect(selected).not.toBe('');
+        await expect(header.getByText(selected, { exact: true })).toHaveCount(1);
+      }
       await expect(header.locator('.theme-toggle')).toHaveAttribute(
         'aria-pressed',
         String(colorScheme === 'dark'),
@@ -34,6 +44,11 @@ for (const locale of LOCALES) {
         'aria-expanded',
         String(width >= 1280),
       );
+      await expect(page.locator('#shell-navigation')).toHaveCSS(
+        'width',
+        width >= 1280 ? '224px' : '68px',
+      );
+      if (width >= 1280) await expectSidebarLabelsToFit(page);
       await page.evaluate(() => document.fonts.ready.then(() => undefined));
       const controls = [
         header.locator('.nav-toggle'),
@@ -146,3 +161,102 @@ async function expectUsageLabel(page: Page, locale: (typeof LOCALES)[number], ac
     await expect(link).toBeFocused();
   }
 }
+
+test('rail navigation exposes the focused destination and keeps focus on Escape', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 768, height: 900 });
+  await page.goto(withVariant(overviewPath('en'), LIMITED_GRANTS));
+  const link = page.locator('app-shell-nav a[aria-current="page"]');
+  await expect(link).toHaveAccessibleName(/\S/);
+  const name = await link.getAttribute('aria-label');
+  if (!name) throw new Error('The current rail destination has no name');
+  await link.focus();
+  const tooltip = page.getByRole('tooltip');
+  await expect(tooltip).toHaveText(name);
+  await page.keyboard.press('Escape');
+  await expect(tooltip).toHaveCount(0);
+  await expect(link).toBeFocused();
+});
+
+test('mobile search and account overlays return focus without changing the route', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 900 });
+  await page.goto(withVariant(overviewPath('en'), LIMITED_GRANTS));
+  const start = page.url();
+  const topbar = page.locator('header.topbar');
+  const search = topbar.getByRole('button', { name: 'Search', exact: true });
+  await search.press('Enter');
+  const picker = page.getByRole('dialog', { name: 'Find a screen' });
+  await expect(picker.getByRole('combobox')).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(picker).toHaveCount(0);
+  await expect(search).toBeFocused();
+  const account = topbar.getByRole('button', { name: 'Account menu' });
+  await account.press('Enter');
+  await expect(page.getByRole('menuitem', { name: 'Sign out of this tab' })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('menu')).toHaveCount(0);
+  await expect(account).toBeFocused();
+  await expect(page).toHaveURL(start);
+});
+
+async function expectSidebarLabelsToFit(page: Page) {
+  const links = page.locator('app-shell-nav a');
+  await expect(links.first()).toBeVisible();
+  await page.evaluate(() => document.fonts.ready.then(() => undefined));
+  const clipped = await links.evaluateAll((items) =>
+    items.flatMap((link) => {
+      const label = link.querySelector(':scope > span');
+      if (!label?.textContent?.trim()) return [link.getAttribute('aria-label')];
+      const range = document.createRange();
+      range.selectNodeContents(label);
+      const bounds = link.getBoundingClientRect();
+      const lines = Array.from(range.getClientRects());
+      const fits =
+        lines.length > 0 &&
+        lines.every(
+          (line) =>
+            line.left >= bounds.left - 1 &&
+            line.right <= bounds.right + 1 &&
+            line.top >= bounds.top - 1 &&
+            line.bottom <= bounds.bottom + 1,
+        );
+      return fits && label.scrollWidth <= label.clientWidth + 1 ? [] : [label.textContent];
+    }),
+  );
+  expect(clipped).toEqual([]);
+}
+
+test('expanded navigation reflows at 125% and 150% browser zoom on a 1920px display', async () => {
+  // Zoom is a profile preference. A disposable regular profile isolates it from other suites.
+  const context = await chromium.launchPersistentContext('', {
+    channel: 'chrome',
+    baseURL: fixturesBaseUrl(),
+    viewport: null,
+  });
+  try {
+    const page = await context.newPage();
+    const cdp = await context.newCDPSession(page);
+    const { windowId } = await cdp.send('Browser.getWindowForTarget');
+    await cdp.send('Browser.setContentsSize', { windowId, width: 1920, height: 1080 });
+    await expect.poll(() => page.evaluate(() => innerWidth)).toBe(1920);
+    const settings = await context.newPage();
+    await settings.goto('chrome://settings/appearance');
+    for (const zoom of [1.25, 1.5]) {
+      await settings.locator('#zoomLevel').selectOption({ label: `${zoom * 100}%` });
+      for (const locale of LOCALES) {
+        await page.goto(overviewPath(locale));
+        await expect.poll(() => page.evaluate(() => innerWidth)).toBe(1920 / zoom);
+        await expect(page.locator('#shell-navigation')).toHaveCSS('width', '224px');
+        await expectSidebarLabelsToFit(page);
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+          true,
+        );
+      }
+    }
+  } finally {
+    await context.close();
+  }
+});

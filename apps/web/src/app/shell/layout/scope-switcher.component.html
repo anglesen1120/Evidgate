@@ -16,7 +16,9 @@
     (stateChanged)="popupState('org', $event)"
   >
     <hlm-select-trigger [buttonId]="orgId" class="min-h-(--eg-control-touch) w-full min-w-0">
-      <span class="truncate">{{ currentOrg()?.name || chooseOrganization }}</span>
+      <bdi class="min-w-0 whitespace-normal [overflow-wrap:anywhere]">{{
+        currentOrg()?.name || chooseOrganization
+      }}</bdi>
     </hlm-select-trigger>
     <hlm-select-content *hlmSelectPortal class="animate-none" [aria-labelledby]="orgId + '-label'">
       @for (organization of organizations(); track organization.id) {
@@ -48,9 +50,9 @@
     (stateChanged)="popupState('project', $event)"
   >
     <hlm-select-trigger [buttonId]="projectId" class="min-h-(--eg-control-touch) w-full min-w-0">
-      <span class="truncate">{{
+      <bdi class="min-w-0 whitespace-normal [overflow-wrap:anywhere]">{{
         currentProject()?.name || (projects().length === 0 ? noProjects : chooseProject)
-      }}</span>
+      }}</bdi>
     </hlm-select-trigger>
     <hlm-select-content
       *hlmSelectPortal
