@@ -22247,12 +22247,12 @@
 <trans-unit id="healingswitch.server-snapshot" datatype="html"><source>Server snapshot</source><target>Dữ liệu máy chủ</target></trans-unit>
 <trans-unit id="healingswitch.project-setting" datatype="html"><source>Project setting</source><target>Cài đặt dự án</target></trans-unit>
 <trans-unit id="healingswitch.stored-setting" datatype="html"><source>Stored setting</source><target>Cài đặt đã lưu</target></trans-unit>
-      <trans-unit id="healingswitch.disable-title" datatype="html">
-        <source>Disable healing for this scope?</source>
-        <target>Tắt tự sửa cho phạm vi này?</target>
+      <trans-unit id="healingswitch.disable-scope-title" datatype="html">
+        <source>Disable healing for <x id="SCOPE" equiv-text="this.title()"/>?</source>
+        <target>Tắt tự sửa cho <x id="SCOPE" equiv-text="this.title()"/>?</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/availability/switch-scope-control.component.ts</context>
-          <context context-type="linenumber">92</context>
+          <context context-type="linenumber">106</context>
         </context-group>
       </trans-unit>
       <trans-unit id="healingswitch.disable-consequence" datatype="html">
@@ -22261,6 +22261,14 @@
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/availability/switch-scope-control.component.ts</context>
           <context context-type="linenumber">93</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="healingswitch.disable-tenant-impact" datatype="html">
+        <source>This stops healing proposals for all projects in this tenant.</source>
+        <target>Thao tác này dừng các đề xuất tự sửa của mọi dự án trong tổ chức này.</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/availability/switch-scope-control.component.ts</context>
+          <context context-type="linenumber">109</context>
         </context-group>
       </trans-unit>
       <trans-unit id="healingswitch.disable-hint" datatype="html">

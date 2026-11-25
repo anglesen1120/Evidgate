@@ -27,14 +27,14 @@ const COPY: Record<ShellLocale, Copy> = {
     enabled: 'Enabled',
     disabled: 'Disabled',
     notRecorded: 'Not recorded',
-    title: 'Disable healing for this scope?',
+    title: 'Disable healing for Project scope',
     consequence: 'All shadow healing proposals for this scope will stop right away.',
   },
   vi: {
     enabled: 'Bật',
     disabled: 'Tắt',
     notRecorded: 'Chưa được ghi lại',
-    title: 'Tắt tự sửa cho phạm vi này?',
+    title: 'Tắt tự sửa cho Phạm vi dự án',
     consequence: 'Mọi đề xuất tự sửa chế độ bóng của phạm vi này sẽ dừng ngay.',
   },
 };

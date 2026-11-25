@@ -28,6 +28,7 @@ import {
   listRuns,
   postRunEvents,
   queueAuthoringChange,
+  revokeApiToken,
   type AuthoringChangeV1,
 } from '@evidgate/sdk';
 import { firstValueFrom } from 'rxjs';
@@ -267,5 +268,15 @@ describe('fixture backend (09.1.1-T12.1)', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('answers DELETE /api-tokens/{t} with 204 and no body', async () => {
+    await gateway.call((client) =>
+      revokeApiToken({ client, path: { t: '018f0000-0000-7000-8000-000000000021' } }),
+    );
+    const response = events.find(
+      (event): event is HttpResponse<unknown> => event instanceof HttpResponse,
+    );
+    expect(response).toMatchObject({ status: 204, body: null });
   });
 });

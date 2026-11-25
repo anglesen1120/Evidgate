@@ -4,7 +4,15 @@
   [attr.data-healing-editor]="scope()"
 >
   <header class="grid min-w-0 gap-(--eg-space-2)">
-    <h3 hlmCardTitle [size]="subsectionHeadingSize" [id]="titleId()">{{ title() }}</h3>
+    <h3
+      #scopeHeading
+      hlmCardTitle
+      [size]="subsectionHeadingSize"
+      [id]="titleId()"
+      [attr.tabindex]="-1"
+    >
+      {{ title() }}
+    </h3>
     <dl class="m-0 flex min-w-0 flex-wrap items-baseline gap-x-(--eg-space-3)">
       <dt class="text-xs text-muted-foreground" i18n="@@healingswitch.stored-setting">
         Stored setting
@@ -127,6 +135,7 @@
           type="button"
           [variant]="'destructive'"
           class="min-h-(--eg-control-touch) h-auto w-full min-w-0 whitespace-normal wrap-anywhere"
+          #disableTrigger
           data-healing-disable
           [disabled]="saving()"
           [attr.aria-busy]="saving()"
@@ -156,7 +165,7 @@
     [autoFocus]="'[data-healing-cancel]'"
     [restoreFocus]="false"
     [closeOnOutsidePointerEvents]="false"
-    [aria-label]="disableTitle"
+    [aria-label]="disableTitle()"
     (stateChanged)="dialogStateChanged($event)"
   >
     <hlm-dialog-content
@@ -167,16 +176,20 @@
       data-healing-confirm-dialog
     >
       <header hlmDialogHeader>
-        <h2 hlmDialogTitle>{{ disableTitle }}</h2>
+        <h2 hlmDialogTitle>{{ disableTitle() }}</h2>
       </header>
       <p hlmDialogDescription>{{ disableConsequence }}</p>
+      @if (scope() === 'tenant') {
+        <p hlmDialogDescription data-healing-tenant-impact>{{ disableTenantImpact }}</p>
+      }
       <footer hlmDialogFooter>
         <button
           hlmBtn
           type="button"
           [variant]="'outline'"
+          class="min-h-(--eg-control-touch)"
           data-healing-cancel
-          (click)="confirmOpen.set(false)"
+          (click)="closeConfirm()"
         >
           {{ disableKeep }}
         </button>
@@ -184,6 +197,7 @@
           hlmBtn
           type="button"
           [variant]="'destructive'"
+          class="min-h-(--eg-control-touch)"
           data-healing-confirm
           (click)="confirmDisable()"
         >

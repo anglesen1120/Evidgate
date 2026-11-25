@@ -117,6 +117,7 @@ describe('Availability page composition and narrow policy', () => {
     desktop.set(false);
     control.submitted.emit({ mode: 'enabled', reason: null });
     control.submitted.emit({ mode: 'shadow', reason: null });
+    control.submitted.emit({ mode: 'enabled', reason: null, action: 'healing-kill-switch' });
     await settle();
     expect(data.writes).toHaveLength(0);
     control.submitted.emit({ mode: 'disabled', reason: null, action: 'healing-kill-switch' });

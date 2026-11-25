@@ -1,13 +1,17 @@
 import { FieldHintComponent } from '../../shared/ui/forms/field-hint.component';
 import {
+  afterNextRender,
   ChangeDetectionStrategy,
   Component,
   computed,
+  ElementRef,
   inject,
+  Injector,
   input,
   linkedSignal,
   output,
   signal,
+  viewChild,
 } from '@angular/core';
 import type { HealingSwitchView } from '@evidgate/sdk';
 import { HlmButton } from '@evidgate/ui/button';
@@ -58,6 +62,8 @@ export class SwitchScopeControl {
 
   private readonly session = inject(SessionStore);
 
+  private readonly injector = inject(Injector);
+
   readonly scope = input.required<SwitchScope>();
   readonly row = input<HealingSwitchView | null>(null);
   readonly blockedBy = input<SwitchScope | null>(null);
@@ -86,15 +92,22 @@ export class SwitchScopeControl {
   protected readonly reason = signal('');
 
   protected readonly confirmOpen = signal(false);
+  private readonly disableTrigger = viewChild<ElementRef<HTMLButtonElement>>('disableTrigger');
+  private readonly scopeHeading = viewChild<ElementRef<HTMLElement>>('scopeHeading');
   /** Containment is the one mutation a narrow screen may send, so it is offered only there. */
   protected readonly containmentVisible = computed(
     () =>
       !this.narrowPolicy.canMutateFor() &&
       this.writable() &&
-      this.narrowPolicy.canMutateFor('healing-kill-switch'),
+      this.narrowPolicy.canMutateFor('healing-kill-switch') &&
+      this.row()?.mode !== 'disabled',
   );
-  protected readonly disableTitle = $localize`:@@healingswitch.disable-title:Disable healing for this scope?`;
+  protected readonly disableTitle = computed(
+    () =>
+      $localize`:@@healingswitch.disable-scope-title:Disable healing for ${this.title()}:SCOPE:?`,
+  );
   protected readonly disableConsequence = $localize`:@@healingswitch.disable-consequence:All shadow healing proposals for this scope will stop right away. Existing PRs and original failures stay as they are.`;
+  protected readonly disableTenantImpact = $localize`:@@healingswitch.disable-tenant-impact:This stops healing proposals for all projects in this tenant.`;
   protected readonly disableHint = $localize`:@@healingswitch.disable-hint:Emergency stop only. Turning healing on or changing other modes needs a desktop screen.`;
   protected readonly disableButton = $localize`:@@healingswitch.disable:Disable healing`;
   protected readonly disableKeep = $localize`:@@healingswitch.disable-keep:Keep enabled`;
@@ -166,43 +179,54 @@ export class SwitchScopeControl {
     this.reason.set(value);
   }
 
-  private emit(mode: SettableMode, action?: 'healing-kill-switch'): void {
-    if (
-      !this.narrowPolicy.allowsMutation(action) ||
-      !this.writable() ||
-      this.saving() ||
-      this.reasonTooLong()
-    ) {
-      return;
-    }
-    const reason = this.reason().trim();
-    this.submitted.emit({ mode, reason: reason.length === 0 ? null : reason, action });
+  /** Shared by every route that closes the dialog; a second close is a no-op. */
+  protected closeConfirm(): void {
+    if (!this.confirmOpen()) return;
+    this.confirmOpen.set(false);
+    this.restoreFocusAfterClose();
   }
 
-  /** Desktop save keeps its existing path; only the containment confirm passes the kill-switch id. */
+  /** Returns focus to the containment trigger, or to the scope heading when a resize removed it. */
+  private restoreFocusAfterClose(): void {
+    afterNextRender(
+      () => {
+        const trigger = this.disableTrigger()?.nativeElement;
+        if (trigger !== undefined && trigger.isConnected && !trigger.disabled) {
+          trigger.focus();
+          return;
+        }
+        this.scopeHeading()?.nativeElement.focus();
+      },
+      { injector: this.injector },
+    );
+  }
+
+  private canSend(action?: 'healing-kill-switch'): boolean {
+    return this.narrowPolicy.allowsMutation(action) && this.writable() && !this.saving();
+  }
+
+  /** Desktop save keeps the draft and its length check; containment never sends the draft. */
   protected submit(): void {
-    this.emit(this.selectedMode());
+    if (!this.canSend() || this.reasonTooLong()) return;
+    const reason = this.reason().trim();
+    this.submitted.emit({ mode: this.selectedMode(), reason: reason.length === 0 ? null : reason });
   }
 
   /** Containment opens the confirm first; nothing is sent until the operator confirms. */
   protected openDisableConfirm(): void {
-    if (
-      !this.narrowPolicy.allowsMutation('healing-kill-switch') ||
-      !this.writable() ||
-      this.saving() ||
-      this.reasonTooLong()
-    ) {
-      return;
-    }
+    if (!this.canSend('healing-kill-switch')) return;
     this.confirmOpen.set(true);
   }
 
+  /** Single use: the confirm must be open, and closing it consumes that state before the emit. */
   protected confirmDisable(): void {
-    this.confirmOpen.set(false);
-    this.emit('disabled', 'healing-kill-switch');
+    if (!this.confirmOpen()) return;
+    this.closeConfirm();
+    if (!this.canSend('healing-kill-switch')) return;
+    this.submitted.emit({ mode: 'disabled', reason: null, action: 'healing-kill-switch' });
   }
 
   protected dialogStateChanged(state: 'open' | 'closed'): void {
-    if (state === 'closed') this.confirmOpen.set(false);
+    if (state === 'closed') this.closeConfirm();
   }
 }

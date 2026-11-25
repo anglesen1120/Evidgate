@@ -113,7 +113,11 @@ export class HealingSwitchPage {
       action?: 'healing-kill-switch' | undefined;
     },
   ): void {
-    if (!this.narrowPolicy.allowsMutation(event.action)) return;
+    const action =
+      event.mode === 'disabled' && event.action === 'healing-kill-switch'
+        ? event.action
+        : undefined;
+    if (!this.narrowPolicy.allowsMutation(action)) return;
     void this.store.save(scope, event.mode, event.reason);
   }
 }

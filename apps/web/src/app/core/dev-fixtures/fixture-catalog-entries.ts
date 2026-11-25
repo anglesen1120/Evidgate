@@ -23,6 +23,17 @@ export const FIXTURE_CATALOG: readonly FixtureCatalogRow[] = [
   ...FIXTURE_CATALOG_AI_SETTINGS_ROWS,
   ...FIXTURE_CATALOG_AUTHORING_PENDING_ROWS,
   ...FIXTURE_CATALOG_AUTHORING_EDITOR_ROWS,
+  {
+    name: 'api-token-revoke-ok',
+    derived: true,
+    document: {
+      operation_id: 'revokeApiToken',
+      variant: 'ok',
+      status: 204,
+      headers: { 'X-Request-Id': '018f0000-0000-7000-8000-0000000000d4' },
+      latency_ms: 0,
+    },
+  },
 ];
 
 /** One catalog entry: the corpus directory name, the document it holds and the cursor it answers. */
