@@ -10,7 +10,11 @@ import { SettingsTabPlaceholderPage } from './settings-tab-placeholder.page';
 import { SETTINGS_TABS } from './settings-tabs';
 
 const permissions = signal<ReadonlySet<string>>(new Set());
-const currentOrg = signal<{ name: string } | null>({ name: 'Example organization' });
+const currentOrg = signal<{ id: string; name: string } | null>({
+  id: 'o',
+  name: 'Example organization',
+});
+const currentProject = signal<{ id: string } | null>(null);
 
 function tabIds(root: HTMLElement): (string | null)[] {
   return Array.from(root.querySelectorAll('[data-settings-tab]'), (link) =>
@@ -27,14 +31,15 @@ describe('SettingsShellPage', () => {
   provideLayoutTestStubs();
   beforeEach(() => {
     permissions.set(new Set());
-    currentOrg.set({ name: 'Example organization' });
+    currentOrg.set({ id: 'o', name: 'Example organization' });
+    currentProject.set(null);
     TestBed.configureTestingModule({
       imports: [SettingsShellPage],
       providers: [
         provideZonelessChangeDetection(),
         provideRouter([
           {
-            path: 'settings',
+            path: 'orgs/:orgId/settings',
             component: SettingsShellPage,
             children: SETTINGS_TABS.map((tab) => ({
               path: tab.segment,
@@ -48,6 +53,7 @@ describe('SettingsShellPage', () => {
           useValue: {
             permissions: permissions.asReadonly(),
             currentOrg: currentOrg.asReadonly(),
+            currentProject: currentProject.asReadonly(),
             has: (code: string) => permissions().has(code),
           },
         },
@@ -73,6 +79,10 @@ describe('SettingsShellPage', () => {
     expect(root.querySelector('nav ul')?.classList.contains('flex-nowrap')).toBe(true);
     expect(root.querySelector('.settings-content[hlmCard]')).toBeNull();
     expect(root.querySelector('[hidden]')).toBeNull();
+    expect(root.querySelectorAll('[data-settings-group]')).toHaveLength(1);
+    expect(root.querySelector('[data-settings-group="billing"]')?.textContent).toContain(
+      'Billing & Audit',
+    );
   });
 
   it('preserves Members, Quota & retention, Audit order in the tab links', async () => {
@@ -105,8 +115,42 @@ describe('SettingsShellPage', () => {
     expect(root.querySelector('nav')).toBeNull();
   });
 
+  it('groups the visible tabs under their sections in section order', async () => {
+    permissions.set(new Set(['membership:read', 'usage:read', 'audit:read']));
+    const root = await render();
+    const sections = Array.from(root.querySelectorAll('[data-settings-group]'), (el) =>
+      el.getAttribute('data-settings-group'),
+    );
+    expect(sections).toEqual(['access', 'billing']);
+    expect(tabIds(root.querySelector('[data-settings-group="access"]') as HTMLElement)).toEqual([
+      'members',
+    ]);
+    expect(tabIds(root.querySelector('[data-settings-group="billing"]') as HTMLElement)).toEqual([
+      'quota-retention',
+      'audit',
+    ]);
+  });
+
+  it('offers project AI settings in Workspace only with its permission and a selected project', async () => {
+    permissions.set(new Set(['authoring:read']));
+    const fixture = TestBed.createComponent(SettingsShellPage);
+    await fixture.whenStable();
+    const root = fixture.nativeElement as HTMLElement;
+    const selector = '[data-settings-group="workspace"] a[data-settings-tab="ai-settings"]';
+    expect(root.querySelector(selector)).toBeNull();
+    currentProject.set({ id: 'p' });
+    await fixture.whenStable();
+    expect(root.querySelector(selector)?.getAttribute('href')).toBe(
+      '/orgs/o/projects/p/ai-settings',
+    );
+    expect(root.querySelector(selector)?.hasAttribute('aria-current')).toBe(false);
+    permissions.set(new Set());
+    await fixture.whenStable();
+    expect(root.querySelector(selector)).toBeNull();
+  });
+
   it('renders the current organization as text without inventing a missing scope', async () => {
-    currentOrg.set({ name: '<img src=x onerror=alert(1)>' });
+    currentOrg.set({ id: 'o', name: '<img src=x onerror=alert(1)>' });
     const fixture = TestBed.createComponent(SettingsShellPage);
     await fixture.whenStable();
     const root = fixture.nativeElement as HTMLElement;
@@ -119,7 +163,7 @@ describe('SettingsShellPage', () => {
 
   it('marks the routed link current and follows browser history', async () => {
     permissions.set(new Set(['membership:read', 'audit:read']));
-    const harness = await RouterTestingHarness.create('/settings/audit');
+    const harness = await RouterTestingHarness.create('/orgs/o/settings/audit');
     const root = harness.routeNativeElement!;
     expect(root.querySelector('[data-settings-tab="audit"]')?.getAttribute('aria-current')).toBe(
       'page',
@@ -129,11 +173,11 @@ describe('SettingsShellPage', () => {
     );
     root.querySelector<HTMLAnchorElement>('[data-settings-tab="members"]')!.click();
     await harness.fixture.whenStable();
-    expect(TestBed.inject(Router).url).toBe('/settings/members');
+    expect(TestBed.inject(Router).url).toBe('/orgs/o/settings/members');
     expect(root.querySelector('[data-settings-tab="members"]')?.getAttribute('aria-current')).toBe(
       'page',
     );
-    await harness.navigateByUrl('/settings/audit');
+    await harness.navigateByUrl('/orgs/o/settings/audit');
     expect(root.querySelector('[data-settings-tab="audit"]')?.getAttribute('aria-current')).toBe(
       'page',
     );
@@ -141,7 +185,7 @@ describe('SettingsShellPage', () => {
 
   it('shows the active destination permission only while the server still grants it', async () => {
     permissions.set(new Set(['audit:read', 'membership:read']));
-    const harness = await RouterTestingHarness.create('/settings/audit');
+    const harness = await RouterTestingHarness.create('/orgs/o/settings/audit');
     const root = harness.routeNativeElement!;
     expect(root.querySelector('.settings-scope code')?.textContent?.trim()).toBe('audit:read');
     permissions.set(new Set(['membership:read']));

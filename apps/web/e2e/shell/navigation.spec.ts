@@ -9,10 +9,9 @@
 // refuses. Two states are reachable:
 //
 //   - DEFAULT (`permissions-list`, 16 catalogue codes): `authoring:read`, `authoring:generate`,
-//     `authoring:write`, `audit:read` and the non-G1 codes → the authoring group's three entry rows
-//     plus the audit log;
+//     `authoring:write` and `audit:read` → three authoring rows, then Settings landing on Audit;
 //   - LIMITED (`permissions-list-limited`): `audit:read`, `authoring:read`, `membership:read`,
-//     `project:read`, `role:read` → `authoring` plus the rows those five codes gate.
+//     `project:read`, `role:read` → Overview, Feature tree and Settings landing on Members.
 //
 // Both are asserted exactly (a set, not "contains"), so a permission filter that starts leaking an
 // ungranted row fails here as loudly as one that hides a granted row.
@@ -26,23 +25,18 @@ import {
   navSegments,
   ORG_ACME,
   PROJECT_STOREFRONT,
+  SETTINGS_ADMIN_GRANTS,
+  settingsPath,
+  settingsTabPath,
   withVariant,
 } from './support';
 
 /** `/orgs/:orgId/projects/:projectId/authoring` — reachable under BOTH corpus grant sets. */
 const PROJECT_AUTHORING_PATH = `/orgs/${ORG_ACME}/projects/${PROJECT_STOREFRONT}/authoring`;
 
-/** The default corpus session: the authoring group's three rows, AI settings and the audit log. */
-const DEFAULT_SESSION_SEGMENTS = [
-  'ai-settings',
-  'audit',
-  'authoring',
-  'generation',
-  'pending-changes',
-];
-
-/** The trimmed corpus session: `authoring` survives, `overview`/`ai-settings`/`members` arrive. */
-const LIMITED_SESSION_SEGMENTS = ['ai-settings', 'audit', 'authoring', 'members', 'overview'];
+/** Settings links to the first permitted administration destination, not a fixed URL. */
+const DEFAULT_SESSION_SEGMENTS = ['audit', 'authoring', 'generation', 'pending-changes'];
+const LIMITED_SESSION_SEGMENTS = ['authoring', 'members', 'overview'];
 
 /**
  * The URL segment of every row of a phase the build has not reached (G2–G4,
@@ -81,15 +75,15 @@ test.describe('sidebar visibility (AC4)', () => {
         LIMITED_GRANTS,
       ),
     );
-    const open = page.getByRole('button', { name: 'Search', exact: true });
+    const open = page.getByRole('button', { name: /^Command palette \((?:⌘K|Ctrl K)\)$/ });
     await open.focus();
     await page.keyboard.press('Enter');
-    const picker = page.getByRole('dialog', { name: 'Find a screen' });
-    const query = picker.getByRole('combobox', { name: 'Screen name' });
+    const picker = page.getByRole('dialog', { name: 'Command palette', exact: true });
+    const query = picker.getByRole('combobox', { name: 'Find a command' });
     await expect(query).toBeFocused();
     await query.fill('pending');
     await expect(picker.getByRole('option')).toHaveCount(0);
-    await expect(picker.getByRole('status')).toHaveText('No matching screens.');
+    await expect(picker.getByRole('status')).toHaveText('No results');
     await page.keyboard.press('Escape');
     await expect(open).toBeFocused();
     await page.keyboard.press('Enter');
@@ -108,6 +102,9 @@ test.describe('sidebar visibility (AC4)', () => {
 
     const visible = await navSegments(page);
     expect(visible).toEqual(DEFAULT_SESSION_SEGMENTS);
+    const last = page.locator('app-shell-nav nav a').last();
+    await expect(last).toHaveAccessibleName('Settings');
+    await expect(last).toHaveAttribute('href', `/en/orgs/${ORG_ACME}/audit`);
     expect(
       visible.filter((segment) => LATER_PHASE_SEGMENTS.includes(segment)),
       'no later-phase row is ever rendered',
@@ -117,6 +114,36 @@ test.describe('sidebar visibility (AC4)', () => {
     await expect(
       page.locator(`app-shell-nav nav a[href$="/projects/${PROJECT_STOREFRONT}/authoring"]`),
     ).toHaveCount(1);
+  });
+
+  test('Settings opens the grouped strip and keeps it visible when navigating to Audit', async ({
+    page,
+  }) => {
+    await page.goto(
+      withVariant(localePath('en', `/orgs/${ORG_ACME}/members`), SETTINGS_ADMIN_GRANTS),
+    );
+    const settings = page.locator('app-shell-nav').getByRole('link', { name: 'Settings' });
+    await expect(settings).toHaveAttribute('href', settingsPath('en'));
+    await settings.click();
+    await expect.poll(() => new URL(page.url()).pathname).toBe(settingsTabPath('en', 'members'));
+    const strip = page.getByRole('navigation', { name: 'Settings destinations' });
+    await expect(
+      strip.getByRole('group', { name: 'Access & Security' }).getByRole('link', {
+        name: 'Members',
+        exact: true,
+      }),
+    ).toHaveAttribute('aria-current', 'page');
+    const audit = strip.getByRole('group', { name: 'Billing & Audit' }).getByRole('link', {
+      name: 'Audit',
+      exact: true,
+    });
+    await audit.click();
+    await expect.poll(() => new URL(page.url()).pathname).toBe(settingsTabPath('en', 'audit'));
+    await expect(audit).toHaveAttribute('aria-current', 'page');
+    await expect(settings).toHaveAttribute('aria-current', 'page');
+    expect(
+      await settings.evaluate((link) => getComputedStyle(link, '::before').borderInlineStartWidth),
+    ).toBe('3px');
   });
 
   test('the limited grant set hides the rows it does not grant and shows the ones it does', async ({
@@ -130,10 +157,13 @@ test.describe('sidebar visibility (AC4)', () => {
     // The rows the default session granted and this one does not are GONE, not disabled.
     expect(visible).not.toContain('generation');
     expect(visible).not.toContain('pending-changes');
-    // And the rows only these five codes gate are now present.
+    // Members, audit and AI settings no longer compete for separate sidebar stops.
     expect(visible).toContain('overview');
-    expect(visible).toContain('ai-settings');
-    expect(visible).toContain('members');
+    expect(visible).not.toContain('ai-settings');
+    expect(visible).not.toContain('audit');
+    const last = page.locator('app-shell-nav nav a').last();
+    await expect(last).toHaveAccessibleName('Settings');
+    await expect(last).toHaveAttribute('href', `/en/orgs/${ORG_ACME}/members`);
     expect(visible.filter((segment) => LATER_PHASE_SEGMENTS.includes(segment))).toEqual([]);
   });
 });

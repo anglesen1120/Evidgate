@@ -11,6 +11,8 @@ import { ShellSearchComponent } from './shell-search.component';
 
 provideLayoutTestStubs();
 
+const NAV_LABELS = ['Overview', 'Feature tree', 'Project AI settings'];
+
 class SearchBoundaryTrigger extends ComponentHarness {
   static hostSelector = 'app-shell-search';
   readonly button = this.locatorFor('button');
@@ -20,14 +22,15 @@ class SearchBoundaryPicker extends ComponentHarness {
   static hostSelector = '[role="dialog"]';
   readonly input = this.locatorFor('input[role="combobox"]');
   readonly options = this.locatorForAll('[role="option"]');
-  readonly empty = this.locatorForOptional('[role="status"]');
+  readonly status = this.locatorFor('[role="status"]');
 }
 
-describe('Shell screen search boundary interactions', () => {
+describe('Shell command palette boundaries', () => {
   async function open(grantedIds = ['overview', 'authoring', 'ai-settings']) {
-    const permissions = new Set<string>(
+    const granted = new Set(
       NAV_ENTRIES.filter((entry) => grantedIds.includes(entry.id)).map((entry) => entry.permission),
     );
+    const permissions = signal(granted);
     TestBed.configureTestingModule({
       imports: [ShellSearchComponent],
       providers: [
@@ -35,9 +38,11 @@ describe('Shell screen search boundary interactions', () => {
         {
           provide: SessionStore,
           useValue: {
-            currentOrg: signal({ id: 'o' }),
-            currentProject: signal({ id: 'p' }),
-            has: (code: string) => permissions.has(code),
+            currentOrg: signal({ id: 'org' }),
+            currentProject: signal({ id: 'project' }),
+            organizations: signal([]),
+            projects: signal([]),
+            has: (code: string) => permissions().has(code),
           },
         },
       ],
@@ -48,81 +53,101 @@ describe('Shell screen search boundary interactions', () => {
       fixture,
       SearchBoundaryTrigger,
     );
-    const button = await trigger.button();
-    await button.focus();
-    expect(await button.isFocused()).toBe(true);
-    await button.click();
+    await (await trigger.button()).focus();
+    await (await trigger.button()).click();
+    await vi.waitFor(async () => expect(await loader.hasHarness(SearchBoundaryPicker)).toBe(true));
     const picker = await loader.getHarness(SearchBoundaryPicker);
-    return { picker, trigger, loader };
+    return { picker, loader, trigger };
   }
 
-  it('keeps an empty-permission search open on arrows and Enter without navigating', async () => {
+  async function optionTexts(picker: SearchBoundaryPicker): Promise<string[]> {
+    return Promise.all((await picker.options()).map((option) => option.text()));
+  }
+
+  it('offers no destinations without permissions; a non-matching query stays open with no active option', async () => {
+    vi.spyOn(document, 'baseURI', 'get').mockReturnValue('http://localhost/en/');
     const { picker, loader } = await open([]);
+    const labels = await optionTexts(picker);
+    for (const destination of NAV_ENTRIES) expect(labels).not.toContain(destination.label);
+    expect(labels).toEqual([
+      'Switch to light theme',
+      'Switch to dark theme',
+      'Switch to system theme',
+      'Switch to Vietnamese',
+    ]);
     const input = await picker.input();
+    await input.setInputValue('no-such-screen');
+    await input.dispatchEvent('input');
     expect(await picker.options()).toHaveLength(0);
-    expect(await (await picker.empty())?.text()).toBe('No matching screens.');
+    expect(await (await picker.status()).text()).toBe('No results');
     await input.sendKeys(TestKey.DOWN_ARROW, TestKey.UP_ARROW, TestKey.ENTER);
     expect(await input.getAttribute('aria-activedescendant')).toBeNull();
     expect(await loader.hasHarness(SearchBoundaryPicker)).toBe(true);
     expect(TestBed.inject(Router).url).toBe('/');
   });
 
-  it('shows every permitted destination for empty and whitespace-only queries', async () => {
-    const { picker } = await open();
-    const expected = ['Overview', 'Feature tree', 'Project AI settings'];
-    expect(await Promise.all((await picker.options()).map((option) => option.text()))).toEqual(
-      expected,
-    );
+  it.each(['', '   '])('shows every destination for the query %j', async (query) => {
+    const { picker, loader } = await open();
     const input = await picker.input();
-    await input.setInputValue(' \t ');
+    await input.setInputValue(query);
     await input.dispatchEvent('input');
-    expect(await Promise.all((await picker.options()).map((option) => option.text()))).toEqual(
-      expected,
-    );
-    expect(await picker.empty()).toBeNull();
+    expect((await optionTexts(picker)).slice(0, NAV_LABELS.length)).toEqual(NAV_LABELS);
+    expect(await (await picker.status()).text()).not.toBe('No results');
+    await input.sendKeys(TestKey.ESCAPE);
+    await vi.waitFor(async () => expect(await loader.hasHarness(SearchBoundaryPicker)).toBe(false));
   });
 
-  it('wraps from the first result to the last and back with the arrow keys', async () => {
+  it('wraps the active option from last to first and first to last', async () => {
     const { picker } = await open();
     const input = await picker.input();
     const options = await picker.options();
-    expect(options.length).toBeGreaterThan(1);
-    await input.sendKeys(TestKey.DOWN_ARROW, TestKey.UP_ARROW);
+    await input.sendKeys(TestKey.DOWN_ARROW);
     expect(await input.getAttribute('aria-activedescendant')).toBe(
-      await options.at(-1)?.getAttribute('id'),
+      await options[0]!.getAttribute('id'),
+    );
+    await input.sendKeys(TestKey.UP_ARROW);
+    expect(await input.getAttribute('aria-activedescendant')).toBe(
+      await options[options.length - 1]!.getAttribute('id'),
     );
     await input.sendKeys(TestKey.DOWN_ARROW);
     expect(await input.getAttribute('aria-activedescendant')).toBe(
-      await options[0]?.getAttribute('id'),
+      await options[0]!.getAttribute('id'),
     );
   });
 
-  it('clears a stale active descendant when a query has no matches', async () => {
+  it('clears a stale active option when the query matches nothing', async () => {
     const { picker } = await open();
     const input = await picker.input();
+    await input.setInputValue('overview');
+    await input.dispatchEvent('input');
     await input.sendKeys(TestKey.DOWN_ARROW);
     expect(await input.getAttribute('aria-activedescendant')).not.toBeNull();
+
     await input.setInputValue('no-such-screen');
     await input.dispatchEvent('input');
-    expect(await picker.options()).toHaveLength(0);
     expect(await input.getAttribute('aria-activedescendant')).toBeNull();
     await input.sendKeys(TestKey.ENTER);
     expect(TestBed.inject(Router).url).toBe('/');
   });
 
-  it('restores opener focus on Escape and resets the query before reopening', async () => {
-    const { picker, trigger, loader } = await open();
+  it('returns focus to the trigger on Escape and reopens with an empty query', async () => {
+    const { picker, loader, trigger } = await open();
     const input = await picker.input();
     await input.setInputValue('feature');
     await input.dispatchEvent('input');
-    expect(await picker.options()).toHaveLength(1);
+    expect(await optionTexts(picker)).toEqual(['Feature tree']);
+
     await input.sendKeys(TestKey.ESCAPE);
     await vi.waitFor(async () => expect(await loader.hasHarness(SearchBoundaryPicker)).toBe(false));
-    expect(await (await trigger.button()).isFocused()).toBe(true);
+    await vi.waitFor(() =>
+      expect(document.activeElement).toBe(document.querySelector('button.screen-search')),
+    );
+    expect(TestBed.inject(Router).url).toBe('/');
+
     await (await trigger.button()).click();
+    await vi.waitFor(async () => expect(await loader.hasHarness(SearchBoundaryPicker)).toBe(true));
     const reopened = await loader.getHarness(SearchBoundaryPicker);
     expect(await (await reopened.input()).getProperty('value')).toBe('');
-    expect(await reopened.options()).toHaveLength(3);
-    expect(TestBed.inject(Router).url).toBe('/');
+    expect((await optionTexts(reopened)).slice(0, NAV_LABELS.length)).toEqual(NAV_LABELS);
   });
 });

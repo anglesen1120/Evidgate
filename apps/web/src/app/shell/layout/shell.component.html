@@ -107,7 +107,8 @@
       }
       <app-shell-nav
         class="flex-1 group-[.mobile]/shell:flex-none group-[.mobile]/shell:overflow-visible"
-        [groups]="nav.groups()"
+        [groups]="nav.sidebarGroups()"
+        [settings]="nav.settings()"
         [collapsed]="collapsed()"
         (itemSelected)="onNavigationSelected($event)"
       />

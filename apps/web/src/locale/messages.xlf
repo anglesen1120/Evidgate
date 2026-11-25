@@ -5143,7 +5143,7 @@
         <source>Organization settings</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/availability/healing-switch.page.html</context>
-          <context context-type="linenumber">58,62</context>
+          <context context-type="linenumber">62,66</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/security/security-events.page.ts</context>
@@ -5158,42 +5158,42 @@
         <source> Effective state </source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/availability/healing-switch.page.html</context>
-          <context context-type="linenumber">81,83</context>
+          <context context-type="linenumber">85,87</context>
         </context-group>
       </trans-unit>
       <trans-unit id="healingswitch.server-snapshot" datatype="html">
         <source>Server snapshot</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/availability/healing-switch.page.html</context>
-          <context context-type="linenumber">85,90</context>
+          <context context-type="linenumber">89,94</context>
         </context-group>
       </trans-unit>
       <trans-unit id="healingswitch.project-setting" datatype="html">
         <source> Project setting </source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/availability/healing-switch.page.html</context>
-          <context context-type="linenumber">118,121</context>
+          <context context-type="linenumber">122,125</context>
         </context-group>
       </trans-unit>
       <trans-unit id="healingswitch.runtime-approvals" datatype="html">
         <source> Runtime and approvals </source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/availability/healing-switch.page.html</context>
-          <context context-type="linenumber">160,165</context>
+          <context context-type="linenumber">161,166</context>
         </context-group>
       </trans-unit>
       <trans-unit id="healingswitch.auto-apply-off" datatype="html">
         <source>Auto-apply off</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/availability/healing-switch.page.html</context>
-          <context context-type="linenumber">173,176</context>
+          <context context-type="linenumber">174,177</context>
         </context-group>
       </trans-unit>
       <trans-unit id="healingswitch.original-failure" datatype="html">
         <source> Healing never hides the original failure. </source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/availability/healing-switch.page.html</context>
-          <context context-type="linenumber">177,185</context>
+          <context context-type="linenumber">178,186</context>
         </context-group>
       </trans-unit>
       <trans-unit id="healingswitch.availability" datatype="html">
@@ -5769,7 +5769,7 @@
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shell/layout/shell-account.component.ts</context>
-          <context context-type="linenumber">59,62</context>
+          <context context-type="linenumber">67,70</context>
         </context-group>
       </trans-unit>
       <trans-unit id="catalog.case-view.file-path" datatype="html">
@@ -19700,7 +19700,7 @@
         <source>Created</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/detail/timeline/run-timeline.component.ts</context>
-          <context context-type="linenumber">52</context>
+          <context context-type="linenumber">61</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/list/run-list.page.ts</context>
@@ -19715,7 +19715,7 @@
         <source>Queued</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/detail/timeline/run-timeline.component.ts</context>
-          <context context-type="linenumber">53</context>
+          <context context-type="linenumber">62</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/list/run-list.page.ts</context>
@@ -19730,7 +19730,7 @@
         <source>Running</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/detail/timeline/run-timeline.component.ts</context>
-          <context context-type="linenumber">54</context>
+          <context context-type="linenumber">63</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/list/run-list.page.ts</context>
@@ -19745,7 +19745,7 @@
         <source>Collecting</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/detail/timeline/run-timeline.component.ts</context>
-          <context context-type="linenumber">55</context>
+          <context context-type="linenumber">64</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/list/run-list.page.ts</context>
@@ -19760,7 +19760,7 @@
         <source>Complete</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/detail/timeline/run-timeline.component.ts</context>
-          <context context-type="linenumber">56</context>
+          <context context-type="linenumber">65</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/list/run-list.page.ts</context>
@@ -19775,7 +19775,7 @@
         <source>Incomplete</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/detail/timeline/run-timeline.component.ts</context>
-          <context context-type="linenumber">57</context>
+          <context context-type="linenumber">66</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/list/run-list.page.ts</context>
@@ -19790,7 +19790,7 @@
         <source>Canceled</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/detail/timeline/run-timeline.component.ts</context>
-          <context context-type="linenumber">58</context>
+          <context context-type="linenumber">67</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/list/run-list.page.ts</context>
@@ -19805,98 +19805,98 @@
         <source>Reached</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/detail/timeline/run-timeline.component.ts</context>
-          <context context-type="linenumber">62</context>
+          <context context-type="linenumber">71</context>
         </context-group>
       </trans-unit>
       <trans-unit id="runs.detail.timeline.current" datatype="html">
         <source>Current step</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/detail/timeline/run-timeline.component.ts</context>
-          <context context-type="linenumber">63</context>
+          <context context-type="linenumber">72</context>
         </context-group>
       </trans-unit>
       <trans-unit id="runs.detail.timeline.upcoming" datatype="html">
         <source>Not reached yet</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/detail/timeline/run-timeline.component.ts</context>
-          <context context-type="linenumber">64</context>
+          <context context-type="linenumber">73</context>
         </context-group>
       </trans-unit>
       <trans-unit id="runs.detail.timeline.not-reached" datatype="html">
         <source>Not reached</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/detail/timeline/run-timeline.component.ts</context>
-          <context context-type="linenumber">65</context>
+          <context context-type="linenumber">74</context>
         </context-group>
       </trans-unit>
       <trans-unit id="runs.detail.timeline.unrecorded" datatype="html">
         <source>Not recorded</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/detail/timeline/run-timeline.component.ts</context>
-          <context context-type="linenumber">66</context>
+          <context context-type="linenumber">75</context>
         </context-group>
       </trans-unit>
       <trans-unit id="runs.detail.timeline" datatype="html">
         <source>Run state timeline</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/detail/timeline/run-timeline.component.ts</context>
-          <context context-type="linenumber">70</context>
+          <context context-type="linenumber">79</context>
         </context-group>
       </trans-unit>
       <trans-unit id="runs.detail.timeline.history-unavailable" datatype="html">
         <source>History unavailable for this run</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/detail/timeline/run-timeline.component.ts</context>
-          <context context-type="linenumber">72</context>
+          <context context-type="linenumber">81</context>
         </context-group>
       </trans-unit>
       <trans-unit id="runs.detail.timeline.history-empty" datatype="html">
         <source>No state changes recorded yet</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/detail/timeline/run-timeline.component.ts</context>
-          <context context-type="linenumber">73</context>
+          <context context-type="linenumber">82</context>
         </context-group>
       </trans-unit>
       <trans-unit id="runs.detail.timeline.since-previous" datatype="html">
         <source>Since the previous transition:</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/detail/timeline/run-timeline.component.ts</context>
-          <context context-type="linenumber">74</context>
+          <context context-type="linenumber">83</context>
         </context-group>
       </trans-unit>
       <trans-unit id="runs.detail.timeline.after-cancel-note" datatype="html">
         <source>Events that arrive after cancel are kept as evidence and never complete the run.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/detail/timeline/run-timeline.component.ts</context>
-          <context context-type="linenumber">75</context>
+          <context context-type="linenumber">84</context>
         </context-group>
       </trans-unit>
       <trans-unit id="runs.detail.timeline.after-cancel-events" datatype="html">
         <source>After-cancel events</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/detail/timeline/run-timeline.component.ts</context>
-          <context context-type="linenumber">76</context>
+          <context context-type="linenumber">85</context>
         </context-group>
       </trans-unit>
       <trans-unit id="runs.detail.timeline.after-cancel-none" datatype="html">
         <source>No events after cancel</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/detail/timeline/run-timeline.component.ts</context>
-          <context context-type="linenumber">77</context>
+          <context context-type="linenumber">86</context>
         </context-group>
       </trans-unit>
       <trans-unit id="runs.detail.timeline.after-cancel-one" datatype="html">
         <source>1 event arrived after cancel (informational)</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/detail/timeline/run-timeline.component.ts</context>
-          <context context-type="linenumber">85</context>
+          <context context-type="linenumber">94</context>
         </context-group>
       </trans-unit>
       <trans-unit id="runs.detail.timeline.after-cancel-count" datatype="html">
         <source><x id="count" equiv-text="count"/> events arrived after cancel (informational)</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/detail/timeline/run-timeline.component.ts</context>
-          <context context-type="linenumber">87</context>
+          <context context-type="linenumber">96</context>
         </context-group>
       </trans-unit>
       <trans-unit id="runs.list.view-run" datatype="html">
@@ -20123,7 +20123,7 @@
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/verdict/decision-chip.component.ts</context>
-          <context context-type="linenumber">109</context>
+          <context context-type="linenumber">110</context>
         </context-group>
       </trans-unit>
       <trans-unit id="runs.list.page-scope-filter" datatype="html">
@@ -23743,14 +23743,14 @@
         <source>Project policy</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/policy/policy-summary.component.ts</context>
-          <context context-type="linenumber">211</context>
+          <context context-type="linenumber">216</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.policy.activation" datatype="html">
         <source>Activation</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/policy/policy-summary.component.ts</context>
-          <context context-type="linenumber">212</context>
+          <context context-type="linenumber">217</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/policy/policy.page.ts</context>
@@ -23761,28 +23761,28 @@
         <source>Reading the activation…</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/policy/policy-summary.component.ts</context>
-          <context context-type="linenumber">213</context>
+          <context context-type="linenumber">218</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.policy.activation-empty" datatype="html">
         <source>No activation: this project is not gated by a policy.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/policy/policy-summary.component.ts</context>
-          <context context-type="linenumber">214</context>
+          <context context-type="linenumber">219</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.policy.activation-forbidden" datatype="html">
         <source>You cannot read this project&apos;s activation.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/policy/policy-summary.component.ts</context>
-          <context context-type="linenumber">215</context>
+          <context context-type="linenumber">220</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.policy.head-revision" datatype="html">
         <source>Head revision</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/policy/policy-summary.component.ts</context>
-          <context context-type="linenumber">216</context>
+          <context context-type="linenumber">221</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/policy/policy.page.ts</context>
@@ -23793,28 +23793,28 @@
         <source>Reading the head revision…</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/policy/policy-summary.component.ts</context>
-          <context context-type="linenumber">217</context>
+          <context context-type="linenumber">222</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.policy.head-empty" datatype="html">
         <source>No policy revisions yet.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/policy/policy-summary.component.ts</context>
-          <context context-type="linenumber">218</context>
+          <context context-type="linenumber">223</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.policy.head-forbidden" datatype="html">
         <source>You cannot read this project&apos;s head revision.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/policy/policy-summary.component.ts</context>
-          <context context-type="linenumber">219</context>
+          <context context-type="linenumber">224</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.policy.revision" datatype="html">
         <source>Revision</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/policy/policy-summary.component.ts</context>
-          <context context-type="linenumber">220</context>
+          <context context-type="linenumber">225</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/policy/policy.page.ts</context>
@@ -23837,28 +23837,28 @@
         <source>Activated</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/policy/policy-summary.component.ts</context>
-          <context context-type="linenumber">221</context>
+          <context context-type="linenumber">226</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.policy.read-failed" datatype="html">
         <source>The project&apos;s policy details could not be read.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/policy/policy-summary.component.ts</context>
-          <context context-type="linenumber">222</context>
+          <context context-type="linenumber">227</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.policy.read-retry" datatype="html">
         <source>Reload policy details</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/policy/policy-summary.component.ts</context>
-          <context context-type="linenumber">223</context>
+          <context context-type="linenumber">228</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.policy.read-retry-waiting" datatype="html">
         <source>Reload available after the wait</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/policy/policy-summary.component.ts</context>
-          <context context-type="linenumber">224</context>
+          <context context-type="linenumber">229</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.policy.release-title" datatype="html">
@@ -24496,14 +24496,14 @@
         <source> <x id="INTERPOLATION" equiv-text="{{ metricLabel(metric.metric) }}"/> by project </source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/quota-retention/quota-panel.component.html</context>
-          <context context-type="linenumber">147,148</context>
+          <context context-type="linenumber">149,150</context>
         </context-group>
       </trans-unit>
       <trans-unit id="quota.panel.project-order" datatype="html">
         <source> Projects ordered oldest first </source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/quota-retention/quota-panel.component.html</context>
-          <context context-type="linenumber">150,154</context>
+          <context context-type="linenumber">152,156</context>
         </context-group>
       </trans-unit>
       <trans-unit id="quota.panel.counter-details" datatype="html">
@@ -27334,7 +27334,7 @@
         <source> Showing <x id="INTERPOLATION" equiv-text="{{ filtered().length | number }}"/> of <x id="INTERPOLATION_1" equiv-text="{{ rows().length | number }}"/> on this page </source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/secret-reference-list.component.html</context>
-          <context context-type="linenumber">219,221</context>
+          <context context-type="linenumber">225,227</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.inspect-named" datatype="html">
@@ -27829,7 +27829,7 @@
         <source> Filters apply to all matching security events on the server. </source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/security/security-events.page.html</context>
-          <context context-type="linenumber">61,63</context>
+          <context context-type="linenumber">63,65</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.security.page-summary" datatype="html">
@@ -28053,14 +28053,14 @@
         <source>No settings destinations</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/settings-no-tabs.page.ts</context>
-          <context context-type="linenumber">22</context>
+          <context context-type="linenumber">25</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.empty.description" datatype="html">
         <source>No settings destinations are available with your permissions. Ask an administrator.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/settings-no-tabs.page.ts</context>
-          <context context-type="linenumber">23</context>
+          <context context-type="linenumber">26</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.navigation" datatype="html">
@@ -28074,14 +28074,14 @@
         <source>Settings</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/settings-shell.page.ts</context>
-          <context context-type="linenumber">23</context>
+          <context context-type="linenumber">37</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.shell-intro" datatype="html">
         <source>Open a section to manage settings for your organization or project.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/settings-shell.page.ts</context>
-          <context context-type="linenumber">24</context>
+          <context context-type="linenumber">38</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.placeholder.body" datatype="html">
@@ -28095,63 +28095,63 @@
         <source>Members</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/settings-tabs.ts</context>
-          <context context-type="linenumber">56</context>
+          <context context-type="linenumber">59</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.tab.secrets" datatype="html">
         <source>Secrets</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/settings-tabs.ts</context>
-          <context context-type="linenumber">63</context>
+          <context context-type="linenumber">67</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.tab.api-tokens" datatype="html">
         <source>API tokens</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/settings-tabs.ts</context>
-          <context context-type="linenumber">70</context>
+          <context context-type="linenumber">75</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.tab.policy" datatype="html">
         <source>Policy</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/settings-tabs.ts</context>
-          <context context-type="linenumber">77</context>
+          <context context-type="linenumber">83</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.tab.quota-retention" datatype="html">
         <source>Quota &amp; retention</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/settings-tabs.ts</context>
-          <context context-type="linenumber">86</context>
+          <context context-type="linenumber">93</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.tab.audit" datatype="html">
         <source>Audit</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/settings-tabs.ts</context>
-          <context context-type="linenumber">93</context>
+          <context context-type="linenumber">101</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.tab.security-events" datatype="html">
         <source>Security events</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/settings-tabs.ts</context>
-          <context context-type="linenumber">100</context>
+          <context context-type="linenumber">109</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.tab.integrations" datatype="html">
         <source>Integrations</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/settings-tabs.ts</context>
-          <context context-type="linenumber">107</context>
+          <context context-type="linenumber">117</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.tab.agents" datatype="html">
         <source>Agents</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/settings-tabs.ts</context>
-          <context context-type="linenumber">114</context>
+          <context context-type="linenumber">125</context>
         </context-group>
       </trans-unit>
       <trans-unit id="review.editor.title" datatype="html">
@@ -33921,7 +33921,7 @@
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/verdict/decision-chip.component.ts</context>
-          <context context-type="linenumber">117</context>
+          <context context-type="linenumber">118</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.decision-chip.read-unavailable" datatype="html">
@@ -33949,77 +33949,77 @@
         <source>Pending</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/verdict/decision-chip.component.ts</context>
-          <context context-type="linenumber">116</context>
+          <context context-type="linenumber">117</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.decision-chip.compact-name" datatype="html">
         <source>Decision: <x id="value" equiv-text="this.compactLabel()"/></source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/verdict/decision-chip.component.ts</context>
-          <context context-type="linenumber">120</context>
+          <context context-type="linenumber">121</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.evidence-badge.dimension" datatype="html">
         <source>Completeness: </source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/verdict/evidence-badge.component.ts</context>
-          <context context-type="linenumber">24,30</context>
+          <context context-type="linenumber">25,31</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.evidence-badge.compact-name" datatype="html">
         <source>Completeness: <x id="value" equiv-text="this.compactLabel()"/></source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/verdict/evidence-badge.component.ts</context>
-          <context context-type="linenumber">56</context>
+          <context context-type="linenumber">60</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.evidence-badge.complete" datatype="html">
         <source>Evidence complete</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/verdict/evidence-badge.component.ts</context>
-          <context context-type="linenumber">74</context>
+          <context context-type="linenumber">78</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.evidence-badge.incomplete" datatype="html">
         <source>Evidence incomplete</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/verdict/evidence-badge.component.ts</context>
-          <context context-type="linenumber">76</context>
+          <context context-type="linenumber">80</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.evidence-badge.unavailable" datatype="html">
         <source>Evidence status unavailable</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/verdict/evidence-badge.component.ts</context>
-          <context context-type="linenumber">78</context>
+          <context context-type="linenumber">82</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.evidence-badge.unknown-detail" datatype="html">
         <source>Unknown evidence status: <x id="state" equiv-text="state"/></source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/verdict/evidence-badge.component.ts</context>
-          <context context-type="linenumber">84</context>
+          <context context-type="linenumber">88</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.evidence-badge.short.complete" datatype="html">
         <source>Complete</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/verdict/evidence-badge.component.ts</context>
-          <context context-type="linenumber">90</context>
+          <context context-type="linenumber">94</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.evidence-badge.short.incomplete" datatype="html">
         <source>Incomplete</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/verdict/evidence-badge.component.ts</context>
-          <context context-type="linenumber">92</context>
+          <context context-type="linenumber">96</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.evidence-badge.short.unavailable" datatype="html">
         <source>Unavailable</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/verdict/evidence-badge.component.ts</context>
-          <context context-type="linenumber">94</context>
+          <context context-type="linenumber">98</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.outcome-pill.dimension" datatype="html">
@@ -34100,7 +34100,7 @@
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shell/layout/shell-account.component.ts</context>
-          <context context-type="linenumber">111</context>
+          <context context-type="linenumber">120</context>
         </context-group>
       </trans-unit>
       <trans-unit id="auth.login.locale-vi" datatype="html">
@@ -34111,7 +34111,7 @@
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shell/layout/shell-account.component.ts</context>
-          <context context-type="linenumber">112</context>
+          <context context-type="linenumber">121</context>
         </context-group>
       </trans-unit>
       <trans-unit id="auth.login.switch-language" datatype="html">
@@ -34125,7 +34125,91 @@
         <source>Primary navigation</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shell/layout/nav.component.ts</context>
-          <context context-type="linenumber">35</context>
+          <context context-type="linenumber">39</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shell.palette.group-navigate" datatype="html">
+        <source>Navigate</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shell/layout/palette-source.ts</context>
+          <context context-type="linenumber">38</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shell.palette.group-appearance" datatype="html">
+        <source>Appearance</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shell/layout/palette-source.ts</context>
+          <context context-type="linenumber">39</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shell.palette.group-language" datatype="html">
+        <source>Language</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shell/layout/palette-source.ts</context>
+          <context context-type="linenumber">40</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shell.palette.group-runs" datatype="html">
+        <source>Runs</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shell/layout/palette-source.ts</context>
+          <context context-type="linenumber">41</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shell.palette.open-run" datatype="html">
+        <source>Open run</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shell/layout/palette-source.ts</context>
+          <context context-type="linenumber">42</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shell.palette.switch-organization" datatype="html">
+        <source>Switch organization: <x id="name" equiv-text="name"/></source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shell/layout/palette-source.ts</context>
+          <context context-type="linenumber">44</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shell.palette.switch-project" datatype="html">
+        <source>Switch project: <x id="name" equiv-text="name"/></source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shell/layout/palette-source.ts</context>
+          <context context-type="linenumber">46</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shell.palette.theme-light" datatype="html">
+        <source>Switch to light theme</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shell/layout/palette-source.ts</context>
+          <context context-type="linenumber">48</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shell.palette.theme-dark" datatype="html">
+        <source>Switch to dark theme</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shell/layout/palette-source.ts</context>
+          <context context-type="linenumber">49</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shell.palette.theme-system" datatype="html">
+        <source>Switch to system theme</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shell/layout/palette-source.ts</context>
+          <context context-type="linenumber">50</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shell.palette.locale-en" datatype="html">
+        <source>Switch to English</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shell/layout/palette-source.ts</context>
+          <context context-type="linenumber">53</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shell.palette.locale-vi" datatype="html">
+        <source>Switch to Vietnamese</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shell/layout/palette-source.ts</context>
+          <context context-type="linenumber">54</context>
         </context-group>
       </trans-unit>
       <trans-unit id="quota.badge.blocked" datatype="html">
@@ -34195,42 +34279,42 @@
         <source>Theme</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shell/layout/shell-account.component.ts</context>
-          <context context-type="linenumber">76,79</context>
+          <context context-type="linenumber">85,88</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shell.account.sign-out" datatype="html">
         <source> Sign out of this tab </source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shell/layout/shell-account.component.ts</context>
-          <context context-type="linenumber">97,103</context>
+          <context context-type="linenumber">106,112</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shell.account.preferences" datatype="html">
         <source>Account and preferences</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shell/layout/shell-account.component.ts</context>
-          <context context-type="linenumber">109</context>
+          <context context-type="linenumber">118</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shell.theme.light" datatype="html">
         <source>Light</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shell/layout/shell-account.component.ts</context>
-          <context context-type="linenumber">115</context>
+          <context context-type="linenumber">124</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shell.theme.dark" datatype="html">
         <source>Dark</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shell/layout/shell-account.component.ts</context>
-          <context context-type="linenumber">116</context>
+          <context context-type="linenumber">125</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shell.theme.system" datatype="html">
         <source>System</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shell/layout/shell-account.component.ts</context>
-          <context context-type="linenumber">117</context>
+          <context context-type="linenumber">126</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shell.breadcrumb.label" datatype="html">
@@ -34240,39 +34324,60 @@
           <context context-type="linenumber">15,17</context>
         </context-group>
       </trans-unit>
-      <trans-unit id="shell.search.title" datatype="html">
-        <source>Find a screen</source>
+      <trans-unit id="shell.palette.title" datatype="html">
+        <source>Command palette</source>
         <context-group purpose="location">
-          <context context-type="sourcefile">src/app/shell/layout/shell-search.component.html</context>
-          <context context-type="linenumber">16,18</context>
+          <context context-type="sourcefile">src/app/shell/layout/shell-palette.component.ts</context>
+          <context context-type="linenumber">42</context>
         </context-group>
       </trans-unit>
-      <trans-unit id="shell.search.field" datatype="html">
-        <source>Screen name</source>
+      <trans-unit id="shell.palette.field" datatype="html">
+        <source>Find a command</source>
         <context-group purpose="location">
-          <context context-type="sourcefile">src/app/shell/layout/shell-search.component.html</context>
-          <context context-type="linenumber">18,23</context>
+          <context context-type="sourcefile">src/app/shell/layout/shell-palette.component.ts</context>
+          <context context-type="linenumber">43</context>
         </context-group>
       </trans-unit>
-      <trans-unit id="shell.search.matches" datatype="html">
-        <source>Matching screens</source>
+      <trans-unit id="shell.palette.matches" datatype="html">
+        <source>Matching commands</source>
         <context-group purpose="location">
-          <context context-type="sourcefile">src/app/shell/layout/shell-search.component.html</context>
-          <context context-type="linenumber">40,43</context>
+          <context context-type="sourcefile">src/app/shell/layout/shell-palette.component.ts</context>
+          <context context-type="linenumber">44</context>
         </context-group>
       </trans-unit>
-      <trans-unit id="shell.search.empty" datatype="html">
-        <source> No matching screens. </source>
+      <trans-unit id="shell.palette.footer" datatype="html">
+        <source>↑↓ navigate · Enter execute · Esc close</source>
         <context-group purpose="location">
-          <context context-type="sourcefile">src/app/shell/layout/shell-search.component.html</context>
-          <context context-type="linenumber">61,66</context>
+          <context context-type="sourcefile">src/app/shell/layout/shell-palette.component.ts</context>
+          <context context-type="linenumber">45</context>
         </context-group>
       </trans-unit>
-      <trans-unit id="shell.search.trigger" datatype="html">
-        <source>Search</source>
+      <trans-unit id="shell.palette.empty" datatype="html">
+        <source>No results</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shell/layout/shell-palette.component.ts</context>
+          <context context-type="linenumber">54</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shell.palette.count-one" datatype="html">
+        <source>1 result</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shell/layout/shell-palette.component.ts</context>
+          <context context-type="linenumber">56</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shell.palette.count-many" datatype="html">
+        <source><x id="count" equiv-text="count"/> results</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shell/layout/shell-palette.component.ts</context>
+          <context context-type="linenumber">57</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shell.palette.trigger" datatype="html">
+        <source>Command palette (<x id="shortcut" equiv-text="this.shortcut"/>)</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shell/layout/shell-search.component.ts</context>
-          <context context-type="linenumber">30</context>
+          <context context-type="linenumber">47</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shell.layout.skip-content" datatype="html">
@@ -34373,249 +34478,277 @@
           <context context-type="linenumber">10</context>
         </context-group>
       </trans-unit>
+      <trans-unit id="shell.settings.group.workspace" datatype="html">
+        <source>Workspace</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
+          <context context-type="linenumber">15</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shell.settings.group.access" datatype="html">
+        <source>Access &amp; Security</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
+          <context context-type="linenumber">16</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shell.settings.group.automation" datatype="html">
+        <source>CI &amp; Automation</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
+          <context context-type="linenumber">17</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shell.settings.group.billing" datatype="html">
+        <source>Billing &amp; Audit</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
+          <context context-type="linenumber">18</context>
+        </context-group>
+      </trans-unit>
       <trans-unit id="shell.nav.org-overview" datatype="html">
         <source>Organization overview</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
-          <context context-type="linenumber">30</context>
+          <context context-type="linenumber">38</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shell.nav.overview" datatype="html">
         <source>Overview</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
-          <context context-type="linenumber">43</context>
+          <context context-type="linenumber">51</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shell.screen.onboarding" datatype="html">
         <source>Project onboarding</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
-          <context context-type="linenumber">57</context>
+          <context context-type="linenumber">65</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shell.nav.catalog" datatype="html">
         <source>Test catalog</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
-          <context context-type="linenumber">71</context>
+          <context context-type="linenumber">79</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shell.screen.mapping" datatype="html">
         <source>Mapping resolution</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
-          <context context-type="linenumber">85</context>
+          <context context-type="linenumber">93</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shell.screen.run-detail" datatype="html">
         <source>Run detail</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
-          <context context-type="linenumber">90</context>
+          <context context-type="linenumber">98</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shell.screen.runs" datatype="html">
         <source>Test runs</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
-          <context context-type="linenumber">99</context>
+          <context context-type="linenumber">107</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shell.screen.failures" datatype="html">
         <source>Failure inbox</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
-          <context context-type="linenumber">112</context>
+          <context context-type="linenumber">120</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shell.screen.releases" datatype="html">
         <source>Release gates</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
-          <context context-type="linenumber">125</context>
+          <context context-type="linenumber">133</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shell.screen.quality" datatype="html">
         <source>Quality overview</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
-          <context context-type="linenumber">138</context>
+          <context context-type="linenumber">146</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shell.screen.repairs" datatype="html">
         <source>Review queue</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
-          <context context-type="linenumber">151</context>
+          <context context-type="linenumber">159</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shell.nav.knowledge" datatype="html">
         <source>Knowledge lineage</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
-          <context context-type="linenumber">164</context>
+          <context context-type="linenumber">172</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shell.screen.availability" datatype="html">
         <source>Healing availability</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
-          <context context-type="linenumber">178</context>
+          <context context-type="linenumber">186</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shell.screen.case-editor" datatype="html">
         <source>Test case editor</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
-          <context context-type="linenumber">186</context>
+          <context context-type="linenumber">194</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shell.screen.import-export" datatype="html">
         <source>Import and export</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
-          <context context-type="linenumber">190</context>
+          <context context-type="linenumber">198</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shell.nav.authoring" datatype="html">
         <source>Feature tree</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
-          <context context-type="linenumber">201</context>
+          <context context-type="linenumber">209</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shell.nav.pending-changes" datatype="html">
         <source>Pending changes</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
-          <context context-type="linenumber">214</context>
+          <context context-type="linenumber">222</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shell.screen.scripts" datatype="html">
         <source>Generated scripts</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
-          <context context-type="linenumber">227</context>
+          <context context-type="linenumber">235</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shell.nav.generation" datatype="html">
         <source>Generate tests</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
-          <context context-type="linenumber">241</context>
+          <context context-type="linenumber">249</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shell.screen.studio" datatype="html">
         <source>Template gallery</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
-          <context context-type="linenumber">255</context>
+          <context context-type="linenumber">263</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shell.screen.suites" datatype="html">
         <source>Suite composition</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
-          <context context-type="linenumber">269</context>
+          <context context-type="linenumber">277</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shell.screen.members" datatype="html">
         <source>Members</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
-          <context context-type="linenumber">283</context>
+          <context context-type="linenumber">292</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shell.screen.settings" datatype="html">
         <source>Settings</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
-          <context context-type="linenumber">296</context>
+          <context context-type="linenumber">305</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shell.nav.secrets" datatype="html">
         <source>Secret references</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
-          <context context-type="linenumber">311</context>
+          <context context-type="linenumber">321</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shell.screen.policies" datatype="html">
         <source>Release policy</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
-          <context context-type="linenumber">326</context>
+          <context context-type="linenumber">337</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shell.screen.quota" datatype="html">
         <source>Usage and AI credits</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
-          <context context-type="linenumber">341</context>
+          <context context-type="linenumber">353</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shell.nav.quota-short" datatype="html">
         <source>AI credits</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
-          <context context-type="linenumber">342</context>
+          <context context-type="linenumber">354</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shell.nav.audit" datatype="html">
         <source>Audit log</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
-          <context context-type="linenumber">357</context>
+          <context context-type="linenumber">370</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shell.nav.security" datatype="html">
         <source>Security events</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
-          <context context-type="linenumber">372</context>
+          <context context-type="linenumber">386</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shell.screen.agents" datatype="html">
         <source>Agent pools</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
-          <context context-type="linenumber">387</context>
+          <context context-type="linenumber">402</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shell.screen.integrations" datatype="html">
         <source>Webhook integrations</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
-          <context context-type="linenumber">402</context>
+          <context context-type="linenumber">418</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shell.nav.support" datatype="html">
         <source>Support access</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
-          <context context-type="linenumber">416</context>
+          <context context-type="linenumber">433</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shell.nav.tokens" datatype="html">
         <source>API tokens</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
-          <context context-type="linenumber">431</context>
+          <context context-type="linenumber">449</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shell.screen.deploy" datatype="html">
         <source>Deploy targets</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
-          <context context-type="linenumber">445</context>
+          <context context-type="linenumber">464</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shell.screen.ai-settings" datatype="html">
         <source>Project AI settings</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
-          <context context-type="linenumber">459</context>
+          <context context-type="linenumber">479</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shell.page.no-organization.heading" datatype="html">

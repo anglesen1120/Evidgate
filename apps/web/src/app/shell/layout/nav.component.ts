@@ -1,8 +1,10 @@
-import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
-import { RouterLink, RouterLinkActive } from '@angular/router';
+import { ChangeDetectionStrategy, Component, computed, inject, input, output } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
+import { NavigationEnd, Router, RouterLink, RouterLinkActive } from '@angular/router';
+import { filter } from 'rxjs';
 import { HlmButton } from '@evidgate/ui/button';
 import { HlmTooltip } from '@evidgate/ui/tooltip';
-import type { NavGroupView } from '../nav/nav.models';
+import type { NavGroupView, NavSettingsItem } from '../nav/nav.models';
 import { ShellIconComponent } from './shell-icon.component';
 
 /** Consumes the already-filtered nav view; no permission or phase decisions belong here. */
@@ -29,8 +31,30 @@ import { ShellIconComponent } from './shell-icon.component';
   },
 })
 export class NavComponent {
+  private readonly router = inject(Router);
   readonly groups = input<readonly NavGroupView[]>([]);
   readonly collapsed = input(false);
+  readonly settings = input<NavSettingsItem | null>(null);
   readonly itemSelected = output<readonly string[]>();
   readonly navigationLabel = $localize`:@@shell.layout.primary-navigation:Primary navigation`;
+  private readonly navigated = toSignal(
+    this.router.events.pipe(filter((event) => event instanceof NavigationEnd)),
+    { initialValue: null },
+  );
+  // The Settings item covers every tab URL; `subset` keeps it lit on each of them.
+  readonly settingsActive = computed(() => {
+    const item = this.settings();
+    this.navigated();
+    return (
+      item !== null &&
+      item.covers.some((link) =>
+        this.router.isActive(this.router.createUrlTree(link), {
+          paths: 'subset',
+          queryParams: 'ignored',
+          fragment: 'ignored',
+          matrixParams: 'ignored',
+        }),
+      )
+    );
+  });
 }

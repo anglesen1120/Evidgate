@@ -2,72 +2,92 @@ import { DOCUMENT } from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
-  afterRenderEffect,
-  computed,
+  ElementRef,
+  Injector,
   inject,
-  linkedSignal,
-  signal,
+  viewChild,
 } from '@angular/core';
 import { Router } from '@angular/router';
 import { HlmButton } from '@evidgate/ui/button';
-import { HlmDialog, HlmDialogImports } from '@evidgate/ui/dialog';
-import { HlmInput } from '@evidgate/ui/input';
-import { HlmLabel } from '@evidgate/ui/label';
+import { HlmDialogService } from '@evidgate/ui/dialog';
 import { HlmTooltip } from '@evidgate/ui/tooltip';
-import { NavViewService } from '../nav/nav-view';
+import { SessionStore } from '../../core/session/session.store';
 import { ShellIconComponent } from './shell-icon.component';
+import type { PaletteAction } from './palette-index';
+import { ThemeService } from './theme.service';
+import { projectSwitchTree } from './scope-route';
 
+const SHORTCUT_KEY = 'k';
+
+/** Opens the command palette from the topbar trigger or Cmd/Ctrl+K. */
 @Component({
   selector: 'app-shell-search',
-  imports: [HlmButton, HlmDialogImports, HlmInput, HlmLabel, HlmTooltip, ShellIconComponent],
+  imports: [HlmButton, HlmTooltip, ShellIconComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
+  host: {
+    '(document:keydown)': 'onShortcut($event)',
+  },
   templateUrl: './shell-search.component.html',
 })
 export class ShellSearchComponent {
-  private readonly nav = inject(NavViewService);
+  private readonly dialogs = inject(HlmDialogService);
   private readonly router = inject(Router);
+  private readonly session = inject(SessionStore);
+  private readonly theme = inject(ThemeService);
   private readonly document = inject(DOCUMENT);
-  readonly searchLabel = $localize`:@@shell.search.trigger:Search`;
-  readonly query = signal('');
-  readonly results = computed(() => {
-    const term = this.query().trim().toLowerCase();
-    return this.nav
-      .groups()
-      .flatMap((group) => group.items.filter((item) => item.label.toLowerCase().includes(term)));
-  });
-  readonly active = linkedSignal({ source: this.results, computation: () => -1 });
-  readonly activeId = computed(() => {
-    const item = this.results()[this.active()];
-    return item ? `screen-option-${item.id}` : null;
-  });
+  private readonly injector = inject(Injector);
+  private readonly trigger = viewChild.required<ElementRef<HTMLButtonElement>>('trigger');
+  private loading = false;
 
-  constructor() {
-    afterRenderEffect(() => {
-      const id = this.activeId();
-      if (id) this.document.getElementById(id)?.scrollIntoView?.({ block: 'nearest' });
-    });
+  protected readonly shortcut = /Mac|iPhone|iPad|iPod/.test(
+    this.document.defaultView?.navigator.userAgent ?? '',
+  )
+    ? '⌘K'
+    : 'Ctrl K';
+  protected readonly label = $localize`:@@shell.palette.trigger:Command palette (${this.shortcut}:shortcut:)`;
+
+  protected async open(): Promise<void> {
+    // The palette chunk loads on first use; the flag stops a second open during that load.
+    if (this.loading || this.document.querySelector('[role="dialog"]')) return;
+    this.loading = true;
+    try {
+      const { ShellPaletteComponent } = await import('./shell-palette.component');
+      const ref = this.dialogs.open<PaletteAction | undefined>(ShellPaletteComponent, {
+        contentClass: 'shell-palette',
+        size: 'md',
+        restoreFocus: this.trigger().nativeElement,
+      });
+      ref.closed$.subscribe((action) => this.execute(action));
+    } finally {
+      this.loading = false;
+    }
   }
 
-  move(event: Event, direction: 1 | -1): void {
+  protected onShortcut(event: KeyboardEvent): void {
+    if (event.key?.toLowerCase() !== SHORTCUT_KEY || event.altKey || event.shiftKey) return;
+    if (!event.metaKey && !event.ctrlKey) return;
+    if (isEditable(event.target)) return;
     event.preventDefault();
-    const count = this.results().length;
-    if (count === 0) return;
-    this.active.update((index) =>
-      index < 0 ? (direction === 1 ? 0 : count - 1) : (index + direction + count) % count,
-    );
+    void this.open();
   }
 
-  // Only navigate after the dialog has restored focus; the shell then focuses the new page.
-  navigate(selected: unknown): void {
-    const item = this.results().find((result) => result === selected);
-    this.query.set('');
-    this.active.set(-1);
-    if (item) void this.router.navigate(item.link);
+  // Runs after the dialog restores focus, so the target page receives focus from the shell.
+  private execute(action: PaletteAction | undefined): void {
+    if (!action) return;
+    if (action.kind === 'navigate') void this.router.navigate(action.link);
+    else if (action.kind === 'theme') this.theme.choose(action.choice);
+    else if (action.kind === 'locale') this.document.location.assign(action.href);
+    else if (action.kind === 'switch-org') void this.router.navigate(['/orgs', action.id]);
+    else this.switchProject(action.id);
   }
 
-  choose(event: Event, picker: HlmDialog): void {
-    event.preventDefault();
-    const item = this.results()[Math.max(0, this.active())];
-    if (item) picker.close(item);
+  private switchProject(id: string): void {
+    const org = this.session.currentOrg();
+    if (org) void this.router.navigateByUrl(projectSwitchTree(this.router, org.id, id));
   }
+}
+
+function isEditable(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  return target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName);
 }

@@ -5,7 +5,7 @@ import { TestBed } from '@angular/core/testing';
 import { Router, provideRouter } from '@angular/router';
 import { NotFoundPage } from '../pages/not-found.page';
 import { NavComponent } from './nav.component';
-import type { NavGroupView } from '../nav/nav.models';
+import type { NavGroupView, NavSettingsItem } from '../nav/nav.models';
 import { stubScopeBrowserApis } from './scope.fixture';
 
 class NavigationHarness extends ComponentHarness {
@@ -201,5 +201,52 @@ describe('NavComponent', () => {
     await fixture.whenStable();
     expect(link.textContent?.trim()).toBe('Overview');
     expect(document.querySelector('[role="tooltip"]')).toBeNull();
+  });
+
+  describe('settings item', () => {
+    const settings: NavSettingsItem = {
+      label: 'Settings',
+      link: ['/orgs', 'o', 'settings'],
+      covers: [
+        ['/orgs', 'o', 'settings'],
+        ['/orgs', 'o', 'members'],
+        ['/orgs', 'o', 'audit'],
+      ],
+    };
+
+    async function renderAt(url: string) {
+      const fixture = TestBed.createComponent(NavComponent);
+      fixture.componentRef.setInput('groups', []);
+      fixture.componentRef.setInput('settings', settings);
+      attachedRoot = fixture.nativeElement as HTMLElement;
+      // 3px marker (::before) is verified in a real browser by e2e/shell/navigation.spec.ts.
+      document.body.append(attachedRoot);
+      await TestBed.inject(Router).navigateByUrl(url);
+      await fixture.whenStable();
+      return attachedRoot.querySelector<HTMLAnchorElement>('a')!;
+    }
+
+    it.each([
+      '/orgs/o/settings/members',
+      '/orgs/o/settings/audit',
+      '/orgs/o/members',
+      '/orgs/o/audit',
+    ])('marks Settings as the current page on %s', async (url) => {
+      const link = await renderAt(url);
+      expect(link.getAttribute('aria-current')).toBe('page');
+    });
+
+    it.each(['/orgs/o/projects', '/orgs/o/settingsx', '/orgs/other/settings'])(
+      'does not activate Settings on unrelated URL %s',
+      async (url) => {
+        const link = await renderAt(url);
+        expect(link.getAttribute('aria-current')).toBeNull();
+      },
+    );
+
+    it('ignores query and fragment when matching a covered destination', async () => {
+      const link = await renderAt('/orgs/o/audit?tab=events#top');
+      expect(link.getAttribute('aria-current')).toBe('page');
+    });
   });
 });

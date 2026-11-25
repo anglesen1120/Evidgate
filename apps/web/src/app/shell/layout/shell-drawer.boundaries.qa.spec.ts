@@ -5,7 +5,6 @@ import { ComponentFixture, DeferBlockBehavior, TestBed } from '@angular/core/tes
 import { provideRouter } from '@angular/router';
 import { SessionStore } from '../../core/session/session.store';
 import { QuotaStore } from '../../features/settings/quota-retention/quota.store';
-import { NavViewService } from '../nav/nav-view';
 import { NotFoundPage } from '../pages/not-found.page';
 import { SCOPE_ORGANIZATIONS, SCOPE_PROJECTS, stubScopeBrowserApis } from './scope.fixture';
 import { ShellComponent } from './shell.component';
@@ -39,10 +38,10 @@ describe('Shell drawer responsive keyboard boundaries', () => {
             projects: signal(SCOPE_PROJECTS),
             currentOrg: signal(SCOPE_ORGANIZATIONS[0]),
             currentProject: signal(SCOPE_PROJECTS[0]),
+            has: () => false,
           },
         },
         { provide: QuotaStore, useValue: { badge: signal(null), load: vi.fn() } },
-        { provide: NavViewService, useValue: { groups: signal([]) } },
       ],
     }).compileComponents();
     fixture = TestBed.createComponent(ShellComponent);

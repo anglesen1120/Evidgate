@@ -1,65 +1,14 @@
-<hlm-dialog #picker [autoFocus]="'#shell-screen-query'" (closed)="navigate($event)">
-  <button
-    type="button"
-    hlmBtn
-    hlmDialogTrigger
-    [variant]="'ghost'"
-    [size]="'icon'"
-    class="screen-search min-h-(--eg-control-touch) min-w-(--eg-control-touch) text-muted-foreground"
-    [hlmTooltip]="searchLabel"
-    [attr.aria-label]="searchLabel"
-  >
-    <app-shell-icon [name]="'search'" />
-  </button>
-  <hlm-dialog-content *hlmDialogPortal>
-    <header hlmDialogHeader>
-      <h2 hlmDialogTitle i18n="@@shell.search.title">Find a screen</h2>
-    </header>
-    <label hlmLabel for="shell-screen-query" i18n="@@shell.search.field">Screen name</label>
-    <input
-      #searchBox
-      hlmInput
-      id="shell-screen-query"
-      type="text"
-      role="combobox"
-      autocomplete="off"
-      [attr.aria-autocomplete]="'list'"
-      aria-expanded="true"
-      [attr.aria-controls]="'shell-screen-results'"
-      [attr.aria-activedescendant]="activeId()"
-      [value]="query()"
-      (input)="query.set(searchBox.value)"
-      (keydown.arrowdown)="move($event, 1)"
-      (keydown.arrowup)="move($event, -1)"
-      (keydown.enter)="choose($event, picker)"
-    />
-    <div
-      role="listbox"
-      id="shell-screen-results"
-      class="grid max-h-[40dvh] gap-(--eg-space-1) overflow-y-auto p-(--eg-space-2)"
-      aria-label="Matching screens"
-      i18n-aria-label="@@shell.search.matches"
-    >
-      @for (item of results(); track item.id; let index = $index) {
-        <button
-          hlmBtn
-          [variant]="'ghost'"
-          class="h-auto min-h-(--eg-control-touch) justify-start gap-(--eg-space-3) whitespace-normal text-start aria-selected:bg-accent aria-selected:font-bold aria-selected:text-accent-foreground"
-          type="button"
-          role="option"
-          tabindex="-1"
-          [id]="'screen-option-' + item.id"
-          [attr.aria-selected]="active() === index"
-          (click)="picker.close(item)"
-        >
-          <app-shell-icon [name]="item.icon" /> {{ item.label }}
-        </button>
-      }
-    </div>
-    @if (!results().length) {
-      <p role="status" class="text-muted-foreground" i18n="@@shell.search.empty">
-        No matching screens.
-      </p>
-    }
-  </hlm-dialog-content>
-</hlm-dialog>
+<button
+  #trigger
+  type="button"
+  hlmBtn
+  [variant]="'ghost'"
+  [size]="'icon'"
+  class="screen-search min-h-(--eg-control-touch) min-w-(--eg-control-touch) text-muted-foreground"
+  [attr.aria-keyshortcuts]="'Control+K Meta+K'"
+  [hlmTooltip]="label"
+  [attr.aria-label]="label"
+  (click)="open()"
+>
+  <app-shell-icon [name]="'search'" />
+</button>

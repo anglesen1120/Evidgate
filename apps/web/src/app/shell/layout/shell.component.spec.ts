@@ -12,26 +12,9 @@ import axe from 'axe-core';
 import { AXE_JSDOM_RUN_OPTIONS } from '../../../../e2e/a11y/axe-config';
 import { SessionStore } from '../../core/session/session.store';
 import { QuotaStore } from '../../features/settings/quota-retention/quota.store';
-import { NavViewService } from '../nav/nav-view';
-import type { NavGroupView } from '../nav/nav.models';
 import { NotFoundPage } from '../pages/not-found.page';
 import { ShellComponent } from './shell.component';
 import { SCOPE_ORGANIZATIONS, SCOPE_PROJECTS, stubScopeBrowserApis } from './scope.fixture';
-
-const groups: readonly NavGroupView[] = [
-  {
-    id: 'workspace',
-    label: 'Workspace',
-    items: [
-      {
-        id: 'overview',
-        label: 'Overview',
-        icon: 'home',
-        link: ['/orgs', 'org-one', 'projects', 'project-one', 'overview'],
-      },
-    ],
-  },
-];
 
 describe('ShellComponent', () => {
   let fixture: ComponentFixture<ShellComponent>;
@@ -42,6 +25,7 @@ describe('ShellComponent', () => {
     projects: signal(SCOPE_PROJECTS),
     currentOrg: signal(SCOPE_ORGANIZATIONS[0]),
     currentProject: signal(SCOPE_PROJECTS[0]),
+    has: (permission: string) => permission === 'project:read',
   };
 
   beforeEach(async () => {
@@ -55,7 +39,6 @@ describe('ShellComponent', () => {
         provideRouter([{ path: '**', component: NotFoundPage }]),
         { provide: SessionStore, useValue: session },
         { provide: QuotaStore, useValue: { badge: signal(null), load: vi.fn() } },
-        { provide: NavViewService, useValue: { groups: signal(groups) } },
       ],
     }).compileComponents();
     fixture = TestBed.createComponent(ShellComponent);
@@ -104,7 +87,7 @@ describe('ShellComponent', () => {
     expect(stops[0]?.classList.contains('nav-toggle')).toBe(true);
     expect(stops[1]?.getAttribute('role')).toBe('combobox');
     expect(stops[2]?.getAttribute('role')).toBe('combobox');
-    expect(stops[3]?.classList.contains('screen-search')).toBe(true);
+    expect(stops[3]?.getAttribute('aria-label')).toMatch(/^Command palette \((?:Ctrl K|⌘K)\)$/);
     expect(stops[4]?.classList.contains('theme-toggle')).toBe(true);
     expect(stops.at(-1)?.getAttribute('aria-label')).toBe('Account and preferences');
 

@@ -1,4 +1,4 @@
-import type { NavEntry, NavGroupDef } from './nav.models';
+import type { NavEntry, NavGroupDef, SettingsGroupDef } from './nav.models';
 
 // The route table, sidebar, breadcrumbs and search share these rows; only presentation is grouped.
 // Segment, scope, permission and phase remain the contracts of the mounted routes.
@@ -8,6 +8,14 @@ export const NAV_GROUPS: readonly NavGroupDef[] = [
   { id: 'healing', label: $localize`:@@shell.nav.group.healing:Healing` },
   { id: 'authoring', label: $localize`:@@shell.nav.group.authoring:Authoring` },
   { id: 'administration', label: $localize`:@@shell.nav.group.administration:Administration` },
+];
+
+// Settings sections, in page order. The sidebar's single Settings entry replaces the administration group.
+export const SETTINGS_GROUPS: readonly SettingsGroupDef[] = [
+  { id: 'workspace', label: $localize`:@@shell.settings.group.workspace:Workspace` },
+  { id: 'access', label: $localize`:@@shell.settings.group.access:Access & Security` },
+  { id: 'automation', label: $localize`:@@shell.settings.group.automation:CI & Automation` },
+  { id: 'billing', label: $localize`:@@shell.settings.group.billing:Billing & Audit` },
 ];
 
 // Routes needing a selected record are contextual, not new sidebar/search destinations:
@@ -273,6 +281,7 @@ export const NAV_ENTRIES: readonly NavEntry[] = [
     screenId: '28',
     settingsTabId: 'members',
     group: 'administration',
+    settingsGroup: 'access',
     phase: 'G1',
     order: 1,
     icon: 'people',
@@ -301,6 +310,7 @@ export const NAV_ENTRIES: readonly NavEntry[] = [
     settingsTabId: 'secrets',
     parentId: 'settings',
     group: 'administration',
+    settingsGroup: 'access',
     phase: 'G2',
     order: 3,
     icon: 'key',
@@ -316,6 +326,7 @@ export const NAV_ENTRIES: readonly NavEntry[] = [
     settingsTabId: 'policy',
     parentId: 'settings',
     group: 'administration',
+    settingsGroup: 'workspace',
     phase: 'G4',
     order: 4,
     icon: 'scroll',
@@ -331,6 +342,7 @@ export const NAV_ENTRIES: readonly NavEntry[] = [
     settingsTabId: 'quota-retention',
     parentId: 'settings',
     group: 'administration',
+    settingsGroup: 'billing',
     phase: 'G1',
     order: 5,
     icon: 'credit',
@@ -347,6 +359,7 @@ export const NAV_ENTRIES: readonly NavEntry[] = [
     settingsTabId: 'audit',
     parentId: 'settings',
     group: 'administration',
+    settingsGroup: 'billing',
     phase: 'G1',
     order: 6,
     icon: 'audit',
@@ -362,6 +375,7 @@ export const NAV_ENTRIES: readonly NavEntry[] = [
     settingsTabId: 'security-events',
     parentId: 'settings',
     group: 'administration',
+    settingsGroup: 'access',
     phase: 'G2',
     order: 7,
     icon: 'shield-alert',
@@ -377,6 +391,7 @@ export const NAV_ENTRIES: readonly NavEntry[] = [
     settingsTabId: 'agents',
     parentId: 'settings',
     group: 'administration',
+    settingsGroup: 'automation',
     phase: 'G4',
     order: 8,
     icon: 'bot',
@@ -392,6 +407,7 @@ export const NAV_ENTRIES: readonly NavEntry[] = [
     settingsTabId: 'integrations',
     parentId: 'settings',
     group: 'administration',
+    settingsGroup: 'automation',
     phase: 'G4',
     order: 9,
     icon: 'plug',
@@ -406,6 +422,7 @@ export const NAV_ENTRIES: readonly NavEntry[] = [
     screenId: '36',
     parentId: 'settings',
     group: 'administration',
+    settingsGroup: 'access',
     phase: 'G2',
     order: 10,
     icon: 'life',
@@ -421,6 +438,7 @@ export const NAV_ENTRIES: readonly NavEntry[] = [
     settingsTabId: 'api-tokens',
     parentId: 'settings',
     group: 'administration',
+    settingsGroup: 'access',
     phase: 'G4',
     order: 11,
     icon: 'key',
@@ -435,6 +453,7 @@ export const NAV_ENTRIES: readonly NavEntry[] = [
     screenId: '38',
     parentId: 'settings',
     group: 'administration',
+    settingsGroup: 'automation',
     phase: 'G4',
     order: 12,
     icon: 'server',
@@ -449,6 +468,7 @@ export const NAV_ENTRIES: readonly NavEntry[] = [
     screenId: '44',
     parentId: 'settings',
     group: 'administration',
+    settingsGroup: 'workspace',
     phase: 'G1',
     order: 13,
     icon: 'sparkle',

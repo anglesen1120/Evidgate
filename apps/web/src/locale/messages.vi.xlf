@@ -1404,6 +1404,102 @@
           <context context-type="linenumber">19</context>
         </context-group>
       </trans-unit>
+      <trans-unit id="shell.palette.group-navigate" datatype="html">
+        <source>Navigate</source>
+        <target>Điều hướng</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shell/layout/palette-source.ts</context>
+          <context context-type="linenumber">36</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shell.palette.group-appearance" datatype="html">
+        <source>Appearance</source>
+        <target>Giao diện</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shell/layout/palette-source.ts</context>
+          <context context-type="linenumber">37</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shell.palette.group-language" datatype="html">
+        <source>Language</source>
+        <target>Ngôn ngữ</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shell/layout/palette-source.ts</context>
+          <context context-type="linenumber">38</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shell.palette.group-runs" datatype="html">
+        <source>Runs</source>
+        <target>Lần chạy</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shell/layout/palette-source.ts</context>
+          <context context-type="linenumber">39</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shell.palette.open-run" datatype="html">
+        <source>Open run</source>
+        <target>Mở lần chạy</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shell/layout/palette-source.ts</context>
+          <context context-type="linenumber">40</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shell.palette.switch-organization" datatype="html">
+        <source>Switch organization: <x id="name" equiv-text="name"/></source>
+        <target>Chuyển sang tổ chức: <x id="name" equiv-text="name"/></target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shell/layout/palette-source.ts</context>
+          <context context-type="linenumber">44</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shell.palette.switch-project" datatype="html">
+        <source>Switch project: <x id="name" equiv-text="name"/></source>
+        <target>Chuyển sang dự án: <x id="name" equiv-text="name"/></target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shell/layout/palette-source.ts</context>
+          <context context-type="linenumber">46</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shell.palette.theme-light" datatype="html">
+        <source>Switch to light theme</source>
+        <target>Chuyển sang giao diện sáng</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shell/layout/palette-source.ts</context>
+          <context context-type="linenumber">42</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shell.palette.theme-dark" datatype="html">
+        <source>Switch to dark theme</source>
+        <target>Chuyển sang giao diện tối</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shell/layout/palette-source.ts</context>
+          <context context-type="linenumber">43</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shell.palette.theme-system" datatype="html">
+        <source>Switch to system theme</source>
+        <target>Theo giao diện hệ thống</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shell/layout/palette-source.ts</context>
+          <context context-type="linenumber">44</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shell.palette.locale-en" datatype="html">
+        <source>Switch to English</source>
+        <target>Chuyển sang tiếng Anh</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shell/layout/palette-source.ts</context>
+          <context context-type="linenumber">47</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shell.palette.locale-vi" datatype="html">
+        <source>Switch to Vietnamese</source>
+        <target>Chuyển sang tiếng Việt</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shell/layout/palette-source.ts</context>
+          <context context-type="linenumber">48</context>
+        </context-group>
+      </trans-unit>
 <trans-unit id="shell.layout.navigation-drawer" datatype="html">
         <source>Navigation drawer</source>
         <target>Ngăn điều hướng</target>
@@ -4379,44 +4475,68 @@
           <context context-type="linenumber">13,14</context>
         </context-group>
       </trans-unit>
-<trans-unit id="shell.search.title" datatype="html">
-        <source>Find a screen</source>
-        <target>Tìm màn hình</target>
+      <trans-unit id="shell.palette.title" datatype="html">
+        <source>Command palette</source>
+        <target>Bảng lệnh</target>
         <context-group purpose="location">
-          <context context-type="sourcefile">src/app/shell/layout/shell-search.component.html</context>
-          <context context-type="linenumber">15,17</context>
+          <context context-type="sourcefile">src/app/shell/layout/shell-palette.component.ts</context>
+          <context context-type="linenumber">42</context>
         </context-group>
       </trans-unit>
-<trans-unit id="shell.search.field" datatype="html">
-        <source>Screen name</source>
-        <target>Tên màn hình</target>
+      <trans-unit id="shell.palette.field" datatype="html">
+        <source>Find a command</source>
+        <target>Tìm lệnh</target>
         <context-group purpose="location">
-          <context context-type="sourcefile">src/app/shell/layout/shell-search.component.html</context>
-          <context context-type="linenumber">17,22</context>
+          <context context-type="sourcefile">src/app/shell/layout/shell-palette.component.ts</context>
+          <context context-type="linenumber">43</context>
         </context-group>
       </trans-unit>
-<trans-unit id="shell.search.matches" datatype="html">
-        <source>Matching screens</source>
-        <target>Màn hình phù hợp</target>
+      <trans-unit id="shell.palette.matches" datatype="html">
+        <source>Matching commands</source>
+        <target>Lệnh phù hợp</target>
         <context-group purpose="location">
-          <context context-type="sourcefile">src/app/shell/layout/shell-search.component.html</context>
-          <context context-type="linenumber">39,42</context>
+          <context context-type="sourcefile">src/app/shell/layout/shell-palette.component.ts</context>
+          <context context-type="linenumber">44</context>
         </context-group>
       </trans-unit>
-<trans-unit id="shell.search.empty" datatype="html">
-        <source>No matching screens.</source>
-        <target>Không có màn hình phù hợp.</target>
+      <trans-unit id="shell.palette.footer" datatype="html">
+        <source>↑↓ navigate · Enter execute · Esc close</source>
+        <target>↑↓ di chuyển · Enter thực hiện · Esc đóng</target>
         <context-group purpose="location">
-          <context context-type="sourcefile">src/app/shell/layout/shell-search.component.html</context>
-          <context context-type="linenumber">59,63</context>
+          <context context-type="sourcefile">src/app/shell/layout/shell-palette.component.ts</context>
+          <context context-type="linenumber">45</context>
         </context-group>
       </trans-unit>
-<trans-unit id="shell.search.trigger" datatype="html">
-        <source>Search</source>
-        <target>Tìm kiếm</target>
+      <trans-unit id="shell.palette.empty" datatype="html">
+        <source>No results</source>
+        <target>Không có kết quả</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shell/layout/shell-palette.component.ts</context>
+          <context context-type="linenumber">54</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shell.palette.count-one" datatype="html">
+        <source>1 result</source>
+        <target>1 kết quả</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shell/layout/shell-palette.component.ts</context>
+          <context context-type="linenumber">56</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shell.palette.count-many" datatype="html">
+        <source><x id="count" equiv-text="count"/> results</source>
+        <target><x id="count" equiv-text="count"/> kết quả</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shell/layout/shell-palette.component.ts</context>
+          <context context-type="linenumber">57</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shell.palette.trigger" datatype="html">
+        <source>Command palette (<x id="shortcut" equiv-text="this.shortcut"/>)</source>
+        <target>Bảng lệnh (<x id="shortcut" equiv-text="this.shortcut"/>)</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shell/layout/shell-search.component.ts</context>
-          <context context-type="linenumber">29</context>
+          <context context-type="linenumber">36</context>
         </context-group>
       </trans-unit>
 <trans-unit id="shell.brand.subtitle" datatype="html">
@@ -4465,6 +4585,38 @@
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
           <context context-type="linenumber">10</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shell.settings.group.workspace" datatype="html">
+        <source>Workspace</source>
+        <target>Không gian làm việc</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
+          <context context-type="linenumber">15</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shell.settings.group.access" datatype="html">
+        <source>Access &amp; Security</source>
+        <target>Truy cập &amp; Bảo mật</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
+          <context context-type="linenumber">16</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shell.settings.group.automation" datatype="html">
+        <source>CI &amp; Automation</source>
+        <target>CI &amp; Tự động hóa</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
+          <context context-type="linenumber">17</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shell.settings.group.billing" datatype="html">
+        <source>Billing &amp; Audit</source>
+        <target>Thanh toán &amp; Kiểm toán</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
+          <context context-type="linenumber">18</context>
         </context-group>
       </trans-unit>
 <trans-unit id="shell.screen.onboarding" datatype="html">
