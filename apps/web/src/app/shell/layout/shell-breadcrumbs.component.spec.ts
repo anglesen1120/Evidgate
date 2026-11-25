@@ -5,6 +5,7 @@ import { TestBed } from '@angular/core/testing';
 import { Router, provideRouter } from '@angular/router';
 import { SessionStore } from '../../core/session/session.store';
 import { NotFoundPage } from '../pages/not-found.page';
+import { RunBreadcrumbItem } from './shell-breadcrumbs.run-item';
 import { ShellBreadcrumbsComponent } from './shell-breadcrumbs.component';
 
 class Breadcrumbs extends ComponentHarness {
@@ -24,6 +25,11 @@ describe('Shell breadcrumbs', () => {
             component: NotFoundPage,
             data: { settingsTabId: 'members' },
           },
+          {
+            path: 'orgs/:orgId/projects/:projectId/runs/:runId',
+            component: NotFoundPage,
+            data: { runBreadcrumb: true },
+          },
           { path: '**', component: NotFoundPage },
         ]),
         {
@@ -41,6 +47,20 @@ describe('Shell breadcrumbs', () => {
     const crumbs = await TestbedHarnessEnvironment.harnessForFixture(fixture, Breadcrumbs);
     return { crumbs, granted };
   }
+
+  it('shows only an admitted run as the current short item after Runs', async () => {
+    const id = '018f0000-0000-7000-8000-000000000fa1';
+    const { crumbs } = await open(`runs/${id}`, []);
+    const names = () =>
+      crumbs.names().then((parts) => Promise.all(parts.map((part) => part.text())));
+    expect(await names()).toEqual(['Acme', 'Storefront', 'Runs']);
+    expect(await crumbs.current()).toBeNull();
+    TestBed.inject(RunBreadcrumbItem).id.set(id);
+    expect(await names()).toEqual(['Acme', 'Storefront', 'Runs', '018f0…00fa1']);
+    expect(await (await crumbs.current())?.text()).toBe('018f0…00fa1');
+    await TestBed.inject(Router).navigateByUrl('/orgs/o/projects/p/runs/unknown');
+    expect(await names()).toEqual(['Acme', 'Storefront', 'Runs']);
+  });
 
   it('uses the registered parent and detail label, never the raw case id or query', async () => {
     const { crumbs } = await open('authoring/cases/record-id?from=list', ['authoring:read']);

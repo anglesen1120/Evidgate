@@ -19,6 +19,6 @@ export const routes: Routes = [
   {
     path: ':runId',
     loadComponent: () => import('./detail/run-detail.page').then((module) => module.RunDetailPage),
-    data: { pageHeadingLevel: 1 },
+    data: { pageHeadingLevel: 1, runBreadcrumb: true },
   },
 ];

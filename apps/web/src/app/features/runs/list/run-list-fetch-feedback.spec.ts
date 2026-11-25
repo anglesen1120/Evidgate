@@ -12,7 +12,7 @@ import { RunListPage } from './run-list.page';
 class RunFetchHarness extends ComponentHarness {
   static hostSelector = 'app-run-list-page';
   readonly next = this.locatorFor('button[data-page="next"]');
-  readonly apply = this.locatorFor('[data-run-apply]');
+  readonly apply = this.locatorFor('[data-filter-search]');
   readonly ref = this.locatorFor('#run-ref');
   readonly table = this.locatorFor('[role="table"]');
   readonly firstRow = this.locatorFor('[data-row-id]');

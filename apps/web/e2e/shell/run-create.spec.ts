@@ -54,7 +54,9 @@ for (const locale of LOCALES) {
       'data-run-detail-status',
       'ready',
     );
-    await expect(page.locator('[data-run-id] > bdi')).toHaveText(createdFixture.body.run_id);
+    await expect(page.locator('[data-run-id] .identifier-accessible bdi')).toHaveText(
+      `${locale === 'vi' ? 'Mã lượt chạy' : 'Run id'}: ${createdFixture.body.run_id}`,
+    );
   });
 
   test(`preserves focus and the draft through a typed key conflict (${locale})`, async ({

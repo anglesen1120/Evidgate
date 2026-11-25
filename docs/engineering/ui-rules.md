@@ -233,6 +233,7 @@ Search here before writing UI. Paths are under `apps/web/src/app/`; test hosts a
 | Edit conflict and `Retry-After` wait | `app-conflict-dialog`, `app-retry-after` | `shared/ui/conflict/` |
 | Page and section headers with action slots | `app-page-header` (`focusTitle()` focuses its h1), `app-section-header`, `[appPageHeaderActions]`, `[appSectionHeaderActions]` | `shared/ui/page-header/` |
 | Independent dashboard widgets, KPIs, decision bars, bounded meters and activity details | `app-dashboard-widget`, `app-dashboard-kpi`, `app-decision-trend`, `app-dashboard-meter`, `app-dashboard-activity` | `shared/ui/dashboard/` |
+| Compact list filters with an inline search, optional chips and a secondary filter popover | `app-filter-toolbar`, `hlm-popover` | `shared/ui/forms/`, `ui/popover/` |
 | Desktop-only mutation on a narrow viewport | `[appDesktopMutation]`, `app-desktop-required-notice` | `shared/ui/narrow/` |
 | One-time credential or value reveal with copy and dismiss | `app-connect-step-reveal` | `shared/ui/reveal/` |
 | Advisory field or filter help beside its label | `app-field-hint` | `shared/ui/forms/` |

@@ -38,7 +38,9 @@ import type { Completeness } from './verdict-values';
         [class.text-(--eg-success-fg)]="compact() && tone() === 'success'"
         [class.text-(--eg-warning-fg)]="compact() && tone() === 'warning'"
       />
-      <span class="verdict__value min-w-0 whitespace-nowrap">{{ compactLabel() }}</span>
+      <span class="verdict__value min-w-0 whitespace-nowrap">{{
+        compact() ? compactLabel() : standaloneLabel()
+      }}</span>
     </span>
     @if (showDetail()) {
       <span class="verdict__detail block whitespace-normal [overflow-wrap:anywhere]">{{
@@ -87,6 +89,17 @@ export class EvidenceBadgeComponent {
     return state && state !== 'complete' && state !== 'incomplete'
       ? $localize`:@@shared.evidence-badge.unknown-detail:Unknown evidence status: ${state}:state:`
       : this.label();
+  });
+  // Standalone wording follows its visible dimension prefix, rather than repeating “Evidence”.
+  protected readonly standaloneLabel = computed(() => {
+    switch (this.completeness()) {
+      case 'complete':
+        return $localize`:@@shared.evidence-badge.full.complete:Complete`;
+      case 'incomplete':
+        return $localize`:@@shared.evidence-badge.full.incomplete:Incomplete`;
+      default:
+        return $localize`:@@shared.evidence-badge.full.unavailable:Unavailable`;
+    }
   });
   readonly compactLabel = computed(() => {
     switch (this.completeness()) {

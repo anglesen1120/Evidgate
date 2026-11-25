@@ -20,7 +20,7 @@ const SERVED_TIMES = [
 const HISTORY_UNAVAILABLE = 'History unavailable for this run';
 
 async function openTimeline(page: Page, run: RunStateVariant): Promise<void> {
-  await page.goto(runDetailPath({ run }));
+  await page.goto(runDetailPath({ run, tab: 'context' }));
   await expect(page.locator('app-run-detail-page')).toHaveAttribute(
     'data-run-detail-status',
     'ready',

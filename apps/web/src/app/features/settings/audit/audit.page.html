@@ -89,15 +89,38 @@
       <app-status-pill [tone]="'neutral'" [label]="copy.newestFirst" />
     }
   </header>
-  <form
-    class="grid min-w-0 gap-3 border-b border-border p-(--eg-space-5) md:p-(--eg-space-6)"
-    (ngSubmit)="!(status() === 'loading' || store.paging()) && apply()"
-    aria-labelledby="audit-filters-title"
+  <app-filter-toolbar
+    [panelId]="'audit-filter-panel'"
+    [count]="secondaryCount()"
+    [active]="filtered()"
+    [busy]="status() === 'loading' || store.paging()"
+    [applyLabel]="copy.apply"
+    [clearLabel]="copy.clear"
+    (submitted)="searchAction()"
+    (apply)="apply()"
+    (clear)="clear()"
   >
-    <span id="audit-filters-title" class="sr-only">{{ copy.filters }}</span>
-    <div
-      class="grid min-w-0 items-start gap-3 @xl:grid-cols-2 @2xl:grid-cols-3 @5xl:grid-cols-[repeat(3,minmax(0,1fr))_repeat(2,minmax(0,1.4fr))] [&_input]:box-border [&_input]:min-w-0 [&_input]:w-full"
+    <app-field-hint
+      filterSearch
+      [descriptionId]="'audit-action-hint'"
+      [label]="copy.action"
+      [text]="copy.actionHint"
     >
+      <label hlmLabel class="sr-only" for="audit-action">{{ copy.action }}</label>
+    </app-field-hint>
+    <input
+      filterSearch
+      hlmInput
+      id="audit-action"
+      name="action"
+      maxlength="128"
+      class="min-w-0 w-full max-md:min-h-(--eg-control-touch) pointer-coarse:min-h-(--eg-control-touch)"
+      [placeholder]="copy.action"
+      [ngModel]="draft().action"
+      (ngModelChange)="updateDraft({ action: $event })"
+      [aria-describedby]="'audit-action-hint'"
+    />
+    <ng-template #filterOptions>
       <div class="grid min-w-0 gap-2">
         <label hlmLabel for="audit-actor">{{ copy.actorType }}</label>
         <hlm-select
@@ -108,7 +131,7 @@
         >
           <hlm-select-trigger
             [buttonId]="'audit-actor'"
-            class="w-full min-h-[var(--eg-control-touch)] whitespace-normal"
+            class="w-full max-md:min-h-(--eg-control-touch) pointer-coarse:min-h-(--eg-control-touch) min-w-0 w-full whitespace-normal"
           >
             <hlm-select-value [placeholder]="copy.anyActor" />
           </hlm-select-trigger>
@@ -124,25 +147,6 @@
       </div>
       <div class="grid min-w-0 gap-2">
         <app-field-hint
-          [descriptionId]="'audit-action-hint'"
-          [label]="copy.action"
-          [text]="copy.actionHint"
-        >
-          <label hlmLabel for="audit-action">{{ copy.action }}</label>
-        </app-field-hint>
-        <input
-          hlmInput
-          class="min-h-[var(--eg-control-touch)]"
-          id="audit-action"
-          name="action"
-          maxlength="128"
-          [ngModel]="draft().action"
-          (ngModelChange)="updateDraft({ action: $event })"
-          [aria-describedby]="'audit-action-hint'"
-        />
-      </div>
-      <div class="grid min-w-0 gap-2">
-        <app-field-hint
           [descriptionId]="'audit-object-hint'"
           [label]="copy.objectType"
           [text]="copy.objectHint"
@@ -151,7 +155,7 @@
         </app-field-hint>
         <input
           hlmInput
-          class="min-h-[var(--eg-control-touch)]"
+          class="max-md:min-h-(--eg-control-touch) pointer-coarse:min-h-(--eg-control-touch) min-w-0 w-full"
           id="audit-object"
           name="objectType"
           maxlength="64"
@@ -170,7 +174,7 @@
         </app-field-hint>
         <input
           hlmInput
-          class="min-h-[var(--eg-control-touch)]"
+          class="max-md:min-h-(--eg-control-touch) pointer-coarse:min-h-(--eg-control-touch) min-w-0 w-full"
           id="audit-from"
           name="from"
           type="datetime-local"
@@ -189,7 +193,7 @@
         </app-field-hint>
         <input
           hlmInput
-          class="min-h-[var(--eg-control-touch)]"
+          class="max-md:min-h-(--eg-control-touch) pointer-coarse:min-h-(--eg-control-touch) min-w-0 w-full"
           id="audit-to"
           name="to"
           type="datetime-local"
@@ -200,38 +204,11 @@
           [aria-describedby]="invalidRange() ? 'audit-to-hint audit-range-error' : 'audit-to-hint'"
         />
       </div>
-    </div>
-    @if (invalidRange()) {
-      <p class="text-destructive" id="audit-range-error" role="alert">{{ copy.rangeError }}</p>
-    }
-    <div class="flex flex-wrap items-center justify-between gap-3">
-      <div class="flex flex-wrap items-center gap-2">
-        <button
-          hlmBtn
-          [variant]="'secondary'"
-          class="whitespace-normal"
-          type="submit"
-          [disabled]="status() === 'loading' || store.paging()"
-          [attr.aria-busy]="status() === 'loading' || store.paging()"
-          data-audit-apply
-        >
-          {{ copy.apply }}
-        </button>
-        <button
-          hlmBtn
-          [variant]="'outline'"
-          class="whitespace-normal"
-          type="button"
-          [disabled]="status() === 'loading' || store.paging()"
-          [attr.aria-busy]="status() === 'loading' || store.paging()"
-          data-audit-clear
-          (click)="!(status() === 'loading' || store.paging()) && clear()"
-        >
-          {{ copy.clear }}
-        </button>
-      </div>
-    </div>
-  </form>
+    </ng-template>
+  </app-filter-toolbar>
+  @if (invalidRange()) {
+    <p class="text-destructive" id="audit-range-error" role="alert">{{ copy.rangeError }}</p>
+  }
   @if (status() === 'error') {
     @if (store.loadError(); as failure) {
       @if (

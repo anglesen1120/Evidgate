@@ -1,11 +1,26 @@
-import { ComponentHarness, TestKey } from '@angular/cdk/testing';
+import { TestKey } from '@angular/cdk/testing';
 import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { provideZonelessChangeDetection, signal } from '@angular/core';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
-import { ActivatedRoute } from '@angular/router';
-import type { AuditEntryDto, AuditListResponse } from '@evidgate/sdk';
-import { AuditDataService, type AuditListQuery } from '../../../core/data/audit-data.service';
-import { ApiRequestError, type ApiError } from '../../../core/http/api-error';
+import {
+  ActivatedRoute,
+  Router,
+  convertToParamMap,
+  type ParamMap,
+  type NavigationExtras,
+} from '@angular/router';
+import { BehaviorSubject } from 'rxjs';
+import type { AuditListResponse } from '@evidgate/sdk';
+import {
+  entry,
+  refused,
+  deferred,
+  FakeAuditDataService,
+  AuditSummaryHarness,
+  openOptions,
+} from './audit-page.test-support';
+import { AuditDataService } from '../../../core/data/audit-data.service';
+import { ApiRequestError } from '../../../core/http/api-error';
 import { SessionStore } from '../../../core/session/session.store';
 import { provideLayoutTestStubs } from '../../../shared/testing/layout.testing';
 import { AuditPage } from './audit.page';
@@ -13,78 +28,28 @@ import { AuditStore, EMPTY_AUDIT_FILTERS } from './audit.store';
 
 provideLayoutTestStubs();
 
-class AuditSummaryHarness extends ComponentHarness {
-  static hostSelector = 'app-audit-page';
-  readonly values = this.locatorForAll('[data-audit-summary] [data-audit-value]');
-  readonly next = this.locatorFor('[data-page="next"]');
-  readonly previous = this.locatorFor('[data-page="previous"]');
-  readonly retry = this.locatorFor('[data-audit-paging-error] button');
-}
-
-function entry(id: string, changes: Partial<AuditEntryDto> = {}): AuditEntryDto {
-  return {
-    id,
-    seq: 1,
-    actor_type: 'user',
-    actor_id: 'member1',
-    action: 'project.updated',
-    prev_hash: 'previous',
-    entry_hash: 'entry',
-    created_at: '2026-10-25T00:00:00Z',
-    ...changes,
-  };
-}
-const refused: ApiError = {
-  kind: 'unavailable',
-  status: 503,
-  code: 'audit_unavailable',
-  message: 'Server refuses this audit request. <b>Keep verbatim.</b>',
-  requestId: 'request1',
-  retryable: true,
-  retryAfterSeconds: null,
-  details: [],
-};
-/**
- * `Promise.withResolvers` is ES2024 and this project compiles against ES2022, so this spec carries
- * its own equivalent — the hand-rolled resolver that
- * `features/onboarding/steps/create-project.page.spec.ts` builds inline, lifted into one helper
- * because two cases here need it.
- */
-function deferred<T>(): { readonly promise: Promise<T>; readonly resolve: (value: T) => void } {
-  let resolve: (value: T) => void = () => undefined;
-  const promise = new Promise<T>((settle) => {
-    resolve = settle;
-  });
-  return { promise, resolve };
-}
-class FakeAuditDataService {
-  readonly list = vi.fn<
-    (org: string, query: AuditListQuery, cursor?: string) => Promise<AuditListResponse>
-  >(() =>
-    Promise.resolve({
-      items: [
-        entry('ordinary'),
-        entry('operator', {
-          actor_type: 'platform_operator',
-          metadata: { support_grant_id: 'grant-42' },
-        }),
-      ],
-      next_cursor: null,
-    }),
-  );
-}
-
 describe('AuditPage', () => {
   let data: FakeAuditDataService;
   const org = signal<{ id: string } | null>({ id: 'org1' });
+  const query = new BehaviorSubject<ParamMap>(convertToParamMap({}));
+  const navigate = vi.fn((_commands: unknown[], extras: NavigationExtras) => {
+    query.next(convertToParamMap(extras.queryParams ?? {}));
+    return Promise.resolve(true);
+  });
   let routeData: Record<string, unknown>;
   const providers = () => [
     provideZonelessChangeDetection(),
     { provide: AuditDataService, useValue: data },
     { provide: SessionStore, useValue: { currentOrg: org } },
-    { provide: ActivatedRoute, useFactory: () => ({ snapshot: { data: routeData } }) },
+    { provide: Router, useValue: { navigate } },
+    {
+      provide: ActivatedRoute,
+      useFactory: () => ({ queryParamMap: query, snapshot: { data: routeData } }),
+    },
   ];
   beforeEach(() => {
+    query.next(convertToParamMap({}));
+    navigate.mockClear();
     routeData = {};
     data = new FakeAuditDataService();
     org.set({ id: 'org1' });
@@ -123,7 +88,7 @@ describe('AuditPage', () => {
     field.dispatchEvent(new Event('input', { bubbles: true }));
   }
   function submit(root: HTMLElement): void {
-    const form = root.querySelector('form');
+    const form = root.querySelector('#audit-filter-panel form') ?? root.querySelector('form');
     if (!form) throw new Error('Expected audit filters form');
     form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
   }
@@ -141,6 +106,32 @@ describe('AuditPage', () => {
     option.click();
     await fixture.whenStable();
   }
+  it('replays all five URL filters without a second fetch or an unapplied export draft', async () => {
+    query.next(
+      convertToParamMap({
+        actor_type: 'system',
+        action: 'run.create',
+        object_type: 'run',
+        from: '2026-11-01T01:30:00-05:00',
+        to: '2026-11-01T08:00:00Z',
+      }),
+    );
+    const { fixture, root, store } = await render();
+    expect(store.filters()).toEqual({
+      actorType: 'system',
+      action: 'run.create',
+      objectType: 'run',
+      from: '2026-11-01T06:30:00.000Z',
+      to: '2026-11-01T08:00:00.000Z',
+    });
+    expect(root.querySelector('#audit-export-draft-hint')).toBeNull();
+    expect(data.list).toHaveBeenCalledTimes(1);
+    query.next(convertToParamMap({ action: 'auth.login' }));
+    await fixture.whenStable();
+    expect(store.filters()).toEqual({ ...EMPTY_AUDIT_FILTERS, action: 'auth.login' });
+    expect(data.list).toHaveBeenCalledTimes(2);
+    expect(navigate).not.toHaveBeenCalled();
+  });
   it('loads the current organization into a real scoped store and flags support activity', async () => {
     const { root } = await render();
     expect(data.list).toHaveBeenCalledWith('org1', { limit: 20 });
@@ -151,7 +142,9 @@ describe('AuditPage', () => {
     );
   });
   it('submits a labelled form with bounded inputs and maps local date inputs to UTC filters', async () => {
-    const { fixture, root, store } = await render();
+    const { fixture, store } = await render();
+    await openOptions(fixture);
+    const root = document.body;
     const load = vi.spyOn(store, 'load');
     await chooseActor(fixture, root, 'CI producer');
     input(root, 'action', 'run.created');
@@ -167,6 +160,15 @@ describe('AuditPage', () => {
       from: new Date('2026-10-20T10:30').toISOString(),
       to: new Date('2026-10-21T10:30').toISOString(),
     });
+    const [commands, extras] = navigate.mock.lastCall ?? [];
+    expect(commands).toEqual([]);
+    expect(extras?.queryParamsHandling).toBe('merge');
+    expect(extras?.queryParams).toMatchObject({
+      actor_type: 'ci_producer',
+      action: 'run.created',
+      object_type: 'run',
+    });
+    await openOptions(fixture);
     expect(root.querySelector('[name="action"]')?.getAttribute('maxlength')).toBe('128');
     expect(root.querySelector('[name="objectType"]')?.getAttribute('maxlength')).toBe('64');
     expect(root.querySelectorAll('form label')).toHaveLength(5);
@@ -175,7 +177,9 @@ describe('AuditPage', () => {
     expect(root.querySelector('label[for="audit-actor"]')).not.toBeNull();
   });
   it('keeps exact-code examples visibly associated with both technical filters', async () => {
-    const { root } = await render();
+    const { fixture } = await render();
+    await openOptions(fixture);
+    const root = document.body;
     for (const [name, id, example] of [
       ['action', 'audit-action-hint', 'auth.login'],
       ['objectType', 'audit-object-hint', 'policy_revision'],
@@ -210,13 +214,15 @@ describe('AuditPage', () => {
     input(root, 'action', 'run.create');
     await fixture.whenStable();
     expect(action?.disabled).toBe(true);
-    root.querySelector<HTMLButtonElement>('[data-audit-clear]')?.click();
+    root.querySelector<HTMLButtonElement>('[data-filter-clear]')?.click();
     await fixture.whenStable();
     expect(action?.disabled).toBe(false);
     expect(root.querySelector('[data-audit-export-done]')).toBeNull();
   });
   it('blocks reversed dates inline without calling load and accepts equal boundaries', async () => {
-    const { fixture, root, store } = await render();
+    const { fixture, store } = await render();
+    await openOptions(fixture);
+    const root = document.body;
     const load = vi.spyOn(store, 'load');
     for (const name of ['from', 'to']) {
       expect(root.querySelector(`[name="${name}"]`)?.getAttribute('aria-describedby')).toBe(
@@ -242,6 +248,7 @@ describe('AuditPage', () => {
     await fixture.whenStable();
     expect(load).toHaveBeenCalledTimes(1);
     expect(root.querySelector('#audit-range-error')).toBeNull();
+    await openOptions(fixture);
     for (const name of ['from', 'to']) {
       expect(root.querySelector(`[name="${name}"]`)?.getAttribute('aria-describedby')).toBe(
         `audit-${name}-hint`,
@@ -254,7 +261,7 @@ describe('AuditPage', () => {
     submit(root);
     await fixture.whenStable();
     const load = vi.spyOn(store, 'load');
-    root.querySelector<HTMLButtonElement>('[data-audit-clear]')!.click();
+    root.querySelector<HTMLButtonElement>('[data-filter-clear]')!.click();
     await fixture.whenStable();
     expect(load).toHaveBeenLastCalledWith('org1', EMPTY_AUDIT_FILTERS);
     expect((root.querySelector('[name="action"]') as HTMLInputElement).value).toBe('');
@@ -277,9 +284,10 @@ describe('AuditPage', () => {
     expect((root.querySelector('[name="action"]') as HTMLInputElement).value).toBe('');
   });
   it('opens actor choices from the keyboard and dismisses without applying a filter', async () => {
-    const { fixture, root, store } = await render();
+    const { fixture, store } = await render();
     const load = vi.spyOn(store, 'load');
-    const trigger = root.querySelector<HTMLButtonElement>('#audit-actor');
+    await openOptions(fixture);
+    const trigger = document.querySelector<HTMLButtonElement>('#audit-actor');
     if (!trigger) throw new Error('Expected actor picker');
     trigger.focus();
     trigger.dispatchEvent(

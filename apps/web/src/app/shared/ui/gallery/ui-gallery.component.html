@@ -121,6 +121,11 @@
         <app-evidence-badge [completeness]="'incomplete'" />
         <app-evidence-badge />
       </div>
+      <div class="specimens flex flex-wrap items-start gap-3 [&>*]:min-w-0 [&>*]:max-w-full">
+        <app-evidence-badge [compact]="true" [completeness]="'complete'" />
+        <app-evidence-badge [compact]="true" [completeness]="'incomplete'" />
+        <app-evidence-badge [compact]="true" />
+      </div>
     </section>
 
     <section

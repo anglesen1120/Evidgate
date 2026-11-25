@@ -12,7 +12,7 @@ import { RunListPage } from './run-list.page';
 class RunMetricsHarness extends ComponentHarness {
   static hostSelector = 'app-run-list-page';
   readonly loaded = this.locatorForOptional('[data-run-metrics] dd > app-number-value');
-  readonly filters = this.locatorFor('[data-run-filter-disclosure] .sr-only');
+  readonly filters = this.locatorFor('button[aria-controls="run-filter-panel"]');
   async loadedCount(): Promise<string | null> {
     return (await (await this.loaded())?.text()) ?? null;
   }
@@ -68,19 +68,19 @@ describe('Run list metric strip', () => {
 
   it('keeps filters on their disclosure and never reuses a previous project count', async () => {
     const { data, fixture, project, query, page } = await render();
-    expect(await (await page.filters()).text()).toBe('Active filters: 0');
+    expect(await (await page.filters()).text()).toBe('Filters (0)');
     query.next(convertToParamMap({ state: 'running' }));
     expect(await page.loadedCount()).toBe('20');
     data.pending[0]?.resolve({ items: [], next_cursor: null });
     await fixture.whenStable();
     expect(await page.loadedCount()).toBe('0');
-    expect(await (await page.filters()).text()).toBe('Active filters: 1');
+    expect(await (await page.filters()).text()).toBe('Filters (1)');
 
     project.next(convertToParamMap({ projectId: 'project-2' }));
     expect(await page.loadedCount()).toBeNull();
     data.pending[1]?.resolve({ items: data.all, next_cursor: null });
     await fixture.whenStable();
     expect(await page.loadedCount()).toBe('21');
-    expect(await (await page.filters()).text()).toBe('Active filters: 1');
+    expect(await (await page.filters()).text()).toBe('Filters (1)');
   });
 });

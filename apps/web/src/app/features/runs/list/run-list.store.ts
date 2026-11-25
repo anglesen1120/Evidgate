@@ -104,7 +104,7 @@ const UNRESOLVED_FAILURE: ApiError = {
  */
 function filtersFromQuery(query: Record<string, string | null | undefined>): RunListFilters {
   const state = query['state'];
-  const decision = query['decision'];
+  const decision = query['decision'] === 'fail' ? 'FAIL' : query['decision'];
   const scope = query['scope'];
 
   return {
@@ -371,7 +371,7 @@ export const RunListStore = signalStore(
           query['state'] = filters.state;
         }
         if (filters.decision !== '') {
-          query['decision'] = filters.decision;
+          query['decision'] = filters.decision === 'FAIL' ? 'fail' : filters.decision;
         }
         if (filters.scope !== '') {
           query['scope'] = filters.scope;

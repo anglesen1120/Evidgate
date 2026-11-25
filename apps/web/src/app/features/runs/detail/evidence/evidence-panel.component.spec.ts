@@ -397,6 +397,11 @@ describe('EvidencePanelComponent', () => {
       expect(event.defaultPrevented).toBe(true);
       expect(document.activeElement).toBe(row);
       expect(scrollIntoView).toHaveBeenCalledTimes(1);
+      row.remove();
+      const crossTab = new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 });
+      // An inactive panel has no row yet: let the browser navigate to the qualified fragment.
+      link.dispatchEvent(crossTab);
+      expect(crossTab.defaultPrevented).toBe(false);
     } finally {
       row.remove();
       if (original === undefined) Reflect.deleteProperty(Element.prototype, 'scrollIntoView');

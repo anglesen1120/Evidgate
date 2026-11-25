@@ -12,11 +12,14 @@ import { RunListStore } from './run-list.store';
 
 class FilterHarness extends ComponentHarness {
   static hostSelector = 'app-run-list-page';
-  readonly disclosure = this.locatorFor('[data-run-filter-disclosure]');
-  readonly panel = this.locatorFor('#run-filter-panel');
+  readonly disclosure = this.locatorFor('button[aria-controls="run-filter-panel"]');
+  readonly panel = this.documentRootLocatorFactory().locatorForOptional('#run-filter-panel');
+  readonly state = this.documentRootLocatorFactory().locatorFor('#run-state');
+  readonly all = this.locatorFor('[data-run-quick="all"]');
+  readonly fail = this.locatorFor('[data-run-quick="fail"]');
   readonly ref = this.locatorFor('#run-ref');
-  readonly apply = this.locatorFor('[data-run-apply]');
-  readonly clear = this.locatorFor('[data-run-clear]');
+  readonly apply = this.locatorFor('[data-filter-search]');
+  readonly clear = this.locatorFor('[data-filter-clear]');
 }
 
 describe('Run list filters', () => {
@@ -46,40 +49,56 @@ describe('Run list filters', () => {
     return { store, harness, desktop };
   }
 
-  it('collapses the form at both widths and counts committed filters rather than drafts', async () => {
+  it('opens secondary filters at both widths and counts only their committed values', async () => {
     const { store, harness, desktop } = await render();
     const toggle = await harness.disclosure();
     expect(await toggle.getAttribute('aria-expanded')).toBe('false');
-    expect(await toggle.text()).toContain('Active filters: 0');
+    expect(await toggle.text()).toContain('Filters (0)');
     await toggle.click();
-    expect(await (await harness.panel()).getProperty('hidden')).toBe(false);
+    expect(await harness.panel()).not.toBeNull();
     await (await harness.ref()).setInputValue('draft-only');
-    expect(await toggle.text()).toContain('Active filters: 0');
+    expect(await toggle.text()).toContain('Filters (0)');
     store.filters.update((filters) => ({ ...filters, decision: 'PASS', refName: 'main' }));
-    expect(await toggle.text()).toContain('Active filters: 2');
+    expect(await toggle.text()).toContain('Filters (1)');
     await toggle.click();
     desktop.next({ matches: true, breakpoints: {} });
     expect(await toggle.getAttribute('aria-expanded')).toBe('false');
-    expect(await (await harness.panel()).getProperty('hidden')).toBe(true);
+    expect(await harness.panel()).toBeNull();
   });
 
   it('moves focus to the disclosure when collapsing with a focused filter inside', async () => {
     const { harness } = await render();
     const toggle = await harness.disclosure();
     await toggle.click();
-    const ref = await harness.ref();
+    const ref = await harness.state();
     await ref.focus();
     expect(await ref.isFocused()).toBe(true);
     await toggle.click();
-    expect(await (await harness.panel()).getProperty('hidden')).toBe(true);
+    expect(await harness.panel()).toBeNull();
     expect(await toggle.isFocused()).toBe(true);
+  });
+
+  it('derives quick-chip selection from committed filters and never submits draft text on a chip click', async () => {
+    const { store, harness } = await render();
+    expect(await (await harness.all()).getAttribute('aria-pressed')).toBe('true');
+    await (await harness.ref()).setInputValue('draft-only');
+    await (await harness.fail()).click();
+    expect(store.setFilters).toHaveBeenCalledWith({
+      state: '',
+      scope: '',
+      refName: '',
+      decision: 'FAIL',
+    });
+    store.filters.update((filters) => ({ ...filters, decision: 'FAIL' }));
+    expect(await (await harness.fail()).getAttribute('aria-pressed')).toBe('true');
+    expect(await (await harness.all()).getAttribute('aria-pressed')).toBe('false');
   });
 
   it.each(['apply', 'clear'] as const)(
     'retains %s focus and refuses repeated intents while busy',
     async (action) => {
       const { store, harness } = await render();
-      await (await harness.disclosure()).click();
+      store.filters.update((filters) => ({ ...filters, decision: 'FAIL' }));
       const button = await harness[action]();
       await button.focus();
       store.busy.set(true);

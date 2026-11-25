@@ -1,0 +1,77 @@
+<hlm-dialog-header>
+  <h2 hlmDialogTitle>{{ copy.title }}</h2>
+</hlm-dialog-header>
+<dl class="hlm-field-grid">
+  <div class="hlm-field-wide">
+    <dt>{{ copy.execution }}</dt>
+    <dd>
+      <app-copyable-identifier
+        [value]="attempt.executionKey"
+        [label]="copy.execution"
+        [truncate]="false"
+        [iconOnlyCopy]="true"
+      />
+    </dd>
+  </div>
+  <div>
+    <dt>{{ copy.attempt }}</dt>
+    <dd class="tabular-nums">{{ attempt.attemptNo }}</dd>
+  </div>
+  <div>
+    <dt>{{ copy.raw }}</dt>
+    <dd data-attempt-raw>
+      <bdi class="font-mono">{{ display(attempt.rawStatus) }}</bdi>
+    </dd>
+  </div>
+  <div>
+    <dt>{{ copy.normalised }}</dt>
+    <dd data-attempt-normalised>
+      <bdi>{{ statusLabel('attempt', attempt.normalisedStatus) }}</bdi>
+    </dd>
+  </div>
+  <div class="hlm-field-wide" data-retry-chain>
+    <dt>{{ copy.chain }}</dt>
+    <dd>
+      <ol class="flex flex-wrap gap-(--eg-space-3)">
+        @for (retry of chain; track retry.attemptNo) {
+          <li>
+            {{ copy.attempt }} {{ retry.attemptNo }} ·
+            <bdi>{{ statusLabel('attempt', retry.normalisedStatus) }}</bdi>
+          </li>
+        }
+      </ol>
+    </dd>
+  </div>
+  @if (failure; as original) {
+    <div
+      data-pre-healing
+      class="hlm-field-wide border-s-2 border-(--eg-warning-fg) bg-(--eg-warning-bg) p-(--eg-space-4) text-(--eg-warning-fg)"
+    >
+      <dt>{{ copy.preHealing }}</dt>
+      <dd>
+        {{ copy.attempt }} {{ original.attemptNo }} ·
+        <bdi>{{ statusLabel('attempt', original.normalisedStatus) }}</bdi>
+        <bdi class="block font-mono">{{ display(original.rawStatus) }}</bdi>
+      </dd>
+    </div>
+  }
+  @for (retry of chain; track retry.attemptNo) {
+    @if (retry.healingCandidate; as candidate) {
+      <div data-healing-candidate class="hlm-field-wide border-s border-border ps-(--eg-space-4)">
+        <dt>{{ copy.candidate }}</dt>
+        <dd>
+          <span
+            >{{ copy.attempt }} {{ retry.attemptNo }} ·
+            {{ candidate.mode === 'shadow' ? copy.shadow : copy.official }}</span
+          >
+          <app-copyable-identifier
+            [value]="candidate.candidateHash"
+            [label]="copy.candidate"
+            [truncate]="false"
+            [iconOnlyCopy]="true"
+          />
+        </dd>
+      </div>
+    }
+  }
+</dl>

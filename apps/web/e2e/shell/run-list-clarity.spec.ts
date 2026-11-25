@@ -46,16 +46,40 @@ for (const locale of LOCALES) {
         ]),
       );
       const hint = page.getByText(copy.hint, { exact: true });
-      for (const width of [390, 900, 1440]) {
+      for (const width of [360, 390, 900, 1440]) {
         await page.setViewportSize({ width, height: 900 });
-        if (width === 390) await expect(page.locator('#run-scope')).toBeHidden();
+        if (width === 360) {
+          const all = page.locator('[data-run-quick="all"]');
+          const pending = page.locator('[data-run-quick="pending"]');
+          const pressedRing = /(?:2px inset|inset [^,]*2px)/;
+          await expect(all).toHaveCSS('box-shadow', pressedRing);
+          await expect(pending).not.toHaveCSS('box-shadow', pressedRing);
+          await pending.click();
+          await expect(page).toHaveURL(/decision=pending/);
+          await expect(pending).toHaveCSS('box-shadow', pressedRing);
+          await expect(all).not.toHaveCSS('box-shadow', pressedRing);
+          expect(
+            await page.evaluate(() => document.documentElement.scrollWidth),
+          ).toBeLessThanOrEqual(width);
+          await page.goBack();
+          await expect(all).toHaveCSS('box-shadow', pressedRing);
+          await expect(pending).not.toHaveCSS('box-shadow', pressedRing);
+        }
+        await expect(page.locator('#run-scope')).toBeHidden();
         await openRunFilters(page);
+        const scopeHint = page.locator('button[aria-controls="run-filter-hint"]');
+        await expect(hint).toBeHidden();
+        await scopeHint.click();
         await expect(hint).toBeVisible();
+        await scopeHint.press('Escape');
+        await expect(scopeHint).toBeFocused();
         for (const name of [copy.scope, copy.state, copy.decision]) {
           await expect(page.getByRole('combobox', { name, exact: true })).toBeVisible();
         }
         await expect(page.getByRole('textbox', { name: copy.ref, exact: true })).toBeVisible();
         await expect(page.locator('label[for="run-scope"]')).toHaveText(copy.scope);
+        await page.keyboard.press('Escape');
+        await expect(page.locator('#run-scope')).toBeHidden();
         // The available width and translated headers determine which presentation fits.
         const heading = page
           .getByRole('columnheader', { name: copy.order, exact: true })

@@ -1,8 +1,9 @@
 import { expect, type Locator, type Page } from '@playwright/test';
+import type { ShellLocale } from './support';
 
 /** Both approved table presentations carry the same served row identity. */
 export const RUN_RECORDS = 'app-run-list-table [data-row-id]';
-export const RUN_FILTER_BUTTON = 'button[data-run-filter-disclosure]';
+export const RUN_FILTER_BUTTON = 'button[aria-controls="run-filter-panel"]';
 
 /** The same keyboard disclosure exposes the filter form at every width. */
 export async function openRunFilters(page: Page): Promise<void> {
@@ -11,6 +12,23 @@ export async function openRunFilters(page: Page): Promise<void> {
   if ((await button.getAttribute('aria-expanded')) === 'false') await button.press('Enter');
   await expect(button).toHaveAttribute('aria-expanded', 'true');
   await expect(page.locator('#run-filter-panel')).toBeVisible();
+}
+
+/** The filters are Helm comboboxes now: the trigger shows the selected label, not a value. */
+export const FILTER_LABEL = {
+  any: { en: 'All', vi: 'Tất cả' },
+  running: { en: 'Running', vi: 'Đang chạy' },
+  complete: { en: 'Complete', vi: 'Hoàn tất' },
+  pending: { en: 'Not evaluated', vi: 'Chưa đánh giá' },
+  fail: { en: 'FAIL', vi: 'FAIL' },
+  rerun: { en: 'Rerun', vi: 'Chạy lại' },
+} satisfies Record<string, Record<ShellLocale, string>>;
+
+/** A combobox commits on an option click; it exposes no form value to read back. */
+export async function chooseFilter(page: Page, trigger: string, label: string): Promise<void> {
+  await openRunFilters(page);
+  await page.locator(trigger).click();
+  await page.getByRole('option', { name: label, exact: true }).click();
 }
 
 export async function expectCenteredRunIdentity(row: Locator): Promise<void> {

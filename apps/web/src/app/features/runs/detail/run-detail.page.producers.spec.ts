@@ -48,7 +48,7 @@ describe('RunDetailPage producer region', () => {
   async function open(fragment = '') {
     const harness = await RouterTestingHarness.create();
     await harness.navigateByUrl(
-      `/projects/project-1/runs/${run.run_id}${fragment === '' ? '' : `#${fragment}`}`,
+      `/projects/project-1/runs/${run.run_id}${fragment === '' ? '?tab=evidence' : `#${fragment}`}`,
       RunDetailPage,
     );
     await harness.fixture.whenStable();
@@ -159,6 +159,8 @@ describe('RunDetailPage producer region', () => {
     );
     expect(region?.querySelector('tbody [data-badge="after-cancel"]')).toBeNull();
     expect(region?.querySelectorAll('[data-fact][data-unavailable]')).toHaveLength(8);
+    root.querySelector<HTMLButtonElement>('[data-run-tab="context"]')!.click();
+    await vi.waitFor(() => expect(root.querySelector('app-run-timeline')).not.toBeNull());
     expect(root.querySelector('[data-step="complete"]')?.getAttribute('data-status')).toBe(
       'not-reached',
     );

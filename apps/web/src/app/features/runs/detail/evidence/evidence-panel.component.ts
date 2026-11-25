@@ -233,9 +233,10 @@ export class EvidencePanelComponent {
     const href = anchor.getAttribute('href') ?? '';
     const fragment = href.slice(href.indexOf('#'));
     if (!fragment.startsWith('#')) return;
-    event.preventDefault();
     const row = resolveEvidenceAnchor(fragment, this.document);
+    // An inactive or paginated panel can only mount its target after fragment navigation.
     if (row === null) return;
+    event.preventDefault();
     row.scrollIntoView?.({ block: 'start', inline: 'nearest' });
     row.focus({ preventScroll: true });
   }

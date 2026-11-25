@@ -1,6 +1,6 @@
 // Runs flow by keyboard alone on the fixtures build (no click or force); focus is identified by
 // role/name, id or data hook, never by Tab count. Scrollers, row copy and pagers keep DOM order.
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import runList from '../../../../fixtures/web-api/run-list/input.json';
 import runList250 from '../../../../fixtures/web-api/run-list-250/input.json';
 import { expectNoA11yViolations } from '../a11y/axe-scan';
@@ -8,6 +8,8 @@ import { activeElement, localePath, ORG_ACME, PROJECT_STOREFRONT, withVariants }
 import { RUN_FILTER_BUTTON, RUN_RECORDS } from './run-list.support';
 import {
   auditRunTabStops,
+  enterFilterDisclosure,
+  expectFocusRing,
   enterRunDetails,
   tabThroughNarrowRunRecords,
   tabThroughRunControls,
@@ -18,13 +20,6 @@ import {
 const RUN_READ_GRANT = '?fixture.variant.listPermissions=settings-policy-readonly';
 const RUN_WITH_REVISION_AND_RELEASE = '?fixture.variant.getRun=detail-release';
 const FIRST_RUN = runList.body.items[0]!.run_id;
-const SELECT_STOPS = [
-  '#run-state',
-  'button[aria-label="Hint: Decision"]',
-  '#run-decision',
-  '#run-scope',
-] as const;
-const FILTER_STOPS = [...SELECT_STOPS, '#run-ref', '[data-run-apply]', '[data-run-clear]'] as const;
 
 const FULL_PAGE_ROWS = 20;
 const LARGE_PAGE_FIRST = runList250.body.items[0]!.run_id;
@@ -50,17 +45,6 @@ async function listIsReady(page: Page): Promise<void> {
   await expect(page.locator('app-run-list-page')).toHaveAttribute('data-run-list-status', 'ready');
 }
 
-/**
- * The focus ring every stop must show: the token pair the page styles its own controls with
- * (`--eg-focus-width` / `--eg-focus` on the light theme, which is this suite's default).
- */
-async function expectFocusRing(target: Locator, offset: string): Promise<void> {
-  await expect(target).toHaveCSS('outline-width', '2px');
-  await expect(target).toHaveCSS('outline-style', 'solid');
-  await expect(target).toHaveCSS('outline-color', 'rgb(0, 107, 102)');
-  await expect(target).toHaveCSS('outline-offset', offset);
-}
-
 /** Skip link, then the route's own region: the first two stops of every page, by keyboard only. */
 async function enterMain(page: Page): Promise<void> {
   await page.keyboard.press('Tab');
@@ -68,16 +52,6 @@ async function enterMain(page: Page): Promise<void> {
   await expect(page.locator('a.skip-link')).toHaveAccessibleName('Skip to main content');
   await page.keyboard.press('Enter');
   await expect(page.locator('#main-content')).toBeFocused();
-}
-
-/** The filter disclosure precedes the controls and their optional guidance. */
-async function enterFilterDisclosure(page: Page): Promise<void> {
-  await page.keyboard.press('Tab');
-  const button = page.locator(RUN_FILTER_BUTTON);
-  await expect(button).toBeFocused();
-  await expectFocusRing(button, '2px');
-  if ((await button.getAttribute('aria-expanded')) === 'false') await page.keyboard.press('Enter');
-  await expect(button).toHaveAttribute('aria-expanded', 'true');
 }
 
 test('the list, a row and the way back are keyboard-reachable and identifiable', async ({
@@ -88,12 +62,6 @@ test('the list, a row and the way back are keyboard-reachable and identifiable',
   await enterMain(page);
   await enterFilterDisclosure(page);
   await auditRunTabStops(page.locator('app-run-list-page'), 'list-to-detail/list');
-
-  for (const selector of FILTER_STOPS) {
-    await page.keyboard.press('Tab');
-    await expect(page.locator(selector)).toBeFocused();
-    await expectFocusRing(page.locator(selector), '2px');
-  }
 
   // Overflow adds exactly one named local-scroller stop, never a redundant wrapper stop.
   await tabThroughTableScroller(page, page.locator('app-run-list-table'));
@@ -115,41 +83,50 @@ test('the list, a row and the way back are keyboard-reachable and identifiable',
   expect((await activeElement(page)).id).toBe('main-content');
 
   await page.keyboard.press('Tab');
+  await expect(page.locator('app-shell-breadcrumbs a')).toBeFocused();
+  await page.keyboard.press('Tab');
   const back = page.getByRole('link', { name: 'Back to runs' });
   await expect(back).toBeFocused();
   expect((await back.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(32);
 
-  // The header's inspect-evidence action sits between the back link and the run summary.
-  await page.keyboard.press('Tab');
-  await expect(page.getByRole('button', { name: 'Inspect evidence' })).toBeFocused();
   const summary = page.getByRole('region', { name: 'Stored run decision' });
-  for (const name of ['Show full Evidence revision', 'Copy Evidence revision']) {
+  for (const name of [
+    'Show full Run id',
+    'Copy Run id',
+    'Copy Ref',
+    'Show full Head commit',
+    'Copy Head commit',
+    'Show full Evidence revision',
+    'Copy Evidence revision',
+  ]) {
     await page.keyboard.press('Tab');
     await expect(summary.getByRole('button', { name, exact: true })).toBeFocused();
   }
-  const context = page.locator('app-run-header').last();
-  await tabThroughRunControls(page, context.locator('section > dl'), 3);
-  await enterRunDetails(page, context.locator('details'));
-  await tabThroughRunControls(page, context.locator('details'), 2);
-  await expect(page.getByRole('region', { name: 'Attempts table' })).toHaveAttribute(
+  await page.keyboard.press('Tab');
+  const attemptsTab = page.locator('[data-run-tab="attempts"]');
+  await expect(attemptsTab).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(page.getByRole('tabpanel')).toBeFocused();
+  const attempts = page.locator('app-attempts-table');
+  await expect(attempts.getByRole('region', { name: 'Attempts table' })).toHaveAttribute(
     'tabindex',
     '-1',
   );
-  await expect(page.locator('app-attempts-table [data-attempt-row]')).toHaveCount(7);
-  for (const [selector, rows, copies, summary] of [
-    ['app-attempts-table', 'app-data-table', 7, 'Showing 1–7'],
-    ['#producers', 'app-data-table', 2, 'Showing 1–2 of 2'],
-  ] as const) {
-    const root = page.locator(selector);
-    await tabThroughTableScroller(page, root);
-    await tabThroughRunControls(page, root.locator(rows), copies);
-    await expect(root.getByRole('navigation', { name: 'Table pagination' })).toHaveCount(0);
-    await expect(root.locator('app-data-table-pager .page-range')).toHaveText(summary);
+  await expect(attempts.locator('[data-attempt-row]')).toHaveCount(7);
+  await expect(attempts.locator('button[appRowAction]')).toHaveCount(7);
+  await expect(attempts.locator('app-copy-value-button button')).toHaveCount(7);
+  await tabThroughTableScroller(page, attempts);
+  for (const control of await attempts
+    .locator('app-data-table button, app-data-table [tabindex="0"]:not([role="region"])')
+    .all()) {
+    await page.keyboard.press('Tab');
+    await expect(control).toBeFocused();
+    await expect(control).toHaveAccessibleName(/\S/);
   }
-
-  // Evidence and the latest live decision are tabs: only the selected tab is a Tab stop, arrows move
-  // inside the list, and the selected panel is the next stop; the hidden panel leaves the order.
-  await page.keyboard.press('Tab');
+  await expect(attempts.getByRole('navigation', { name: 'Table pagination' })).toHaveCount(0);
+  await expect(attempts.locator('app-data-table-pager .page-range')).toHaveText('Showing 1–7');
+  await attemptsTab.focus();
+  await page.keyboard.press('ArrowRight');
   const evidenceTab = page.getByRole('tab', { name: 'Evidence' });
   await expect(evidenceTab).toBeFocused();
   await page.keyboard.press('ArrowRight');
@@ -158,7 +135,7 @@ test('the list, a row and the way back are keyboard-reachable and identifiable',
   await expect(decisionTab).toHaveAttribute('aria-selected', 'true');
   const decisionPanel = page.getByRole('tabpanel');
   await expect(decisionPanel).toHaveAttribute('tabindex', '0');
-  await expect(page.locator('[role="tabpanel"][hidden]')).toHaveAttribute('tabindex', '-1');
+  await expect(page.locator('[role="tabpanel"][hidden][tabindex="-1"]')).toHaveCount(3);
   await page.keyboard.press('Tab');
   await expect(decisionPanel).toBeFocused();
   await expectFocusRing(decisionPanel, '2px');
@@ -171,13 +148,13 @@ test('the list, a row and the way back are keyboard-reachable and identifiable',
   await expect(evidenceTab).toBeFocused();
   await expect(evidenceTab).toHaveAttribute('aria-selected', 'true');
   await expect(decisionTab).toHaveAttribute('tabindex', '-1');
-  await expect(page.locator('[role="tabpanel"][hidden]')).toHaveAttribute('tabindex', '-1');
+  await expect(page.locator('[role="tabpanel"][hidden][tabindex="-1"]')).toHaveCount(3);
   await page.keyboard.press('Tab');
   const evidencePanel = page.getByRole('tabpanel');
   await expect(evidencePanel).toBeFocused();
   await expect(evidencePanel).toHaveAttribute('tabindex', '0');
 
-  // The revision picker precedes the peer timeline/context area, then manifest provenance.
+  // The evidence selector precedes producer actions inside the active panel.
   await page.keyboard.press('Tab');
   await expect(
     page.getByRole('button', { name: 'Hint: Evidence revision', exact: true }),
@@ -185,6 +162,22 @@ test('the list, a row and the way back are keyboard-reachable and identifiable',
   await page.keyboard.press('Tab');
   await expect(page.getByRole('combobox', { name: 'Evidence revision' })).toBeFocused();
   await expect(page.locator('app-evidence-panel app-copy-value-button button')).toHaveCount(0);
+  const producers = page.locator('#producers');
+  await tabThroughTableScroller(page, producers);
+  await tabThroughRunControls(page, producers.locator('app-data-table'), 2);
+  await expect(producers.getByRole('navigation', { name: 'Table pagination' })).toHaveCount(0);
+  await expect(producers.locator('app-data-table-pager .page-range')).toHaveText(
+    'Showing 1–2 of 2',
+  );
+  await evidenceTab.focus();
+  await page.keyboard.press('End');
+  await expect(page.locator('[data-run-tab="context"]')).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(page.getByRole('tabpanel')).toBeFocused();
+  const context = page.locator('app-run-context');
+  await tabThroughRunControls(page, context.locator('section > dl'), 1);
+  await enterRunDetails(page, context.locator('details'));
+  await tabThroughRunControls(page, context.locator('details'), 2);
   const manifest = page.locator('app-manifest-panel details');
   await enterRunDetails(page, manifest);
   await tabThroughRunControls(page, manifest, 3);
@@ -237,7 +230,7 @@ test('the selected panel precedes its three decision provenance copy controls', 
         '?fixture.variant.listRunAttempts=ok',
         '?fixture.variant.getRunDecision=evaluated-fail-missing-shard',
         // The decision was evaluated at revision 2, so pinning there raises no mismatch action.
-        '?evidence_revision=2',
+        '?evidence_revision=2&tab=evidence',
       ],
     ),
   );
@@ -259,7 +252,7 @@ test('the selected panel precedes its three decision provenance copy controls', 
   await expect(panel).toHaveCount(1);
   await expect(panel).toHaveAttribute('tabindex', '0');
   await auditRunTabStops(panel, 'decision-provenance-panel');
-  await expect(page.locator('[role="tabpanel"][hidden]')).toHaveAttribute('tabindex', '-1');
+  await expect(page.locator('[role="tabpanel"][hidden][tabindex="-1"]')).toHaveCount(3);
   await page.keyboard.press('Tab');
   await expect(panel).toBeFocused();
   await expectFocusRing(panel, '2px');
@@ -280,21 +273,15 @@ test('a filter change keeps the focus that asked for it, and Clear restores the 
   await enterMain(page);
   await enterFilterDisclosure(page);
 
-  // The three selects are comboboxes reached and left by Tab alone; their option lists are a
-  // portaled overlay opened with Enter or an arrow key, so the value this walk sets is the text
-  // filter's — the one a keystroke sequence can type unambiguously.
-  for (const selector of SELECT_STOPS) {
-    await page.keyboard.press('Tab');
-    await expect(page.locator(selector)).toBeFocused();
-    await expectFocusRing(page.locator(selector), '2px');
-  }
-  await page.keyboard.press('Tab');
+  await page.keyboard.press('Shift+Tab');
+  await expect(page.locator('[data-filter-search]')).toBeFocused();
+  await page.keyboard.press('Shift+Tab');
   const ref = page.locator('#run-ref');
   await expect(ref).toBeFocused();
   await page.keyboard.insertText('release/việt');
 
   await page.keyboard.press('Tab');
-  const apply = page.locator('[data-run-apply]');
+  const apply = page.locator('[data-filter-search]');
   await expect(apply).toBeFocused();
   await page.keyboard.press('Enter');
   await expect.poll(() => new URL(page.url()).searchParams.get('ref')).toBe('release/việt');
@@ -309,7 +296,9 @@ test('a filter change keeps the focus that asked for it, and Clear restores the 
   await expect(apply).toBeFocused();
 
   await page.keyboard.press('Tab');
-  const clear = page.locator('[data-run-clear]');
+  await expect(page.locator(RUN_FILTER_BUTTON)).toBeFocused();
+  await page.keyboard.press('Tab');
+  const clear = page.locator('[data-filter-clear]');
   await expect(clear).toBeFocused();
   await page.keyboard.press('Enter');
   await expect.poll(() => new URL(page.url()).searchParams.has('ref')).toBe(false);
@@ -321,7 +310,8 @@ test('a filter change keeps the focus that asked for it, and Clear restores the 
   await expect(page.locator('app-run-list-table [data-run-row]')).toHaveCount(
     runList.body.items.length,
   );
-  await expect(clear).toBeFocused();
+  await expect(clear).toHaveCount(0);
+  await expect(page.locator(RUN_FILTER_BUTTON)).toBeFocused();
   await auditRunTabStops(page.locator('app-run-list-page'), 'filter-clear');
   // The tab order survives the re-read, including only an actually overflowing scroller.
   await tabThroughTableScroller(page, page.locator('app-run-list-table'));
@@ -345,10 +335,6 @@ test('the narrow server pages keep every fact reachable and preserve focus on a 
   await enterMain(page);
   await enterFilterDisclosure(page);
   await auditRunTabStops(page.locator('app-run-list-page'), '250-records/first-page');
-  for (const selector of FILTER_STOPS) {
-    await page.keyboard.press('Tab');
-    await expect(page.locator(selector)).toBeFocused();
-  }
   await tabThroughNarrowRunRecords(page, page.locator('app-run-list-table .eg-table-records'), 20);
   const pager = page.locator('app-data-table-pager');
   const previous = pager.getByRole('button', { name: 'Previous page', exact: true });
@@ -402,10 +388,6 @@ test('a retried 503 hands focus to the page heading instead of dropping it to bo
   await enterFilterDisclosure(page);
   await auditRunTabStops(page.locator('app-run-list-page'), 'retry-503');
   // Opening the filter disclosure preserves the same hint and field order during recovery.
-  for (const selector of FILTER_STOPS) {
-    await page.keyboard.press('Tab');
-    await expect(page.locator(selector)).toBeFocused();
-  }
   await page.keyboard.press('Tab');
   await expect(retry).toBeFocused();
 
@@ -434,10 +416,6 @@ test('Next replaces the page and retains its keyboard focus while busy and at th
   await enterMain(page);
   await enterFilterDisclosure(page);
   await auditRunTabStops(page.locator('app-run-list-page'), 'cursor/first-page');
-  for (const selector of FILTER_STOPS) {
-    await page.keyboard.press('Tab');
-    await expect(page.locator(selector)).toBeFocused();
-  }
   await tabThroughTableScroller(page, page.locator('app-run-list-table'));
   for (let row = 0; row < FULL_PAGE_ROWS; row++) {
     await tabThroughRunControls(page, rows.nth(row), 1, true);

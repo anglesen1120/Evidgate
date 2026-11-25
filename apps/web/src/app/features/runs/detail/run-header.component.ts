@@ -15,7 +15,7 @@ import { DecisionChipComponent } from '../../../shared/ui/verdict/decision-chip.
 import { OutcomePillComponent } from '../../../shared/ui/verdict/outcome-pill.component';
 import type { Completeness } from '../../../shared/ui/verdict/verdict-values';
 import { escapeFormatChars } from '../../../shared/ui/values/ref-name-display';
-import { RUN_DETAIL_NOT_PROVIDED, runValueLabel } from './run-value-label';
+import { RUN_DETAIL_NOT_PROVIDED } from './run-value-label';
 import type { DecisionViewModel } from './decision/decision-view-model';
 
 @Component({
@@ -38,6 +38,20 @@ import type { DecisionViewModel } from './decision/decision-view-model';
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './run-header.component.html',
+  styles: `
+    .run-summary {
+      border-inline-start-color: var(--eg-border-control);
+    }
+    [data-verdict='PASS'] {
+      border-inline-start-color: var(--eg-success-fg);
+    }
+    [data-verdict='FAIL'] {
+      border-inline-start-color: var(--eg-danger-fg);
+    }
+    [data-verdict='INCONCLUSIVE'] {
+      border-inline-start-color: var(--eg-warning-fg);
+    }
+  `,
   host: {
     class: 'block min-w-0 text-foreground wrap-anywhere',
   },
@@ -45,7 +59,6 @@ import type { DecisionViewModel } from './decision/decision-view-model';
 export class RunHeaderComponent {
   readonly run = input.required<RunStateDto>();
   protected readonly sectionSize = 'section' as const;
-  readonly view = input<'summary' | 'context'>('summary');
   readonly viewEvidence = output<void>();
   // The incomplete-collection warning still describes the latest freeze, regardless of the pin.
   readonly runCompleteness = input<Completeness | null>(null);
@@ -58,24 +71,14 @@ export class RunHeaderComponent {
   readonly decision = input<DecisionViewModel | null>(null);
   readonly decisionLoading = input(false);
   protected readonly display = escapeFormatChars;
-  protected readonly valueLabel = runValueLabel;
   protected readonly copy = {
     id: $localize`:@@runs.detail.id:Run id`,
-    state: $localize`:@@runs.detail.state:Collection state`,
-    version: $localize`:@@runs.detail.run-version:Run version`,
-    purpose: $localize`:@@runs.detail.purpose:Purpose`,
     notProvided: RUN_DETAIL_NOT_PROVIDED,
     missing: $localize`:@@runs.evidence.missing-title:Missing evidence reasons`,
     latestFreeze: $localize`:@@runs.detail.latest-freeze:Latest loaded freeze`,
     ref: $localize`:@@runs.detail.ref:Ref`,
-    refKind: $localize`:@@runs.detail.ref-kind:Ref kind`,
     pr: $localize`:@@runs.detail.pr:Pull request number`,
     head: $localize`:@@runs.detail.head:Head commit`,
-    base: $localize`:@@runs.detail.base:Base commit`,
-    trigger: $localize`:@@runs.detail.trigger:Trigger event`,
-    fork: $localize`:@@runs.detail.fork:Fork`,
-    yes: $localize`:@@runs.detail.yes:Yes`,
-    no: $localize`:@@runs.detail.no:No`,
     unverified: $localize`:@@runs.detail.unverified:Unverified ref`,
     incomplete: $localize`:@@runs.detail.incomplete-summary:Collection is incomplete. Review the evidence panel for recorded missing reasons.`,
     viewEvidence: $localize`:@@runs.detail.view-evidence:View evidence`,
@@ -86,8 +89,5 @@ export class RunHeaderComponent {
     unavailable: $localize`:@@runs.value.decision-unavailable:Unavailable`,
     loading: $localize`:@@runs.decision.loading:Loading live decision`,
     none: $localize`:@@runs.detail.none:None recorded`,
-    context: $localize`:@@runs.detail.context:Execution context`,
-    environment: $localize`:@@runs.detail.environment:Environment`,
-    revision: $localize`:@@runs.detail.release.environment:Environment revision`,
   };
 }

@@ -19,14 +19,13 @@ import {
   pendingBody,
   run,
   settle,
+  selectTab,
 } from './run-detail.page.test-support';
 
 class RunDetailHarness extends ComponentHarness {
   static hostSelector = 'app-run-detail-page';
   private readonly facts = this.locatorForAll('.run-summary dl > div > dd');
-  private readonly inspect = this.locatorFor(
-    'app-page-header .header-actions > button:last-of-type',
-  );
+  private readonly inspect = this.locatorFor('[data-run-missing-summary] button');
   private readonly decisionTab = this.locatorFor('[role="tab"][aria-label]');
   private readonly evidenceTitle = this.locatorFor('#evidence-title');
 
@@ -45,9 +44,9 @@ describe('RunDetailPage decision and evidence', () => {
   provideLayoutTestStubs();
   beforeEach(() => configureRunDetailTestBed());
   afterEach(() => TestBed.resetTestingModule());
-  it('renders the live decision from one served body beside the evidence panel', async () => {
+  it('renders the live decision and its evidence in their respective panels', async () => {
     getDecision.mockResolvedValue(liveBody());
-    const { root } = await open();
+    const { harness, root } = await open(run.run_id, '', '?tab=decision');
     expect(getDecision).toHaveBeenCalledExactlyOnceWith(run.run_id);
     const decision = root.querySelector('app-decision-view')!;
     expect(decision.querySelector('app-decision-chip')?.textContent).toContain('FAIL');
@@ -64,6 +63,7 @@ describe('RunDetailPage decision and evidence', () => {
     );
     expect(decision.querySelector('[data-decision-evaluator] dd')?.textContent).toBe('1.4.0');
     expect(decision.querySelector('[data-decision-mode] dd')?.textContent).toBe('Live evaluation');
+    await selectTab(harness, 'evidence');
     const evidence = root.querySelector('app-evidence-panel')!;
     expect(root.querySelector('.run-summary [data-evidence-completeness]')?.textContent).toContain(
       'Completeness: Incomplete',
@@ -71,8 +71,14 @@ describe('RunDetailPage decision and evidence', () => {
     expect(evidence.querySelector('[data-evidence-missing]')?.textContent).toContain(
       'missing_shard',
     );
-    // Reading order stays Evidence then Decision, whatever the grid does with the columns.
-    expect(evidence.compareDocumentPosition(decision)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    const tabs = [...root.querySelectorAll('[role="tab"]')];
+    expect(tabs.map((tab) => tab.getAttribute('data-run-tab'))).toEqual([
+      'attempts',
+      'evidence',
+      'decision',
+      'context',
+    ]);
+    expect(decision.isConnected).toBe(false);
   });
   it('shows the three independent facts together only for a matching frozen evaluation', async () => {
     getDecision.mockResolvedValue(liveBody());
@@ -107,7 +113,7 @@ describe('RunDetailPage decision and evidence', () => {
       reasons: [],
     });
     listEvidenceRevisions.mockResolvedValue(revisionPage([revision({ revision_no: 5 })]));
-    const { harness, root } = await open(run.run_id, '', '?evidence_revision=5');
+    const { harness, root } = await open(run.run_id, '', '?evidence_revision=5&tab=decision');
     const detail = await TestbedHarnessEnvironment.loader(harness.fixture).getHarness(
       RunDetailHarness,
     );
@@ -120,6 +126,7 @@ describe('RunDetailPage decision and evidence', () => {
     );
   });
   it('opens evidence from the header without a second decision or revision read', async () => {
+    get.mockResolvedValue({ ...run, state: 'incomplete' });
     const { harness } = await open();
     const detail = await TestbedHarnessEnvironment.loader(harness.fixture).getHarness(
       RunDetailHarness,
@@ -129,7 +136,8 @@ describe('RunDetailPage decision and evidence', () => {
     expect(listEvidenceRevisions).toHaveBeenCalledTimes(1);
   });
   it('renders pending with the evidence panel saying no live evaluation exists', async () => {
-    const { root } = await open();
+    const { harness, root } = await open(run.run_id, '', '?tab=decision');
+    await selectTab(harness, 'evidence');
     const evidence = root.querySelector('app-evidence-panel')!;
     expect(evidence.textContent).toContain('No live evaluation recorded for this revision');
     expect(root.querySelector('.run-summary [data-evidence-completeness]')?.textContent).toContain(
@@ -138,7 +146,7 @@ describe('RunDetailPage decision and evidence', () => {
     expect(evidence.querySelector('[data-evidence-missing]')?.textContent).toContain(
       'Missing evidence reasons unavailable',
     );
-    expect(root.querySelector('app-decision-chip')?.textContent).toContain('Not evaluated');
+    expect(root.querySelector('app-decision-chip')?.textContent).toContain('Pending');
     expect(root.querySelector('app-outcome-pill')).toBeNull();
   });
   it('a failed decision read keeps the run, manifest and attempts and retries only the decision', async () => {
@@ -158,8 +166,10 @@ describe('RunDetailPage decision and evidence', () => {
       .mockResolvedValueOnce(liveBody());
     const { harness, root } = await open();
     expect(root.querySelector('app-run-header')).not.toBeNull();
-    expect(root.querySelector('app-manifest-panel')).not.toBeNull();
     expect(root.querySelector('app-attempts-table')).not.toBeNull();
+    await selectTab(harness, 'context');
+    expect(root.querySelector('app-manifest-panel')).not.toBeNull();
+    await selectTab(harness, 'decision');
     const decision = root.querySelector('app-decision-view')!;
     expect(decision.querySelector('app-error-pattern')).not.toBeNull();
     expect(decision.textContent).toContain('request-decision');
@@ -186,7 +196,7 @@ describe('RunDetailPage decision and evidence', () => {
         retryAfterSeconds: null,
       }),
     );
-    const { root } = await open();
+    const { harness, root } = await open(run.run_id, '', '?tab=decision');
     const decision = root.querySelector('app-decision-view')!;
     expect(decision.querySelector('app-forbidden-pattern')).not.toBeNull();
     expect(decision.querySelector('[data-decision-policy]')).toBeNull();
@@ -194,6 +204,7 @@ describe('RunDetailPage decision and evidence', () => {
     expect(decision.textContent).not.toContain('sha256:policy');
     expect(decision.textContent).not.toContain('critical_not_executed');
 
+    await selectTab(harness, 'evidence');
     const evidence = root.querySelector('app-evidence-panel')!;
     expect(root.querySelector('.run-summary [data-evidence-completeness]')?.textContent).toContain(
       'Completeness: Unavailable',
@@ -211,7 +222,10 @@ describe('RunDetailPage decision and evidence', () => {
     getDecision.mockReturnValue(decision.promise);
     listEvidenceRevisions.mockResolvedValue(revisionPage([revision({ revision_no: 4 })]));
     const harness = await RouterTestingHarness.create();
-    await harness.navigateByUrl(`/projects/project-1/runs/${run.run_id}`, RunDetailPage);
+    await harness.navigateByUrl(
+      `/projects/project-1/runs/${run.run_id}?tab=evidence`,
+      RunDetailPage,
+    );
     await harness.fixture.whenStable();
     const root = harness.routeNativeElement!;
     const evidence = root.querySelector('app-evidence-panel');
@@ -225,9 +239,9 @@ describe('RunDetailPage decision and evidence', () => {
     expect(root.textContent).not.toContain('PASS');
     decision.resolve(pendingBody());
     await settle(harness);
-    expect(root.querySelector('.run-summary')?.textContent).toContain('Not evaluated');
+    expect(root.querySelector('.run-summary')?.textContent).toContain('Pending');
     expect(harness.routeNativeElement?.querySelector('app-decision-chip')?.textContent).toContain(
-      'Not evaluated',
+      'Pending',
     );
   });
   it('lands on the attempt fragment once the rows render, without paging on its own', async () => {
@@ -263,7 +277,7 @@ describe('RunDetailPage decision and evidence', () => {
       revisionPage([revision({ revision_no: 4 }), revision({ revision_no: 3 })]),
     );
     getDecision.mockResolvedValue(liveBody());
-    const { harness, root } = await open(run.run_id, '', '?evidence_revision=3');
+    const { harness, root } = await open(run.run_id, '', '?tab=evidence&evidence_revision=3');
     const banner = root.querySelector('[data-evidence-newer]');
     expect(banner).not.toBeNull();
     (banner?.querySelector('button') as HTMLButtonElement).focus();

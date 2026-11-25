@@ -1,7 +1,7 @@
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { clearTranslations, loadTranslations } from '@angular/localize';
-import { provideRouter } from '@angular/router';
+import { provideRouter, Router } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
 import { ReleasesDataService } from '../../../core/data/releases-data.service';
 import { RunsDataService } from '../../../core/data/runs-data.service';
@@ -43,10 +43,10 @@ describe('RunDetailPage evidence and decision tabs', () => {
     TestBed.resetTestingModule();
   });
 
-  async function open() {
+  async function open(tab = 'evidence') {
     const harness = await RouterTestingHarness.create();
     await harness.navigateByUrl(
-      `/projects/project-1/runs/${run.run_id}?evidence_revision=3`,
+      `/projects/project-1/runs/${run.run_id}?evidence_revision=3&tab=${tab}`,
       RunDetailPage,
     );
     await harness.fixture.whenStable();
@@ -56,11 +56,22 @@ describe('RunDetailPage evidence and decision tabs', () => {
     const evidence = tabs.find((tab) => tab.textContent?.trim() === 'Evidence');
     const decision = tabs.find((tab) => tab.hasAttribute('aria-label'));
     if (!evidence || !decision) throw new Error('Detail tab triggers were not rendered');
-    return { harness, root, evidence, decision };
+    return { harness, root, evidence, decision, attempts: tabs[0]!, context: tabs[3]! };
   }
 
-  it('labels both mounted panels and starts with only evidence visible without rereading on selection', async () => {
-    const { root, harness, evidence, decision } = await open();
+  it('replaces an invalid tab and preserves unrelated parameters', async () => {
+    const { attempts, root } = await open('bad');
+    expect(attempts.getAttribute('aria-selected')).toBe('true');
+    const router = TestBed.inject(Router);
+    expect(router.url).toContain('tab=attempts');
+    expect(router.url).toContain('evidence_revision=3');
+    expect(router.lastSuccessfulNavigation()?.extras.replaceUrl).toBe(true);
+    expect(root.querySelector('app-attempts-table')).not.toBeNull();
+    expect(root.querySelector('app-evidence-panel')).toBeNull();
+  });
+
+  it('labels all four panels and starts with only evidence visible without rereading on selection', async () => {
+    const { root, harness, evidence, decision, attempts, context } = await open();
     const tablist = root.querySelector('[role="tablist"]');
     expect(tablist?.getAttribute('aria-label')).toBe('Run sections');
     expect(tablist?.getAttribute('aria-label')).not.toBe(root.querySelector('h1')?.textContent);
@@ -69,24 +80,22 @@ describe('RunDetailPage evidence and decision tabs', () => {
     expect(tablist?.classList.contains('flex-wrap')).toBe(false);
     expect(tablist?.classList.contains('flex-nowrap')).toBe(true);
     expect(tablist?.classList.contains('overflow-x-auto')).toBe(true);
-    for (const tab of [evidence, decision]) {
+    for (const tab of [attempts, evidence, decision, context]) {
       expect(tab.classList.contains('whitespace-nowrap')).toBe(true);
       expect(tab.classList.contains('flex-none')).toBe(true);
     }
     const panels = [...root.querySelectorAll<HTMLElement>('[role="tabpanel"]')];
-    expect(panels).toHaveLength(2);
+    expect(panels).toHaveLength(4);
     expect(evidence.getAttribute('aria-selected')).toBe('true');
     expect(decision.tabIndex).toBe(-1);
-    for (const tab of [evidence, decision]) {
+    for (const tab of [attempts, evidence, decision, context]) {
       const panel = panels.find((entry) => entry.id === tab.getAttribute('aria-controls'));
       expect(panel?.getAttribute('aria-labelledby')).toBe(tab.id);
     }
     expect(
       root.querySelector('app-evidence-panel')?.closest<HTMLElement>('[role="tabpanel"]')?.hidden,
     ).toBe(false);
-    expect(
-      root.querySelector('app-decision-view')?.closest<HTMLElement>('[role="tabpanel"]')?.hidden,
-    ).toBe(true);
+    expect(root.querySelector('app-decision-view')).toBeNull();
     decision.click();
     await harness.fixture.whenStable();
     expect(decision.getAttribute('aria-selected')).toBe('true');
@@ -104,7 +113,7 @@ describe('RunDetailPage evidence and decision tabs', () => {
       'runs.detail.decision-tab-compact': 'Quyết định',
       'runs.decision.title': 'Quyết định trực tiếp mới nhất',
     });
-    const { decision, root } = await open();
+    const { decision, root } = await open('decision');
     expect(decision.textContent?.trim()).toBe('Quyết định');
     expect(decision.getAttribute('aria-label')).toBe('Quyết định trực tiếp mới nhất');
     expect(root.querySelector('app-decision-view #decision-title')?.textContent).toContain(
@@ -122,19 +131,18 @@ describe('RunDetailPage evidence and decision tabs', () => {
     if (!region) throw new Error('Evidence announcement region was not rendered');
     expect(region.getAttribute('role')).toBe('status');
     expect(region.getAttribute('aria-live')).toBe('polite');
-    // Outside both panels: a live region inside the hidden evidence panel is never spoken.
+    // Outside the panels: a live region inside the hidden evidence panel is never spoken.
     expect(region.closest('[role="tabpanel"]')).toBeNull();
     expect(region.closest('[hidden]')).toBeNull();
     expect(region.textContent?.trim()).toBe('');
 
     await harness.navigateByUrl(
-      `/projects/project-1/runs/${run.run_id}?evidence_revision=4`,
+      `/projects/project-1/runs/${run.run_id}?evidence_revision=4&tab=decision`,
       RunDetailPage,
     );
     await harness.fixture.whenStable();
-    expect(
-      root.querySelector('app-evidence-panel')?.closest<HTMLElement>('[role="tabpanel"]')?.hidden,
-    ).toBe(true);
+    expect(root.querySelector('app-evidence-panel')).toBeNull();
+    expect(decision.getAttribute('aria-selected')).toBe('true');
     expect(region.textContent).toContain('Viewing evidence revision 4');
     const spoken = [...root.querySelectorAll<HTMLElement>('[role="status"]')].filter((entry) =>
       entry.textContent?.includes('Viewing evidence revision'),
@@ -156,7 +164,7 @@ describe('RunDetailPage evidence and decision tabs', () => {
     // The fixture's newest revision is 4, so pinning back to 3 brings the newer-revision banner in
     // while the evidence panel is the visible one: the banner must not speak over the page region.
     await harness.navigateByUrl(
-      `/projects/project-1/runs/${run.run_id}?evidence_revision=4`,
+      `/projects/project-1/runs/${run.run_id}?evidence_revision=4&tab=evidence`,
       RunDetailPage,
     );
     await harness.fixture.whenStable();
@@ -166,7 +174,7 @@ describe('RunDetailPage evidence and decision tabs', () => {
     expect(root.querySelector('[data-evidence-newer]')).toBeNull();
 
     await harness.navigateByUrl(
-      `/projects/project-1/runs/${run.run_id}?evidence_revision=3`,
+      `/projects/project-1/runs/${run.run_id}?evidence_revision=3&tab=evidence`,
       RunDetailPage,
     );
     await harness.fixture.whenStable();
@@ -181,14 +189,16 @@ describe('RunDetailPage evidence and decision tabs', () => {
     expect(speaking).toEqual([]);
   });
 
-  it('keeps the selected panel a Tab stop and the hidden one out of the order', async () => {
+  it('keeps the selected panel a Tab stop and the hidden panels out of the order', async () => {
     const { root, harness, decision } = await open();
     const panels = [...root.querySelectorAll<HTMLElement>('[role="tabpanel"]')];
-    expect(panels).toHaveLength(2);
+    expect(panels).toHaveLength(4);
     const evidencePanel = panels.find(
       (panel) => panel.querySelector('app-evidence-panel') !== null,
     );
-    const decisionPanel = panels.find((panel) => panel.querySelector('app-decision-view') !== null);
+    const decisionPanel = panels.find(
+      (panel) => panel.id === decision.getAttribute('aria-controls'),
+    );
     if (!evidencePanel || !decisionPanel) throw new Error('Detail panels were not rendered');
     // Brain hardcodes tabindex="0" on every panel and only hides the inactive one; the page binds
     // the stop to the selected panel so the panel stays reachable when it has no control.
@@ -213,8 +223,8 @@ describe('RunDetailPage evidence and decision tabs', () => {
     expect(decisionPanel.hidden).toBe(false);
     expect(decisionPanel.getAttribute('tabindex')).toBe('0');
     expect(decisionPanel.tabIndex).toBe(0);
-    expect(root.querySelectorAll('[role="tabpanel"][hidden]')).toHaveLength(1);
-    expect(root.querySelector<HTMLElement>('[role="tabpanel"][hidden]')).toBe(evidencePanel);
+    expect(root.querySelectorAll('[role="tabpanel"][hidden]')).toHaveLength(3);
+    expect(evidencePanel.hidden).toBe(true);
   });
 
   it.each([
@@ -244,7 +254,7 @@ describe('RunDetailPage evidence and decision tabs', () => {
   );
 
   it('supports arrow, Home and End keyboard selection with roving focus', async () => {
-    const { harness, evidence, decision } = await open();
+    const { harness, evidence, decision, attempts, context } = await open();
     evidence.focus();
     evidence.dispatchEvent(
       new KeyboardEvent('keydown', { key: 'ArrowRight', keyCode: 39, bubbles: true }),
@@ -256,12 +266,12 @@ describe('RunDetailPage evidence and decision tabs', () => {
       new KeyboardEvent('keydown', { key: 'Home', keyCode: 36, bubbles: true }),
     );
     await harness.fixture.whenStable();
-    expect(document.activeElement).toBe(evidence);
-    evidence.dispatchEvent(
+    expect(document.activeElement).toBe(attempts);
+    attempts.dispatchEvent(
       new KeyboardEvent('keydown', { key: 'End', keyCode: 35, bubbles: true }),
     );
     await harness.fixture.whenStable();
-    expect(document.activeElement).toBe(decision);
+    expect(document.activeElement).toBe(context);
   });
 
   it('reveals evidence before focusing it from the summary or decision mismatch action', async () => {

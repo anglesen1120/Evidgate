@@ -14,7 +14,7 @@ import {
   TemplateRef,
   viewChild,
 } from '@angular/core';
-import { HlmAlert } from '@evidgate/ui/alert';
+import { RowActionComponent } from '../../../../shared/ui/data-table/row-action.component';
 import { HlmCard, HlmCardTitle } from '@evidgate/ui/card';
 import { DataTableComponent } from '../../../../shared/ui/data-table/data-table.component';
 import type { ApiError } from '../../../../core/http/api-error';
@@ -43,7 +43,6 @@ import type { AttemptRow } from './attempt-summary';
 interface AttemptEntry {
   readonly attempt: AttemptRow;
   readonly anchor: string;
-  readonly preHealing: boolean;
 }
 type AttemptCell = TemplateRef<DataTableCellContext<AttemptEntry>>;
 
@@ -54,7 +53,7 @@ type AttemptCell = TemplateRef<DataTableCellContext<AttemptEntry>>;
     EmptyPatternComponent,
     ErrorPatternComponent,
     LoadingPatternComponent,
-    HlmAlert,
+    RowActionComponent,
     DataTablePagerComponent,
     HlmCard,
     HlmCardTitle,
@@ -84,6 +83,7 @@ export class AttemptsTableComponent {
   readonly loadingMore = input(false);
   readonly page = input(1);
   readonly pageSize = input(20);
+  readonly inspect = output<AttemptRow>();
   readonly retry = output<void>();
   readonly next = output<void>();
   readonly previous = output<void>();
@@ -99,12 +99,12 @@ export class AttemptsTableComponent {
       group.attempts.map((attempt) => ({
         attempt,
         anchor: attemptAnchorId(attempt.executionKey, attempt.attemptNo),
-        preHealing: attempt === group.preHealingFailure,
       })),
     ),
   );
   protected readonly rowId = (entry: AttemptEntry) => entry.anchor;
   private readonly identityCell = viewChild.required<AttemptCell>('identityCell');
+  private readonly actionCell = viewChild.required<AttemptCell>('actionCell');
   private readonly rawCell = viewChild.required<AttemptCell>('rawCell');
   private readonly statusCell = viewChild.required<AttemptCell>('statusCell');
   private readonly durationCell = viewChild.required<AttemptCell>('durationCell');
@@ -150,6 +150,15 @@ export class AttemptsTableComponent {
       cell: (row) => row.attempt.artifactCount ?? this.copy.notProvided,
       cellTemplate: this.artifactCell(),
     },
+    {
+      id: 'actions',
+      header: this.copy.actions,
+      role: 'actions',
+      priority: 'secondary',
+      cell: ({ attempt }) =>
+        $localize`:@@runs.detail.attempts.view:View attempt ${attempt.attemptNo}:number:: ${this.display(attempt.executionKey)}:execution:`,
+      cellTemplate: this.actionCell(),
+    },
   ]);
   protected readonly copy = {
     title: $localize`:@@runs.detail.attempts.title:Attempts`,
@@ -166,10 +175,7 @@ export class AttemptsTableComponent {
     loadingMore: $localize`:@@runs.detail.attempts.page-loading:Loading attempts page`,
     moreLoaded: $localize`:@@runs.detail.attempts.page-loaded:Attempts page loaded`,
     empty: $localize`:@@runs.detail.attempts.empty:No attempts recorded`,
-    preHealing: $localize`:@@runs.detail.attempts.pre-healing:Pre-healing failure`,
-    candidate: $localize`:@@runs.detail.attempts.candidate:Healing candidate`,
-    shadow: $localize`:@@runs.detail.attempts.shadow:Shadow evaluation`,
-    official: $localize`:@@runs.detail.attempts.official:Official evaluation`,
+    actions: $localize`:@@runs.detail.attempts.actions:Actions`,
   };
   private readonly tableRegion = viewChild<ElementRef<HTMLElement>>('tableRegion');
   private readonly heading = viewChild.required<ElementRef<HTMLElement>>('heading');
@@ -233,6 +239,12 @@ export class AttemptsTableComponent {
         this.focusTarget().focus();
       });
     });
+  }
+
+  protected inspectAttempt(attempt: AttemptRow, opener: HTMLElement): void {
+    // Pointer activation does not focus native buttons on every browser. Give Helm a restore target.
+    opener.focus({ preventScroll: true });
+    this.inspect.emit(attempt);
   }
 
   protected requestPage(forward: boolean): void {

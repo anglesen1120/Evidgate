@@ -6,7 +6,7 @@ import { DataTableComponent } from '../../../../shared/ui/data-table/data-table.
 import { groupAttempts } from './attempt-groups';
 import type { AttemptRow } from './attempt-summary';
 import { AttemptsTableComponent } from './attempts-table.component';
-import { render, row, rows } from './attempts-table.test-support';
+import { inspect, render, row, rows } from './attempts-table.test-support';
 
 type AttemptStatus = 'passed' | 'failed' | 'skipped' | 'timed_out' | 'error' | 'blocked';
 
@@ -53,6 +53,18 @@ describe('retry-chain grouping', () => {
     expect(group!.attempts.map((attempt) => attempt.attemptNo)).toEqual([2, 1, 3, 4]);
     expect(groupAttempts(input.slice(0, 3))[0]!.preHealingFailure).toBeNull();
   });
+  it('does not relabel a later failure as occurring before an earlier candidate', () => {
+    const [group] = groupAttempts([
+      row({ attemptNo: 2, normalisedStatus: 'failed' }),
+      row({
+        attemptNo: 1,
+        normalisedStatus: 'passed',
+        healingCandidate: { candidateHash: 'hash', mode: 'shadow' },
+      }),
+    ]);
+    expect(group!.preHealingFailure).toBeNull();
+    expect(group!.attempts.map((attempt) => attempt.attemptNo)).toEqual([1, 2]);
+  });
   it('does not invent a failure if a candidate has no failed attempt', () => {
     const [group] = groupAttempts([
       row({
@@ -82,7 +94,7 @@ describe('AttemptsTableComponent', () => {
     );
     const attempt = rows(root)[0];
     expect(attempt?.getAttribute('role')).toBe('row');
-    expect(attempt?.querySelectorAll('[role="cell"]')).toHaveLength(5);
+    expect(attempt?.querySelectorAll('[role="cell"]')).toHaveLength(6);
     expect(attempt?.querySelector('[data-column-role="identity"] bdi')?.textContent).toBe(
       'long-'.repeat(100),
     );
@@ -214,7 +226,7 @@ describe('AttemptsTableComponent', () => {
   it.each(['shadow', 'official'] as const)(
     'keeps pre-healing failure and %s candidate in distinct blocks, not a flaky verdict',
     async (mode) => {
-      const { root } = await render([
+      const { root, fixture } = await render([
         row({
           attemptNo: 3,
           normalisedStatus: 'passed',
@@ -226,25 +238,34 @@ describe('AttemptsTableComponent', () => {
       const attempts = rows(root);
       expect(attempts).toHaveLength(3);
       expect(attempts[0]?.querySelector('.attempt-number')?.textContent).toBe('Attempt 2');
-      expect(attempts[0]?.querySelector('.pre-healing-block')?.textContent).toContain(
-        'Pre-healing failure',
-      );
+      expect(root.querySelector('[data-pre-healing], [data-healing-candidate]')).toBeNull();
+      const dialog = await inspect(fixture, 2);
+      const fields = dialog.querySelector('dl.hlm-field-grid')!;
+      const failure = fields.querySelector('[data-pre-healing]')!;
+      expect(failure.textContent).toContain('Pre-healing failure');
+      expect(failure.textContent).toContain('original-error');
+      expect(fields.querySelector('[data-attempt-normalised]')?.textContent).toContain('Passed');
+      expect(fields.querySelector('[data-attempt-raw]')?.textContent).toContain('provider-failure');
+      expect(
+        [...fields.querySelectorAll('[data-retry-chain] li')].map((el) => el.textContent?.trim()),
+      ).toEqual(['Attempt 1 · Skipped', 'Attempt 2 · Failed', 'Attempt 3 · Passed']);
       expect(attempts[0]?.querySelector('[data-attempt-raw]')?.textContent).toContain(
         'original-error',
       );
-      const candidate = root.querySelector('[data-healing-candidate]')!;
+      const candidate = fields.querySelector('[data-healing-candidate]')!;
+      expect(candidate.parentElement).toBe(failure.parentElement);
       expect(candidate.querySelector('bdi')?.textContent).toBe('sha256:candidate');
       expect(candidate.textContent).toContain(
         mode === 'shadow' ? 'Shadow evaluation' : 'Official evaluation',
       );
-      expect(candidate.querySelector('.pre-healing-block')).toBeNull();
-      expect(root.textContent).not.toMatch(/flaky/i);
-      expect(root.querySelector('app-decision-chip, app-outcome-pill')).toBeNull();
+      expect(candidate.querySelector('[data-pre-healing]')).toBeNull();
+      expect(dialog.textContent).not.toMatch(/flaky/i);
+      expect(dialog.querySelector('app-decision-chip, app-outcome-pill')).toBeNull();
     },
   );
 
   it('escapes format characters and isolates every supplied string without parsing markup', async () => {
-    const { root } = await render([
+    const { root, fixture } = await render([
       row({
         executionKey: 'exec\u202e<script>',
         rawStatus: 'raw\u202e<script>',
@@ -259,9 +280,12 @@ describe('AttemptsTableComponent', () => {
     expect(root.querySelector('[data-attempt-normalised] > bdi')?.textContent).toBe(
       'unknown⟨U+202E⟩<script>',
     );
-    expect(root.querySelector('[data-healing-candidate] bdi')?.textContent).toBe(
+    const dialog = await inspect(fixture);
+    expect(dialog.querySelector('[data-healing-candidate] bdi')?.textContent).toBe(
       'hash⟨U+202E⟩<script>',
     );
+    expect(dialog.textContent).not.toContain('\u202e');
+    expect(dialog.querySelector('script')).toBeNull();
     expect(root.textContent).not.toContain('\u202e');
     expect(root.querySelector('script')).toBeNull();
   });
@@ -280,7 +304,9 @@ describe('AttemptsTableComponent', () => {
     expect(root.querySelector('[data-attempts-unavailable], table')).toBeNull();
   });
   it('renders absent healing facts as plain not provided text', async () => {
-    const { root } = await render([row()]);
+    const { root, fixture } = await render([row()]);
+    const dialog = await inspect(fixture);
+    expect(dialog.querySelector('[data-pre-healing], [data-healing-candidate]')).toBeNull();
     expect(root.querySelector('[data-attempts-healing-unavailable]')?.textContent).toContain(
       'Not provided',
     );
@@ -335,7 +361,7 @@ describe('AttemptsTableComponent', () => {
     const caption = root.querySelector('.caption');
     expect(caption?.textContent?.trim()).toBe('Attempts');
     expect(root.querySelector('[role="table"]')?.getAttribute('aria-labelledby')).toBe(caption?.id);
-    expect(root.querySelectorAll('thead th[scope="col"]')).toHaveLength(5);
+    expect(root.querySelectorAll('thead th[scope="col"]')).toHaveLength(6);
     const identity = root.querySelector('[data-column-role="identity"] [data-attempt-row]');
     expect(identity?.id).toBe(root.querySelector('tbody tr')?.getAttribute('data-row-id'));
     expect(identity?.getAttribute('tabindex')).toBe('-1');

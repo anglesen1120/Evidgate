@@ -127,13 +127,13 @@ test.describe('the run list and the run it opens are WCAG 2.2 AA clean', () => {
         await seedStoredTheme(page, theme);
         const detail = new RunDetailPage(page);
         await detail.openDetail(
-          runDetailPath({ locale, decision: 'evaluated-fail-missing-shard' }),
+          runDetailPath({ locale, decision: 'evaluated-fail-missing-shard', tab: 'evidence' }),
         );
         await expect(detail.evidencePanel.locator('[data-evidence-missing]')).toBeVisible();
         expect(await currentTheme(page)).toBe(theme);
 
-        // Evidence is the default tab and the decision is the other one: both are scanned, because
-        // the FAIL chip and its reason list only exist on the second.
+        // Scan both panels because
+        // the FAIL chip and its reason list only exist together on Decision.
         await expectNoA11yViolations(page, `run detail, missing shard evidence ${locale}/${theme}`);
         await detail.showDecision();
         await expectNoA11yViolations(page, `run detail, missing shard decision ${locale}/${theme}`);

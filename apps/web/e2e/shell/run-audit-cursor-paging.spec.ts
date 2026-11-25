@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import audit from '../../../../fixtures/web-api/audit-list/input.json';
 import type { FixtureCallRecord } from '../../src/app/core/dev-fixtures/fixture-request-log';
-import { openRunFilters, RUN_RECORDS } from './run-list.support';
+import { RUN_RECORDS } from './run-list.support';
 import {
   localePath,
   ORG_ACME,
@@ -284,7 +284,6 @@ for (const surface of ['runs', 'audit'] as const) {
     await pager.getByRole('button', { name: 'Next page', exact: true }).click();
     await expect(rows).toHaveCount(13);
     if (surface === 'runs') {
-      await openRunFilters(page);
       await page.locator('#run-ref').fill('feature/batch-000');
     } else {
       const seed = audit.body.items[0];
@@ -292,7 +291,7 @@ for (const surface of ['runs', 'audit'] as const) {
       await page.locator('#audit-action').fill(seed.action);
     }
     const before = (await requests(page, surface)).length;
-    await page.locator(`[data-${surface === 'runs' ? 'run' : 'audit'}-apply]`).click();
+    await page.locator(`[data-filter-search]`).click();
     await expect.poll(async () => (await requests(page, surface)).length).toBe(before + 1);
     const filteredCount = surface === 'runs' ? 1 : 6;
     await expect(rows).toHaveCount(filteredCount);
@@ -302,7 +301,7 @@ for (const surface of ['runs', 'audit'] as const) {
     await expect(pager.getByText(`Showing 1–${filteredCount}`, { exact: true })).toBeVisible();
     await expect(pager.getByRole('navigation')).toHaveCount(0);
     await expect(pager.locator('button, [role="combobox"]')).toHaveCount(0);
-    await page.locator(`[data-${surface === 'runs' ? 'run' : 'audit'}-clear]`).click();
+    await page.locator(`[data-filter-clear]`).click();
     await expect(rows).toHaveCount(20);
     await expect.poll(async () => (await requests(page, surface)).length).toBe(before + 2);
     const cleared = (await requests(page, surface)).at(-1);

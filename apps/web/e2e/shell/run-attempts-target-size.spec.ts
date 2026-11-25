@@ -63,7 +63,10 @@ async function openEnlargedAttempts(
   await expect(
     page.locator('[data-attempt-identity] app-data-table-value .value').first(),
   ).toHaveClass(/clipped/);
-  await page.locator('app-run-detail-page').getByRole('tab').nth(1).click();
+  const tabs = page.locator('app-run-detail-page').getByRole('tab');
+  await tabs.nth(2).click();
+  await tabs.first().click();
+  await expect(tabs.first()).toHaveAttribute('aria-selected', 'true');
   await page.mouse.move(0, 0);
 }
 
@@ -99,7 +102,7 @@ for (const locale of LOCALES) {
       await expectNoA11yViolations(page, `enlarged attempt after Decision ${locale}/${theme}`);
 
       expect(await page.evaluate(() => scrollY)).toBe(0);
-      await expect(page.locator('app-run-detail-page').getByRole('tab').nth(1)).toHaveAttribute(
+      await expect(page.locator('app-run-detail-page').getByRole('tab').first()).toHaveAttribute(
         'aria-selected',
         'true',
       );
@@ -112,6 +115,7 @@ for (const locale of LOCALES) {
       for (const width of [1280, 768, 390]) {
         await page.setViewportSize({ width, height: 900 });
         const identities = page.locator('[data-attempt-identity]');
+        await expect(identities).toHaveCount(attemptsFixture.body.items.length);
         for (const identity of await identities.all()) {
           const targets = identity.locator(
             'app-data-table-value .value, app-copy-value-button button',

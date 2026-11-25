@@ -1,278 +1,149 @@
-@if (view() === 'summary') {
-  <section hlmCard class="run-summary min-w-0 gap-0 py-0" aria-labelledby="run-summary-title">
-    <h2
-      hlmCardTitle
-      [size]="sectionSize"
-      id="run-summary-title"
-      class="m-0 border-b border-border px-(--eg-space-5) py-(--eg-space-4)"
-    >
-      {{ copy.decision }}
-    </h2>
-    @let live = decision();
-    <dl
-      class="hlm-field-grid p-(--eg-space-5) md:p-(--eg-space-6) sm:[--hlm-field-columns:2] [&_dt]:flex [&_dt]:items-center [&_dt]:gap-(--eg-space-2) [&_dd]:font-semibold [&_dt>hlm-icon]:size-(--eg-space-5)"
-    >
-      <div>
-        <dt>
-          <hlm-icon [name]="'lucideInfo'" />
-          {{ copy.completeness }}
-        </dt>
-        <dd data-evidence-completeness>
-          <app-evidence-badge [completeness]="selectedEvidence()?.completeness" [compact]="true" />
-          @if (evidenceQualifier(); as qualifier) {
-            <span
-              class="eg-type-caption mt-(--eg-space-2) block font-normal text-muted-foreground"
-              >{{ qualifier }}</span
-            >
-          }
-          @if (selectedEvidence()?.missing?.length; as count) {
-            <span class="eg-type-caption mt-(--eg-space-2) block font-normal text-muted-foreground">
-              {{ copy.missing }}: <app-number-value [value]="count" />
-            </span>
-          }
-        </dd>
-      </div>
-      <div>
-        <dt>
-          <hlm-icon [name]="'lucideActivity'" />
-          {{ copy.outcome }}
-        </dt>
-        <dd>
-          @if (live && live.kind === 'evaluated') {
-            <app-outcome-pill [outcome]="live.outcome" [compact]="true" />
-          } @else {
-            <span class="text-muted-foreground">{{
-              decisionLoading() ? copy.loading : copy.unavailable
-            }}</span>
-          }
-        </dd>
-      </div>
-      <div>
-        <dt>
-          <hlm-icon [name]="live?.kind === 'pending' ? 'lucideClock' : 'lucideCircle'" />
-          {{ copy.decision }}
-        </dt>
-        <dd>
-          @if (live && live.kind === 'evaluated') {
-            <app-decision-chip [decision]="live.decision" [compact]="true" />
-            <span class="eg-type-caption mt-(--eg-space-2) block font-normal text-muted-foreground">
-              {{ copy.evidence }} <app-number-value [value]="live.evidenceRevision" />
-            </span>
-          } @else if (live?.kind === 'pending') {
-            <span class="text-(--eg-pending-fg)">{{ valueLabel('decision', 'pending') }}</span>
-          } @else {
-            <span class="text-muted-foreground">{{
-              decisionLoading() ? copy.loading : copy.unavailable
-            }}</span>
-          }
-        </dd>
-      </div>
-      <div>
-        <dt>
-          <hlm-icon [name]="'lucideCopy'" />
-          {{ copy.evidence }}
-        </dt>
-        <dd
-          class="flex min-w-0 flex-wrap items-center gap-(--eg-space-2) [&_app-copyable-identifier]:text-sm"
-        >
-          @if (latestSnapshot(); as snapshot) {
-            <span class="block w-full" data-run-latest-freeze>
-              {{ copy.latestFreeze }}: <app-number-value [value]="snapshot.revision_no" /> ·
-              <app-absolute-time [value]="snapshot.created_at" />
-            </span>
-          }
-          @if (run().current_evidence_revision_id; as revision) {
-            <app-copyable-identifier
-              [value]="revision"
-              [label]="copy.evidence"
-              [compact]="true"
-              [iconOnlyCopy]="true"
-            />
-          } @else if (!latestSnapshot()) {
-            <span class="text-muted-foreground">{{ copy.none }}</span>
-          }
-        </dd>
-      </div>
-    </dl>
-    @if (run().state === 'incomplete' || runCompleteness() === 'incomplete') {
-      <div
-        hlmAlert
-        class="flex flex-wrap items-center justify-between gap-(--eg-space-3) border-(--eg-warning-fg) bg-(--eg-warning-bg) text-(--eg-warning-fg)"
-        data-run-missing-summary
-      >
-        <p class="m-0 min-w-0 flex-1">{{ copy.incomplete }}</p>
-        <button
-          hlmBtn
-          [variant]="'outline'"
-          type="button"
-          class="min-h-(--eg-control-touch) whitespace-normal transition-none"
-          (click)="viewEvidence.emit()"
-        >
-          {{ copy.viewEvidence }}
-        </button>
-      </div>
+@let live = decision();
+<section
+  hlmCard
+  class="run-summary min-w-0 gap-0 border-s-[3px] p-(--eg-space-4)"
+  [attr.data-verdict]="live && live.kind === 'evaluated' ? live.decision : null"
+  aria-labelledby="run-summary-title"
+>
+  <h2 hlmCardTitle [size]="sectionSize" id="run-summary-title" class="sr-only">
+    {{ copy.decision }}
+  </h2>
+  <div
+    class="flex min-w-0 flex-wrap items-center justify-between gap-(--eg-space-3) border-b border-border pb-(--eg-space-3)"
+  >
+    <div class="flex min-w-0 flex-wrap items-center gap-(--eg-space-3)">
+      <app-copyable-identifier
+        data-run-id
+        [value]="run().run_id"
+        [label]="copy.id"
+        [compact]="true"
+      />
+      <app-run-state-pill [state]="run().state" [compact]="true" />
+    </div>
+    <ng-content />
+  </div>
+  <div
+    class="flex min-w-0 flex-wrap items-center gap-x-(--eg-space-4) gap-y-(--eg-space-2) py-(--eg-space-2)"
+  >
+    <span class="flex min-w-0 flex-wrap items-center gap-(--eg-space-2)" data-run-ref>
+      {{ copy.ref }}:
+      @if (run().ref.name; as ref) {
+        <bdi>{{ display(ref) }}</bdi>
+        <app-copy-value-button [value]="ref" [label]="copy.ref" [iconOnly]="true" />
+      } @else {
+        <span>{{ copy.notProvided }}</span>
+      }
+      @if (run().unverified_ref) {
+        <app-status-pill [tone]="'warning'" [label]="copy.unverified" data-run-unverified />
+      }
+    </span>
+    @if (run().ref.pr_number !== null) {
+      <span>{{ copy.pr }}: <app-number-value [value]="run().ref.pr_number" /></span>
     }
-  </section>
-} @else {
-  <section hlmCard class="gap-0 py-0" aria-labelledby="run-environment-title">
-    <h2
-      hlmCardTitle
-      [size]="sectionSize"
-      id="run-environment-title"
-      class="m-0 border-b border-(--eg-border) px-(--eg-space-5) py-(--eg-space-4)"
-      [textContent]="copy.context"
-    ></h2>
-    <dl
-      class="hlm-field-grid p-(--eg-space-5) md:p-(--eg-space-6) sm:[--hlm-field-columns:2] [&_dd]:flex [&_dd]:flex-wrap [&_dd]:items-center [&_dd]:gap-(--eg-space-2) [&_bdi]:max-w-full"
-    >
-      <div class="hlm-field-wide">
-        <dt>{{ copy.id }}</dt>
-        <dd data-run-id class="min-w-0 flex-nowrap!">
-          <bdi class="min-w-0 font-mono wrap-anywhere">{{ display(run().run_id) }}</bdi>
-          <app-copy-value-button [value]="run().run_id" [label]="copy.id" [iconOnly]="true" />
-        </dd>
-      </div>
-      <div>
-        <dt>{{ copy.state }}</dt>
-        <dd><app-run-state-pill [state]="run().state" [compact]="true" /></dd>
-      </div>
-      <div>
-        <dt>{{ copy.version }}</dt>
-        <dd data-run-version><app-number-value [value]="run().version" /></dd>
-      </div>
-      <div>
-        <dt>{{ copy.purpose }}</dt>
-        <dd data-run-purpose>
-          <bdi>{{ valueLabel('purpose', run().purpose) }}</bdi>
-        </dd>
-      </div>
-      <div>
-        <dt>{{ copy.ref }}</dt>
-        <dd data-run-ref>
-          @let ref = run().ref.name;
-          @if (ref !== null) {
-            <bdi>{{ display(ref) }}</bdi>
-            <app-copy-value-button [value]="ref" [label]="copy.ref" [iconOnly]="true" />
-          } @else {
-            <span class="text-muted-foreground">{{ copy.notProvided }}</span>
-          }
-          @if (run().unverified_ref) {
-            <app-status-pill
-              class="[&_.spartan-badge]:max-w-full"
-              [tone]="'warning'"
-              [label]="copy.unverified"
-              data-run-unverified
-            />
-          }
-        </dd>
-      </div>
-      <div>
-        <dt>{{ copy.environment }}</dt>
-        <dd data-run-environment>
-          <bdi class="font-mono">{{ display(run().environment.environment_key) }}</bdi>
-          <app-copy-value-button
-            [value]="run().environment.environment_key"
-            [label]="copy.environment"
-            [iconOnly]="true"
+    @if (run().ref.head_sha; as head) {
+      <app-copyable-identifier [value]="head" [label]="copy.head" [compact]="true" />
+    }
+  </div>
+  <dl
+    class="m-0 flex flex-wrap gap-x-(--eg-space-6) gap-y-(--eg-space-2) text-xs [&_dd]:m-0 [&_dt]:flex [&_dt]:items-center [&_dt]:gap-(--eg-space-2) [&_dd]:font-semibold [&_dt>hlm-icon]:size-(--eg-space-5)"
+  >
+    <div>
+      <dt>
+        <hlm-icon [name]="'lucideInfo'" />
+        {{ copy.completeness }}
+      </dt>
+      <dd data-evidence-completeness>
+        <app-evidence-badge [completeness]="selectedEvidence()?.completeness" [compact]="true" />
+        @if (evidenceQualifier(); as qualifier) {
+          <span class="eg-type-caption mt-(--eg-space-2) block font-normal text-muted-foreground">{{
+            qualifier
+          }}</span>
+        }
+        @if (selectedEvidence()?.missing?.length; as count) {
+          <span class="eg-type-caption mt-(--eg-space-2) block font-normal text-muted-foreground">
+            {{ copy.missing }}: <app-number-value [value]="count" />
+          </span>
+        }
+      </dd>
+    </div>
+    <div>
+      <dt>
+        <hlm-icon [name]="'lucideActivity'" />
+        {{ copy.outcome }}
+      </dt>
+      <dd>
+        @if (live && live.kind === 'evaluated') {
+          <app-outcome-pill [outcome]="live.outcome" [compact]="true" />
+        } @else {
+          <span class="text-muted-foreground">{{
+            decisionLoading() ? copy.loading : copy.unavailable
+          }}</span>
+        }
+      </dd>
+    </div>
+    <div>
+      <dt>
+        <hlm-icon [name]="live?.kind === 'pending' ? 'lucideClock' : 'lucideCircle'" />
+        {{ copy.decision }}
+      </dt>
+      <dd>
+        @if (live && live.kind === 'evaluated') {
+          <app-decision-chip [decision]="live.decision" [compact]="true" />
+          <span class="eg-type-caption mt-(--eg-space-2) block font-normal text-muted-foreground">
+            {{ copy.evidence }} <app-number-value [value]="live.evidenceRevision" />
+          </span>
+        } @else if (live?.kind === 'pending') {
+          <app-decision-chip [decision]="'pending'" [compact]="true" />
+        } @else {
+          <span class="text-muted-foreground">{{
+            decisionLoading() ? copy.loading : copy.unavailable
+          }}</span>
+        }
+      </dd>
+    </div>
+    <div>
+      <dt>
+        <hlm-icon [name]="'lucideCopy'" />
+        {{ copy.evidence }}
+      </dt>
+      <dd
+        class="flex min-w-0 flex-wrap items-center gap-(--eg-space-2) [&_app-copyable-identifier]:text-sm"
+      >
+        @if (latestSnapshot(); as snapshot) {
+          <span class="block w-full" data-run-latest-freeze>
+            {{ copy.latestFreeze }}: <app-number-value [value]="snapshot.revision_no" /> ·
+            <app-absolute-time [value]="snapshot.created_at" />
+          </span>
+        }
+        @if (run().current_evidence_revision_id; as revision) {
+          <app-copyable-identifier
+            [value]="revision"
+            [label]="copy.evidence"
+            [compact]="true"
+            [iconOnlyCopy]="true"
           />
-        </dd>
-      </div>
-      <div>
-        <dt>{{ copy.revision }}</dt>
-        <dd data-run-environment-revision>
-          <app-number-value [value]="run().environment.revision_no" />
-        </dd>
-      </div>
-    </dl>
-    <details class="border-t border-border px-(--eg-space-5) py-(--eg-space-3)">
-      <summary
-        class="min-h-(--eg-control-touch) cursor-pointer content-center font-semibold"
-        i18n="@@runs.detail.context-details"
+        } @else if (!latestSnapshot()) {
+          <span class="text-muted-foreground">{{ copy.none }}</span>
+        }
+      </dd>
+    </div>
+  </dl>
+  @if (run().state === 'incomplete' || runCompleteness() === 'incomplete') {
+    <div
+      hlmAlert
+      class="flex flex-wrap items-center justify-between gap-(--eg-space-3) border-(--eg-warning-fg) bg-(--eg-warning-bg) text-(--eg-warning-fg)"
+      data-run-missing-summary
+    >
+      <p class="m-0 min-w-0 flex-1">{{ copy.incomplete }}</p>
+      <button
+        hlmBtn
+        [variant]="'outline'"
+        type="button"
+        class="max-md:min-h-(--eg-control-touch) pointer-coarse:min-h-(--eg-control-touch) whitespace-normal transition-none"
+        (click)="viewEvidence.emit()"
       >
-        Additional execution context
-      </summary>
-      <dl
-        class="hlm-field-grid py-(--eg-space-3) sm:[--hlm-field-columns:2] [&_dd]:flex [&_dd]:flex-wrap [&_dd]:items-center [&_dd]:gap-(--eg-space-2)"
-      >
-        <div>
-          <dt>{{ copy.refKind }}</dt>
-          <dd data-run-ref-kind>
-            @let kind = run().ref.kind;
-            @if (kind !== null) {
-              <bdi>{{ display(kind) }}</bdi>
-            } @else {
-              <span class="text-muted-foreground">{{ copy.notProvided }}</span>
-            }
-          </dd>
-        </div>
-        <div>
-          <dt>{{ copy.pr }}</dt>
-          <dd>
-            @if (run().ref.pr_number !== null) {
-              <app-number-value [value]="run().ref.pr_number" />
-            } @else {
-              <span class="text-muted-foreground">{{ copy.notProvided }}</span>
-            }
-          </dd>
-        </div>
-        <div>
-          <dt>{{ copy.head }}</dt>
-          <dd>
-            @let head = run().ref.head_sha;
-            @if (head !== null) {
-              <bdi class="font-mono">{{ display(head) }}</bdi>
-              <app-copy-value-button [value]="head" [label]="copy.head" [iconOnly]="true" />
-            } @else {
-              <span class="text-muted-foreground">{{ copy.notProvided }}</span>
-            }
-          </dd>
-        </div>
-        <div>
-          <dt>{{ copy.base }}</dt>
-          <dd>
-            @let base = run().ref.base_sha;
-            @if (base !== null) {
-              <bdi class="font-mono">{{ display(base) }}</bdi>
-              <app-copy-value-button [value]="base" [label]="copy.base" [iconOnly]="true" />
-            } @else {
-              <span class="text-muted-foreground">{{ copy.notProvided }}</span>
-            }
-          </dd>
-        </div>
-        <div>
-          <dt>{{ copy.trigger }}</dt>
-          <dd>
-            @let trigger = run().ref.trigger_event;
-            @if (trigger !== null) {
-              <bdi>{{ display(trigger) }}</bdi>
-            } @else {
-              <span class="text-muted-foreground">{{ copy.notProvided }}</span>
-            }
-          </dd>
-        </div>
-        <div>
-          <dt>{{ copy.fork }}</dt>
-          <dd data-run-fork>
-            @if (run().ref.is_fork !== null) {
-              {{ run().ref.is_fork ? copy.yes : copy.no }}
-            } @else {
-              <span class="text-muted-foreground">{{ copy.notProvided }}</span>
-            }
-          </dd>
-        </div>
-        <div>
-          <dt>{{ copy.evidence }}</dt>
-          <dd data-run-evidence-revision>
-            @let revision = run().current_evidence_revision_id;
-            @if (revision !== null) {
-              <bdi class="font-mono">{{ display(revision) }}</bdi>
-              <app-copy-value-button [value]="revision" [label]="copy.evidence" [iconOnly]="true" />
-            } @else {
-              <span>{{ copy.none }}</span>
-            }
-          </dd>
-        </div>
-      </dl>
-    </details>
-  </section>
-}
+        {{ copy.viewEvidence }}
+      </button>
+    </div>
+  }
+</section>

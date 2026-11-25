@@ -366,19 +366,12 @@
           </footer>
         </hlm-dialog-content>
       </hlm-dialog>
-      <button
-        hlmBtn
-        [variant]="'ghost'"
-        type="button"
-        [disabled]="locked()"
-        [attr.popovertarget]="id() + '-policy'"
-      >
-        {{ copy.policy }}
-      </button>
-      <div popover [id]="id() + '-policy'">
-        <strong>{{ copy.policy }}</strong>
-        <p>{{ copy.policyHint }}</p>
-      </div>
+      <hlm-popover [panelId]="id() + '-policy'" [label]="copy.policy" [disabled]="locked()">
+        <ng-template
+          ><strong>{{ copy.policy }}</strong>
+          <p>{{ copy.policyHint }}</p></ng-template
+        >
+      </hlm-popover>
     </div>
   }
   @case ('table') {
