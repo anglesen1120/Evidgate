@@ -128,7 +128,7 @@ for (const locale of LOCALES) {
     await expect(crumb.locator('[aria-current="page"]')).toHaveText(
       `${RUN.run_id.slice(0, 5)}…${RUN.run_id.slice(-5)}`,
     );
-    await expect(crumb.getByRole('link')).toHaveText(locale === 'vi' ? 'Lần chạy' : 'Runs');
+    await expect(crumb.getByRole('link')).toHaveText(locale === 'vi' ? 'Lượt chạy' : 'Runs');
     await tab('evidence').click();
     await tab('context').click();
     await page.goBack();
