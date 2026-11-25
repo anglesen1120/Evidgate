@@ -89,7 +89,9 @@ import { DashboardWidgetComponent } from './dashboard-widget.component';
               <dd>
                 <app-copyable-identifier
                   [value]="selection.row.id"
-                  [label]="title"
+                  label="Event ID"
+                  i18n-label="@@shared.dashboard.activity-id"
+                  [iconOnlyCopy]="true"
                   [truncate]="false"
                 />
               </dd>
@@ -103,7 +105,15 @@ import { DashboardWidgetComponent } from './dashboard-widget.component';
             @if (selection.row.object_id; as id) {
               <div class="hlm-field-wide">
                 <dt i18n="@@shared.dashboard.activity-object">Object ID</dt>
-                <dd><app-copyable-identifier [value]="id" [label]="title" [truncate]="false" /></dd>
+                <dd>
+                  <app-copyable-identifier
+                    [value]="id"
+                    label="Object ID"
+                    i18n-label="@@shared.dashboard.activity-object"
+                    [truncate]="false"
+                    [iconOnlyCopy]="true"
+                  />
+                </dd>
               </div>
             }
           </dl>

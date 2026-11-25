@@ -12,11 +12,13 @@ class DashboardHarness extends ComponentHarness {
   readonly text = async () => (await this.host()).text();
   readonly retry = this.locatorFor('button');
   readonly meter = this.locatorForOptional('meter');
-  readonly bars = this.locatorForAll('.trend-stack [data-segment]');
+  readonly bars = this.locatorForAll('button [data-segment]');
   readonly stacks = this.locatorForAll('.trend-segments');
   readonly totals = this.locatorForAll('.trend-total');
-  readonly kpiIcon = this.locatorForOptional('h3 hlm-icon');
-  readonly scrollRegion = this.locatorFor('[role="region"]');
+  readonly terms = this.locatorForAll('dl dt');
+  readonly values = this.locatorForAll('dl dd');
+  readonly definitions = this.locatorForAll('dl');
+  readonly decorations = this.locatorForAll('dl hlm-icon, dl [hlmCard]');
   readonly loading = this.locatorForOptional('app-loading-pattern');
   readonly empty = this.locatorForOptional('app-empty-pattern');
   readonly emptyIcon = this.locatorFor('app-empty-pattern hlm-icon');
@@ -84,19 +86,30 @@ describe('Dashboard primitives', () => {
     expect(await harness.text()).toContain('50%');
   });
 
-  it('only renders a decorative KPI icon on request and keeps its default tone neutral', async () => {
+  it('groups scoped metrics in one list and only displays supplied denominators', async () => {
     const fixture = TestBed.createComponent(DashboardKpiComponent);
-    fixture.componentRef.setInput('label', 'Recent runs');
+    fixture.componentRef.setInput('label', 'Memberships');
+    fixture.componentRef.setInput('metrics', [
+      { id: 'active', label: 'Active', value: 1, denominator: 1, detail: 'Loaded memberships' },
+      { id: 'pending', label: 'Pending', value: 0, detail: 'On this page' },
+      { id: 'limit', label: 'Limit', value: null, detail: 'This period' },
+    ]);
     const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, DashboardHarness);
-    expect(await harness.kpiIcon()).toBeNull();
-    fixture.componentRef.setInput('icon', 'navRun');
-    const icon = await harness.kpiIcon();
-    expect(await icon?.getAttribute('aria-hidden')).toBe('true');
-    expect(await icon?.hasClass('text-[var(--eg-neutral-fg)]')).toBe(true);
-    fixture.componentRef.setInput('tone', 'danger');
-    const dangerIcon = await harness.kpiIcon();
-    expect(await dangerIcon?.hasClass('text-[var(--eg-danger-fg)]')).toBe(true);
-    expect(await dangerIcon?.hasClass('text-[var(--eg-neutral-fg)]')).toBe(false);
+    expect(await harness.definitions()).toHaveLength(1);
+    expect(await harness.decorations()).toHaveLength(0);
+    expect(await Promise.all((await harness.terms()).map((term) => term.text()))).toEqual([
+      'Active',
+      'Pending',
+      'Limit',
+    ]);
+    const values = await Promise.all((await harness.values()).map((value) => value.text()));
+    expect(values[0]).toMatch(/1\s*\/\s*1/);
+    expect(values[0]).toContain('Loaded memberships');
+    expect(values[1]).toMatch(/^0/);
+    expect(values[1]).toContain('On this page');
+    expect(values[1]).not.toContain('/');
+    expect(values[2]).toContain('Number unavailable');
+    expect(values[2]).not.toMatch(/[0/]/);
   });
 
   it('does not draw a quota ratio with an unknown or zero limit', async () => {
@@ -137,9 +150,7 @@ describe('Dashboard primitives', () => {
     expect(segments).toHaveLength(2);
     expect(await segments[1]?.getAttribute('data-tone')).toBe('neutral');
     expect(await segments[1]?.getAttribute('data-pattern')).toBe('2');
-    const region = await harness.scrollRegion();
-    expect(await region.getAttribute('tabindex')).toBe('0');
-    expect(await region.getAttribute('aria-label')).toBe('Recent decisions');
+    expect(await harness.stacks()).toHaveLength(1);
     expect(await segments[0]?.getAttribute('aria-hidden')).toBe('true');
   });
 
@@ -162,12 +173,12 @@ describe('Dashboard primitives', () => {
       })),
     );
     const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, DashboardHarness);
-    const heights = await Promise.all(
+    const widths = await Promise.all(
       (await harness.stacks()).map(
-        async (el) => (await el.getProperty<CSSStyleDeclaration>('style')).height,
+        async (el) => (await el.getProperty<CSSStyleDeclaration>('style')).width,
       ),
     );
-    expect(heights).toEqual(['0%', '50%', '100%']);
+    expect(widths).toEqual(['0%', '50%', '100%']);
     const labels = await Promise.all((await harness.totals()).map((el) => el.text()));
     expect(labels).toEqual(['0', '3', '6']);
     const weights = await Promise.all(

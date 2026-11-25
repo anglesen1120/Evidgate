@@ -1,59 +1,74 @@
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
-import { HlmCard } from '@evidgate/ui/card';
-import { HlmIcon, type HlmIconName } from '@evidgate/ui/icon';
-import { BADGE_TONE_CLASSES } from '../chips/badge-classes';
+import type { HlmIconName } from '@evidgate/ui/icon';
 import { NumberValueComponent } from '../values/number-value.component';
 
 export type DashboardTone = 'neutral' | 'success' | 'danger' | 'warning' | 'info';
 
+export interface DashboardMetric {
+  readonly id: string;
+  readonly label: string;
+  readonly value: number | string | null;
+  /** A known count beside a numeric value; percentages carry their sample in detail. */
+  readonly denominator?: number | null;
+  readonly detail: string;
+  readonly unavailableLabel?: string;
+}
+
 @Component({
   selector: 'app-dashboard-kpi',
-  imports: [HlmCard, HlmIcon, NumberValueComponent],
+  imports: [NumberValueComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'block min-w-0' },
   template: `
-    <section
-      hlmCard
-      class="h-full min-w-0 gap-(--eg-space-2) p-(--eg-space-5)"
-      [attr.aria-label]="label()"
-      [attr.data-tone]="tone()"
-    >
-      <h3
-        class="m-0 flex items-center gap-(--eg-space-2) text-sm font-medium text-muted-foreground"
-      >
-        @if (icon(); as name) {
-          <hlm-icon
-            class="size-(--eg-space-7) rounded-(--eg-radius-sm) p-(--eg-space-1)"
-            [name]="name"
-            [class]="iconTone()"
-          />
-        }
-        <span class="min-w-0 wrap-anywhere">{{ label() }}</span>
-      </h3>
-      <p class="m-0 text-3xl font-semibold tabular-nums wrap-anywhere">
-        @if (numericValue(); as current) {
-          <app-number-value [value]="current" />
-        } @else if (value() === 0) {
-          <app-number-value [value]="0" />
-        } @else {
-          {{ value() ?? unavailableLabel() }}
-        }
-      </p>
-      @if (detail()) {
-        <p class="m-0 text-xs text-muted-foreground">{{ detail() }}</p>
+    <dl class="metric-list" [class.metric-strip]="metrics() !== null" [attr.aria-label]="label()">
+      @for (metric of items(); track metric.id) {
+        <div class="metric">
+          <dt>{{ metric.label }}</dt>
+          <dd>
+            <span class="reading" [class.unknown]="metric.value === null">
+              @if (typeof metric.value === 'string') {
+                {{ metric.value }}
+              } @else if (metric.value === null && metric.unavailableLabel) {
+                {{ metric.unavailableLabel }}
+              } @else {
+                <app-number-value [value]="metric.value" />
+              }
+              @if (
+                typeof metric.value === 'number' &&
+                metric.denominator !== null &&
+                metric.denominator !== undefined
+              ) {
+                <small>/ <app-number-value [value]="metric.denominator" /></small>
+              }
+            </span>
+            @if (metric.detail) {
+              <span class="scope">{{ metric.detail }}</span>
+            }
+          </dd>
+        </div>
       }
-    </section>
+    </dl>
   `,
+  styleUrl: './dashboard-kpi.component.css',
 })
 export class DashboardKpiComponent {
   readonly label = input.required<string>();
+  readonly metrics = input<readonly DashboardMetric[] | null>(null);
   readonly value = input<string | number | null>(null);
   readonly detail = input('');
   readonly unavailableLabel = input('');
   readonly tone = input<DashboardTone>('neutral');
   readonly icon = input<HlmIconName | null>(null);
-  protected readonly iconTone = computed(() => BADGE_TONE_CLASSES[this.tone()]);
-  protected readonly numericValue = computed(() =>
-    typeof this.value() === 'number' ? this.value() : null,
+  protected readonly items = computed<readonly DashboardMetric[]>(
+    () =>
+      this.metrics() ?? [
+        {
+          id: 'single',
+          label: this.label(),
+          value: this.value(),
+          detail: this.detail(),
+          unavailableLabel: this.unavailableLabel(),
+        },
+      ],
   );
 }

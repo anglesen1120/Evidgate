@@ -82,13 +82,7 @@
     }
   }
   @case ('kpi') {
-    <article hlmCard class="eg-kpi-card">
-      <h4 hlmCardTitle><hlm-icon [name]="'lucideActivity'" />{{ copy.kpiLabel }}</h4>
-      <p hlmCardContent>{{ missing() ? '—' : '100%' }}</p>
-      <p hlmCardDescription>
-        {{ missing() ? (state() === 'empty' ? copy.noSamples : caption()) : copy.kpiCaption }}
-      </p>
-    </article>
+    <app-dashboard-kpi [label]="copy.kpiLabel" [metrics]="metrics()" />
   }
   @case ('queue') {
     <div class="row">

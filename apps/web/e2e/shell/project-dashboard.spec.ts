@@ -45,13 +45,11 @@ for (const locale of LOCALES) {
             '[data-dashboard-incidents] button, [data-dashboard-incidents] app-error-pattern',
           ),
         ).toHaveCount(0);
-        await expect(page.locator('[data-dashboard-kpis] app-dashboard-kpi hlm-icon')).toHaveCount(
-          5,
-        );
+        await expect(page.locator('[data-dashboard-kpis]').getByRole('term')).toHaveCount(5);
+        await expect(page.locator('[data-dashboard-kpis]').getByRole('definition')).toHaveCount(5);
         expect(
           await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
         ).toBe(true);
-        expect(await page.locator('.trend-stack').evaluateAll(fullHeightStacksFit)).toBe(true);
         await expectNoA11yViolations(page, `project dashboard ${locale} ${theme} ${width}`);
         await mkdir('/tmp/s674-shots', { recursive: true });
         await page.screenshot({
@@ -71,34 +69,24 @@ async function expectDayReadout(page: Page, locale: string): Promise<void> {
   await day.hover();
   await expect(values).toContainText(locale === 'vi' ? 'Chưa đánh giá:' : 'Not evaluated:');
   await expect(values).toContainText(locale === 'vi' ? 'Tổng:' : 'Total:');
-  await expect(day).toHaveAccessibleName(/PASS: \d+.*FAIL: \d+.*INCONCLUSIVE: \d+/);
-  const [bar, tip, card, legend, dates] = await Promise.all([
-    day.locator('.trend-segments').boundingBox(),
+  await expect(day).toHaveAccessibleDescription(/PASS: \d+.*FAIL: \d+.*INCONCLUSIVE: \d+/);
+  const [bars, readout, legend] = await Promise.all([
+    chart.getByRole('toolbar').boundingBox(),
     values.boundingBox(),
-    page.locator('[data-dashboard-trend]').boundingBox(),
     chart.getByRole('list').boundingBox(),
-    chart
-      .locator('.trend-column > span')
-      .evaluateAll((labels) => labels.map((label) => label.getBoundingClientRect().top)),
   ]);
-  if (!bar || !tip || !card || !legend) throw new Error('Expected visible chart geometry.');
-  expect(dates.length).toBeGreaterThan(0);
-  expect(tip.y + tip.height).toBeLessThanOrEqual(legend.y);
-  expect(tip.y + tip.height).toBeLessThanOrEqual(Math.min(...dates));
-  expect(tip.x).toBeGreaterThanOrEqual(card.x);
-  expect(tip.x + tip.width).toBeLessThanOrEqual(card.x + card.width);
-  expect(tip.x + tip.width).toBeGreaterThan(bar.x);
-  expect(tip.x).toBeLessThan(bar.x + bar.width);
-  expect(Math.abs(bar.y - tip.y - tip.height)).toBeLessThanOrEqual(2);
+  if (!bars || !readout || !legend) throw new Error('Expected visible chart and readout.');
+  expect(legend.y + legend.height).toBeLessThanOrEqual(bars.y + 1);
+  expect(bars.y + bars.height).toBeLessThanOrEqual(readout.y + 1);
+  expect(readout.x).toBeGreaterThanOrEqual(bars.x - 1);
+  expect(readout.x + readout.width).toBeLessThanOrEqual(bars.x + bars.width + 1);
   await values.hover();
   await expect(values).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(values).toBeHidden();
 }
 
-test('a focused readout moves beside the bar when scrolling leaves no room above', async ({
-  page,
-}) => {
+test('the focused date has an exact keyboard-accessible row at phone width', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 900 });
   await page.goto(overviewPath('vi') + FIXTURE);
   const chart = page.locator('app-decision-trend');
@@ -106,26 +94,22 @@ test('a focused readout moves beside the bar when scrolling leaves no room above
   const tip = chart.getByRole('tooltip');
   await day.focus();
   await expect(tip).toBeVisible();
-  await day.evaluate((button) => button.scrollIntoView({ block: 'start', inline: 'nearest' }));
-  await expect(async () => {
-    const [bar, panel, card] = await Promise.all([
-      day.locator('.trend-segments').boundingBox(),
-      tip.boundingBox(),
-      page.locator('[data-dashboard-trend]').boundingBox(),
-    ]);
-    if (!bar || !panel || !card) throw new Error('Expected visible chart geometry.');
-    expect(panel.y).toBeLessThan(bar.y + bar.height);
-    expect(panel.y + panel.height).toBeGreaterThan(bar.y);
-    expect(panel.y + panel.height).toBeLessThanOrEqual(bar.y + bar.height + 1);
-    expect(
-      Math.min(Math.abs(panel.x + panel.width - bar.x), Math.abs(bar.x + bar.width - panel.x)),
-    ).toBeLessThanOrEqual(1);
-    expect(panel.x).toBeGreaterThanOrEqual(card.x);
-    expect(panel.x + panel.width).toBeLessThanOrEqual(card.x + card.width);
-  }).toPass();
+  const date = await day.locator('time').innerText();
+  const total = (await day.innerText()).replace(date, '').trim();
+  await expect(tip).toContainText(date);
+  await expect(tip).toContainText(`Tổng: ${total}`);
   await page.keyboard.press('Escape');
   await expect(tip).toBeHidden();
   await expect(day).toBeFocused();
+  const disclosure = chart.locator('summary');
+  await disclosure.focus();
+  await page.keyboard.press('Enter');
+  const row = chart
+    .getByRole('row')
+    .filter({ has: page.getByRole('rowheader', { name: date, exact: true }) });
+  await expect(row).toBeVisible();
+  await expect(row.getByRole('cell').last()).toHaveText(total);
+  await expectNoA11yViolations(page, 'project dashboard exact dates at 390px');
 });
 
 test('one failed source leaves other dashboard facts visible and retries only locally', async ({
@@ -193,83 +177,63 @@ test('run inspection is a named read-only dialog with Escape and focus return', 
   await expect(view).toBeFocused();
 });
 
-test('500 sampled dates stay legible and keyboard-scrollable at 390px', async ({ page }) => {
+test('500 sampled dates stay legible and keyboard-reachable at 390px', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 1000 });
   await page.goto(overviewPath('en') + FIXTURE + '&fixture.variant.listRuns=dashboard-dense');
-  const region = page.locator('[data-dashboard-trend] .trend-bars');
-  await expect(region.locator('.trend-column')).toHaveCount(500);
-  await expect(region).toHaveAttribute('role', 'region');
-  await expect(region).toHaveAttribute('tabindex', '0');
-  await expect(region).toHaveAccessibleName(/\S/);
-  const geometry = await region.evaluate((element) => ({
-    scrollable: element.scrollWidth > element.clientWidth,
-    minimumWidth: Math.min(
-      ...Array.from(
-        element.querySelectorAll('.trend-column'),
-        (column) => column.getBoundingClientRect().width,
-      ),
-    ),
-    positiveOnly: Array.from(element.querySelectorAll('[data-segment]')).every(
-      (segment) => segment.getBoundingClientRect().height > 0,
-    ),
-  }));
-  expect(geometry.scrollable).toBe(true);
-  expect(geometry.minimumWidth).toBeGreaterThanOrEqual(64);
-  expect(await region.locator('.trend-stack').evaluateAll(fullHeightStacksFit)).toBe(true);
-  expect(geometry.positiveOnly).toBe(true);
-  await region.focus();
-  await expect(region).toBeFocused();
-  await page.keyboard.press('ArrowRight');
-  await expect.poll(() => region.evaluate((element) => element.scrollLeft)).toBeGreaterThan(0);
+  const chart = page.locator('app-decision-trend');
+  const dates = chart.getByRole('toolbar').getByRole('button');
+  await expect(dates).toHaveCount(500);
+  const first = dates.first();
+  const last = dates.last();
+  await first.focus();
+  await page.keyboard.press('End');
+  await expect(last).toBeFocused();
+  await expect(last).toBeInViewport();
+  const lastDate = await last.locator('time').innerText();
+  await expect(chart.getByRole('tooltip')).toContainText(lastDate);
+  await page.keyboard.press('ArrowUp');
+  await expect(dates.nth(498)).toBeFocused();
+  await page.keyboard.press('Home');
+  await expect(first).toBeFocused();
   await expect(page.locator('[data-dashboard-attention]')).toContainText(
     'Not available (latest runs not loaded)',
   );
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.locator('[data-dashboard-trend] summary').click();
   await expect(page.locator('[data-dashboard-trend] table')).toBeVisible();
+  await expect(chart.getByRole('rowheader')).toHaveCount(500);
+  await expect(chart.getByRole('rowheader', { name: lastDate, exact: true })).toBeVisible();
 });
 
-test('decision bars share a bottom baseline and scale heights to run counts', async ({ page }) => {
+test('unequal daily counts share a horizontal baseline and match the table totals', async ({
+  page,
+}) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto(overviewPath('en') + FIXTURE + '&fixture.variant.listRuns=dashboard-unequal');
-  const columns = page.locator('[data-dashboard-trend] .trend-column');
-  await expect(columns).toHaveCount(2);
-  const geometry = await columns.evaluateAll((elements) =>
-    elements.map((element) => {
-      const segments = Array.from(element.querySelectorAll('[data-segment]'), (segment) =>
+  const chart = page.locator('app-decision-trend');
+  const days = chart.getByRole('toolbar').getByRole('button');
+  await expect(days).toHaveCount(2);
+  const [three, one] = await days.evaluateAll((buttons) =>
+    buttons.map((button) => {
+      const segments = Array.from(button.querySelectorAll('[data-segment]'), (segment) =>
         segment.getBoundingClientRect(),
       );
       return {
-        top: Math.min(...segments.map((segment) => segment.top)),
-        bottom: Math.max(...segments.map((segment) => segment.bottom)),
-        height: segments.reduce((sum, segment) => sum + segment.height, 0),
+        left: Math.min(...segments.map((segment) => segment.left)),
+        width: segments.reduce((sum, segment) => sum + segment.width, 0),
       };
     }),
   );
-  const [three, one] = geometry;
-  expect(three).toBeDefined();
-  expect(one).toBeDefined();
   if (!three || !one) throw new Error('The unequal-count fixture must render two dates.');
-  expect(Math.abs(three.bottom - one.bottom)).toBeLessThan(1);
-  expect(three.height).toBeGreaterThan(100);
-  expect(Math.abs(three.height / one.height - 3)).toBeLessThan(0.05);
-  expect(one.top).toBeGreaterThan(three.top);
-  await expect(page.locator('[data-dashboard-trend] .trend-total')).toHaveText(['3', '1']);
+  expect(Math.abs(three.left - one.left)).toBeLessThan(1);
+  expect(one.width).toBeGreaterThan(0);
+  expect(Math.abs(three.width / one.width - 3)).toBeLessThan(0.05);
+  await chart.locator('summary').click();
+  const [larger, smaller] = await chart
+    .getByRole('row')
+    .filter({ has: page.getByRole('rowheader') })
+    .all();
+  if (!larger || !smaller) throw new Error('Missing exact rows for the unequal-count dates.');
+  await expect(larger.getByRole('cell').last()).toHaveText('3');
+  await expect(smaller.getByRole('cell').last()).toHaveText('1');
 });
-
-function fullHeightStacksFit(stacks: Element[]): boolean {
-  return stacks.every((stack) => {
-    const bounds = stack.getBoundingClientRect();
-    const segments = Array.from(stack.querySelectorAll('[data-segment]'), (segment) =>
-      segment.getBoundingClientRect(),
-    );
-    // Both fixtures fill every date to the maximum total; gaps must not shrink their evidence.
-    return (
-      segments.every(
-        (segment) => segment.top >= bounds.top - 0.5 && segment.bottom <= bounds.bottom + 0.5,
-      ) &&
-      Math.abs(segments.reduce((height, segment) => height + segment.height, 0) - bounds.height) <=
-        1
-    );
-  });
-}

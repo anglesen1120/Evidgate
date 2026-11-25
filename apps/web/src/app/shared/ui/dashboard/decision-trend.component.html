@@ -1,0 +1,123 @@
+@if (bars().length === 0) {
+  <app-empty-pattern [bare]="true" [icon]="'navChart'" [title]="emptyLabel" />
+} @else {
+  <figure class="chart" [attr.aria-label]="label()" (pointerleave)="leave($event)">
+    <figcaption>
+      <ul class="legend">
+        @for (segment of legend(); track segment.id) {
+          <li>
+            <span
+              aria-hidden="true"
+              data-segment
+              [attr.data-tone]="segment.tone"
+              [attr.data-pattern]="$index % 4"
+            ></span>
+            <span>{{ segment.label }}: {{ segment.total | number }}</span>
+          </li>
+        }
+      </ul>
+    </figcaption>
+    <div>
+      <div class="axis-labels" aria-hidden="true">
+        <span>{{ dateLabel }}</span
+        ><span>{{ totalLabel }}</span>
+      </div>
+      <div
+        role="toolbar"
+        [attr.aria-orientation]="'vertical'"
+        class="days"
+        [attr.aria-label]="daysLabel"
+      >
+        @for (point of bars(); track point.id) {
+          <button
+            #bar
+            hlmBtn
+            type="button"
+            [variant]="'ghost'"
+            [tabIndex]="tabStop() === point.id ? 0 : -1"
+            [attr.aria-description]="point.summary"
+            (focus)="focusDay(point.id, bar, point.summary)"
+            (blur)="blurDay(bar)"
+            (pointerenter)="hoverDay($event, bar, point.summary)"
+            (pointerdown)="beginTap($event, bar)"
+            (pointercancel)="closingTap = null"
+            (click)="activate(bar, point.summary)"
+            (keydown)="navigate($event, $index)"
+          >
+            <time [attr.datetime]="point.id">{{ point.label }}</time>
+            <span aria-hidden="true" class="track">
+              <span class="trend-segments" [style.width.%]="point.width">
+                @for (segment of point.visibleSegments; track segment.id) {
+                  <span
+                    data-segment
+                    aria-hidden="true"
+                    [attr.data-tone]="segment.tone"
+                    [attr.data-pattern]="segment.pattern"
+                    [style.flex-grow]="segment.value"
+                  ></span>
+                }
+              </span>
+            </span>
+            <span class="trend-total">{{ point.total | number }}</span>
+          </button>
+        }
+      </div>
+    </div>
+    <p data-sample-readout class="readout" [attr.role]="inspection() ? 'tooltip' : null">
+      {{ inspection()?.summary ?? sampleSummary() }}
+    </p>
+    <details>
+      <summary
+        class="min-h-(--eg-control-touch) cursor-pointer text-sm font-medium text-primary focus-visible:outline-solid focus-visible:outline-ring"
+        i18n="@@shared.dashboard.trend-table"
+      >
+        View as table
+      </summary>
+      <div hlmTableContainer>
+        <table hlmTable>
+          <caption class="sr-only">
+            {{
+              label()
+            }}
+          </caption>
+          <thead hlmTHead>
+            <tr hlmTr>
+              <th hlmTh scope="col">{{ dateLabel }}</th>
+              @for (segment of legend(); track segment.id) {
+                <th hlmTh scope="col">{{ segment.label }}</th>
+              }
+              <th hlmTh scope="col">{{ totalLabel }}</th>
+            </tr>
+          </thead>
+          <tbody hlmTBody>
+            @for (point of bars(); track point.id) {
+              <tr hlmTr>
+                <th hlmTh scope="row">
+                  <time [attr.datetime]="point.id">{{ point.label }}</time>
+                </th>
+                @for (segment of point.segments; track segment.id) {
+                  <td hlmTd>
+                    <span
+                      class="mobile-label"
+                      aria-hidden="true"
+                      [attr.data-label]="segment.label"
+                    ></span
+                    >{{ segment.value | number }}
+                  </td>
+                }
+                <td hlmTd>
+                  <span
+                    class="mobile-label"
+                    aria-hidden="true"
+                    [attr.data-label]="totalLabel"
+                  ></span
+                  >{{ point.total | number }}
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </details>
+  </figure>
+}
