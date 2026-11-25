@@ -73,6 +73,31 @@ describe('Decision trend day inspection', () => {
     expect(await chart.empty()).not.toBeNull();
   });
 
+  it('counts a non-finite value as zero so the other dates keep a bar width', () => {
+    const fixture = TestBed.createComponent(DecisionTrendComponent);
+    fixture.componentRef.setInput('label', 'Sample');
+    fixture.componentRef.setInput('points', [
+      {
+        id: '2026-11-22',
+        label: '11/22/2026',
+        segments: [{ id: 'pass', label: 'PASS', value: Number.NaN, tone: 'success' }],
+      },
+      {
+        id: '2026-11-23',
+        label: '11/23/2026',
+        segments: [{ id: 'pass', label: 'PASS', value: 4, tone: 'success' }],
+      },
+    ]);
+    fixture.detectChanges();
+    const widths = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLElement>(
+        '.days button [style*="width"]',
+      ),
+    ).map((el) => el.style.width);
+    expect(widths.some((w) => w.includes('NaN'))).toBe(false);
+    expect(widths.length).toBeGreaterThan(0);
+  });
+
   it('keeps a single long UTC date intact in the label, readout and exact row', async () => {
     const { fixture, chart } = await setup();
     const date = 'Wednesday, September 30, 2026';

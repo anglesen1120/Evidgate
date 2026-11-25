@@ -34,6 +34,9 @@ export interface DashboardTrendPoint {
   readonly segments: readonly DashboardTrendSegment[];
 }
 
+// A non-finite or negative count would blank every bar width, so it counts as zero.
+const count = (value: number): number => (Number.isFinite(value) ? Math.max(0, value) : 0);
+
 @Component({
   selector: 'app-decision-trend',
   imports: [DecimalPipe, EmptyPatternComponent, HlmButton, HlmTableImports],
@@ -79,7 +82,7 @@ export class DecisionTrendComponent {
       ...segment,
       total: this.points().reduce(
         (sum, point) =>
-          sum + Math.max(0, point.segments.find((item) => item.id === segment.id)?.value ?? 0),
+          sum + count(point.segments.find((item) => item.id === segment.id)?.value ?? 0),
         0,
       ),
     })),
@@ -87,7 +90,7 @@ export class DecisionTrendComponent {
   protected readonly bars = computed(() => {
     const totals = this.points().map((point) => ({
       point,
-      total: point.segments.reduce((sum, segment) => sum + Math.max(0, segment.value), 0),
+      total: point.segments.reduce((sum, segment) => sum + count(segment.value), 0),
     }));
     const maximum = totals.reduce((max, { total }) => Math.max(max, total), 1);
     return totals.map(({ point, total }) => ({
