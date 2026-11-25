@@ -1,6 +1,5 @@
 import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
 import { RouterLink, RouterLinkActive } from '@angular/router';
-import { HlmBadge } from '@evidgate/ui/badge';
 import { HlmButton } from '@evidgate/ui/button';
 import { HlmTooltip } from '@evidgate/ui/tooltip';
 import type { NavGroupView } from '../nav/nav.models';
@@ -9,7 +8,7 @@ import { ShellIconComponent } from './shell-icon.component';
 /** Consumes the already-filtered nav view; no permission or phase decisions belong here. */
 @Component({
   selector: 'app-shell-nav',
-  imports: [RouterLink, RouterLinkActive, ShellIconComponent, HlmButton, HlmBadge, HlmTooltip],
+  imports: [RouterLink, RouterLinkActive, ShellIconComponent, HlmButton, HlmTooltip],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './nav.component.html',
   host: {

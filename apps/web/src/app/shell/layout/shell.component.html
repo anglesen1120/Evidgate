@@ -28,7 +28,7 @@
   <aside
     #navigation
     id="shell-navigation"
-    class="navigation relative z-(--eg-z-sticky) box-border flex min-w-0 flex-col self-stretch border-0 border-r-(length:--eg-border-width) border-solid border-border bg-card group-[.mobile]/shell:fixed group-[.mobile]/shell:inset-y-0 group-[.mobile]/shell:start-0 group-[.mobile]/shell:z-(--eg-z-drawer) group-[.mobile]/shell:h-dvh group-[.mobile]/shell:w-[min(84vw,var(--eg-rail-width))] group-[.mobile]/shell:overflow-y-auto group-[.mobile]/shell:overscroll-contain group-[.mobile]/shell:scroll-py-(--eg-space-3) group-[.mobile]/shell:max-[420px]:w-dvw"
+    class="navigation relative z-(--eg-z-sticky) box-border flex min-w-0 flex-col self-stretch border-0 border-r-(length:--eg-border-width) border-solid border-border bg-secondary group-[.mobile]/shell:fixed group-[.mobile]/shell:inset-y-0 group-[.mobile]/shell:start-0 group-[.mobile]/shell:z-(--eg-z-drawer) group-[.mobile]/shell:h-dvh group-[.mobile]/shell:w-[min(84vw,var(--eg-rail-width))] group-[.mobile]/shell:overflow-y-auto group-[.mobile]/shell:overscroll-contain group-[.mobile]/shell:scroll-py-(--eg-space-3) group-[.mobile]/shell:max-[420px]:w-dvw"
     [class.opacity-0]="mobile() && !drawerOpen()"
     [class.-translate-x-full]="mobile() && !drawerOpen()"
     [cdkTrapFocus]="mobile() && drawerOpen()"
@@ -55,12 +55,12 @@
         </button>
       }
       <a
-        class="brand box-border flex min-h-(--eg-space-12) shrink-0 items-center gap-(--eg-space-4) p-(--eg-space-6) text-foreground no-underline group-[.rail]/shell:justify-center group-[.rail]/shell:px-0 group-[.rail]/shell:py-(--eg-space-5) group-[.mobile]/shell:pe-(--eg-space-12)"
+        class="brand box-border flex min-h-(--eg-space-12) shrink-0 items-center gap-(--eg-space-3) px-(--eg-space-6) py-(--eg-space-4) text-foreground no-underline group-[.rail]/shell:justify-center group-[.rail]/shell:px-0 group-[.mobile]/shell:pe-(--eg-space-12)"
         routerLink="/"
         [attr.aria-label]="brandLinkLabel"
       >
         <span
-          class="grid size-(--eg-control-md) shrink-0 place-items-center rounded-md bg-primary text-primary-foreground"
+          class="grid size-(--eg-control-sm) shrink-0 place-items-center rounded-md bg-primary text-primary-foreground"
         >
           <app-shell-icon class="size-(--eg-space-7)" [name]="'logo'" />
         </span>
@@ -69,7 +69,9 @@
             class="block font-(family-name:--eg-font-display) text-xl tracking-tight"
             i18n="@@shell.layout.brand"
             >Evidgate</strong
-          >&ngsp;<small class="block text-xs text-muted-foreground" i18n="@@shell.brand.subtitle"
+          >&ngsp;<small
+            class="hidden text-xs text-muted-foreground group-[.mobile]/shell:block"
+            i18n="@@shell.brand.subtitle"
             >Quality workspace</small
           >
         </span>
@@ -113,7 +115,7 @@
         <div
           class="drawer-preferences flex shrink-0 flex-wrap gap-(--eg-space-3) border-0 border-t-(length:--eg-border-width) border-solid border-border p-(--eg-space-4)"
         >
-          <app-locale-switcher (switchRequested)="switchLocale()" />
+          <app-locale-switcher [variant]="'ghost'" (switchRequested)="switchLocale()" />
         </div>
       }
     </div>
@@ -121,7 +123,7 @@
   <div class="main-stack flex min-w-0 flex-col" [attr.inert]="mobile() && drawerOpen() ? '' : null">
     <header
       #topbar
-      class="topbar sticky top-0 z-(--eg-z-sticky) box-border grid min-h-(--eg-space-12) min-w-0 items-center border-0 border-b-(length:--eg-border-width) border-solid border-border bg-card"
+      class="topbar sticky top-0 z-(--eg-z-sticky) box-border grid min-h-(--eg-space-11) min-w-0 items-center border-0 border-b-(length:--eg-border-width) border-solid border-border bg-card"
     >
       <button
         #toggleButton
@@ -137,36 +139,36 @@
       >
         <app-shell-icon [name]="'menu'" />
       </button>
-      <app-shell-breadcrumbs />
+      <app-shell-breadcrumbs [interactiveScope]="!mobile()">
+        @if (!mobile()) {
+          <li class="topbar-scope min-w-0">
+            @defer (on idle) {
+              <app-scope-switcher
+                class="grid-cols-2 gap-(--eg-space-2) [&_[data-slot=select-trigger]]:text-xs [&_[data-slot=select-trigger]:enabled:not(:hover,:focus-visible,[aria-expanded=true])]:border-transparent"
+                [compact]="true"
+                [organizations]="session.organizations()"
+                [projects]="session.projects()"
+                [currentOrg]="session.currentOrg()"
+                [currentProject]="session.currentProject()"
+                (orgSelected)="selectOrganization($event)"
+                (projectSelected)="selectProject($event)"
+              />
+            } @placeholder {
+              <div class="grid min-w-0 grid-cols-2 gap-(--eg-space-2)" aria-hidden="true">
+                @for (scope of [session.currentOrg(), session.currentProject()]; track $index) {
+                  <span
+                    class="box-border flex h-(--eg-control-touch) min-w-0 items-center rounded-sm bg-muted px-(--eg-space-3)"
+                    ><span class="truncate">{{ scope?.name }}</span></span
+                  >
+                }
+              </div>
+            }
+          </li>
+        }
+      </app-shell-breadcrumbs>
       <div
         class="topbar-tools flex min-w-0 flex-wrap items-center justify-end gap-(--eg-space-2) pointer-coarse:gap-(--eg-space-3)"
       >
-        @if (!mobile()) {
-          @defer (on idle) {
-            <app-scope-switcher
-              class="topbar-scope min-w-0 grid-cols-2 gap-(--eg-space-2) [&_[data-slot=select-trigger]]:px-(--eg-space-2) [&_[data-slot=select-trigger]]:text-xs [&_[data-slot=select-trigger]:enabled]:bg-card [&_[data-slot=select-trigger]:enabled:hover]:border-primary"
-              [compact]="true"
-              [organizations]="session.organizations()"
-              [projects]="session.projects()"
-              [currentOrg]="session.currentOrg()"
-              [currentProject]="session.currentProject()"
-              (orgSelected)="selectOrganization($event)"
-              (projectSelected)="selectProject($event)"
-            />
-          } @placeholder {
-            <div
-              class="topbar-scope grid min-w-0 grid-cols-2 gap-(--eg-space-2)"
-              aria-hidden="true"
-            >
-              @for (scope of [session.currentOrg(), session.currentProject()]; track $index) {
-                <span
-                  class="box-border flex h-(--eg-control-touch) min-w-0 items-center rounded-sm bg-muted px-(--eg-space-3)"
-                  ><span class="truncate">{{ scope?.name }}</span></span
-                >
-              }
-            </div>
-          }
-        }
         <app-quota-badge class="min-w-0 max-w-full" />
         <app-shell-search />
         <button
@@ -182,7 +184,7 @@
           <app-shell-icon [name]="dark() ? 'moon' : 'sun'" />
         </button>
         @if (!mobile() && canSwitchLocale) {
-          <app-locale-switcher (switchRequested)="switchLocale()" />
+          <app-locale-switcher [variant]="'ghost'" (switchRequested)="switchLocale()" />
         }
         <app-shell-account />
       </div>

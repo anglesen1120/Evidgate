@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
 import { PRIMARY_OUTLET, Router } from '@angular/router';
 import { HlmIcon } from '@evidgate/ui/icon';
 import { SessionStore } from '../../core/session/session.store';
@@ -11,15 +11,21 @@ import { NavViewService } from '../nav/nav-view';
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'block min-w-0' },
   template: `
-    @if (trail().parts.length) {
+    @if (interactiveScope() || trail().parts.length) {
       <nav aria-label="Breadcrumb" i18n-aria-label="@@shell.breadcrumb.label">
         <ol
           class="m-0 flex min-w-0 list-none flex-wrap items-center gap-x-(--eg-space-2) gap-y-(--eg-space-1) p-0 text-xs leading-(--eg-leading-xs) text-muted-foreground"
         >
+          <ng-content />
           @for (part of trail().parts; track $index; let first = $first, last = $last) {
-            <li class="flex min-w-0 max-w-full items-baseline gap-(--eg-space-2)">
-              @if (!first) {
-                <hlm-icon [name]="'lucideChevronRight'" class="size-(--eg-text-xs) self-center" />
+            <li
+              class="flex min-w-0 max-w-full items-baseline gap-(--eg-space-2) max-[768px]:not-last:sr-only"
+            >
+              @if (interactiveScope() || !first) {
+                <hlm-icon
+                  [name]="'lucideChevronRight'"
+                  class="size-(--eg-text-xs) self-center max-[768px]:hidden"
+                />
               }
               <bdi
                 class="min-w-0 [overflow-wrap:anywhere] aria-[current=page]:font-bold aria-[current=page]:text-foreground"
@@ -37,6 +43,7 @@ export class ShellBreadcrumbsComponent {
   private readonly router = inject(Router);
   private readonly session = inject(SessionStore);
   private readonly nav = inject(NavViewService);
+  readonly interactiveScope = input(false);
 
   protected readonly trail = computed(() => {
     const url = this.router.lastSuccessfulNavigation()?.finalUrl;
@@ -65,8 +72,8 @@ export class ShellBreadcrumbsComponent {
     return {
       hasPage: !!(current || page),
       parts: [
-        this.session.currentOrg()?.name,
-        this.session.currentProject()?.name,
+        this.interactiveScope() ? undefined : this.session.currentOrg()?.name,
+        this.interactiveScope() ? undefined : this.session.currentProject()?.name,
         parent?.label,
         current?.label,
         page === current?.label ? undefined : page,

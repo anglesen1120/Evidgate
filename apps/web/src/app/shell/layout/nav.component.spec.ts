@@ -1,3 +1,5 @@
+import { ComponentHarness } from '@angular/cdk/testing';
+import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { Router, provideRouter } from '@angular/router';
@@ -5,6 +7,15 @@ import { NotFoundPage } from '../pages/not-found.page';
 import { NavComponent } from './nav.component';
 import type { NavGroupView } from '../nav/nav.models';
 import { stubScopeBrowserApis } from './scope.fixture';
+
+class NavigationHarness extends ComponentHarness {
+  static hostSelector = 'app-shell-nav';
+  readonly landmark = this.locatorFor('nav');
+  readonly regions = this.locatorForAll('section, [role="region"]');
+  readonly groups = this.locatorForAll('[role="group"]');
+  readonly heading = this.locatorFor('h2');
+  readonly links = this.locatorForAll('a');
+}
 
 const groups: readonly NavGroupView[] = [
   {
@@ -44,19 +55,17 @@ describe('NavComponent', () => {
     const fixture = TestBed.createComponent(NavComponent);
     fixture.componentRef.setInput('groups', groups);
     await fixture.whenStable();
-    const root = fixture.nativeElement as HTMLElement;
-    expect(root.querySelector('nav')?.getAttribute('aria-label')).toBe('Primary navigation');
-    // The groups are named `role="group"` containers, not `<section>`s: a named section is a
-    // `region` landmark, and five of them inside this navigation is landmark noise (review L5).
-    expect(root.querySelectorAll('section')).toHaveLength(0);
-    expect(root.querySelectorAll('[role="group"]')).toHaveLength(1);
-    const renderedGroup = root.querySelector('[role="group"]');
-    expect(renderedGroup?.getAttribute('aria-labelledby')).toBe('nav-group-workspace');
-    expect(renderedGroup?.querySelector('h2')?.getAttribute('id')).toBe('nav-group-workspace');
-    expect(renderedGroup?.querySelector('h2 [data-slot="badge"]')?.textContent?.trim()).toBe('1');
-    expect(root.textContent).toContain('Workspace');
-    expect(root.textContent).not.toContain('Administration');
-    expect(root.querySelectorAll('a')).toHaveLength(1);
+    const nav = await TestbedHarnessEnvironment.harnessForFixture(fixture, NavigationHarness);
+    expect(await (await nav.landmark()).getAttribute('aria-label')).toBe('Primary navigation');
+    expect(await nav.regions()).toHaveLength(0);
+    const visibleGroups = await nav.groups();
+    expect(visibleGroups).toHaveLength(1);
+    const heading = await nav.heading();
+    expect(await visibleGroups[0]?.getAttribute('aria-labelledby')).toBe(
+      await heading.getAttribute('id'),
+    );
+    expect(await heading.text()).toBe(groups[0]?.label);
+    expect(await nav.links()).toHaveLength(1);
   });
 
   it('marks the active link as the current page and emits link selection', async () => {
