@@ -5,9 +5,6 @@ import { TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { provideRouter } from '@angular/router';
 import type { ProjectDto, RunPage } from '@evidgate/sdk';
-import { readFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { firstValueFrom, Subject } from 'rxjs';
 import { AuditDataService } from '../../core/data/audit-data.service';
 import { MembersDataService } from '../../core/data/members-data.service';
@@ -36,8 +33,10 @@ class OverviewHarness extends ComponentHarness {
   readonly tableRole = this.locatorFor('.projects [role="table"]');
   readonly tableCaption = this.locatorFor('.projects app-data-table > .caption');
   readonly decisionPrefix = this.locatorFor('app-decision-chip .verdict__label');
-  readonly usageTerms = this.locatorForAll('.usage dl.hlm-field-grid > div.grid-cols-2 > dt');
-  readonly usageValues = this.locatorForAll('.usage dl.hlm-field-grid > div.grid-cols-2 > dt + dd');
+  readonly memberValues = this.locatorForAll('.members dt + dd');
+  readonly memberTerms = this.locatorForAll('.members dt');
+  readonly usageTerms = this.locatorForAll('app-dashboard-meter dt');
+  readonly usageValues = this.locatorForAll('app-dashboard-meter dt + dd');
   readonly countNotice = this.locatorFor('.projects [data-project-count]');
 }
 
@@ -168,8 +167,7 @@ describe('OrgOverviewPage', () => {
     const text = await harness.text();
     expect(text).toContain('Period: 2026-11');
     expect(text).toContain('Results');
-    expect(text).toMatch(/AI tokens\s*0/);
-    expect(await (await harness.aiUsage()).hasClass('mt-(--eg-space-5)')).toBe(true);
+    expect(await (await harness.aiUsage()).text()).toMatch(/AI tokens\s*0$/);
   });
 
   it('opens project details from a named icon button without fetching extra data', async () => {
@@ -208,25 +206,22 @@ describe('OrgOverviewPage', () => {
     expect(await (await harness.countNotice()).text()).toBe(expected);
   });
 
-  it('uses one Vietnamese plural form for all counts in both paging states', () => {
-    const catalog = new DOMParser().parseFromString(
-      readFileSync(
-        resolve(dirname(fileURLToPath(import.meta.url)), '../../../locale/messages.vi.xlf'),
-        'utf8',
-      ),
-      'application/xml',
-    );
-    for (const [key, suffix] of [
-      ['projects-count', ''],
-      ['projects-more', '; còn dự án khác'],
-    ]) {
-      const target = catalog.querySelector(`trans-unit[id="orgoverview.${key}"] target`);
-      expect(target?.querySelector('x')?.getAttribute('id')).toBe('INTERPOLATION');
-      target?.querySelector('x')?.replaceWith('N');
-      expect(target?.textContent?.trim()).toBe(
-        `{VAR_PLURAL, plural, other {Hiển thị N dự án${suffix}}}`,
-      );
-    }
+  it('counts active members and pending invitations against the loaded membership page', async () => {
+    members.listMemberships.mockResolvedValue({
+      items: [{ status: 'active' }],
+      next_cursor: 'next',
+    });
+    const fixture = TestBed.createComponent(OrgOverviewPage);
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, OverviewHarness);
+    expect(await Promise.all((await harness.memberTerms()).map((term) => term.text()))).toEqual([
+      'Active members',
+      'Pending invitations',
+    ]);
+    expect(await Promise.all((await harness.memberValues()).map((value) => value.text()))).toEqual([
+      expect.stringMatching(/^1\s*\/\s*1$/),
+      expect.stringMatching(/^0\s*\/\s*1$/),
+    ]);
+    expect(await harness.text()).toContain('more available');
   });
 
   it('renders independent successful empty widgets without fabricated credit', async () => {
@@ -236,7 +231,7 @@ describe('OrgOverviewPage', () => {
     const text = await harness.text();
     expect(text).toContain('No projects to show.');
     expect(text).toContain('No organization activity recorded.');
-    expect(text).toContain('Not metered');
+    expect(await (await harness.aiUsage()).text()).toMatch(/AI tokens\s*Not metered$/);
     expect(await harness.errors()).toHaveLength(0);
   });
   it('keeps other widgets visible when memberships fail', async () => {

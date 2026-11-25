@@ -6,7 +6,13 @@ import { SessionStore } from '../../core/session/session.store';
 import { PageHeaderImports } from '../../shared/ui/page-header';
 import { EmptyPatternComponent } from '../../shared/ui/states/empty-pattern.component';
 import { DashboardWidgetComponent } from '../../shared/ui/dashboard/dashboard-widget.component';
-import { DashboardKpiComponent } from '../../shared/ui/dashboard/dashboard-kpi.component';
+import {
+  DashboardKpiComponent,
+  type DashboardMetric,
+} from '../../shared/ui/dashboard/dashboard-kpi.component';
+import { retryWithDashboardFocus } from '../../shared/ui/dashboard/dashboard-retry-focus';
+import { ErrorPatternComponent } from '../../shared/ui/states/error-pattern.component';
+import { LoadingPatternComponent } from '../../shared/ui/states/loading-pattern.component';
 import { DashboardMeterComponent } from '../../shared/ui/dashboard/dashboard-meter.component';
 import { DashboardActivityComponent } from '../../shared/ui/dashboard/dashboard-activity.component';
 import {
@@ -36,6 +42,8 @@ import {
     EmptyPatternComponent,
     DashboardWidgetComponent,
     DashboardKpiComponent,
+    ErrorPatternComponent,
+    LoadingPatternComponent,
     DashboardMeterComponent,
     DecisionTrendComponent,
     DashboardRunsComponent,
@@ -60,7 +68,8 @@ export class ProjectOverviewPage {
   );
   protected readonly rows = computed(() => sampleRuns(this.store.runs.value()));
   protected readonly counts = computed(() => runCounts(this.rows(), this.store.decisionsVisible()));
-  protected readonly latest = computed(() => [...this.rows()].reverse().slice(0, 5));
+  protected readonly latest = computed(() => this.rows().slice(-5).reverse());
+  protected readonly retrySummary = retryWithDashboardFocus;
   protected readonly primaryAction = computed(() => {
     const items = this.nav.groups().flatMap((group) => group.items);
     return ['runs', 'onboarding', 'authoring']
@@ -74,26 +83,54 @@ export class ProjectOverviewPage {
         .flatMap((group) => group.items)
         .find((item) => item.id === 'onboarding')?.link,
   );
-  protected readonly sampleLabel = computed(() => {
-    const count = formatNumber(this.rows().length, this.locale);
+  protected readonly registerScope = computed(() => {
+    if (!this.store.runs.value() || !this.latest().length) return '';
+    const count = formatNumber(this.latest().length, this.locale);
     return this.store.runs.value()?.complete
-      ? $localize`:@@project.dashboard.last-runs:Last ${count}:count: runs`
-      : $localize`:@@project.dashboard.oldest-runs:${count}:count: oldest loaded runs — not the latest`;
+      ? $localize`:@@project.dashboard.register-recent:Showing the ${count}:count: most recent runs in the sample.`
+      : $localize`:@@project.dashboard.register-loaded:Showing ${count}:count: runs from the oldest loaded pages.`;
   });
   protected readonly recentTitle = computed(() =>
     this.store.runs.value()?.complete
       ? this.copy.runs
       : $localize`:@@project.dashboard.loaded-runs:Loaded runs (not the latest)`,
   );
-  protected readonly share = (value: number): string =>
-    this.counts().total === 0
-      ? this.copy.noData
-      : `${formatNumber((value / this.counts().total) * 100, this.locale, '1.0-1')}%`;
-  protected readonly shareDetail = (value: number): string => {
-    const numerator = formatNumber(value, this.locale);
-    const denominator = formatNumber(this.counts().total, this.locale);
-    return $localize`:@@project.dashboard.share-detail:${numerator}:count: of ${denominator}:total: sampled runs`;
-  };
+  protected readonly metrics = computed<readonly DashboardMetric[]>(() => {
+    const sample = this.store.runs.value();
+    const counts = this.counts();
+    const total = formatNumber(counts.total, this.locale);
+    const detail = !sample
+      ? ''
+      : sample.complete
+        ? $localize`:@@project.dashboard.sample-loaded:Loaded sample`
+        : $localize`:@@project.dashboard.sample-partial:Oldest pages only; newer runs are not loaded.`;
+    return [
+      { id: 'runs', label: this.recentTitle(), value: sample ? counts.total : null, detail },
+      ...(this.store.decisionsVisible()
+        ? (['pass', 'fail', 'inconclusive'] as const).map((id) => {
+            const count = formatNumber(counts[id], this.locale);
+            return {
+              id,
+              label: id.toUpperCase(),
+              value: !sample
+                ? null
+                : !counts.total
+                  ? this.copy.noData
+                  : `${formatNumber((counts[id] / counts.total) * 100, this.locale, '1.0-1')}%`,
+              detail: sample
+                ? $localize`:@@project.dashboard.sample-fraction:${count}:count: / ${total}:total: runs`
+                : '',
+            };
+          })
+        : []),
+      {
+        id: 'collecting',
+        label: this.copy.collecting,
+        value: sample ? counts.collecting : null,
+        detail: sample ? $localize`:@@project.dashboard.sample-of:Of ${total}:total: runs` : '',
+      },
+    ];
+  });
   protected readonly trend = computed<readonly DashboardTrendPoint[]>(() =>
     decisionsByDay(this.rows(), this.store.decisionsVisible()).map((day) => ({
       id: day.day,
@@ -118,6 +155,11 @@ export class ProjectOverviewPage {
   protected readonly failures = computed(() =>
     this.store.runs.value()?.complete === true ? recentFailures(this.rows(), Date.now()) : null,
   );
+  protected readonly failureContext = computed(() => {
+    if (this.failures() === null) return this.copy.failuresUnavailable;
+    const total = formatNumber(this.counts().fail, this.locale);
+    return $localize`:@@project.dashboard.failure-scope:In the last 7 days; ${total}:total: FAIL in the whole sample.`;
+  });
   protected readonly waivers = computed(() =>
     expiringWaivers(this.store.waivers.value()?.items ?? [], Date.now()),
   );
@@ -168,16 +210,16 @@ export class ProjectOverviewPage {
     if (metric?.used === null || metric?.used === undefined) return this.copy.unavailable;
     const used = formatNumber(metric.used, this.locale);
     if (metric.limit === null)
-      return $localize`:@@project.dashboard.quota-no-limit:${used}:used: results used · Quota not set`;
+      return $localize`:@@project.dashboard.quota-no-limit:${used}:used: results used · Limit unavailable`;
     const limit = formatNumber(metric.limit, this.locale);
     return $localize`:@@project.dashboard.quota-used:${used}:used: of ${limit}:limit: results used`;
   });
   protected readonly aiDescription = computed(() => {
     const metric = this.ai();
-    if (metric?.used === null || metric?.used === undefined) return this.copy.aiUnavailable;
+    if (metric?.used === null || metric?.used === undefined) return this.copy.notMetered;
     const used = formatNumber(metric.used, this.locale);
     if (metric.limit === null)
-      return $localize`:@@project.dashboard.ai-no-limit:${used}:used: tokens used · Quota not set`;
+      return $localize`:@@project.dashboard.ai-no-limit:${used}:used: tokens used · Limit unavailable`;
     const limit = formatNumber(metric.limit, this.locale);
     return $localize`:@@project.dashboard.ai-used:${used}:used: of ${limit}:limit: tokens used`;
   });

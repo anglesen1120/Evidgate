@@ -108,7 +108,7 @@
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shell/layout/shell.component.html</context>
-          <context context-type="linenumber">71,72</context>
+          <context context-type="linenumber">71,73</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shell.theme.dark-mode" datatype="html">
@@ -12901,81 +12901,81 @@
         <source>{VAR_PLURAL, plural, =1 {Showing 1 project; more available} other {Showing <x id="INTERPOLATION"/> projects; more available}}</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/org-overview/org-overview.page.html</context>
-          <context context-type="linenumber">81,86</context>
+          <context context-type="linenumber">82,87</context>
         </context-group>
       </trans-unit>
       <trans-unit id="orgoverview.projects-count" datatype="html">
         <source>{VAR_PLURAL, plural, =1 {Showing 1 project} other {Showing <x id="INTERPOLATION"/> projects}}</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/org-overview/org-overview.page.html</context>
-          <context context-type="linenumber">86,93</context>
+          <context context-type="linenumber">87,94</context>
         </context-group>
       </trans-unit>
       <trans-unit id="orgoverview.run-bound" datatype="html">
         <source> Latest run is available only when the bounded read contains every run (up to 50 per project). </source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/org-overview/org-overview.page.html</context>
-          <context context-type="linenumber">94,100</context>
+          <context context-type="linenumber">96,102</context>
         </context-group>
       </trans-unit>
       <trans-unit id="orgoverview.period" datatype="html">
         <source> Period: <x id="INTERPOLATION" equiv-text="{{ store.usage.value().period }}"/> </source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/org-overview/org-overview.page.html</context>
-          <context context-type="linenumber">125,127</context>
+          <context context-type="linenumber">136,138</context>
         </context-group>
       </trans-unit>
       <trans-unit id="orgoverview.ai-explanation" datatype="html">
         <source> Token usage is not a credit balance. Unavailable measurements are not zero. </source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/org-overview/org-overview.page.html</context>
-          <context context-type="linenumber">157,160</context>
+          <context context-type="linenumber">161,164</context>
         </context-group>
       </trans-unit>
       <trans-unit id="orgoverview.empty-usage" datatype="html">
         <source>No usage metrics returned.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/org-overview/org-overview.page.html</context>
-          <context context-type="linenumber">160,166</context>
+          <context context-type="linenumber">164,170</context>
         </context-group>
       </trans-unit>
       <trans-unit id="orgoverview.no-access" datatype="html">
         <source> No dashboard data is available with your current permissions. </source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/org-overview/org-overview.page.html</context>
-          <context context-type="linenumber">176,182</context>
+          <context context-type="linenumber">181,187</context>
         </context-group>
       </trans-unit>
       <trans-unit id="orgoverview.project-details" datatype="html">
         <source>Project details</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/org-overview/org-overview.page.html</context>
-          <context context-type="linenumber">189,192</context>
+          <context context-type="linenumber">194,197</context>
         </context-group>
       </trans-unit>
       <trans-unit id="orgoverview.project-id" datatype="html">
         <source>Project ID</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/org-overview/org-overview.page.html</context>
-          <context context-type="linenumber">196,199</context>
+          <context context-type="linenumber">201,204</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/org-overview/org-overview.page.ts</context>
-          <context context-type="linenumber">68</context>
+          <context context-type="linenumber">66</context>
         </context-group>
       </trans-unit>
       <trans-unit id="orgoverview.project-name" datatype="html">
         <source>Name</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/org-overview/org-overview.page.html</context>
-          <context context-type="linenumber">206,210</context>
+          <context context-type="linenumber">212,216</context>
         </context-group>
       </trans-unit>
       <trans-unit id="orgoverview.time-column" datatype="html">
         <source>Latest run (UTC)</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/org-overview/org-overview.page.html</context>
-          <context context-type="linenumber">213,216</context>
+          <context context-type="linenumber">219,222</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/org-overview/org-overview.page.ts</context>
@@ -12986,60 +12986,74 @@
         <source>Open project</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/org-overview/org-overview.page.html</context>
-          <context context-type="linenumber">224,230</context>
+          <context context-type="linenumber">230,236</context>
         </context-group>
       </trans-unit>
       <trans-unit id="orgoverview.title" datatype="html">
         <source>Organization overview</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/org-overview/org-overview.page.ts</context>
-          <context context-type="linenumber">60</context>
+          <context context-type="linenumber">58</context>
         </context-group>
       </trans-unit>
       <trans-unit id="orgoverview.projects" datatype="html">
         <source>My projects</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/org-overview/org-overview.page.ts</context>
-          <context context-type="linenumber">67</context>
+          <context context-type="linenumber">65</context>
         </context-group>
       </trans-unit>
       <trans-unit id="orgoverview.projects-description" datatype="html">
         <source>Projects you can access in this organization.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/org-overview/org-overview.page.ts</context>
-          <context context-type="linenumber">69</context>
+          <context context-type="linenumber">67</context>
         </context-group>
       </trans-unit>
       <trans-unit id="orgoverview.empty-projects" datatype="html">
         <source>No projects to show.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/org-overview/org-overview.page.ts</context>
-          <context context-type="linenumber">70</context>
+          <context context-type="linenumber">68</context>
         </context-group>
       </trans-unit>
       <trans-unit id="orgoverview.members" datatype="html">
         <source>Members and invitations</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/org-overview/org-overview.page.ts</context>
-          <context context-type="linenumber">71</context>
+          <context context-type="linenumber">69</context>
         </context-group>
       </trans-unit>
       <trans-unit id="orgoverview.usage" datatype="html">
         <source>Organization usage</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/org-overview/org-overview.page.ts</context>
-          <context context-type="linenumber">72</context>
+          <context context-type="linenumber">70</context>
         </context-group>
       </trans-unit>
       <trans-unit id="orgoverview.active-members" datatype="html">
         <source>Active members</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/org-overview/org-overview.page.ts</context>
-          <context context-type="linenumber">73</context>
+          <context context-type="linenumber">71</context>
         </context-group>
       </trans-unit>
       <trans-unit id="orgoverview.pending-invites" datatype="html">
         <source>Pending invitations</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/org-overview/org-overview.page.ts</context>
+          <context context-type="linenumber">72</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="orgoverview.members-loaded" datatype="html">
+        <source>Loaded memberships</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/org-overview/org-overview.page.ts</context>
+          <context context-type="linenumber">73</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="orgoverview.members-partial" datatype="html">
+        <source>Loaded memberships; more available</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/org-overview/org-overview.page.ts</context>
           <context context-type="linenumber">74</context>
@@ -13145,98 +13159,84 @@
         <source>Action</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/org-overview/org-overview.page.ts</context>
-          <context context-type="linenumber">156</context>
+          <context context-type="linenumber">157</context>
         </context-group>
       </trans-unit>
       <trans-unit id="orgoverview.view-project" datatype="html">
         <source>View project <x id="name" equiv-text="name"/></source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/org-overview/org-overview.page.ts</context>
-          <context context-type="linenumber">185</context>
-        </context-group>
-      </trans-unit>
-      <trans-unit id="orgoverview.members-sample" datatype="html">
-        <source>Among <x id="count" equiv-text="count"/> memberships shown; more available</source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/org-overview/org-overview.page.ts</context>
-          <context context-type="linenumber">191</context>
-        </context-group>
-      </trans-unit>
-      <trans-unit id="orgoverview.members-complete" datatype="html">
-        <source>Among <x id="count" equiv-text="count"/> memberships</source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/org-overview/org-overview.page.ts</context>
-          <context context-type="linenumber">192</context>
+          <context context-type="linenumber">182</context>
         </context-group>
       </trans-unit>
       <trans-unit id="project.dashboard.runs-caption" datatype="html">
         <source>Runs in this sample</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/project/dashboard/dashboard-runs.component.ts</context>
-          <context context-type="linenumber">136</context>
+          <context context-type="linenumber">145</context>
         </context-group>
       </trans-unit>
       <trans-unit id="project.dashboard.run" datatype="html">
         <source>Run</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/project/dashboard/dashboard-runs.component.ts</context>
-          <context context-type="linenumber">137</context>
+          <context context-type="linenumber">146</context>
         </context-group>
       </trans-unit>
       <trans-unit id="project.dashboard.decision" datatype="html">
         <source>Decision</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/project/dashboard/dashboard-runs.component.ts</context>
-          <context context-type="linenumber">138</context>
+          <context context-type="linenumber">147</context>
         </context-group>
       </trans-unit>
       <trans-unit id="project.dashboard.state" datatype="html">
         <source>State</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/project/dashboard/dashboard-runs.component.ts</context>
-          <context context-type="linenumber">139</context>
+          <context context-type="linenumber">148</context>
         </context-group>
       </trans-unit>
       <trans-unit id="project.dashboard.view" datatype="html">
         <source>View</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/project/dashboard/dashboard-runs.component.ts</context>
-          <context context-type="linenumber">140</context>
+          <context context-type="linenumber">149</context>
         </context-group>
       </trans-unit>
       <trans-unit id="project.dashboard.created" datatype="html">
         <source>Created (UTC)</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/project/dashboard/dashboard-runs.component.ts</context>
-          <context context-type="linenumber">141</context>
+          <context context-type="linenumber">150</context>
         </context-group>
       </trans-unit>
       <trans-unit id="project.dashboard.run-details" datatype="html">
         <source>Run details</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/project/dashboard/dashboard-runs.component.ts</context>
-          <context context-type="linenumber">142</context>
+          <context context-type="linenumber">151</context>
         </context-group>
       </trans-unit>
       <trans-unit id="project.dashboard.run-snapshot" datatype="html">
         <source>Read-only facts from the loaded run sample.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/project/dashboard/dashboard-runs.component.ts</context>
-          <context context-type="linenumber">143</context>
+          <context context-type="linenumber">152</context>
         </context-group>
       </trans-unit>
       <trans-unit id="project.dashboard.ref" datatype="html">
         <source>Reference</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/project/dashboard/dashboard-runs.component.ts</context>
-          <context context-type="linenumber">144</context>
+          <context context-type="linenumber">153</context>
         </context-group>
       </trans-unit>
       <trans-unit id="project.dashboard.unavailable" datatype="html">
         <source>Unavailable</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/project/dashboard/dashboard-runs.component.ts</context>
-          <context context-type="linenumber">145</context>
+          <context context-type="linenumber">154</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/project/dashboard/dashboard.copy.ts</context>
@@ -13247,7 +13247,7 @@
         <source>View run <x id="id" equiv-text="id"/></source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/project/dashboard/dashboard-runs.component.ts</context>
-          <context context-type="linenumber">188</context>
+          <context context-type="linenumber">201</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shell.overview.title" datatype="html">
@@ -13307,14 +13307,14 @@
         </context-group>
       </trans-unit>
       <trans-unit id="project.dashboard.trend" datatype="html">
-        <source>Decision trend</source>
+        <source>Decisions by day</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/project/dashboard/dashboard.copy.ts</context>
           <context context-type="linenumber">11</context>
         </context-group>
       </trans-unit>
       <trans-unit id="project.dashboard.trend-context" datatype="html">
-        <source>Counts by UTC creation day. Dates with runs only; categorical spacing.</source>
+        <source>Runs by creation date (UTC). Only dates with sampled runs are shown.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/project/dashboard/dashboard.copy.ts</context>
           <context context-type="linenumber">12</context>
@@ -13348,298 +13348,305 @@
           <context context-type="linenumber">16</context>
         </context-group>
       </trans-unit>
-      <trans-unit id="project.dashboard.failure-context" datatype="html">
-        <source>FAIL decisions among sampled runs created in the last 7 days.</source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/project/dashboard/dashboard.copy.ts</context>
-          <context context-type="linenumber">17</context>
-        </context-group>
-      </trans-unit>
       <trans-unit id="project.dashboard.failures-unavailable" datatype="html">
         <source>Not available (latest runs not loaded)</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/project/dashboard/dashboard.copy.ts</context>
-          <context context-type="linenumber">18</context>
+          <context context-type="linenumber">17</context>
         </context-group>
       </trans-unit>
       <trans-unit id="project.dashboard.waivers" datatype="html">
         <source>Expiring waivers</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/project/dashboard/dashboard.copy.ts</context>
-          <context context-type="linenumber">19</context>
+          <context context-type="linenumber">18</context>
         </context-group>
       </trans-unit>
       <trans-unit id="project.dashboard.waiver-context" datatype="html">
         <source>Approved waivers expiring in the next 7 days, among up to 10 shown.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/project/dashboard/dashboard.copy.ts</context>
-          <context context-type="linenumber">20</context>
+          <context context-type="linenumber">19</context>
         </context-group>
       </trans-unit>
       <trans-unit id="project.dashboard.quarantine" datatype="html">
         <source>Active quarantine</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/project/dashboard/dashboard.copy.ts</context>
-          <context context-type="linenumber">21</context>
+          <context context-type="linenumber">20</context>
         </context-group>
       </trans-unit>
       <trans-unit id="project.dashboard.quarantine-context" datatype="html">
         <source>Active entries among up to 10 shown.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/project/dashboard/dashboard.copy.ts</context>
-          <context context-type="linenumber">22</context>
+          <context context-type="linenumber">21</context>
         </context-group>
       </trans-unit>
       <trans-unit id="project.dashboard.incidents" datatype="html">
         <source>Incidents</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/project/dashboard/dashboard.copy.ts</context>
-          <context context-type="linenumber">23</context>
+          <context context-type="linenumber">22</context>
         </context-group>
       </trans-unit>
       <trans-unit id="project.dashboard.incidents-unavailable" datatype="html">
         <source>Not available yet</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/project/dashboard/dashboard.copy.ts</context>
-          <context context-type="linenumber">24</context>
+          <context context-type="linenumber">23</context>
         </context-group>
       </trans-unit>
       <trans-unit id="project.dashboard.authoring" datatype="html">
         <source>Authoring</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/project/dashboard/dashboard.copy.ts</context>
-          <context context-type="linenumber">25</context>
+          <context context-type="linenumber">24</context>
         </context-group>
       </trans-unit>
       <trans-unit id="project.dashboard.cases" datatype="html">
         <source>Manual cases</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/project/dashboard/dashboard.copy.ts</context>
-          <context context-type="linenumber">26</context>
+          <context context-type="linenumber">25</context>
         </context-group>
       </trans-unit>
       <trans-unit id="project.dashboard.case-context" datatype="html">
         <source>Cases shown, up to 20.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/project/dashboard/dashboard.copy.ts</context>
-          <context context-type="linenumber">27</context>
+          <context context-type="linenumber">26</context>
         </context-group>
       </trans-unit>
       <trans-unit id="project.dashboard.checklist" datatype="html">
         <source>Checklist items on loaded roots</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/project/dashboard/dashboard.copy.ts</context>
-          <context context-type="linenumber">28</context>
+          <context context-type="linenumber">27</context>
         </context-group>
       </trans-unit>
       <trans-unit id="project.dashboard.checklist-context" datatype="html">
         <source>Direct items on up to 10 root nodes, not the whole tree.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/project/dashboard/dashboard.copy.ts</context>
-          <context context-type="linenumber">29</context>
+          <context context-type="linenumber">28</context>
         </context-group>
       </trans-unit>
       <trans-unit id="project.dashboard.changes" datatype="html">
         <source>Pending changes</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/project/dashboard/dashboard.copy.ts</context>
-          <context context-type="linenumber">30</context>
+          <context context-type="linenumber">29</context>
         </context-group>
       </trans-unit>
       <trans-unit id="project.dashboard.change-context" datatype="html">
         <source>Pending changes shown, up to 20.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/project/dashboard/dashboard.copy.ts</context>
-          <context context-type="linenumber">31</context>
+          <context context-type="linenumber">30</context>
         </context-group>
       </trans-unit>
       <trans-unit id="project.dashboard.ci" datatype="html">
         <source>CI setup</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/project/dashboard/dashboard.copy.ts</context>
-          <context context-type="linenumber">32</context>
+          <context context-type="linenumber">31</context>
         </context-group>
       </trans-unit>
       <trans-unit id="project.dashboard.ci-context" datatype="html">
         <source>Configuration from up to 10 bindings. Active does not prove a recent successful workflow.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/project/dashboard/dashboard.copy.ts</context>
-          <context context-type="linenumber">33</context>
+          <context context-type="linenumber">32</context>
         </context-group>
       </trans-unit>
       <trans-unit id="project.dashboard.active-bindings" datatype="html">
         <source>Active bindings</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/project/dashboard/dashboard.copy.ts</context>
-          <context context-type="linenumber">34</context>
+          <context context-type="linenumber">33</context>
         </context-group>
       </trans-unit>
       <trans-unit id="project.dashboard.pending-bindings" datatype="html">
         <source>Awaiting verification</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/project/dashboard/dashboard.copy.ts</context>
-          <context context-type="linenumber">35</context>
+          <context context-type="linenumber">34</context>
         </context-group>
       </trans-unit>
       <trans-unit id="project.dashboard.disabled-bindings" datatype="html">
         <source>Disabled bindings</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/project/dashboard/dashboard.copy.ts</context>
-          <context context-type="linenumber">36</context>
+          <context context-type="linenumber">35</context>
         </context-group>
       </trans-unit>
       <trans-unit id="project.dashboard.no-bindings" datatype="html">
         <source>No CI bindings yet. Connect a repository to receive CI evidence.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/project/dashboard/dashboard.copy.ts</context>
-          <context context-type="linenumber">37</context>
+          <context context-type="linenumber">36</context>
         </context-group>
       </trans-unit>
       <trans-unit id="project.dashboard.verify-bindings" datatype="html">
         <source>Verify pending bindings in setup to finish connecting CI.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/project/dashboard/dashboard.copy.ts</context>
-          <context context-type="linenumber">38</context>
+          <context context-type="linenumber">37</context>
         </context-group>
       </trans-unit>
       <trans-unit id="project.dashboard.disabled-hint" datatype="html">
         <source>Disabled bindings cannot submit verified CI evidence. Review CI setup.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/project/dashboard/dashboard.copy.ts</context>
-          <context context-type="linenumber">39</context>
+          <context context-type="linenumber">38</context>
         </context-group>
       </trans-unit>
       <trans-unit id="project.dashboard.more-bindings" datatype="html">
         <source>More bindings are not loaded; these are not project totals.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/project/dashboard/dashboard.copy.ts</context>
-          <context context-type="linenumber">40</context>
+          <context context-type="linenumber">39</context>
         </context-group>
       </trans-unit>
       <trans-unit id="project.dashboard.setup" datatype="html">
         <source>Review CI setup</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/project/dashboard/dashboard.copy.ts</context>
-          <context context-type="linenumber">41</context>
+          <context context-type="linenumber">40</context>
         </context-group>
       </trans-unit>
       <trans-unit id="project.dashboard.usage" datatype="html">
         <source>Organization usage and AI</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/project/dashboard/dashboard.copy.ts</context>
-          <context context-type="linenumber">42</context>
+          <context context-type="linenumber">41</context>
         </context-group>
       </trans-unit>
       <trans-unit id="project.dashboard.ai" datatype="html">
         <source>AI tokens</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/project/dashboard/dashboard.copy.ts</context>
-          <context context-type="linenumber">43</context>
+          <context context-type="linenumber">42</context>
         </context-group>
       </trans-unit>
       <trans-unit id="project.dashboard.not-metered" datatype="html">
         <source>Not metered</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/project/dashboard/dashboard.copy.ts</context>
-          <context context-type="linenumber">44</context>
-        </context-group>
-      </trans-unit>
-      <trans-unit id="project.dashboard.ai-unavailable" datatype="html">
-        <source>This API has no measured AI tokens or credit balance. No zero usage is inferred.</source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/project/dashboard/dashboard.copy.ts</context>
-          <context context-type="linenumber">45</context>
+          <context context-type="linenumber">43</context>
         </context-group>
       </trans-unit>
       <trans-unit id="project.dashboard.credit-unavailable" datatype="html">
         <source>AI credit balance is not available from this API.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/project/dashboard/dashboard.copy.ts</context>
-          <context context-type="linenumber">46</context>
+          <context context-type="linenumber">44</context>
         </context-group>
       </trans-unit>
       <trans-unit id="project.dashboard.results" datatype="html">
         <source>Organization results quota</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/project/dashboard/dashboard.copy.ts</context>
-          <context context-type="linenumber">47</context>
-        </context-group>
-      </trans-unit>
-      <trans-unit id="project.dashboard.quota-unset" datatype="html">
-        <source>Quota not set</source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/project/dashboard/dashboard.copy.ts</context>
-          <context context-type="linenumber">48</context>
+          <context context-type="linenumber">45</context>
         </context-group>
       </trans-unit>
       <trans-unit id="project.dashboard.empty-usage" datatype="html">
         <source>No usage metrics returned.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/project/dashboard/dashboard.copy.ts</context>
-          <context context-type="linenumber">49</context>
+          <context context-type="linenumber">46</context>
         </context-group>
       </trans-unit>
       <trans-unit id="project.dashboard.no-access" datatype="html">
         <source>No dashboard data is available with your current permissions.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/project/dashboard/dashboard.copy.ts</context>
-          <context context-type="linenumber">50</context>
+          <context context-type="linenumber">47</context>
         </context-group>
       </trans-unit>
-      <trans-unit id="project.dashboard.last-runs" datatype="html">
-        <source>Last <x id="count" equiv-text="count"/> runs</source>
+      <trans-unit id="project.dashboard.register-recent" datatype="html">
+        <source>Showing the <x id="count" equiv-text="count"/> most recent runs in the sample.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/project/overview.page.ts</context>
-          <context context-type="linenumber">80</context>
+          <context context-type="linenumber">90</context>
         </context-group>
       </trans-unit>
-      <trans-unit id="project.dashboard.oldest-runs" datatype="html">
-        <source><x id="count" equiv-text="count"/> oldest loaded runs — not the latest</source>
+      <trans-unit id="project.dashboard.register-loaded" datatype="html">
+        <source>Showing <x id="count" equiv-text="count"/> runs from the oldest loaded pages.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/project/overview.page.ts</context>
-          <context context-type="linenumber">81</context>
+          <context context-type="linenumber">91</context>
         </context-group>
       </trans-unit>
       <trans-unit id="project.dashboard.loaded-runs" datatype="html">
         <source>Loaded runs (not the latest)</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/project/overview.page.ts</context>
-          <context context-type="linenumber">86</context>
+          <context context-type="linenumber">96</context>
         </context-group>
       </trans-unit>
-      <trans-unit id="project.dashboard.share-detail" datatype="html">
-        <source><x id="count" equiv-text="numerator"/> of <x id="total" equiv-text="denominator"/> sampled runs</source>
+      <trans-unit id="project.dashboard.sample-loaded" datatype="html">
+        <source>Loaded sample</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/project/overview.page.ts</context>
-          <context context-type="linenumber">95</context>
+          <context context-type="linenumber">105</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="project.dashboard.sample-partial" datatype="html">
+        <source>Oldest pages only; newer runs are not loaded.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/project/overview.page.ts</context>
+          <context context-type="linenumber">106</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="project.dashboard.sample-fraction" datatype="html">
+        <source><x id="count" equiv-text="count"/> / <x id="total" equiv-text="total"/> runs</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/project/overview.page.ts</context>
+          <context context-type="linenumber">121</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="project.dashboard.sample-of" datatype="html">
+        <source>Of <x id="total" equiv-text="total"/> runs</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/project/overview.page.ts</context>
+          <context context-type="linenumber">130</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="project.dashboard.failure-scope" datatype="html">
+        <source>In the last 7 days; <x id="total" equiv-text="total"/> FAIL in the whole sample.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/project/overview.page.ts</context>
+          <context context-type="linenumber">161</context>
         </context-group>
       </trans-unit>
       <trans-unit id="project.dashboard.quota-no-limit" datatype="html">
-        <source><x id="used" equiv-text="used"/> results used · Quota not set</source>
+        <source><x id="used" equiv-text="used"/> results used · Limit unavailable</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/project/overview.page.ts</context>
-          <context context-type="linenumber">171</context>
+          <context context-type="linenumber">213</context>
         </context-group>
       </trans-unit>
       <trans-unit id="project.dashboard.quota-used" datatype="html">
         <source><x id="used" equiv-text="used"/> of <x id="limit" equiv-text="limit"/> results used</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/project/overview.page.ts</context>
-          <context context-type="linenumber">173</context>
+          <context context-type="linenumber">215</context>
         </context-group>
       </trans-unit>
       <trans-unit id="project.dashboard.ai-no-limit" datatype="html">
-        <source><x id="used" equiv-text="used"/> tokens used · Quota not set</source>
+        <source><x id="used" equiv-text="used"/> tokens used · Limit unavailable</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/project/overview.page.ts</context>
-          <context context-type="linenumber">180</context>
+          <context context-type="linenumber">222</context>
         </context-group>
       </trans-unit>
       <trans-unit id="project.dashboard.ai-used" datatype="html">
         <source><x id="used" equiv-text="used"/> of <x id="limit" equiv-text="limit"/> tokens used</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/project/overview.page.ts</context>
-          <context context-type="linenumber">182</context>
+          <context context-type="linenumber">224</context>
         </context-group>
       </trans-unit>
       <trans-unit id="review.quality.flaky" datatype="html">
@@ -30783,14 +30790,14 @@
         <source>UTC</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/time/absolute-time.component.ts</context>
-          <context context-type="linenumber">38</context>
+          <context context-type="linenumber">62</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.values.time-unavailable" datatype="html">
         <source>Time unavailable</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/time/absolute-time.component.ts</context>
-          <context context-type="linenumber">39</context>
+          <context context-type="linenumber">63</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.label-chip.flaky" datatype="html">
@@ -31361,131 +31368,131 @@
         <source>Organization event</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/dashboard/dashboard-activity.component.ts</context>
-          <context context-type="linenumber">77,80</context>
+          <context context-type="linenumber">79,82</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.dashboard.activity-time" datatype="html">
         <source>Time (UTC)</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/dashboard/dashboard-activity.component.ts</context>
-          <context context-type="linenumber">84,87</context>
+          <context context-type="linenumber">86,89</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/dashboard/dashboard-activity.component.ts</context>
-          <context context-type="linenumber">156</context>
+          <context context-type="linenumber">159</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.dashboard.activity-id" datatype="html">
         <source>Event ID</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/dashboard/dashboard-activity.component.ts</context>
-          <context context-type="linenumber">88,91</context>
+          <context context-type="linenumber">90,93</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/dashboard/dashboard-activity.component.ts</context>
-          <context context-type="linenumber">92,95</context>
+          <context context-type="linenumber">94,97</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.dashboard.activity-actor" datatype="html">
         <source>Actor type</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/dashboard/dashboard-activity.component.ts</context>
-          <context context-type="linenumber">100,104</context>
+          <context context-type="linenumber">102,106</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.dashboard.activity-object" datatype="html">
         <source>Object ID</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/dashboard/dashboard-activity.component.ts</context>
-          <context context-type="linenumber">107,111</context>
+          <context context-type="linenumber">109,113</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/dashboard/dashboard-activity.component.ts</context>
-          <context context-type="linenumber">111,113</context>
+          <context context-type="linenumber">113,115</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.dashboard.activity-title" datatype="html">
         <source>Organization activity</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/dashboard/dashboard-activity.component.ts</context>
-          <context context-type="linenumber">130</context>
+          <context context-type="linenumber">133</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.dashboard.activity-description" datatype="html">
         <source>Most recent organization events. Not filtered by project.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/dashboard/dashboard-activity.component.ts</context>
-          <context context-type="linenumber">131</context>
+          <context context-type="linenumber">134</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.dashboard.activity-empty" datatype="html">
         <source>No organization activity recorded.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/dashboard/dashboard-activity.component.ts</context>
-          <context context-type="linenumber">132</context>
+          <context context-type="linenumber">135</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.dashboard.activity-action" datatype="html">
         <source>Action</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/dashboard/dashboard-activity.component.ts</context>
-          <context context-type="linenumber">148</context>
+          <context context-type="linenumber">151</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.dashboard.activity-details-column" datatype="html">
         <source>Details</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/dashboard/dashboard-activity.component.ts</context>
-          <context context-type="linenumber">167</context>
+          <context context-type="linenumber">171</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.dashboard.activity-view-label" datatype="html">
         <source>View event <x id="action" equiv-text="auditActionLabel(action)"/></source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/dashboard/dashboard-activity.component.ts</context>
-          <context context-type="linenumber">182</context>
+          <context context-type="linenumber">186</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.dashboard.trend-table" datatype="html">
         <source> View as table </source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/dashboard/decision-trend.component.html</context>
-          <context context-type="linenumber">69,73</context>
+          <context context-type="linenumber">74,78</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.dashboard.trend-days" datatype="html">
         <source>Daily decision counts</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/dashboard/decision-trend.component.ts</context>
-          <context context-type="linenumber">53</context>
+          <context context-type="linenumber">56</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.dashboard.trend-date" datatype="html">
         <source>Date (UTC)</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/dashboard/decision-trend.component.ts</context>
-          <context context-type="linenumber">54</context>
+          <context context-type="linenumber">57</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.dashboard.trend-empty" datatype="html">
         <source>No observed dates in this sample.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/dashboard/decision-trend.component.ts</context>
-          <context context-type="linenumber">55</context>
+          <context context-type="linenumber">58</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.dashboard.trend-total" datatype="html">
         <source>Total</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/dashboard/decision-trend.component.ts</context>
-          <context context-type="linenumber">56</context>
+          <context context-type="linenumber">59</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.dashboard.trend-sample" datatype="html">
         <source>Sampled runs: <x id="runs" equiv-text="runs"/> · Observed dates: <x id="dates" equiv-text="dates"/></source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/dashboard/decision-trend.component.ts</context>
-          <context context-type="linenumber">119</context>
+          <context context-type="linenumber">122</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.data-table.rows-per-page" datatype="html">
@@ -34084,14 +34091,14 @@
         <source>EN / VI: Switch language between English and Vietnamese</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shell/layout/locale-switcher.component.ts</context>
-          <context context-type="linenumber">41</context>
+          <context context-type="linenumber">42</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shell.layout.primary-navigation" datatype="html">
         <source>Primary navigation</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shell/layout/nav.component.ts</context>
-          <context context-type="linenumber">26</context>
+          <context context-type="linenumber">25</context>
         </context-group>
       </trans-unit>
       <trans-unit id="quota.badge.blocked" datatype="html">
@@ -34126,7 +34133,7 @@
         <source>Project</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shell/layout/scope-switcher.component.html</context>
-          <context context-type="linenumber">40,45</context>
+          <context context-type="linenumber">42,47</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shell.switcher.choose-organization" datatype="html">
@@ -34154,21 +34161,21 @@
         <source>Account menu</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shell/layout/shell-account.component.ts</context>
-          <context context-type="linenumber">29,33</context>
-        </context-group>
-      </trans-unit>
-      <trans-unit id="shell.account.label" datatype="html">
-        <source>Account</source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/shell/layout/shell-account.component.ts</context>
-          <context context-type="linenumber">37,42</context>
+          <context context-type="linenumber">33,37</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shell.account.sign-out" datatype="html">
         <source> Sign out of this tab </source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shell/layout/shell-account.component.ts</context>
-          <context context-type="linenumber">48,54</context>
+          <context context-type="linenumber">51,57</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shell.account.label" datatype="html">
+        <source>Account</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shell/layout/shell-account.component.ts</context>
+          <context context-type="linenumber">59</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shell.breadcrumb.label" datatype="html">
@@ -34182,35 +34189,35 @@
         <source>Find a screen</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shell/layout/shell-search.component.html</context>
-          <context context-type="linenumber">15,17</context>
+          <context context-type="linenumber">16,18</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shell.search.field" datatype="html">
         <source>Screen name</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shell/layout/shell-search.component.html</context>
-          <context context-type="linenumber">17,22</context>
+          <context context-type="linenumber">18,23</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shell.search.matches" datatype="html">
         <source>Matching screens</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shell/layout/shell-search.component.html</context>
-          <context context-type="linenumber">39,42</context>
+          <context context-type="linenumber">40,43</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shell.search.empty" datatype="html">
         <source> No matching screens. </source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shell/layout/shell-search.component.html</context>
-          <context context-type="linenumber">60,65</context>
+          <context context-type="linenumber">61,66</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shell.search.trigger" datatype="html">
         <source>Search</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shell/layout/shell-search.component.ts</context>
-          <context context-type="linenumber">29</context>
+          <context context-type="linenumber">30</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shell.layout.skip-content" datatype="html">
@@ -34224,7 +34231,7 @@
         <source>Quality workspace</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shell/layout/shell.component.html</context>
-          <context context-type="linenumber">73,78</context>
+          <context context-type="linenumber">75,80</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shell.layout.workspace" datatype="html">

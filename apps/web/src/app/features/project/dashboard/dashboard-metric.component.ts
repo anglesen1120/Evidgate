@@ -12,9 +12,12 @@ import { NumberValueComponent } from '../../../shared/ui/values/number-value.com
   host: { class: 'block min-w-0 border-b border-border py-(--eg-space-3) last:border-b-0' },
   template: `
     <section #retryHeading [attr.tabindex]="-1" [attr.aria-label]="label()">
-      <dl class="m-0 min-w-0" [attr.aria-busy]="loading()">
-        <dt class="font-medium text-sm">{{ label() }}</dt>
-        <dd class="m-0 mt-(--eg-space-2)">
+      <dl
+        class="m-0 grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-(--eg-space-4)"
+        [attr.aria-busy]="loading()"
+      >
+        <dt class="text-sm font-medium">{{ label() }}</dt>
+        <dd class="m-0 text-end" [class.col-span-full]="loading() || error()">
           @if (loading()) {
             <app-loading-pattern [bare]="true" />
           } @else if (error(); as failure) {
@@ -25,11 +28,13 @@ import { NumberValueComponent } from '../../../shared/ui/values/number-value.com
               (retry)="retryWithFocus(retryHeading, retry)"
             />
           } @else {
-            <strong class="text-2xl tabular-nums"><app-number-value [value]="value()" /></strong>
-            <p class="m-0 text-xs text-muted-foreground">{{ description() }}</p>
+            <strong class="tabular-nums"><app-number-value [value]="value()" /></strong>
           }
         </dd>
       </dl>
+      @if (!loading() && !error() && description()) {
+        <p class="m-0 mt-(--eg-space-1) text-xs text-muted-foreground">{{ description() }}</p>
+      }
     </section>
   `,
 })

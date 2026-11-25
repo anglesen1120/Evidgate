@@ -20,60 +20,35 @@
     <app-empty-pattern [icon]="'navShield'" [title]="copy.noAccess" />
   } @else {
     @if (store.runs.visible()) {
-      <app-dashboard-widget
+      <section
         data-dashboard-kpis
-        [title]="copy.summary"
-        [description]="sampleLabel()"
-        [loading]="store.runs.loading()"
-        [error]="store.runs.error()"
-        (retry)="store.runs.reload()"
+        aria-labelledby="run-summary-title"
+        [attr.aria-busy]="store.runs.loading()"
       >
-        <div class="kpi-grid">
-          <app-dashboard-kpi
-            [label]="recentTitle()"
-            [icon]="'navRun'"
-            [value]="counts().total"
-            [detail]="sampleLabel()"
+        <h2 #summaryTitle id="run-summary-title" tabindex="-1" class="sr-only focus:not-sr-only">
+          {{ copy.summary }}
+        </h2>
+        @if (store.runs.loading()) {
+          <app-loading-pattern [bare]="true" />
+        } @else if (store.runs.error(); as error) {
+          <app-error-pattern
+            [bare]="true"
+            [headingLevel]="3"
+            [error]="error"
+            (retry)="retrySummary(summaryTitle, store.runs.reload)"
           />
-          @if (store.decisionsVisible()) {
-            <app-dashboard-kpi
-              [label]="'PASS'"
-              [icon]="'lucideCheck'"
-              [tone]="'success'"
-              [value]="share(counts().pass)"
-              [detail]="shareDetail(counts().pass)"
-            />
-            <app-dashboard-kpi
-              [label]="'FAIL'"
-              [value]="share(counts().fail)"
-              [icon]="'lucideX'"
-              [tone]="'danger'"
-              [detail]="shareDetail(counts().fail)"
-            />
-            <app-dashboard-kpi
-              [label]="'INCONCLUSIVE'"
-              [value]="share(counts().inconclusive)"
-              [detail]="shareDetail(counts().inconclusive)"
-              [icon]="'lucideCircle'"
-            />
-          }
-          <app-dashboard-kpi
-            [label]="copy.collecting"
-            [icon]="'lucideClock'"
-            [value]="counts().collecting"
-            [detail]="sampleLabel()"
-          />
-        </div>
-      </app-dashboard-widget>
+        } @else {
+          <app-dashboard-kpi [label]="copy.summary" [metrics]="metrics()" />
+        }
+      </section>
     }
     <div class="dashboard-grid">
       @if (store.runs.visible() && store.decisionsVisible()) {
         <app-dashboard-widget
-          class="wide"
           data-dashboard-trend
           [tableContent]="rows().length > 0"
           [title]="copy.trend"
-          [description]="sampleLabel()"
+          [description]="copy.trendContext"
           [loading]="store.runs.loading()"
           [error]="store.runs.error()"
           [empty]="rows().length === 0"
@@ -81,18 +56,17 @@
           [emptyIcon]="'navChart'"
           (retry)="store.runs.reload()"
         >
-          <p class="mt-0 text-sm text-muted-foreground">{{ copy.trendContext }}</p>
-          <app-decision-trend [label]="sampleLabel()" [points]="trend()" />
+          <app-decision-trend [label]="copy.trend" [points]="trend()" />
         </app-dashboard-widget>
       }
       @if (attentionVisible()) {
-        <app-dashboard-widget class="narrow" data-dashboard-attention [title]="copy.attention">
+        <app-dashboard-widget data-dashboard-attention [title]="copy.attention">
           @if (store.runs.visible() && store.decisionsVisible()) {
             <app-dashboard-metric
               data-dashboard-failures
               [label]="copy.failures"
               [value]="failures()"
-              [description]="failures() === null ? copy.failuresUnavailable : copy.failureContext"
+              [description]="failureContext()"
               [loading]="store.runs.loading()"
               [error]="store.runs.error()"
               (retry)="store.runs.reload()"
@@ -130,16 +104,15 @@
       }
       @if (store.runs.visible()) {
         <app-dashboard-widget
-          class="wide"
           data-dashboard-recent
           [tableContent]="true"
           [title]="recentTitle()"
-          [description]="sampleLabel()"
           [loading]="store.runs.loading()"
           [error]="store.runs.error()"
           [empty]="rows().length === 0"
           [emptyTitle]="copy.emptyRuns"
           [emptyIcon]="'navRun'"
+          [description]="registerScope()"
           (retry)="store.runs.reload()"
         >
           <app-dashboard-runs
@@ -150,7 +123,7 @@
         </app-dashboard-widget>
       }
       @if (authoringVisible()) {
-        <app-dashboard-widget class="narrow" data-dashboard-authoring [title]="copy.authoring">
+        <app-dashboard-widget data-dashboard-authoring [title]="copy.authoring">
           @if (store.cases.visible()) {
             <app-dashboard-metric
               [label]="copy.cases"
@@ -185,7 +158,6 @@
       }
       @if (store.bindings.visible()) {
         <app-dashboard-widget
-          class="half"
           data-dashboard-ci
           [title]="copy.ci"
           [description]="copy.ciContext"
@@ -231,7 +203,6 @@
       }
       @if (store.usage.visible()) {
         <app-dashboard-widget
-          class="half"
           data-dashboard-usage
           [title]="copy.usage"
           [description]="store.usage.value()?.period ?? ''"
@@ -263,6 +234,7 @@
     @if (store.audit.visible()) {
       <app-dashboard-activity
         data-dashboard-activity
+        [utcColumn]="true"
         [rows]="store.audit.value()?.items ?? []"
         [loading]="store.audit.loading()"
         [error]="store.audit.error()"

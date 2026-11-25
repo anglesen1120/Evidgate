@@ -14,12 +14,14 @@ class ActivityHarness extends ComponentHarness {
   readonly table = this.locatorFor('app-data-table');
   readonly tableRole = this.locatorFor('[role="table"]');
   readonly caption = this.locatorFor('app-data-table > .caption');
+  readonly time = this.locatorFor('time');
   readonly emptyIcon = this.locatorFor('app-empty-pattern hlm-icon path');
 }
 class EventDialogHarness extends ComponentHarness {
   static hostSelector = '[role="dialog"]';
   readonly text = async () => (await this.host()).text();
   readonly copyLabels = this.locatorForAll('app-copy-value-button button .sr-only');
+  readonly time = this.locatorFor('time');
 }
 const event: AuditEntryDto = {
   id: 'event1',
@@ -46,6 +48,20 @@ describe('DashboardActivityComponent', () => {
     expect(await (await harness.emptyIcon()).getAttribute('d')).toBe(
       'M7 4h10v16H7zM10 8h4M10 12h4M10 16h4',
     );
+  });
+  it('moves UTC to the register heading only on opt-in and keeps it in the dialog', async () => {
+    const fixture = TestBed.createComponent(DashboardActivityComponent);
+    fixture.componentRef.setInput('rows', [event]);
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, ActivityHarness);
+    expect(await (await harness.time()).text()).toMatch(/ UTC$/);
+    fixture.componentRef.setInput('utcColumn', true);
+    const instant = await harness.time();
+    expect(await instant.text()).not.toContain('UTC');
+    expect(await instant.getAttribute('title')).toMatch(/ UTC$/);
+    await (await harness.view()).click();
+    const dialog =
+      await TestbedHarnessEnvironment.documentRootLoader(fixture).getHarness(EventDialogHarness);
+    expect(await (await dialog.time()).text()).toMatch(/ UTC$/);
   });
   it('opens loaded event details and removes the selection when rows change', async () => {
     const fixture = TestBed.createComponent(DashboardActivityComponent);

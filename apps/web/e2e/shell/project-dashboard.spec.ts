@@ -45,6 +45,11 @@ for (const locale of LOCALES) {
             '[data-dashboard-incidents] button, [data-dashboard-incidents] app-error-pattern',
           ),
         ).toHaveCount(0);
+        await expect(page.locator('[data-dashboard-kpis] dl')).toHaveCount(1);
+        const register = page.locator('[data-dashboard-recent]');
+        if (width === 1440)
+          await expect(register.getByRole('columnheader', { name: /UTC/ })).toBeVisible();
+        await expect(register.locator('time[datetime]')).toHaveCount(5);
         await expect(page.locator('[data-dashboard-kpis]').getByRole('term')).toHaveCount(5);
         await expect(page.locator('[data-dashboard-kpis]').getByRole('definition')).toHaveCount(5);
         expect(

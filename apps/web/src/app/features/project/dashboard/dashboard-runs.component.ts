@@ -36,6 +36,7 @@ import { escapeFormatChars } from '../../../shared/ui/values/ref-name-display';
   host: { class: 'block min-w-0' },
   template: `
     <app-data-table
+      class="[&>.caption]:sr-only"
       [busy]="fetching()"
       [rows]="rows()"
       [columns]="columns()"
@@ -44,11 +45,16 @@ import { escapeFormatChars } from '../../../shared/ui/values/ref-name-display';
       [fitToContainer]="true"
     />
     <ng-template #identity let-row>
-      <app-copyable-identifier [value]="row.run_id" [label]="copy.run" />
-      <app-absolute-time class="block text-xs text-muted-foreground" [value]="row.created_at" />
+      <app-copyable-identifier [value]="row.run_id" [label]="copy.run" [iconOnlyCopy]="true" />
+    </ng-template>
+    <ng-template #created let-row>
+      <app-absolute-time [value]="row.created_at" [utcColumn]="true" />
     </ng-template>
     <ng-template #decision let-row
-      ><app-decision-chip [decision]="row.decision ?? 'pending'" [compact]="true"
+      ><app-decision-chip
+        [decision]="row.decision ?? 'pending'"
+        [compact]="true"
+        [showDetail]="false"
     /></ng-template>
     <ng-template #state let-row
       ><app-run-state-pill [state]="row.state" [compact]="true"
@@ -83,6 +89,7 @@ import { escapeFormatChars } from '../../../shared/ui/values/ref-name-display';
                 <app-copyable-identifier
                   [value]="selection.row.run_id"
                   [label]="copy.run"
+                  [iconOnlyCopy]="true"
                   [truncate]="false"
                 />
               </dd>
@@ -127,6 +134,8 @@ export class DashboardRunsComponent {
   >({ source: this.rows, computation: () => null });
   private readonly identity =
     viewChild.required<TemplateRef<DataTableCellContext<RunSummary>>>('identity');
+  private readonly created =
+    viewChild.required<TemplateRef<DataTableCellContext<RunSummary>>>('created');
   private readonly decision =
     viewChild.required<TemplateRef<DataTableCellContext<RunSummary>>>('decision');
   private readonly state =
@@ -153,13 +162,6 @@ export class DashboardRunsComponent {
       kind: 'identifier',
       cellTemplate: this.identity(),
     },
-    {
-      id: 'state',
-      header: this.copy.state,
-      cell: (row) => row.state,
-      role: 'status',
-      cellTemplate: this.state(),
-    },
     ...(this.decisionsVisible()
       ? [
           {
@@ -172,15 +174,26 @@ export class DashboardRunsComponent {
         ]
       : []),
     {
+      id: 'state',
+      header: this.copy.state,
+      cell: (row) => row.state,
+      role: 'status',
+      cellTemplate: this.state(),
+    },
+    {
+      id: 'created',
+      header: this.copy.created,
+      cell: (row) => row.created_at,
+      role: 'date',
+      width: { min: 'calc(24ch + var(--eg-space-4) * 2)' },
+      cellTemplate: this.created(),
+    },
+    {
       id: 'view',
       header: this.copy.view,
       cell: () => this.copy.view,
       role: 'actions',
-      width: {
-        min: 'calc(14ch + var(--eg-space-4) * 2)',
-        preferred: '1%',
-        max: 'calc(14ch + var(--eg-space-4) * 2)',
-      },
+      width: { min: 'max-content', preferred: '1%' },
       cellTemplate: this.view(),
     },
   ]);

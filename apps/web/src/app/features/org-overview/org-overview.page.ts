@@ -15,7 +15,6 @@ import { HlmDialogImports } from '@evidgate/ui/dialog';
 import { isApiRequestError, type ApiError } from '../../core/http/api-error';
 import { mapNetworkError } from '../../core/http/error-mapper';
 import { AbsoluteTimeComponent } from '../../shared/time/absolute-time.component';
-import { DashboardKpiComponent } from '../../shared/ui/dashboard/dashboard-kpi.component';
 import { DashboardMeterComponent } from '../../shared/ui/dashboard/dashboard-meter.component';
 import { retryWithDashboardFocus } from '../../shared/ui/dashboard/dashboard-retry-focus';
 import { DashboardWidgetComponent } from '../../shared/ui/dashboard/dashboard-widget.component';
@@ -41,7 +40,6 @@ import { OrgOverviewStore, type DashboardProject } from './org-overview.store';
     RowActionComponent,
     CopyableIdentifierComponent,
     AbsoluteTimeComponent,
-    DashboardKpiComponent,
     DashboardMeterComponent,
     DashboardWidgetComponent,
     DataTableComponent,
@@ -72,6 +70,8 @@ export class OrgOverviewPage {
     usage: $localize`:@@orgoverview.usage:Organization usage`,
     active: $localize`:@@orgoverview.active-members:Active members`,
     pending: $localize`:@@orgoverview.pending-invites:Pending invitations`,
+    membersLoaded: $localize`:@@orgoverview.members-loaded:Loaded memberships`,
+    membersPartial: $localize`:@@orgoverview.members-partial:Loaded memberships; more available`,
     ai: $localize`:@@orgoverview.ai-tokens:AI tokens`,
     notMetered: $localize`:@@orgoverview.not-metered:Not metered`,
     results: $localize`:@@orgoverview.results:Results`,
@@ -144,6 +144,7 @@ export class OrgOverviewPage {
               id: 'time',
               header: $localize`:@@orgoverview.time-column:Latest run (UTC)`,
               role: 'date' as const,
+              width: { min: 'calc(24ch + var(--eg-space-4) * 2)' },
               cell: () => '',
               cellTemplate: time,
             },
@@ -156,11 +157,7 @@ export class OrgOverviewPage {
               header: $localize`:@@orgoverview.action-column:Action`,
               role: 'actions' as const,
               cell: () => '',
-              width: {
-                min: 'calc(14ch + var(--eg-space-4) * 2)',
-                preferred: '1%',
-                max: 'calc(14ch + var(--eg-space-4) * 2)',
-              },
+              width: { min: 'max-content', preferred: '1%' },
               cellTemplate: view,
             },
           ]
@@ -183,12 +180,5 @@ export class OrgOverviewPage {
   }
   protected viewProject(name: string): string {
     return $localize`:@@orgoverview.view-project:View project ${name}:name:`;
-  }
-  protected memberContext(): string {
-    const page = this.store.members.hasValue() ? this.store.members.value() : undefined;
-    const count = page?.items.length ?? 0;
-    return page?.next_cursor
-      ? $localize`:@@orgoverview.members-sample:Among ${count}:count: memberships shown; more available`
-      : $localize`:@@orgoverview.members-complete:Among ${count}:count: memberships`;
   }
 }
