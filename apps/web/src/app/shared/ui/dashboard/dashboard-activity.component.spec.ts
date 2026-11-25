@@ -19,6 +19,7 @@ class ActivityHarness extends ComponentHarness {
 class EventDialogHarness extends ComponentHarness {
   static hostSelector = '[role="dialog"]';
   readonly text = async () => (await this.host()).text();
+  readonly copyLabels = this.locatorForAll('app-copy-value-button button .sr-only');
 }
 const event: AuditEntryDto = {
   id: 'event1',
@@ -59,6 +60,7 @@ describe('DashboardActivityComponent', () => {
     expect(await dialog.text()).toContain('event1');
     expect(await dialog.text()).toContain('system');
     expect(await dialog.text()).toContain('auth.login');
+    expect(await dialog.copyLabels()).toHaveLength(2);
     fixture.componentRef.setInput('rows', []);
     expect(await root.getHarnessOrNull(EventDialogHarness)).toBeNull();
   });

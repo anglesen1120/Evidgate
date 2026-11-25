@@ -8,12 +8,15 @@ class TrendHarness extends ComponentHarness {
   static hostSelector = 'app-decision-trend';
   readonly days = this.locatorForAll('button');
   readonly tooltip = this.locatorForOptional('[role="tooltip"]');
-  readonly scrollRegion = this.locatorFor('[role="region"]');
-  readonly panel = this.locatorFor('[popover]');
+  readonly empty = this.locatorForOptional('app-empty-pattern');
+  readonly rows = this.locatorForAll('tbody tr');
+  readonly values = this.locatorForAll('tbody td');
+  readonly summary = this.locatorFor('[data-sample-readout]');
+  readonly figure = this.locatorFor('figure');
   readonly tableToggle = this.locatorFor('summary');
 }
 
-const days: readonly DashboardTrendPoint[] = [
+const days: readonly [DashboardTrendPoint, DashboardTrendPoint] = [
   {
     id: '2026-11-23',
     label: '11/23/2026',
@@ -43,7 +46,7 @@ async function setup() {
   const chart = await TestbedHarnessEnvironment.harnessForFixture(fixture, TrendHarness);
   const [first, second] = await chart.days();
   if (!first || !second) throw new Error('Expected a day button for each UTC date');
-  return { chart, first, second };
+  return { fixture, chart, first, second };
 }
 
 function expectFirstDay(text: string | null | undefined): void {
@@ -61,15 +64,61 @@ function expectFirstDay(text: string | null | undefined): void {
 }
 
 describe('Decision trend day inspection', () => {
-  it('can inspect a day without secure-context UUID support', async () => {
-    vi.stubGlobal('crypto', { getRandomValues: crypto.getRandomValues.bind(crypto) });
-    try {
-      const { chart, first } = await setup();
-      await first.focus();
-      expectFirstDay(await (await chart.tooltip())?.text());
-    } finally {
-      vi.unstubAllGlobals();
-    }
+  it('renders no bars or invented zero totals for an empty sample', async () => {
+    const fixture = TestBed.createComponent(DecisionTrendComponent);
+    fixture.componentRef.setInput('label', 'Sample');
+    const chart = await TestbedHarnessEnvironment.harnessForFixture(fixture, TrendHarness);
+    expect(await chart.days()).toHaveLength(0);
+    expect(await chart.rows()).toHaveLength(0);
+    expect(await chart.empty()).not.toBeNull();
+  });
+
+  it('counts a non-finite value as zero so the other dates keep a bar width', () => {
+    const fixture = TestBed.createComponent(DecisionTrendComponent);
+    fixture.componentRef.setInput('label', 'Sample');
+    fixture.componentRef.setInput('points', [
+      {
+        id: '2026-11-22',
+        label: '11/22/2026',
+        segments: [{ id: 'pass', label: 'PASS', value: Number.NaN, tone: 'success' }],
+      },
+      {
+        id: '2026-11-23',
+        label: '11/23/2026',
+        segments: [{ id: 'pass', label: 'PASS', value: 4, tone: 'success' }],
+      },
+    ]);
+    fixture.detectChanges();
+    const widths = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLElement>(
+        '.days button [style*="width"]',
+      ),
+    ).map((el) => el.style.width);
+    expect(widths.some((w) => w.includes('NaN'))).toBe(false);
+    expect(widths.length).toBeGreaterThan(0);
+  });
+
+  it('keeps a single long UTC date intact in the label, readout and exact row', async () => {
+    const { fixture, chart } = await setup();
+    const date = 'Wednesday, September 30, 2026';
+    fixture.componentRef.setInput('points', [{ ...days[0], id: '2026-09-30', label: date }]);
+    const buttons = await chart.days();
+    expect(buttons).toHaveLength(1);
+    const [day] = buttons;
+    if (!day) throw new Error('Missing observed date');
+    await day.focus();
+    expect(await day.text()).toContain(date);
+    expect(await (await chart.tooltip())?.text()).toContain(date);
+    await (await chart.tableToggle()).click();
+    expect(await chart.rows()).toHaveLength(1);
+    expect(await (await chart.rows())[0]?.text()).toContain(date);
+    expect(await Promise.all((await chart.values()).map((cell) => cell.text()))).toEqual([
+      '2',
+      '0',
+      '3',
+      '1',
+      '6',
+    ]);
   });
 
   it('shows the complete day on hover and dismisses it on pointer leave', async () => {
@@ -79,14 +128,15 @@ describe('Decision trend day inspection', () => {
     const tooltip = await chart.tooltip();
     expectFirstDay(await tooltip?.text());
     expect(await tooltip?.getCssValue('display')).not.toBe('none');
-    await first.dispatchEvent('pointerleave', { pointerType: 'mouse' });
+    await (await chart.figure()).dispatchEvent('pointerleave', { pointerType: 'mouse' });
     expect(await chart.tooltip()).toBeNull();
-    expect(await (await chart.panel()).getCssValue('display')).toBe('none');
+    expect(await (await chart.summary()).text()).toContain('Observed dates: 2');
   });
 
   it('names the button before focus, shows its values on focus, and dismisses with Escape without moving focus', async () => {
     const { chart, first } = await setup();
-    expectFirstDay(await first.getAttribute('aria-label'));
+    expect(await first.text()).toContain(days[0].label);
+    expectFirstDay(await first.getAttribute('aria-description'));
     expect(await first.getAttribute('aria-expanded')).toBeNull();
     expect(await first.getAttribute('aria-controls')).toBeNull();
     await first.focus();
@@ -113,20 +163,18 @@ describe('Decision trend day inspection', () => {
     expect(await second.isFocused()).toBe(true);
   });
 
-  it('keeps the End date open when focus scrolls the previous anchor out of view', async () => {
-    const { chart, first, second } = await setup();
+  it('moves down the vertical date list without adding unobserved dates', async () => {
+    const { chart, first, fixture } = await setup();
+    fixture.componentRef.setInput('points', [
+      days[0],
+      { ...days[1], id: '2026-11-29', label: '11/29/2026' },
+    ]);
+    expect(await chart.days()).toHaveLength(2);
     await first.focus();
-    const previous = TestbedHarnessEnvironment.getNativeElement(first);
-    const next = TestbedHarnessEnvironment.getNativeElement(second);
-    const scroller = TestbedHarnessEnvironment.getNativeElement(await chart.scrollRegion());
-    vi.spyOn(previous, 'getBoundingClientRect').mockReturnValue(new DOMRect(-135, 0, 72, 160));
-    // Deliver the scroll after focus changes but before Angular installs the new panel listener.
-    next.addEventListener('focusin', () => scroller.dispatchEvent(new Event('scroll')), {
-      once: true,
-    });
-    await first.sendKeys(TestKey.END);
-    expect(await second.isFocused()).toBe(true);
-    expect(await (await chart.tooltip())?.text()).toContain('11/24/2026');
+    await first.sendKeys(TestKey.DOWN_ARROW);
+    expect(await (await chart.tooltip())?.text()).toContain('11/29/2026');
+    expect(await first.isFocused()).toBe(false);
+    expect(await (await chart.days())[1]?.isFocused()).toBe(true);
   });
 
   it('uses one tab stop for the dates and follows arrow, End and Home navigation', async () => {

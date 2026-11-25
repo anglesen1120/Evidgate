@@ -1,0 +1,56 @@
+:host {
+  container-type: inline-size;
+}
+.metric-list,
+.metric dd {
+  margin: 0;
+}
+.metric-strip {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: var(--eg-border-width);
+  border-block: var(--eg-border-width) solid var(--eg-border);
+  background: var(--eg-border);
+}
+.metric {
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+}
+.metric-strip .metric {
+  padding: var(--eg-space-4) var(--eg-space-5);
+  background: var(--eg-surface);
+}
+.metric dt {
+  font-size: var(--eg-text-sm);
+  line-height: var(--eg-leading-sm);
+  font-weight: var(--eg-weight-semibold);
+}
+.reading {
+  display: block;
+  margin-block: var(--eg-space-2);
+  font-size: var(--eg-text-2xl);
+  line-height: var(--eg-leading-2xl);
+  font-weight: var(--eg-weight-semibold);
+  font-variant-numeric: tabular-nums;
+}
+.reading.unknown {
+  font-size: var(--eg-text-lg);
+  line-height: var(--eg-leading-lg);
+}
+.reading small,
+.scope {
+  color: var(--eg-text-muted);
+  font-size: var(--eg-text-sm);
+  line-height: var(--eg-leading-sm);
+  font-weight: var(--eg-weight-regular);
+}
+@container (max-width: 40rem) {
+  .metric-strip {
+    grid-auto-flow: row;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .metric-strip .metric:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+  }
+}

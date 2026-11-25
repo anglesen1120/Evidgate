@@ -19,6 +19,7 @@ import { HlmTabsImports } from '@evidgate/ui/tabs';
 import { HlmTooltip } from '@evidgate/ui/tooltip';
 import { toast } from '@spartan-ng/brain/sonner';
 import { ReviewStatusChipComponent, type ReviewStatus } from '../chips';
+import { DashboardKpiComponent, type DashboardMetric } from '../dashboard/dashboard-kpi.component';
 import { InlineFeedbackComponent } from '../states';
 import { EvidenceBadgeComponent, OutcomePillComponent } from '../verdict';
 import { GALLERY_COPY } from './gallery-example-copy';
@@ -65,6 +66,7 @@ const approval = {
   selector: 'app-gallery-example',
   imports: [
     HlmButton,
+    DashboardKpiComponent,
     HlmCardImports,
     HlmCheckbox,
     HlmDialogImports,
@@ -100,6 +102,18 @@ export class GalleryExampleComponent {
   protected readonly missing = computed(
     () => this.state() === 'loading' || this.state() === 'empty' || this.state() === 'error',
   );
+  protected readonly metrics = computed<readonly DashboardMetric[]>(() => [
+    {
+      id: 'shadow-pass-rate',
+      label: this.copy.kpiLabel,
+      value: this.missing() ? null : '100%',
+      detail: this.missing()
+        ? this.state() === 'empty'
+          ? this.copy.noSamples
+          : this.caption()
+        : this.copy.kpiCaption,
+    },
+  ]);
   protected readonly locked = computed(
     () => this.state() === 'disabled' || this.state() === 'loading',
   );

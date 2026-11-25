@@ -161,7 +161,7 @@ describe('UiGalleryComponent axe acceptance', () => {
       try {
         expect(document.body.contains(root)).toBe(true);
         expect(root.querySelectorAll('app-gallery-specimen')).toHaveLength(19);
-        expect(root.querySelector('.eg-kpi-card [hlmCardContent]')?.textContent).toContain('100%');
+        expect(root.querySelector('app-dashboard-kpi dd')?.textContent).toContain('100%');
         // Three fixture specimens plus the column-role specimen in the tables group.
         expect(root.querySelectorAll('app-data-table')).toHaveLength(4);
         expect(root.querySelector('app-waiver-banner time')).not.toBeNull();

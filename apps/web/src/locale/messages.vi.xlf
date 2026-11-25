@@ -10630,7 +10630,7 @@
       <trans-unit id="shared.gallery.sheet.breadcrumb" datatype="html"><source>Breadcrumb and avatar</source><target>Đường dẫn và ảnh đại diện</target></trans-unit>
       <trans-unit id="shared.gallery.sheet.header" datatype="html"><source>Page header</source><target>Tiêu đề trang</target></trans-unit>
       <trans-unit id="shared.gallery.sheet.evidence" datatype="html"><source>Queue and evidence</source><target>Hàng chờ và bằng chứng</target></trans-unit>
-      <trans-unit id="shared.gallery.sheet.kpi" datatype="html"><source>KPI card</source><target>Thẻ chỉ số</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.kpi" datatype="html"><source>Metric strip</source><target>Dải chỉ số</target></trans-unit>
       <trans-unit id="shared.gallery.sheet.queue" datatype="html"><source>Queue card, filter and sort</source><target>Thẻ hàng chờ, bộ lọc và sắp xếp</target></trans-unit>
       <trans-unit id="shared.gallery.sheet.detail" datatype="html"><source>Master–detail and action footer</source><target>Danh sách, chi tiết và thanh thao tác</target></trans-unit>
       <trans-unit id="shared.gallery.sheet.failure" datatype="html"><source>Original failure and code diff</source><target>Lỗi gốc và thay đổi mã</target></trans-unit>
@@ -22646,6 +22646,8 @@
       <trans-unit id="orgoverview.projects-count" datatype="html"><source>{VAR_PLURAL, plural, =1 {Showing 1 project} other {Showing <x id="INTERPOLATION"/> projects}}</source><target>{VAR_PLURAL, plural, other {Hiển thị <x id="INTERPOLATION"/> dự án}}</target></trans-unit>
       <trans-unit id="orgoverview.members-sample" datatype="html"><source>Among <x id="count" equiv-text="count"/> memberships shown; more available</source><target>Trong <x id="count" equiv-text="count"/> tư cách thành viên đã tải; còn dữ liệu khác</target></trans-unit>
       <trans-unit id="orgoverview.members-complete" datatype="html"><source>Among <x id="count" equiv-text="count"/> memberships</source><target>Trong <x id="count" equiv-text="count"/> tư cách thành viên</target></trans-unit>
+      <trans-unit id="shared.dashboard.trend-empty" datatype="html"><source>No observed dates in this sample.</source><target>Không có ngày nào được ghi nhận trong mẫu này.</target></trans-unit>
+      <trans-unit id="shared.dashboard.trend-sample" datatype="html"><source>Sampled runs: <x id="runs" equiv-text="runs"/> · Observed dates: <x id="dates" equiv-text="dates"/></source><target>Lượt chạy trong mẫu: <x id="runs" equiv-text="runs"/> · Số ngày có dữ liệu: <x id="dates" equiv-text="dates"/></target></trans-unit>
       <trans-unit id="shared.dashboard.activity-details" datatype="html"><source>Organization event</source><target>Sự kiện tổ chức</target></trans-unit>
       <trans-unit id="shared.dashboard.activity-time" datatype="html"><source>Time (UTC)</source><target>Thời gian (UTC)</target></trans-unit>
       <trans-unit id="shared.dashboard.activity-id" datatype="html"><source>Event ID</source><target>ID sự kiện</target></trans-unit>

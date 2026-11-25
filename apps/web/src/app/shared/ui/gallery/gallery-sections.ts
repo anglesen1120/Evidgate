@@ -15,7 +15,7 @@ export const GALLERY_SECTIONS = [
     id: 'evidence',
     title: $localize`:@@shared.gallery.sheet.evidence:Queue and evidence`,
     specimens: [
-      { id: 'kpi', title: $localize`:@@shared.gallery.sheet.kpi:KPI card` },
+      { id: 'kpi', title: $localize`:@@shared.gallery.sheet.kpi:Metric strip` },
       { id: 'queue', title: $localize`:@@shared.gallery.sheet.queue:Queue card, filter and sort` },
       {
         id: 'detail',

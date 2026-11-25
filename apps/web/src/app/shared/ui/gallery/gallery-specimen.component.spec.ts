@@ -9,7 +9,7 @@ class SpecimenHarness extends ComponentHarness {
   readonly disclosure = this.locatorFor('button[aria-controls^="states-"]');
   readonly filter = this.locatorFor('[data-state="hover"] [role="combobox"]');
   readonly examples = this.locatorForAll('app-gallery-example');
-  readonly value = (state: string) => this.locatorFor(`[data-state="${state}"] [hlmCardContent]`)();
+  readonly value = (state: string) => this.locatorFor(`[data-state="${state}"] dd`)();
 }
 
 describe('GallerySpecimenComponent', () => {
@@ -44,7 +44,7 @@ describe('GallerySpecimenComponent', () => {
     await (await harness.disclosure()).click();
     await fixture.whenStable();
     expect(await harness.examples()).toHaveLength(9);
-    expect(await (await harness.value('default')).text()).toBe('100%');
+    expect(await (await harness.value('default')).text()).toContain('100%');
     for (const state of ['loading', 'empty', 'error']) {
       expect(await (await harness.value(state)).text()).not.toMatch(/0|%/);
     }
