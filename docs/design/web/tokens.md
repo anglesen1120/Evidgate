@@ -53,32 +53,32 @@ or focus-ring geometry, keyboard behaviour, browser rendering or whole-screen ac
 Values are opaque except the explicitly marked scrim. An error uses `danger`, matching v2 naming;
 there is no additional `--eg-error-*` alias.
 
-| Token | Light | Dark | Role |
-| --- | --- | --- | --- |
-| `--eg-bg` | `#f8fafc` | `#0b1116` | Page canvas |
-| `--eg-surface` | `#ffffff` | `#111921` | Cards, menus and dialogs |
-| `--eg-surface-raised` | `#f1f5f9` | `#17222c` | Raised/hover surface |
-| `--eg-text` | `#0f172a` | `#e6edf3` | Primary text |
-| `--eg-text-muted` | `#475569` | `#9fb0bf` | Secondary text, not disabled-by-opacity text |
-| `--eg-border` | `#e2e8f0` | `#233240` | Decorative separation; not the required control boundary |
-| `--eg-border-control` | `#64748b` | `#73899b` | Identifiable control boundary |
-| `--eg-accent` | `#006b66` | `#5fd4c6` | Links, controls and active accents |
-| `--eg-accent-hover` | `#00524e` | `#4bc4b6` | Hover fill of the default button (`--primary-hover` alias) |
-| `--eg-accent-soft` | `#e6f4f1` | `#123432` | Accent-tinted background |
-| `--eg-accent-fg` | `var(--eg-accent)` → `#006b66` | `var(--eg-accent)` → `#5fd4c6` | Added explicit accent text alias |
-| `--eg-on-accent` | `#ffffff` | `#0b1116` | Label on solid accent |
-| `--eg-focus` | `var(--eg-accent)` → `#006b66` | `var(--eg-accent)` → `#5fd4c6` | Visible focus ring |
-| `--eg-scrim` | `#10202b88` | `#050b11ae` | Alpha overlay; excluded from text contrast |
-| `--eg-success-fg` | `#11633d` | `#90dcad` | Success text |
-| `--eg-success-bg` | `#e9f5ee` | `#153b2a` | Success background |
-| `--eg-danger-fg` | `#a62d37` | `#ffb2ba` | Error/failure text |
-| `--eg-danger-bg` | `#fceef0` | `#49242b` | Error/failure background |
-| `--eg-warning-fg` | `#805500` | `#f2cd7a` | Warning text |
-| `--eg-warning-bg` | `#fff5dc` | `#40341c` | Warning background |
-| `--eg-info-fg` | `var(--eg-accent)` → `#006b66` | `var(--eg-accent)` → `#5fd4c6` | Informational text |
-| `--eg-info-bg` | `var(--eg-accent-soft)` → `#e6f4f1` | `var(--eg-accent-soft)` → `#123432` | Informational background |
-| `--eg-neutral-fg` | `#475569` | `#b8c7d2` | General neutral text |
-| `--eg-neutral-bg` | `#eef2f6` | `#1d2b37` | General neutral background |
+| Token                 | Light                               | Dark                                | Role                                                       |
+| --------------------- | ----------------------------------- | ----------------------------------- | ---------------------------------------------------------- |
+| `--eg-bg`             | `#f8fafc`                           | `#0b1116`                           | Page canvas                                                |
+| `--eg-surface`        | `#ffffff`                           | `#111921`                           | Cards, menus and dialogs                                   |
+| `--eg-surface-raised` | `#f1f5f9`                           | `#17222c`                           | Raised/hover surface                                       |
+| `--eg-text`           | `#0f172a`                           | `#e6edf3`                           | Primary text                                               |
+| `--eg-text-muted`     | `#475569`                           | `#9fb0bf`                           | Secondary text, not disabled-by-opacity text               |
+| `--eg-border`         | `#e2e8f0`                           | `#233240`                           | Decorative separation; not the required control boundary   |
+| `--eg-border-control` | `#64748b`                           | `#73899b`                           | Identifiable control boundary                              |
+| `--eg-accent`         | `#006b66`                           | `#5fd4c6`                           | Links, controls and active accents                         |
+| `--eg-accent-hover`   | `#00524e`                           | `#4bc4b6`                           | Hover fill of the default button (`--primary-hover` alias) |
+| `--eg-accent-soft`    | `#e6f4f1`                           | `#123432`                           | Accent-tinted background                                   |
+| `--eg-accent-fg`      | `var(--eg-accent)` → `#006b66`      | `var(--eg-accent)` → `#5fd4c6`      | Added explicit accent text alias                           |
+| `--eg-on-accent`      | `#ffffff`                           | `#0b1116`                           | Label on solid accent                                      |
+| `--eg-focus`          | `var(--eg-accent)` → `#006b66`      | `var(--eg-accent)` → `#5fd4c6`      | Visible focus ring                                         |
+| `--eg-scrim`          | `#10202b88`                         | `#050b11ae`                         | Alpha overlay; excluded from text contrast                 |
+| `--eg-success-fg`     | `#11633d`                           | `#90dcad`                           | Success text                                               |
+| `--eg-success-bg`     | `#e9f5ee`                           | `#153b2a`                           | Success background                                         |
+| `--eg-danger-fg`      | `#a62d37`                           | `#ffb2ba`                           | Error/failure text                                         |
+| `--eg-danger-bg`      | `#fceef0`                           | `#49242b`                           | Error/failure background                                   |
+| `--eg-warning-fg`     | `#805500`                           | `#f2cd7a`                           | Warning text                                               |
+| `--eg-warning-bg`     | `#fff5dc`                           | `#40341c`                           | Warning background                                         |
+| `--eg-info-fg`        | `var(--eg-accent)` → `#006b66`      | `var(--eg-accent)` → `#5fd4c6`      | Informational text                                         |
+| `--eg-info-bg`        | `var(--eg-accent-soft)` → `#e6f4f1` | `var(--eg-accent-soft)` → `#123432` | Informational background                                   |
+| `--eg-neutral-fg`     | `#475569`                           | `#b8c7d2`                           | General neutral text                                       |
+| `--eg-neutral-bg`     | `#eef2f6`                           | `#1d2b37`                           | General neutral background                                 |
 
 ### Pending palette
 
@@ -86,10 +86,10 @@ there is no additional `--eg-error-*` alias.
 so its domain meaning cannot accidentally inherit a verdict colour. None references success,
 danger or warning; pending is not an amber warning and is not a green PASS.
 
-| Token | Light | Dark |
-| --- | --- | --- |
-| `--eg-pending-fg` | `#475569` | `#b8c7d2` |
-| `--eg-pending-bg` | `#eef2f6` | `#1d2b37` |
+| Token                 | Light     | Dark      |
+| --------------------- | --------- | --------- |
+| `--eg-pending-fg`     | `#475569` | `#b8c7d2` |
+| `--eg-pending-bg`     | `#eef2f6` | `#1d2b37` |
 | `--eg-pending-border` | `#64748b` | `#73899b` |
 
 ### Type
@@ -100,54 +100,54 @@ JetBrains Mono variable (mono 400/500), the last two as `latin`, `latin-ext` and
 `.woff2` subsets with `font-display: swap`. `h1`–`h3` use `letter-spacing: -0.02em` and
 `text-wrap: balance`; `table`, `time` and `.tabular-nums` use `font-variant-numeric: tabular-nums`.
 
-| Token | Value |
-| --- | --- |
-| `--eg-font-display` | `'Manrope', 'Inter', system-ui, sans-serif` |
-| `--eg-font-body` | `'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif` |
-| `--eg-font-mono` | `'JetBrains Mono', 'SFMono-Regular', Consolas, 'Liberation Mono', monospace` |
-| `--eg-weight-regular` | `400` |
-| `--eg-weight-medium` | `500` |
-| `--eg-weight-semibold` | `600` |
-| `--eg-weight-bold` | `700` |
+| Token                  | Value                                                                        |
+| ---------------------- | ---------------------------------------------------------------------------- |
+| `--eg-font-display`    | `'Manrope', 'Inter', system-ui, sans-serif`                                  |
+| `--eg-font-body`       | `'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif`                  |
+| `--eg-font-mono`       | `'JetBrains Mono', 'SFMono-Regular', Consolas, 'Liberation Mono', monospace` |
+| `--eg-weight-regular`  | `400`                                                                        |
+| `--eg-weight-medium`   | `500`                                                                        |
+| `--eg-weight-semibold` | `600`                                                                        |
+| `--eg-weight-bold`     | `700`                                                                        |
 
-| Size token | Value | Line-height token | Value |
-| --- | --- | --- | --- |
-| `--eg-text-xs` | `12px` | `--eg-leading-xs` | `18px` |
-| `--eg-text-sm` | `14px` | `--eg-leading-sm` | `20px` |
-| `--eg-text-md` | `16px` | `--eg-leading-md` | `24px` |
-| `--eg-text-lg` | `18px` | `--eg-leading-lg` | `26px` |
-| `--eg-text-xl` | `22px` | `--eg-leading-xl` | `30px` |
+| Size token      | Value  | Line-height token  | Value  |
+| --------------- | ------ | ------------------ | ------ |
+| `--eg-text-xs`  | `12px` | `--eg-leading-xs`  | `18px` |
+| `--eg-text-sm`  | `14px` | `--eg-leading-sm`  | `20px` |
+| `--eg-text-md`  | `16px` | `--eg-leading-md`  | `24px` |
+| `--eg-text-lg`  | `18px` | `--eg-leading-lg`  | `26px` |
+| `--eg-text-xl`  | `22px` | `--eg-leading-xl`  | `30px` |
 | `--eg-text-2xl` | `28px` | `--eg-leading-2xl` | `36px` |
 
 ### Spacing
 
 Shared by both themes. Do not substitute a familiar spacing scale: v2 `space-4` is 12px, not 16px.
 
-| Token | Value |
-| --- | --- |
-| `--eg-space-0` | `0` |
-| `--eg-space-1` | `2px` |
-| `--eg-space-2` | `4px` |
-| `--eg-space-3` | `8px` |
-| `--eg-space-4` | `12px` |
-| `--eg-space-5` | `16px` |
-| `--eg-space-6` | `20px` |
-| `--eg-space-7` | `24px` |
-| `--eg-space-8` | `32px` |
-| `--eg-space-9` | `40px` |
+| Token           | Value  |
+| --------------- | ------ |
+| `--eg-space-0`  | `0`    |
+| `--eg-space-1`  | `2px`  |
+| `--eg-space-2`  | `4px`  |
+| `--eg-space-3`  | `8px`  |
+| `--eg-space-4`  | `12px` |
+| `--eg-space-5`  | `16px` |
+| `--eg-space-6`  | `20px` |
+| `--eg-space-7`  | `24px` |
+| `--eg-space-8`  | `32px` |
+| `--eg-space-9`  | `40px` |
 | `--eg-space-10` | `48px` |
 | `--eg-space-11` | `56px` |
 | `--eg-space-12` | `64px` |
 
 ### Radius
 
-| Token | Light and dark |
-| --- | --- |
-| `--eg-radius-sm` | `4px` |
-| `--eg-radius-md` | `8px` |
-| `--eg-radius-lg` | `12px` |
-| `--eg-radius-pill` | `999px` |
-| `--eg-border-width` | `1px` |
+| Token               | Light and dark |
+| ------------------- | -------------- |
+| `--eg-radius-sm`    | `4px`          |
+| `--eg-radius-md`    | `8px`          |
+| `--eg-radius-lg`    | `12px`         |
+| `--eg-radius-pill`  | `999px`        |
+| `--eg-border-width` | `1px`          |
 
 ### Elevation
 
@@ -155,25 +155,25 @@ Shared by both themes. Do not substitute a familiar spacing scale: v2 `space-4` 
 surfaces. The levels are semantic references, not a graduated shadow scale. Alpha shadow tokens are
 outside `contrast.py` (alpha is not a text pair) and are declared per theme in `tokens.css`.
 
-| Token | Light | Dark | Intended reference |
-| --- | --- | --- | --- |
-| `--eg-elevation-0` | `none` | `none` | Flat baseline; `none` also appears on disabled buttons, line 983 |
-| `--eg-elevation-1` | `0 1px 0 var(--eg-border)` | `0 1px 0 var(--eg-border)` | Sticky-table separator, line 3015 |
-| `--eg-elevation-overlay` | `0 1px 2px #10202b14, 0 12px 32px #10202b26` | `0 1px 2px #05090d66, 0 12px 32px #05090d66` | Select content, dropdown menu, tooltip, popover, dialog |
-| `--eg-elevation-3` | `0 0 0 100vmax var(--eg-scrim)` | `0 0 0 100vmax var(--eg-scrim)` | Navigation scrim, lines 554 and 4082, outside the component layer |
+| Token                    | Light                                        | Dark                                         | Intended reference                                                |
+| ------------------------ | -------------------------------------------- | -------------------------------------------- | ----------------------------------------------------------------- |
+| `--eg-elevation-0`       | `none`                                       | `none`                                       | Flat baseline; `none` also appears on disabled buttons, line 983  |
+| `--eg-elevation-1`       | `0 1px 0 var(--eg-border)`                   | `0 1px 0 var(--eg-border)`                   | Sticky-table separator, line 3015                                 |
+| `--eg-elevation-overlay` | `0 1px 2px #10202b14, 0 12px 32px #10202b26` | `0 1px 2px #05090d66, 0 12px 32px #05090d66` | Select content, dropdown menu, tooltip, popover, dialog           |
+| `--eg-elevation-3`       | `0 0 0 100vmax var(--eg-scrim)`              | `0 0 0 100vmax var(--eg-scrim)`              | Navigation scrim, lines 554 and 4082, outside the component layer |
 
 Complete `@layer components` shadow scan (the layer begins at line 835) found the following
 **six distinct values**, with repeated occurrences listed. Inset states are not elevation and
 must not be repurposed as overlay shadows:
 
-| Actual `box-shadow` value | v2 CSS lines | Classification |
-| --- | --- | --- |
-| `inset 0 0 0 2px var(--eg-on-accent)` | 910, 915, 955 | Button interaction cue |
-| `none` | 983 | Disabled button reset |
-| `inset 0 0 0 1px var(--eg-accent)` | 1263 | Selected card outline |
-| `inset 0 0 0 0 transparent` | 1782 | Tree pseudo-element baseline |
-| `inset 0 0 0 var(--eg-focus-width) var(--eg-focus)` | 1801 | Tree focus cue |
-| `0 1px 0 var(--eg-border)` | 3015 | Sticky-table separator |
+| Actual `box-shadow` value                           | v2 CSS lines  | Classification               |
+| --------------------------------------------------- | ------------- | ---------------------------- |
+| `inset 0 0 0 2px var(--eg-on-accent)`               | 910, 915, 955 | Button interaction cue       |
+| `none`                                              | 983           | Disabled button reset        |
+| `inset 0 0 0 1px var(--eg-accent)`                  | 1263          | Selected card outline        |
+| `inset 0 0 0 0 transparent`                         | 1782          | Tree pseudo-element baseline |
+| `inset 0 0 0 var(--eg-focus-width) var(--eg-focus)` | 1801          | Tree focus cue               |
+| `0 1px 0 var(--eg-border)`                          | 3015          | Sticky-table separator       |
 
 The navigation scrim occurs in the layout/utilities layers, not in components. Applying its
 `100vmax` spread to menus or toasts would incorrectly obscure the page. `--eg-elevation-overlay`
@@ -184,19 +184,19 @@ rule (like `--eg-scrim`).
 
 ### Control sizes and layout dimensions
 
-| Token | Light and dark |
-| --- | --- |
-| `--eg-control-sm` | `32px` |
-| `--eg-control-md` | `36px` |
-| `--eg-control-lg` | `40px` |
-| `--eg-control-touch` | `44px` |
-| `--eg-row-compact` | `40px` |
-| `--eg-row-default` | `44px` |
-| `--eg-nav-width` | `224px` |
-| `--eg-nav-rail` | `68px` |
-| `--eg-rail-width` | `320px` |
-| `--eg-focus-width` | `2px` |
-| `--eg-focus-offset` | `2px` |
+| Token                | Light and dark |
+| -------------------- | -------------- |
+| `--eg-control-sm`    | `32px`         |
+| `--eg-control-md`    | `36px`         |
+| `--eg-control-lg`    | `40px`         |
+| `--eg-control-touch` | `44px`         |
+| `--eg-row-compact`   | `40px`         |
+| `--eg-row-default`   | `44px`         |
+| `--eg-nav-width`     | `224px`        |
+| `--eg-nav-rail`      | `68px`         |
+| `--eg-rail-width`    | `320px`        |
+| `--eg-focus-width`   | `2px`          |
+| `--eg-focus-offset`  | `2px`          |
 
 A compact visual control is not permission to shrink a touch target below 44×44px. Layout and
 small-screen behaviour are specified in [layout.md](layout.md), including the 360px no-horizontal-
@@ -204,11 +204,11 @@ scroll requirement; tokens alone do not implement responsive behaviour.
 
 ### Motion
 
-| Token | Light and dark |
-| --- | --- |
-| `--eg-duration-fast` | `150ms` |
-| `--eg-duration-standard` | `200ms` |
-| `--eg-ease` | `cubic-bezier(0.2, 0, 0, 1)` |
+| Token                    | Light and dark               |
+| ------------------------ | ---------------------------- |
+| `--eg-duration-fast`     | `150ms`                      |
+| `--eg-duration-standard` | `200ms`                      |
+| `--eg-ease`              | `cubic-bezier(0.2, 0, 0, 1)` |
 
 No reduced-motion component rule is added here. V2 already handles it in its utilities layer,
 lines 4465–4479, including its indeterminate progress fallback. A component port must retain that
@@ -222,21 +222,21 @@ scanner can key on, so neither rule reports one (see "Deliberately not checked")
 
 ### Z-index
 
-| Token | Light and dark |
-| --- | --- |
-| `--eg-z-base` | `0` |
-| `--eg-z-sticky` | `10` |
-| `--eg-z-menu` | `20` |
-| `--eg-z-drawer` | `30` |
-| `--eg-z-dialog` | `40` |
-| `--eg-z-toast` | `50` |
+| Token           | Light and dark |
+| --------------- | -------------- |
+| `--eg-z-base`   | `0`            |
+| `--eg-z-sticky` | `10`           |
+| `--eg-z-menu`   | `20`           |
+| `--eg-z-drawer` | `30`           |
+| `--eg-z-dialog` | `40`           |
+| `--eg-z-toast`  | `50`           |
 
 ### Breakpoints
 
-| Token | Light and dark | Meaning |
-| --- | --- | --- |
-| `--eg-bp-tablet` | `768px` | Drawer below; icon rail starts here |
-| `--eg-bp-desktop` | `1280px` | Expanded navigation starts here |
+| Token             | Light and dark | Meaning                             |
+| ----------------- | -------------- | ----------------------------------- |
+| `--eg-bp-tablet`  | `768px`        | Drawer below; icon rail starts here |
+| `--eg-bp-desktop` | `1280px`       | Expanded navigation starts here     |
 
 [DECISION] These additions expose v2's existing boundaries for documentation and JavaScript
 readability. CSS custom properties **cannot be used inside media-query conditions**. Use the
@@ -247,12 +247,12 @@ same literal boundaries in CSS queries and keep them synchronized with these tok
 
 [DECISION] The resolution contract is:
 
-| User choice on `html` | OS preference | Resolved palette / native `color-scheme` |
-| --- | --- | --- |
-| No `data-theme` attribute | Light or unavailable | Light |
-| No `data-theme` attribute | Dark | Dark |
-| `data-theme='light'` | Either | Light |
-| `data-theme='dark'` | Either | Dark |
+| User choice on `html`     | OS preference        | Resolved palette / native `color-scheme` |
+| ------------------------- | -------------------- | ---------------------------------------- |
+| No `data-theme` attribute | Light or unavailable | Light                                    |
+| No `data-theme` attribute | Dark                 | Dark                                     |
+| `data-theme='light'`      | Either               | Light                                    |
+| `data-theme='dark'`       | Either               | Dark                                     |
 
 `:root` supplies light by default. The dark media query applies to
 `:root:not([data-theme='light'])`; the explicit `html[data-theme='dark']` selector continues to
@@ -281,78 +281,78 @@ persisted `system` string, locale behaviour or preference-control UI is introduc
 Output of `python3 docs/design/web/contrast.py` on 2026-11-25, exit status **0**. Pair names omit
 only the shared `--eg-` prefix. This table and the three summary lines reproduce script output.
 
-| Theme | Pair (--eg- prefix) | Usage | Ratio | Minimum | Result |
-| --- | --- | --- | ---: | ---: | --- |
-| light | text / bg | text | 17.06 | 4.5 | PASS |
-| light | text / surface | text | 17.85 | 4.5 | PASS |
-| light | text / surface-raised | text | 16.30 | 4.5 | PASS |
-| light | text / accent-soft | text | 15.79 | 4.5 | PASS |
-| light | text-muted / bg | text | 7.24 | 4.5 | PASS |
-| light | text-muted / surface | text | 7.58 | 4.5 | PASS |
-| light | text-muted / surface-raised | text | 6.92 | 4.5 | PASS |
-| light | text-muted / accent-soft | text | 6.70 | 4.5 | PASS |
-| light | text-muted / neutral-bg | disabled action text | 6.74 | 4.5 | PASS |
-| light | accent / bg | link text | 6.09 | 4.5 | PASS |
-| light | accent / surface | link text | 6.37 | 4.5 | PASS |
-| light | on-accent / accent | button label | 6.37 | 4.5 | PASS |
-| light | success-fg / success-bg | status text | 6.52 | 4.5 | PASS |
-| light | success-fg / surface | status text | 7.30 | 4.5 | PASS |
-| light | danger-fg / danger-bg | status text | 6.10 | 4.5 | PASS |
-| light | danger-fg / surface | status text | 6.88 | 4.5 | PASS |
-| light | warning-fg / warning-bg | status text | 6.01 | 4.5 | PASS |
-| light | warning-fg / surface | status text | 6.53 | 4.5 | PASS |
-| light | info-fg / info-bg | status text | 5.64 | 4.5 | PASS |
-| light | info-fg / surface | status text | 6.37 | 4.5 | PASS |
-| light | neutral-fg / neutral-bg | status text | 6.74 | 4.5 | PASS |
-| light | neutral-fg / surface | status text | 7.58 | 4.5 | PASS |
-| light | pending-fg / pending-bg | status text | 6.74 | 4.5 | PASS |
-| light | pending-fg / surface | status text | 7.58 | 4.5 | PASS |
-| light | accent-fg / accent-soft | accent text | 5.64 | 4.5 | PASS |
-| light | border-control / surface | non-text border | 4.76 | 3.0 | PASS |
-| light | border-control / bg | non-text border | 4.55 | 3.0 | PASS |
-| light | focus / surface | non-text focus | 6.37 | 3.0 | PASS |
-| light | focus / bg | non-text focus | 6.09 | 3.0 | PASS |
-| light | focus / surface-raised | non-text focus | 5.82 | 3.0 | PASS |
-| light | accent / surface | non-text control | 6.37 | 3.0 | PASS |
-| light | pending-border / pending-bg | non-text border | 4.23 | 3.0 | PASS |
-| light | pending-border / surface | non-text border | 4.76 | 3.0 | PASS |
-| light | pending-border / bg | non-text border | 4.55 | 3.0 | PASS |
-| light | text / bg | large display >=24px | 17.06 | 3.0 | PASS |
-| dark | text / bg | text | 16.07 | 4.5 | PASS |
-| dark | text / surface | text | 15.00 | 4.5 | PASS |
-| dark | text / surface-raised | text | 13.65 | 4.5 | PASS |
-| dark | text / accent-soft | text | 11.37 | 4.5 | PASS |
-| dark | text-muted / bg | text | 8.53 | 4.5 | PASS |
-| dark | text-muted / surface | text | 7.96 | 4.5 | PASS |
-| dark | text-muted / surface-raised | text | 7.25 | 4.5 | PASS |
-| dark | text-muted / accent-soft | text | 6.04 | 4.5 | PASS |
-| dark | text-muted / neutral-bg | disabled action text | 6.49 | 4.5 | PASS |
-| dark | accent / bg | link text | 10.60 | 4.5 | PASS |
-| dark | accent / surface | link text | 9.89 | 4.5 | PASS |
-| dark | on-accent / accent | button label | 10.60 | 4.5 | PASS |
-| dark | success-fg / success-bg | status text | 7.70 | 4.5 | PASS |
-| dark | success-fg / surface | status text | 10.99 | 4.5 | PASS |
-| dark | danger-fg / danger-bg | status text | 7.85 | 4.5 | PASS |
-| dark | danger-fg / surface | status text | 10.41 | 4.5 | PASS |
-| dark | warning-fg / warning-bg | status text | 7.99 | 4.5 | PASS |
-| dark | warning-fg / surface | status text | 11.64 | 4.5 | PASS |
-| dark | info-fg / info-bg | status text | 7.50 | 4.5 | PASS |
-| dark | info-fg / surface | status text | 9.89 | 4.5 | PASS |
-| dark | neutral-fg / neutral-bg | status text | 8.35 | 4.5 | PASS |
-| dark | neutral-fg / surface | status text | 10.24 | 4.5 | PASS |
-| dark | pending-fg / pending-bg | status text | 8.35 | 4.5 | PASS |
-| dark | pending-fg / surface | status text | 10.24 | 4.5 | PASS |
-| dark | accent-fg / accent-soft | accent text | 7.50 | 4.5 | PASS |
-| dark | border-control / surface | non-text border | 4.88 | 3.0 | PASS |
-| dark | border-control / bg | non-text border | 5.23 | 3.0 | PASS |
-| dark | focus / surface | non-text focus | 9.89 | 3.0 | PASS |
-| dark | focus / bg | non-text focus | 10.60 | 3.0 | PASS |
-| dark | focus / surface-raised | non-text focus | 9.00 | 3.0 | PASS |
-| dark | accent / surface | non-text control | 9.89 | 3.0 | PASS |
-| dark | pending-border / pending-bg | non-text border | 3.98 | 3.0 | PASS |
-| dark | pending-border / surface | non-text border | 4.88 | 3.0 | PASS |
-| dark | pending-border / bg | non-text border | 5.23 | 3.0 | PASS |
-| dark | text / bg | large display >=24px | 16.07 | 3.0 | PASS |
+| Theme | Pair (--eg- prefix)         | Usage                | Ratio | Minimum | Result |
+| ----- | --------------------------- | -------------------- | ----: | ------: | ------ |
+| light | text / bg                   | text                 | 17.06 |     4.5 | PASS   |
+| light | text / surface              | text                 | 17.85 |     4.5 | PASS   |
+| light | text / surface-raised       | text                 | 16.30 |     4.5 | PASS   |
+| light | text / accent-soft          | text                 | 15.79 |     4.5 | PASS   |
+| light | text-muted / bg             | text                 |  7.24 |     4.5 | PASS   |
+| light | text-muted / surface        | text                 |  7.58 |     4.5 | PASS   |
+| light | text-muted / surface-raised | text                 |  6.92 |     4.5 | PASS   |
+| light | text-muted / accent-soft    | text                 |  6.70 |     4.5 | PASS   |
+| light | text-muted / neutral-bg     | disabled action text |  6.74 |     4.5 | PASS   |
+| light | accent / bg                 | link text            |  6.09 |     4.5 | PASS   |
+| light | accent / surface            | link text            |  6.37 |     4.5 | PASS   |
+| light | on-accent / accent          | button label         |  6.37 |     4.5 | PASS   |
+| light | success-fg / success-bg     | status text          |  6.52 |     4.5 | PASS   |
+| light | success-fg / surface        | status text          |  7.30 |     4.5 | PASS   |
+| light | danger-fg / danger-bg       | status text          |  6.10 |     4.5 | PASS   |
+| light | danger-fg / surface         | status text          |  6.88 |     4.5 | PASS   |
+| light | warning-fg / warning-bg     | status text          |  6.01 |     4.5 | PASS   |
+| light | warning-fg / surface        | status text          |  6.53 |     4.5 | PASS   |
+| light | info-fg / info-bg           | status text          |  5.64 |     4.5 | PASS   |
+| light | info-fg / surface           | status text          |  6.37 |     4.5 | PASS   |
+| light | neutral-fg / neutral-bg     | status text          |  6.74 |     4.5 | PASS   |
+| light | neutral-fg / surface        | status text          |  7.58 |     4.5 | PASS   |
+| light | pending-fg / pending-bg     | status text          |  6.74 |     4.5 | PASS   |
+| light | pending-fg / surface        | status text          |  7.58 |     4.5 | PASS   |
+| light | accent-fg / accent-soft     | accent text          |  5.64 |     4.5 | PASS   |
+| light | border-control / surface    | non-text border      |  4.76 |     3.0 | PASS   |
+| light | border-control / bg         | non-text border      |  4.55 |     3.0 | PASS   |
+| light | focus / surface             | non-text focus       |  6.37 |     3.0 | PASS   |
+| light | focus / bg                  | non-text focus       |  6.09 |     3.0 | PASS   |
+| light | focus / surface-raised      | non-text focus       |  5.82 |     3.0 | PASS   |
+| light | accent / surface            | non-text control     |  6.37 |     3.0 | PASS   |
+| light | pending-border / pending-bg | non-text border      |  4.23 |     3.0 | PASS   |
+| light | pending-border / surface    | non-text border      |  4.76 |     3.0 | PASS   |
+| light | pending-border / bg         | non-text border      |  4.55 |     3.0 | PASS   |
+| light | text / bg                   | large display >=24px | 17.06 |     3.0 | PASS   |
+| dark  | text / bg                   | text                 | 16.07 |     4.5 | PASS   |
+| dark  | text / surface              | text                 | 15.00 |     4.5 | PASS   |
+| dark  | text / surface-raised       | text                 | 13.65 |     4.5 | PASS   |
+| dark  | text / accent-soft          | text                 | 11.37 |     4.5 | PASS   |
+| dark  | text-muted / bg             | text                 |  8.53 |     4.5 | PASS   |
+| dark  | text-muted / surface        | text                 |  7.96 |     4.5 | PASS   |
+| dark  | text-muted / surface-raised | text                 |  7.25 |     4.5 | PASS   |
+| dark  | text-muted / accent-soft    | text                 |  6.04 |     4.5 | PASS   |
+| dark  | text-muted / neutral-bg     | disabled action text |  6.49 |     4.5 | PASS   |
+| dark  | accent / bg                 | link text            | 10.60 |     4.5 | PASS   |
+| dark  | accent / surface            | link text            |  9.89 |     4.5 | PASS   |
+| dark  | on-accent / accent          | button label         | 10.60 |     4.5 | PASS   |
+| dark  | success-fg / success-bg     | status text          |  7.70 |     4.5 | PASS   |
+| dark  | success-fg / surface        | status text          | 10.99 |     4.5 | PASS   |
+| dark  | danger-fg / danger-bg       | status text          |  7.85 |     4.5 | PASS   |
+| dark  | danger-fg / surface         | status text          | 10.41 |     4.5 | PASS   |
+| dark  | warning-fg / warning-bg     | status text          |  7.99 |     4.5 | PASS   |
+| dark  | warning-fg / surface        | status text          | 11.64 |     4.5 | PASS   |
+| dark  | info-fg / info-bg           | status text          |  7.50 |     4.5 | PASS   |
+| dark  | info-fg / surface           | status text          |  9.89 |     4.5 | PASS   |
+| dark  | neutral-fg / neutral-bg     | status text          |  8.35 |     4.5 | PASS   |
+| dark  | neutral-fg / surface        | status text          | 10.24 |     4.5 | PASS   |
+| dark  | pending-fg / pending-bg     | status text          |  8.35 |     4.5 | PASS   |
+| dark  | pending-fg / surface        | status text          | 10.24 |     4.5 | PASS   |
+| dark  | accent-fg / accent-soft     | accent text          |  7.50 |     4.5 | PASS   |
+| dark  | border-control / surface    | non-text border      |  4.88 |     3.0 | PASS   |
+| dark  | border-control / bg         | non-text border      |  5.23 |     3.0 | PASS   |
+| dark  | focus / surface             | non-text focus       |  9.89 |     3.0 | PASS   |
+| dark  | focus / bg                  | non-text focus       | 10.60 |     3.0 | PASS   |
+| dark  | focus / surface-raised      | non-text focus       |  9.00 |     3.0 | PASS   |
+| dark  | accent / surface            | non-text control     |  9.89 |     3.0 | PASS   |
+| dark  | pending-border / pending-bg | non-text border      |  3.98 |     3.0 | PASS   |
+| dark  | pending-border / surface    | non-text border      |  4.88 |     3.0 | PASS   |
+| dark  | pending-border / bg         | non-text border      |  5.23 |     3.0 | PASS   |
+| dark  | text / bg                   | large display >=24px | 16.07 |     3.0 | PASS   |
 
 ```text
 Dark declaration blocks: PASS (identical property names and values).
@@ -371,28 +371,25 @@ use. The subdued decorative `--eg-border` is deliberately not a control-boundary
 
 Each addition has a `[DECISION]` comment at its CSS declaration or enclosing added block.
 
-| Addition | Reason |
-| --- | --- |
-| `--eg-pending-fg`, `--eg-pending-bg`, `--eg-pending-border` | Task-required neutral verdict-free palette; reuse literal v2 neutral/control colours without coupling to verdict tokens |
-| `--eg-accent-fg: var(--eg-accent)` | Explicit text-role name for the requested accent-fg/accent-soft contrast check; keeps the actual v2 accent unchanged |
-| `--eg-elevation-0` through `--eg-elevation-3` | Name existing flat surfaces, sticky separator and navigation scrim without adding new visuals; levels 0 and 2 intentionally coincide |
-| `--eg-bp-tablet`, `--eg-bp-desktop` | Expose the existing 768px/1280px navigation boundaries for documentation/JS; not CSS media-query variables |
-| Dark preference media query plus `color-scheme` | Task-required OS preference with explicit light/dark override and appropriately themed native controls |
+| Addition                                                                             | Reason                                                                                                                  |
+| ------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
+| `--eg-pending-fg`, `--eg-pending-bg`, `--eg-pending-border`                          | Task-required neutral verdict-free palette; reuse literal v2 neutral/control colours without coupling to verdict tokens |
+| `--eg-accent-fg: var(--eg-accent)`                                                   | Explicit text-role name for the requested accent-fg/accent-soft contrast check; keeps the actual v2 accent unchanged    |
+| `--eg-elevation-0`, `--eg-elevation-1`, `--eg-elevation-overlay`, `--eg-elevation-3` | Name the flat surface, sticky separator, floating-surface shadow and navigation scrim                                   |
+| `--eg-bp-tablet`, `--eg-bp-desktop`                                                  | Expose the existing 768px/1280px navigation boundaries for documentation/JS; not CSS media-query variables              |
+| Dark preference media query plus `color-scheme`                                      | Task-required OS preference with explicit light/dark override and appropriately themed native controls                  |
 
-There are ten additional custom properties, no renamed/removed v2 properties, and no new palette
-hues, shadow recipes, font families, spacing sizes or reduced-motion component rules.
+There were ten additional custom properties at the port. PR 1.1 adds `--eg-accent-hover` and
+`--eg-elevation-overlay` (replacing `--eg-elevation-2`), and changes the font families.
 
 ## Parity with v2
 
-Every v2 token is present with the same value; **there are no value exceptions**. Font-family
-quote normalization is syntactic only. The original layer-order statement and `@layer tokens`
-wrapper are retained, and the original explicit-dark selector remains semantically equivalent.
-A read-only comparison against the v2 token source found zero name/value mismatches in either
-resolved theme: 79 original names per theme, including the 22 original dark overrides.
-
-The additions above do not alter the read-only mockups. No component style is silently ported
-with these tokens. See the elevation audit for why an invented four-step blurred-shadow scale
-would not have been a faithful v2 port.
+Historical (09.1.1-T11.2, written before the roadmap PR 1.1): at the time of the port every v2
+token was present with the same value and the additions above changed no value. The UI roadmap
+PR 1.1 then deliberately changed the palette (colour tables above), the font families (Inter,
+JetBrains Mono), added `--eg-accent-hover` and replaced `--eg-elevation-2` with
+`--eg-elevation-overlay`; the v2 comparison therefore no longer holds for those tokens. The
+original layer-order statement and `@layer tokens` wrapper are retained.
 
 ## Rules for components
 
@@ -433,21 +430,21 @@ Enforcement of the rules above is the `style-tokens` ESLint plugin in
 detector, `raw-literal-detector.js`). It is wired in the root [`eslint.config.js`](../../../eslint.config.js)
 and runs under `npm run lint`, so a raw literal fails the gate. Two rules share one detector:
 
-| Rule | Applies to | Contract |
-| --- | --- | --- |
-| `style-tokens/no-raw-literals` | `apps/web/**/*.css` through the `css/css` language of `@eslint/css` 2.0.1, except `apps/web/src/styles/tokens.css` | a component stylesheet may only reference tokens |
-| `style-tokens/no-raw-literals-inline` | `apps/web/**/*.ts`, non-spec | the same contract for the `styles: [...]` strings of an `@Component` |
+| Rule                                  | Applies to                                                                                                         | Contract                                                             |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------- |
+| `style-tokens/no-raw-literals`        | `apps/web/**/*.css` through the `css/css` language of `@eslint/css` 2.0.1, except `apps/web/src/styles/tokens.css` | a component stylesheet may only reference tokens                     |
+| `style-tokens/no-raw-literals-inline` | `apps/web/**/*.ts`, non-spec                                                                                       | the same contract for the `styles: [...]` strings of an `@Component` |
 
 **Checked in every declaration value** (custom properties, `var(--x, <fallback>)` fallbacks and
 the inside of `calc()` included):
 
-| Literal | Message id | Where |
-| --- | --- | --- |
-| hex colour, 3/4/6/8 digits | `rawHexColour` | any property |
-| `rgb()`, `rgba()`, `hsl()`, `hsla()`, `hwb()`, `lab()`, `lch()`, `oklab()`, `oklch()`, `color()` | `rawColourFunction` | any property |
-| CSS named colour (`red`, `rebeccapurple`, …) | `rawNamedColour` | colour-bearing properties (`color`, `background*`, `border*`, `outline*`, `column-rule*`, `text-decoration*`, `text-emphasis*`, `fill`, `stroke*`, `box-shadow`, `text-shadow`, `caret-color`, `accent-color`, `scrollbar-color`, `filter`) and every custom property |
-| non-zero `px`/`rem`/`em` length | `rawLength` | spacing (`margin*`, `padding*`, `gap`, `row-gap`, `column-gap`, `inset*`, `top`/`right`/`bottom`/`left`), scroll spacing (`scroll-margin*`, `scroll-padding*`, all longhands and logical forms), radius (`border-radius`, corner radii), border/outline width (including the `border`/`outline` shorthands), `outline-offset`, `font`, `font-size`, `line-height`, `box-shadow`, `text-shadow`, and **every custom property** |
-| non-zero `ms`/`s` duration | `rawDuration` | `transition`, `transition-duration`, `transition-delay`, `animation`, `animation-duration`, `animation-delay`, and **every custom property** |
+| Literal                                                                                          | Message id          | Where                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| ------------------------------------------------------------------------------------------------ | ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| hex colour, 3/4/6/8 digits                                                                       | `rawHexColour`      | any property                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `rgb()`, `rgba()`, `hsl()`, `hsla()`, `hwb()`, `lab()`, `lch()`, `oklab()`, `oklch()`, `color()` | `rawColourFunction` | any property                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| CSS named colour (`red`, `rebeccapurple`, …)                                                     | `rawNamedColour`    | colour-bearing properties (`color`, `background*`, `border*`, `outline*`, `column-rule*`, `text-decoration*`, `text-emphasis*`, `fill`, `stroke*`, `box-shadow`, `text-shadow`, `caret-color`, `accent-color`, `scrollbar-color`, `filter`) and every custom property                                                                                                                                                         |
+| non-zero `px`/`rem`/`em` length                                                                  | `rawLength`         | spacing (`margin*`, `padding*`, `gap`, `row-gap`, `column-gap`, `inset*`, `top`/`right`/`bottom`/`left`), scroll spacing (`scroll-margin*`, `scroll-padding*`, all longhands and logical forms), radius (`border-radius`, corner radii), border/outline width (including the `border`/`outline` shorthands), `outline-offset`, `font`, `font-size`, `line-height`, `box-shadow`, `text-shadow`, and **every custom property** |
+| non-zero `ms`/`s` duration                                                                       | `rawDuration`       | `transition`, `transition-duration`, `transition-delay`, `animation`, `animation-duration`, `animation-delay`, and **every custom property**                                                                                                                                                                                                                                                                                  |
 
 `--eg-border-width: 1px` exists, so a `1px` hairline is **not** an exception: write
 `border: var(--eg-border-width) solid var(--eg-border)`. The same applies to the `--eg-focus-width`
@@ -460,13 +457,13 @@ fails with `rawDuration` — in a component stylesheet and in an inline `styles`
 `tokens.css` keeps declaring the raw scale because that file is exempt at config level.
 Literal-free custom properties still pass:
 
-| Declaration | Why it passes |
-| --- | --- |
-| `--x: 0` | the zero exemption (`0px`/`0rem`/`0s`/`0ms` too) |
-| `--x: 1.5` | unitless number |
-| `--x: 100%` | percentage |
-| `--x: var(--eg-space-4)` | token reference |
-| `--x: calc(var(--eg-space-2) * 2)` | `calc()` over a token reference only |
+| Declaration                        | Why it passes                                    |
+| ---------------------------------- | ------------------------------------------------ |
+| `--x: 0`                           | the zero exemption (`0px`/`0rem`/`0s`/`0ms` too) |
+| `--x: 1.5`                         | unitless number                                  |
+| `--x: 100%`                        | percentage                                       |
+| `--x: var(--eg-space-4)`           | token reference                                  |
+| `--x: calc(var(--eg-space-2) * 2)` | `calc()` over a token reference only             |
 
 **Deliberately not checked.** The length regex covers `px`, `rem` and `em` and the duration regex
 covers `ms` and `s`; the property lists above are the whole contract. Five groups stay out on
@@ -547,20 +544,20 @@ declaration text out of the string or template literal:
 
 **Disposition of each limitation (S62 send-back on PR #138).** Nothing above is left unowned:
 
-| Limitation or review nit | Disposition |
-| --- | --- |
-| Template `style="…"` attributes and `[style.x]` bindings | Handed to 09.1.1-T7 (plan `09.1.1-app-scaffold-and-build-acceptance-npm.md:181`, STATUS §6 row "09.1.1-T7 `style-tokens` coverage gaps") |
-| Motion durations (`transition`/`animation`) | Closed in 09.1.1-T8: `rawDuration` now reports a non-zero `ms`/`s` time in the six duration properties, in every custom property and in an interpolated `${duration}ms`/`${duration}s` (this section). T7's hand-over note said the T8 patterns animate nothing, so the lint rule and this contract are the pattern the hand-over owed |
-| `border-spacing` | Handed to 09.1.1-T7 (same note and row; the shared list table picks the gap) |
-| Style string imported, built by a function, or held in `let`/`var` | Accepted by design, not handed over: resolving it needs whole-program analysis and would guess runtime values; code review is the net |
-| `@core.Component` namespace form | Accepted by design, not handed over: the project convention imports `Component` directly |
-| `styles` in `*.spec.ts` | Accepted by design, not handed over: test host components are never shipped |
-| Sizing, `transform`/`translate`, `letter-spacing`/`word-spacing`/`text-indent` | Accepted by design, not handed over: no numeric token exists to replace them (see "Deliberately not checked") |
-| Timing functions (`cubic-bezier(...)`, `steps(...)`, `ease`/`linear`) | Accepted by design, not handed over: `--eg-ease` is a review convention only, because a timing function has no unit for the literal scanner to key on and the keywords are legitimate CSS (see "Deliberately not checked") |
-| CSS system colour keywords | Accepted by design, not handed over: they carry no brand value and are the forced-colors pattern |
-| `.scss`/`.sass` files not matched | Accepted by design, not handed over: `apps/web/angular.json` sets `style: css` and no SCSS file exists |
-| Review nit: one `const` used by two components reports twice at the const's location | Accepted by design, not handed over: duplicate message only, never a missed or false verdict |
-| Review nit: `${n}px` inside a comment within a template literal can be reported | Accepted by design, not handed over: an extra report on an unrealistic input, fixed by deleting the comment |
+| Limitation or review nit                                                             | Disposition                                                                                                                                                                                                                                                                                                                            |
+| ------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Template `style="…"` attributes and `[style.x]` bindings                             | Handed to 09.1.1-T7 (plan `09.1.1-app-scaffold-and-build-acceptance-npm.md:181`, STATUS §6 row "09.1.1-T7 `style-tokens` coverage gaps")                                                                                                                                                                                               |
+| Motion durations (`transition`/`animation`)                                          | Closed in 09.1.1-T8: `rawDuration` now reports a non-zero `ms`/`s` time in the six duration properties, in every custom property and in an interpolated `${duration}ms`/`${duration}s` (this section). T7's hand-over note said the T8 patterns animate nothing, so the lint rule and this contract are the pattern the hand-over owed |
+| `border-spacing`                                                                     | Handed to 09.1.1-T7 (same note and row; the shared list table picks the gap)                                                                                                                                                                                                                                                           |
+| Style string imported, built by a function, or held in `let`/`var`                   | Accepted by design, not handed over: resolving it needs whole-program analysis and would guess runtime values; code review is the net                                                                                                                                                                                                  |
+| `@core.Component` namespace form                                                     | Accepted by design, not handed over: the project convention imports `Component` directly                                                                                                                                                                                                                                               |
+| `styles` in `*.spec.ts`                                                              | Accepted by design, not handed over: test host components are never shipped                                                                                                                                                                                                                                                            |
+| Sizing, `transform`/`translate`, `letter-spacing`/`word-spacing`/`text-indent`       | Accepted by design, not handed over: no numeric token exists to replace them (see "Deliberately not checked")                                                                                                                                                                                                                          |
+| Timing functions (`cubic-bezier(...)`, `steps(...)`, `ease`/`linear`)                | Accepted by design, not handed over: `--eg-ease` is a review convention only, because a timing function has no unit for the literal scanner to key on and the keywords are legitimate CSS (see "Deliberately not checked")                                                                                                             |
+| CSS system colour keywords                                                           | Accepted by design, not handed over: they carry no brand value and are the forced-colors pattern                                                                                                                                                                                                                                       |
+| `.scss`/`.sass` files not matched                                                    | Accepted by design, not handed over: `apps/web/angular.json` sets `style: css` and no SCSS file exists                                                                                                                                                                                                                                 |
+| Review nit: one `const` used by two components reports twice at the const's location | Accepted by design, not handed over: duplicate message only, never a missed or false verdict                                                                                                                                                                                                                                           |
+| Review nit: `${n}px` inside a comment within a template literal can be reported      | Accepted by design, not handed over: an extra report on an unrealistic input, fixed by deleting the comment                                                                                                                                                                                                                            |
 
 A new component foreground/background pair still has to be added to `contrast.py` and regenerated
 into the table above — the lint rule checks spelling, not contrast.
