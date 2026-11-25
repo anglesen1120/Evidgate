@@ -22707,7 +22707,7 @@
       <trans-unit id="project.dashboard.setup" datatype="html"><source>Review CI setup</source><target>Xem lại thiết lập CI</target></trans-unit>
       <trans-unit id="project.dashboard.usage" datatype="html"><source>Organization usage and AI</source><target>Mức sử dụng tổ chức và AI</target></trans-unit>
       <trans-unit id="project.dashboard.ai" datatype="html"><source>AI tokens</source><target>Token AI</target></trans-unit>
-      <trans-unit id="project.dashboard.not-metered" datatype="html"><source>Not metered</source><target>Chưa đo lường</target></trans-unit>
+      <trans-unit id="project.dashboard.not-metered" datatype="html"><source>Not metered</source><target>Chưa được đo</target></trans-unit>
       <trans-unit id="project.dashboard.credit-unavailable" datatype="html"><source>AI credit balance is not available from this API.</source><target>API này không cung cấp số dư tín dụng AI.</target></trans-unit>
       <trans-unit id="project.dashboard.results" datatype="html"><source>Organization results quota</source><target>Hạn mức kết quả của tổ chức</target></trans-unit>
       <trans-unit id="project.dashboard.empty-usage" datatype="html"><source>No usage metrics returned.</source><target>Không có chỉ số sử dụng được trả về.</target></trans-unit>
