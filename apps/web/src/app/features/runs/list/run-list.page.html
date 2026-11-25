@@ -78,8 +78,7 @@
   >
     <div filterChips class="flex min-w-0 flex-wrap items-center gap-1">
       @for (chip of quickFilters; track chip.id) {
-        @let selected =
-          chip.decision ? store.filters().decision === chip.decision : !store.isFiltered();
+        @let selected = store.filters().decision === chip.decision;
         <button
           hlmBtn
           [size]="'sm'"

@@ -104,6 +104,8 @@ describe('Run list filters', () => {
       refName: 'main',
       decision: '',
     });
+    store.filters.update((filters) => ({ ...filters, decision: '' }));
+    expect(await (await harness.all()).getAttribute('aria-pressed')).toBe('true');
   });
 
   it.each(['apply', 'clear'] as const)(
