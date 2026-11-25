@@ -6,6 +6,14 @@
 .dashboard-grid > * {
   grid-column: 1 / -1;
 }
+.dashboard-grid > [data-dashboard-attention] {
+  align-self: start;
+}
+.scope-note {
+  margin: var(--eg-space-3) 0 0;
+  color: var(--eg-text-muted);
+  font-size: var(--eg-text-sm);
+}
 @media (min-width: 768px) {
   .dashboard-grid:has([data-dashboard-ci]) > [data-dashboard-authoring],
   .dashboard-grid:has([data-dashboard-authoring]) > [data-dashboard-ci] {

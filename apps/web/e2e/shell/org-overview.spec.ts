@@ -31,6 +31,22 @@ for (const locale of LOCALES) {
         await expect(main.locator('[aria-busy="true"]')).toHaveCount(0);
         await expect(main.locator('[data-table-progress]')).toHaveCount(0);
         await expect(main.locator('app-data-table')).toHaveCount(2);
+        if (width === 1440) {
+          const header = main.locator('.projects').getByRole('columnheader', {
+            name: locale === 'vi' ? 'Xem' : 'View',
+            exact: true,
+          });
+          await expect(header).toBeVisible();
+          expect(
+            await header.evaluate((element) => {
+              const bounds = element.getBoundingClientRect();
+              const range = document.createRange();
+              range.selectNodeContents(element);
+              const rect = range.getBoundingClientRect();
+              return rect.left >= bounds.left - 1 && rect.right <= bounds.right + 1;
+            }),
+          ).toBe(true);
+        }
         const memberships = main.locator('.members dl');
         await expect(memberships).toHaveCount(1);
         await expect(memberships.getByRole('definition')).toHaveText([

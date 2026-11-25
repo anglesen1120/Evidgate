@@ -51,10 +51,11 @@ export function expiringWaivers(rows: readonly WaiverDto[], now: number): number
 
 export function recentFailures(rows: readonly RunSummary[], now: number): number {
   const start = now - 7 * 24 * 60 * 60 * 1000;
-  return rows.filter(
-    (row) =>
-      row.decision === 'FAIL' &&
-      Date.parse(row.created_at) >= start &&
-      Date.parse(row.created_at) <= now,
-  ).length;
+  let count = 0;
+  for (const row of rows) {
+    if (row.decision !== 'FAIL') continue;
+    const instant = rfc3339InstantMs(row.created_at);
+    if (instant !== null && instant >= start && instant <= now) count++;
+  }
+  return count;
 }

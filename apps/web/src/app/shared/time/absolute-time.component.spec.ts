@@ -47,7 +47,9 @@ describe.each(['en-US', 'vi'])('AbsoluteTimeComponent (%s)', (locale) => {
     const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, TimeHarness);
     const time = await harness.instant();
     expect(await time.getAttribute('datetime')).toBe(raw);
-    expect(await time.getAttribute('title')).toBe(`${await time.text()} UTC`);
+    const label = locale === 'vi' ? '08:10:00 07/11/2026' : '11/7/2026, 8:10:00\u202fAM';
+    expect(await time.getAttribute('title')).toBe(`${label} UTC`);
+    expect(await time.text()).not.toContain(',');
     fixture.componentRef.setInput('utcColumn', false);
     const standalone = await harness.instant();
     expect(await standalone.text()).toMatch(/ UTC$/);

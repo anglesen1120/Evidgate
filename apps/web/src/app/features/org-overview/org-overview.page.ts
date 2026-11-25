@@ -154,10 +154,10 @@ export class OrgOverviewPage {
         ? [
             {
               id: 'view',
-              header: $localize`:@@orgoverview.action-column:Action`,
+              header: $localize`:@@project.dashboard.view:View`,
               role: 'actions' as const,
               cell: () => '',
-              width: { min: 'max-content', preferred: '1%' },
+              width: { min: 'calc(5ch + var(--eg-space-4) * 2)', preferred: '1%' },
               cellTemplate: view,
             },
           ]

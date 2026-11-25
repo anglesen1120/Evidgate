@@ -47,6 +47,8 @@ for (const locale of LOCALES) {
         ).toHaveCount(0);
         await expect(page.locator('[data-dashboard-kpis] dl')).toHaveCount(1);
         const register = page.locator('[data-dashboard-recent]');
+        await expect(register.getByText('main', { exact: true }).first()).toBeVisible();
+        await expect(register.locator('app-copyable-identifier')).toHaveCount(0);
         if (width === 1440)
           await expect(register.getByRole('columnheader', { name: /UTC/ })).toBeVisible();
         await expect(register.locator('time[datetime]')).toHaveCount(5);
@@ -174,6 +176,7 @@ test('run inspection is a named read-only dialog with Escape and focus return', 
   await view.click();
   const dialog = page.locator('[data-dashboard-run-dialog]');
   await expect(dialog).toBeVisible();
+  await expect(dialog.locator('app-copy-value-button button')).toBeVisible();
   await expect(page.getByRole('dialog')).toHaveAccessibleName(/\S/);
   await waitForDialogAnimations(page, '[data-dashboard-run-dialog]');
   await expectNoA11yViolations(page, 'project run inspection');

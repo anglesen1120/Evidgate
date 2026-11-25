@@ -72,6 +72,8 @@ export class AbsoluteTimeComponent {
     if (!label) return null;
     // shortDateFormat separates its calendar and clock with an ASCII space in both supported locales.
     const boundary = label.indexOf(' ');
-    return [label.slice(0, boundary), label.slice(boundary + 1)] as const;
+    if (boundary < 0) return null;
+    const first = label.slice(0, label[boundary - 1] === ',' ? boundary - 1 : boundary);
+    return [first, label.slice(boundary + 1)] as const;
   });
 }

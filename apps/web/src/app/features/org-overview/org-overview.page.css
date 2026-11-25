@@ -3,6 +3,9 @@
   grid-template-columns: minmax(0, 1fr);
   gap: var(--eg-space-7);
 }
+.members {
+  align-self: start;
+}
 
 @media (min-width: 768px) {
   .dashboard-grid {

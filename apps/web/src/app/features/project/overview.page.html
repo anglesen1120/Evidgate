@@ -76,7 +76,6 @@
             <app-dashboard-metric
               [label]="copy.waivers"
               [value]="waivers()"
-              [description]="copy.waiverContext"
               [loading]="store.waivers.loading()"
               [error]="store.waivers.error()"
               (retry)="store.waivers.reload()"
@@ -86,11 +85,13 @@
             <app-dashboard-metric
               [label]="copy.quarantine"
               [value]="quarantines()"
-              [description]="copy.quarantineContext"
               [loading]="store.quarantine.loading()"
               [error]="store.quarantine.error()"
               (retry)="store.quarantine.reload()"
             />
+          }
+          @if (store.waivers.visible() || store.quarantine.visible()) {
+            <p class="scope-note">{{ copy.attentionScope }}</p>
           }
           @if (incidentsVisible()) {
             <dl data-dashboard-incidents class="m-0 border-t border-border py-(--eg-space-3)">
@@ -128,7 +129,6 @@
             <app-dashboard-metric
               [label]="copy.cases"
               [value]="store.cases.value()?.items?.length ?? null"
-              [description]="copy.caseContext"
               [loading]="store.cases.loading()"
               [error]="store.cases.error()"
               (retry)="store.cases.reload()"
@@ -138,7 +138,6 @@
             <app-dashboard-metric
               [label]="copy.checklist"
               [value]="checklist()"
-              [description]="copy.checklistContext"
               [loading]="store.tree.loading()"
               [error]="store.tree.error()"
               (retry)="store.tree.reload()"
@@ -148,12 +147,19 @@
             <app-dashboard-metric
               [label]="copy.changes"
               [value]="store.changes.value()?.items?.length ?? null"
-              [description]="copy.changeContext"
               [loading]="store.changes.loading()"
               [error]="store.changes.error()"
               (retry)="store.changes.reload()"
             />
           }
+          <p class="scope-note">
+            @if (store.cases.visible() || store.changes.visible()) {
+              {{ copy.authoringScope }}
+            }
+            @if (store.tree.visible()) {
+              {{ copy.checklistContext }}
+            }
+          </p>
         </app-dashboard-widget>
       }
       @if (store.bindings.visible()) {

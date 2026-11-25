@@ -101,9 +101,11 @@ export class ProjectOverviewPage {
     const total = formatNumber(counts.total, this.locale);
     const detail = !sample
       ? ''
-      : sample.complete
-        ? $localize`:@@project.dashboard.sample-loaded:Loaded sample`
-        : $localize`:@@project.dashboard.sample-partial:Oldest pages only; newer runs are not loaded.`;
+      : !sample.complete
+        ? $localize`:@@project.dashboard.sample-partial:Oldest pages only; newer runs are not loaded.`
+        : sample.items.length > counts.total
+          ? $localize`:@@project.dashboard.sample-latest:Latest ${total}:total: runs`
+          : $localize`:@@project.dashboard.sample-loaded:Loaded sample`;
     return [
       { id: 'runs', label: this.recentTitle(), value: sample ? counts.total : null, detail },
       ...(this.store.decisionsVisible()
@@ -158,7 +160,7 @@ export class ProjectOverviewPage {
   protected readonly failureContext = computed(() => {
     if (this.failures() === null) return this.copy.failuresUnavailable;
     const total = formatNumber(this.counts().fail, this.locale);
-    return $localize`:@@project.dashboard.failure-scope:In the last 7 days; ${total}:total: FAIL in the whole sample.`;
+    return $localize`:@@project.dashboard.failure-scope:Sampled FAILs in the last 7 days; ${total}:total: FAIL across the sample.`;
   });
   protected readonly waivers = computed(() =>
     expiringWaivers(this.store.waivers.value()?.items ?? [], Date.now()),
