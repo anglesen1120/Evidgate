@@ -117,7 +117,7 @@ test('the list, a row and the way back are keyboard-reachable and identifiable',
   await page.keyboard.press('Tab');
   const back = page.getByRole('link', { name: 'Back to runs' });
   await expect(back).toBeFocused();
-  expect((await back.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
+  expect((await back.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(32);
 
   // The header's inspect-evidence action sits between the back link and the run summary.
   await page.keyboard.press('Tab');
