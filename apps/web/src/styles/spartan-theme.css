@@ -10,6 +10,7 @@ html[data-theme='dark'] {
   --popover-foreground: var(--eg-text);
   --primary: var(--eg-accent);
   --primary-foreground: var(--eg-on-accent);
+  --primary-hover: var(--eg-accent-hover);
   --secondary: var(--eg-surface-raised);
   --secondary-foreground: var(--eg-text);
   --muted: var(--eg-neutral-bg);
@@ -37,6 +38,7 @@ html[data-theme='dark'] {
   --color-popover-foreground: var(--popover-foreground);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
+  --color-primary-hover: var(--primary-hover);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
   --color-muted: var(--muted);
@@ -74,8 +76,8 @@ html[data-theme='dark'] {
   /* Bare `none` invalidates Tailwind's composed shadow list, including focus rings. */
   --shadow-xs: 0 0 #0000;
   --shadow-sm: var(--eg-elevation-1);
-  --shadow-md: var(--eg-elevation-2);
-  --shadow-lg: var(--eg-elevation-2);
+  --shadow-md: var(--eg-elevation-overlay);
+  --shadow-lg: var(--eg-elevation-overlay);
   --default-transition-duration: var(--eg-duration-fast);
   --default-transition-timing-function: var(--eg-ease);
 }

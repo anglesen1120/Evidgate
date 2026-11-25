@@ -45,7 +45,7 @@ import { openFullValuePopover } from '@evidgate/ui/utils';
         #panel
         popover="manual"
         tabindex="0"
-        class="box-border w-max overflow-auto rounded-(--eg-radius-md) border border-border bg-popover p-(--eg-space-4) text-start text-sm font-normal text-popover-foreground whitespace-normal wrap-anywhere shadow-(--eg-elevation-2)"
+        class="box-border w-max overflow-auto rounded-(--eg-radius-md) border border-border bg-popover p-(--eg-space-4) text-start text-sm font-normal text-popover-foreground whitespace-normal wrap-anywhere shadow-(--eg-elevation-overlay)"
         [id]="descriptionId()"
         (keydown.escape)="escape($event, trigger)"
         ><span class="block max-w-[40ch]">{{ hint }}</span></span

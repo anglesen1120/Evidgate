@@ -55,29 +55,30 @@ there is no additional `--eg-error-*` alias.
 
 | Token | Light | Dark | Role |
 | --- | --- | --- | --- |
-| `--eg-bg` | `#f5f8fa` | `#10202b` | Page canvas |
-| `--eg-surface` | `#ffffff` | `#14232d` | Cards, menus and dialogs |
-| `--eg-surface-raised` | `#f5f8fa` | `#192d39` | Raised/hover surface |
-| `--eg-text` | `#172b3a` | `#e5eef4` | Primary text |
-| `--eg-text-muted` | `#526471` | `#a8bac7` | Secondary text, not disabled-by-opacity text |
-| `--eg-border` | `#dce5eb` | `#334a59` | Decorative separation; not the required control boundary |
-| `--eg-border-control` | `#7a8c99` | `#7f98a8` | Identifiable control boundary |
-| `--eg-accent` | `#006b66` | `#76d8cb` | Links, controls and active accents |
-| `--eg-accent-soft` | `#e8f5f2` | `#153d3b` | Accent-tinted background |
-| `--eg-accent-fg` | `var(--eg-accent)` → `#006b66` | `var(--eg-accent)` → `#76d8cb` | Added explicit accent text alias |
-| `--eg-on-accent` | `#ffffff` | `#10202b` | Label on solid accent |
-| `--eg-focus` | `#006b66` | `#76d8cb` | Visible focus ring |
-| `--eg-scrim` | `#10202b99` | `#10202b99` | Alpha overlay; excluded from text contrast |
+| `--eg-bg` | `#f8fafc` | `#0b1116` | Page canvas |
+| `--eg-surface` | `#ffffff` | `#111921` | Cards, menus and dialogs |
+| `--eg-surface-raised` | `#f1f5f9` | `#17222c` | Raised/hover surface |
+| `--eg-text` | `#0f172a` | `#e6edf3` | Primary text |
+| `--eg-text-muted` | `#475569` | `#9fb0bf` | Secondary text, not disabled-by-opacity text |
+| `--eg-border` | `#e2e8f0` | `#233240` | Decorative separation; not the required control boundary |
+| `--eg-border-control` | `#64748b` | `#73899b` | Identifiable control boundary |
+| `--eg-accent` | `#006b66` | `#5fd4c6` | Links, controls and active accents |
+| `--eg-accent-hover` | `#00524e` | `#4bc4b6` | Hover fill of the default button (`--primary-hover` alias) |
+| `--eg-accent-soft` | `#e6f4f1` | `#123432` | Accent-tinted background |
+| `--eg-accent-fg` | `var(--eg-accent)` → `#006b66` | `var(--eg-accent)` → `#5fd4c6` | Added explicit accent text alias |
+| `--eg-on-accent` | `#ffffff` | `#0b1116` | Label on solid accent |
+| `--eg-focus` | `var(--eg-accent)` → `#006b66` | `var(--eg-accent)` → `#5fd4c6` | Visible focus ring |
+| `--eg-scrim` | `#10202b88` | `#050b11ae` | Alpha overlay; excluded from text contrast |
 | `--eg-success-fg` | `#11633d` | `#90dcad` | Success text |
 | `--eg-success-bg` | `#e9f5ee` | `#153b2a` | Success background |
 | `--eg-danger-fg` | `#a62d37` | `#ffb2ba` | Error/failure text |
 | `--eg-danger-bg` | `#fceef0` | `#49242b` | Error/failure background |
 | `--eg-warning-fg` | `#805500` | `#f2cd7a` | Warning text |
 | `--eg-warning-bg` | `#fff5dc` | `#40341c` | Warning background |
-| `--eg-info-fg` | `#245ea1` | `#a7cbfa` | Informational text |
-| `--eg-info-bg` | `#ecf3fc` | `#1c3555` | Informational background |
-| `--eg-neutral-fg` | `#526471` | `#b8c7d2` | General neutral text |
-| `--eg-neutral-bg` | `#eff3f6` | `#263844` | General neutral background |
+| `--eg-info-fg` | `var(--eg-accent)` → `#006b66` | `var(--eg-accent)` → `#5fd4c6` | Informational text |
+| `--eg-info-bg` | `var(--eg-accent-soft)` → `#e6f4f1` | `var(--eg-accent-soft)` → `#123432` | Informational background |
+| `--eg-neutral-fg` | `#475569` | `#b8c7d2` | General neutral text |
+| `--eg-neutral-bg` | `#eef2f6` | `#1d2b37` | General neutral background |
 
 ### Pending palette
 
@@ -87,19 +88,23 @@ danger or warning; pending is not an amber warning and is not a green PASS.
 
 | Token | Light | Dark |
 | --- | --- | --- |
-| `--eg-pending-fg` | `#526471` | `#b8c7d2` |
-| `--eg-pending-bg` | `#eff3f6` | `#263844` |
-| `--eg-pending-border` | `#7a8c99` | `#7f98a8` |
+| `--eg-pending-fg` | `#475569` | `#b8c7d2` |
+| `--eg-pending-bg` | `#eef2f6` | `#1d2b37` |
+| `--eg-pending-border` | `#64748b` | `#73899b` |
 
 ### Type
 
-These values are shared by both themes. Token declarations do not load font assets.
+These values are shared by both themes. Fonts are self-hosted from `apps/web/src/styles/fonts/`
+(SIL OFL 1.1, ADR-0002): Manrope variable (display 600/700), Inter variable (body 400/500/600) and
+JetBrains Mono variable (mono 400/500), the last two as `latin`, `latin-ext` and `vietnamese`
+`.woff2` subsets with `font-display: swap`. `h1`–`h3` use `letter-spacing: -0.02em` and
+`text-wrap: balance`; `table`, `time` and `.tabular-nums` use `font-variant-numeric: tabular-nums`.
 
 | Token | Value |
 | --- | --- |
-| `--eg-font-display` | `'Manrope', 'Public Sans', system-ui, sans-serif` |
-| `--eg-font-body` | `'Public Sans', system-ui, -apple-system, 'Segoe UI', sans-serif` |
-| `--eg-font-mono` | `'SFMono-Regular', Consolas, 'Liberation Mono', monospace` |
+| `--eg-font-display` | `'Manrope', 'Inter', system-ui, sans-serif` |
+| `--eg-font-body` | `'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif` |
+| `--eg-font-mono` | `'JetBrains Mono', 'SFMono-Regular', Consolas, 'Liberation Mono', monospace` |
 | `--eg-weight-regular` | `400` |
 | `--eg-weight-medium` | `500` |
 | `--eg-weight-semibold` | `600` |
@@ -146,17 +151,15 @@ Shared by both themes. Do not substitute a familiar spacing scale: v2 `space-4` 
 
 ### Elevation
 
-[DECISION] Name the actual v2 effects rather than invent a blurred-shadow hierarchy. These levels
-are semantic references, **not** four progressively stronger shadows. In particular level 2 is
-flat: v2 menus, drawers, dialogs and toasts have borders/backdrops but no declared box shadow
-(lines 1437–1463, 1518–1537, 1591–1606 and 3571–3586). No dark alpha adjustment is needed for
-parity; the border/scrim references resolve per theme.
+[DECISION] Floating surfaces get one soft overlay shadow; content cards remain flat bordered
+surfaces. The levels are semantic references, not a graduated shadow scale. Alpha shadow tokens are
+outside `contrast.py` (alpha is not a text pair) and are declared per theme in `tokens.css`.
 
 | Token | Light | Dark | Intended reference |
 | --- | --- | --- | --- |
 | `--eg-elevation-0` | `none` | `none` | Flat baseline; `none` also appears on disabled buttons, line 983 |
 | `--eg-elevation-1` | `0 1px 0 var(--eg-border)` | `0 1px 0 var(--eg-border)` | Sticky-table separator, line 3015 |
-| `--eg-elevation-2` | `none` | `none` | Flat bordered menu/dialog/toast; depth comes from z-index/backdrop |
+| `--eg-elevation-overlay` | `0 1px 2px #10202b14, 0 12px 32px #10202b26` | `0 1px 2px #05090d66, 0 12px 32px #05090d66` | Select content, dropdown menu, tooltip, popover, dialog |
 | `--eg-elevation-3` | `0 0 0 100vmax var(--eg-scrim)` | `0 0 0 100vmax var(--eg-scrim)` | Navigation scrim, lines 554 and 4082, outside the component layer |
 
 Complete `@layer components` shadow scan (the layer begins at line 835) found the following
@@ -173,8 +176,11 @@ must not be repurposed as overlay shadows:
 | `0 1px 0 var(--eg-border)` | 3015 | Sticky-table separator |
 
 The navigation scrim occurs in the layout/utilities layers, not in components. Applying its
-`100vmax` spread to menus or toasts would incorrectly obscure the page. These token definitions
-alone do not apply any shadows to components.
+`100vmax` spread to menus or toasts would incorrectly obscure the page. `--eg-elevation-overlay`
+is applied to select content, dropdown menus, tooltips, the field-hint popover, the badge full-value
+popover and dialog content; cards stay flat. The two-layer value is a shadow, not a colour pair, so
+`contrast.py` does not check it; its alpha colours are the documented exception to the opaque-hex
+rule (like `--eg-scrim`).
 
 ### Control sizes and layout dimensions
 
@@ -272,21 +278,21 @@ persisted `system` string, locale behaviour or preference-control UI is introduc
 
 ## Contrast table
 
-Output of `python3 docs/design/web/contrast.py` on 2026-10-24, exit status **0**. Pair names omit
+Output of `python3 docs/design/web/contrast.py` on 2026-11-25, exit status **0**. Pair names omit
 only the shared `--eg-` prefix. This table and the three summary lines reproduce script output.
 
 | Theme | Pair (--eg- prefix) | Usage | Ratio | Minimum | Result |
 | --- | --- | --- | ---: | ---: | --- |
-| light | text / bg | text | 13.64 | 4.5 | PASS |
-| light | text / surface | text | 14.55 | 4.5 | PASS |
-| light | text / surface-raised | text | 13.64 | 4.5 | PASS |
-| light | text / accent-soft | text | 13.01 | 4.5 | PASS |
-| light | text-muted / bg | text | 5.76 | 4.5 | PASS |
-| light | text-muted / surface | text | 6.14 | 4.5 | PASS |
-| light | text-muted / surface-raised | text | 5.76 | 4.5 | PASS |
-| light | text-muted / accent-soft | text | 5.49 | 4.5 | PASS |
-| light | text-muted / neutral-bg | disabled action text | 5.50 | 4.5 | PASS |
-| light | accent / bg | link text | 5.98 | 4.5 | PASS |
+| light | text / bg | text | 17.06 | 4.5 | PASS |
+| light | text / surface | text | 17.85 | 4.5 | PASS |
+| light | text / surface-raised | text | 16.30 | 4.5 | PASS |
+| light | text / accent-soft | text | 15.79 | 4.5 | PASS |
+| light | text-muted / bg | text | 7.24 | 4.5 | PASS |
+| light | text-muted / surface | text | 7.58 | 4.5 | PASS |
+| light | text-muted / surface-raised | text | 6.92 | 4.5 | PASS |
+| light | text-muted / accent-soft | text | 6.70 | 4.5 | PASS |
+| light | text-muted / neutral-bg | disabled action text | 6.74 | 4.5 | PASS |
+| light | accent / bg | link text | 6.09 | 4.5 | PASS |
 | light | accent / surface | link text | 6.37 | 4.5 | PASS |
 | light | on-accent / accent | button label | 6.37 | 4.5 | PASS |
 | light | success-fg / success-bg | status text | 6.52 | 4.5 | PASS |
@@ -295,58 +301,58 @@ only the shared `--eg-` prefix. This table and the three summary lines reproduce
 | light | danger-fg / surface | status text | 6.88 | 4.5 | PASS |
 | light | warning-fg / warning-bg | status text | 6.01 | 4.5 | PASS |
 | light | warning-fg / surface | status text | 6.53 | 4.5 | PASS |
-| light | info-fg / info-bg | status text | 5.89 | 4.5 | PASS |
-| light | info-fg / surface | status text | 6.58 | 4.5 | PASS |
-| light | neutral-fg / neutral-bg | status text | 5.50 | 4.5 | PASS |
-| light | neutral-fg / surface | status text | 6.14 | 4.5 | PASS |
-| light | pending-fg / pending-bg | status text | 5.50 | 4.5 | PASS |
-| light | pending-fg / surface | status text | 6.14 | 4.5 | PASS |
-| light | accent-fg / accent-soft | accent text | 5.70 | 4.5 | PASS |
-| light | border-control / surface | non-text border | 3.48 | 3.0 | PASS |
-| light | border-control / bg | non-text border | 3.26 | 3.0 | PASS |
+| light | info-fg / info-bg | status text | 5.64 | 4.5 | PASS |
+| light | info-fg / surface | status text | 6.37 | 4.5 | PASS |
+| light | neutral-fg / neutral-bg | status text | 6.74 | 4.5 | PASS |
+| light | neutral-fg / surface | status text | 7.58 | 4.5 | PASS |
+| light | pending-fg / pending-bg | status text | 6.74 | 4.5 | PASS |
+| light | pending-fg / surface | status text | 7.58 | 4.5 | PASS |
+| light | accent-fg / accent-soft | accent text | 5.64 | 4.5 | PASS |
+| light | border-control / surface | non-text border | 4.76 | 3.0 | PASS |
+| light | border-control / bg | non-text border | 4.55 | 3.0 | PASS |
 | light | focus / surface | non-text focus | 6.37 | 3.0 | PASS |
-| light | focus / bg | non-text focus | 5.98 | 3.0 | PASS |
-| light | focus / surface-raised | non-text focus | 5.98 | 3.0 | PASS |
+| light | focus / bg | non-text focus | 6.09 | 3.0 | PASS |
+| light | focus / surface-raised | non-text focus | 5.82 | 3.0 | PASS |
 | light | accent / surface | non-text control | 6.37 | 3.0 | PASS |
-| light | pending-border / pending-bg | non-text border | 3.12 | 3.0 | PASS |
-| light | pending-border / surface | non-text border | 3.48 | 3.0 | PASS |
-| light | pending-border / bg | non-text border | 3.26 | 3.0 | PASS |
-| light | text / bg | large display >=24px | 13.64 | 3.0 | PASS |
-| dark | text / bg | text | 14.14 | 4.5 | PASS |
-| dark | text / surface | text | 13.66 | 4.5 | PASS |
-| dark | text / surface-raised | text | 12.11 | 4.5 | PASS |
-| dark | text / accent-soft | text | 10.14 | 4.5 | PASS |
-| dark | text-muted / bg | text | 8.32 | 4.5 | PASS |
-| dark | text-muted / surface | text | 8.04 | 4.5 | PASS |
-| dark | text-muted / surface-raised | text | 7.12 | 4.5 | PASS |
-| dark | text-muted / accent-soft | text | 5.96 | 4.5 | PASS |
-| dark | text-muted / neutral-bg | disabled action text | 6.07 | 4.5 | PASS |
-| dark | accent / bg | link text | 9.86 | 4.5 | PASS |
-| dark | accent / surface | link text | 9.52 | 4.5 | PASS |
-| dark | on-accent / accent | button label | 9.86 | 4.5 | PASS |
+| light | pending-border / pending-bg | non-text border | 4.23 | 3.0 | PASS |
+| light | pending-border / surface | non-text border | 4.76 | 3.0 | PASS |
+| light | pending-border / bg | non-text border | 4.55 | 3.0 | PASS |
+| light | text / bg | large display >=24px | 17.06 | 3.0 | PASS |
+| dark | text / bg | text | 16.07 | 4.5 | PASS |
+| dark | text / surface | text | 15.00 | 4.5 | PASS |
+| dark | text / surface-raised | text | 13.65 | 4.5 | PASS |
+| dark | text / accent-soft | text | 11.37 | 4.5 | PASS |
+| dark | text-muted / bg | text | 8.53 | 4.5 | PASS |
+| dark | text-muted / surface | text | 7.96 | 4.5 | PASS |
+| dark | text-muted / surface-raised | text | 7.25 | 4.5 | PASS |
+| dark | text-muted / accent-soft | text | 6.04 | 4.5 | PASS |
+| dark | text-muted / neutral-bg | disabled action text | 6.49 | 4.5 | PASS |
+| dark | accent / bg | link text | 10.60 | 4.5 | PASS |
+| dark | accent / surface | link text | 9.89 | 4.5 | PASS |
+| dark | on-accent / accent | button label | 10.60 | 4.5 | PASS |
 | dark | success-fg / success-bg | status text | 7.70 | 4.5 | PASS |
-| dark | success-fg / surface | status text | 9.96 | 4.5 | PASS |
+| dark | success-fg / surface | status text | 10.99 | 4.5 | PASS |
 | dark | danger-fg / danger-bg | status text | 7.85 | 4.5 | PASS |
-| dark | danger-fg / surface | status text | 9.43 | 4.5 | PASS |
+| dark | danger-fg / surface | status text | 10.41 | 4.5 | PASS |
 | dark | warning-fg / warning-bg | status text | 7.99 | 4.5 | PASS |
-| dark | warning-fg / surface | status text | 10.54 | 4.5 | PASS |
-| dark | info-fg / info-bg | status text | 7.44 | 4.5 | PASS |
-| dark | info-fg / surface | status text | 9.61 | 4.5 | PASS |
-| dark | neutral-fg / neutral-bg | status text | 7.01 | 4.5 | PASS |
-| dark | neutral-fg / surface | status text | 9.28 | 4.5 | PASS |
-| dark | pending-fg / pending-bg | status text | 7.01 | 4.5 | PASS |
-| dark | pending-fg / surface | status text | 9.28 | 4.5 | PASS |
-| dark | accent-fg / accent-soft | accent text | 7.07 | 4.5 | PASS |
-| dark | border-control / surface | non-text border | 5.32 | 3.0 | PASS |
-| dark | border-control / bg | non-text border | 5.51 | 3.0 | PASS |
-| dark | focus / surface | non-text focus | 9.52 | 3.0 | PASS |
-| dark | focus / bg | non-text focus | 9.86 | 3.0 | PASS |
-| dark | focus / surface-raised | non-text focus | 8.44 | 3.0 | PASS |
-| dark | accent / surface | non-text control | 9.52 | 3.0 | PASS |
-| dark | pending-border / pending-bg | non-text border | 4.02 | 3.0 | PASS |
-| dark | pending-border / surface | non-text border | 5.32 | 3.0 | PASS |
-| dark | pending-border / bg | non-text border | 5.51 | 3.0 | PASS |
-| dark | text / bg | large display >=24px | 14.14 | 3.0 | PASS |
+| dark | warning-fg / surface | status text | 11.64 | 4.5 | PASS |
+| dark | info-fg / info-bg | status text | 7.50 | 4.5 | PASS |
+| dark | info-fg / surface | status text | 9.89 | 4.5 | PASS |
+| dark | neutral-fg / neutral-bg | status text | 8.35 | 4.5 | PASS |
+| dark | neutral-fg / surface | status text | 10.24 | 4.5 | PASS |
+| dark | pending-fg / pending-bg | status text | 8.35 | 4.5 | PASS |
+| dark | pending-fg / surface | status text | 10.24 | 4.5 | PASS |
+| dark | accent-fg / accent-soft | accent text | 7.50 | 4.5 | PASS |
+| dark | border-control / surface | non-text border | 4.88 | 3.0 | PASS |
+| dark | border-control / bg | non-text border | 5.23 | 3.0 | PASS |
+| dark | focus / surface | non-text focus | 9.89 | 3.0 | PASS |
+| dark | focus / bg | non-text focus | 10.60 | 3.0 | PASS |
+| dark | focus / surface-raised | non-text focus | 9.00 | 3.0 | PASS |
+| dark | accent / surface | non-text control | 9.89 | 3.0 | PASS |
+| dark | pending-border / pending-bg | non-text border | 3.98 | 3.0 | PASS |
+| dark | pending-border / surface | non-text border | 4.88 | 3.0 | PASS |
+| dark | pending-border / bg | non-text border | 5.23 | 3.0 | PASS |
+| dark | text / bg | large display >=24px | 16.07 | 3.0 | PASS |
 
 ```text
 Dark declaration blocks: PASS (identical property names and values).

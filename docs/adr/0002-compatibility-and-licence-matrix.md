@@ -161,12 +161,17 @@ Planned (not yet referenced) — DECISIONS §4.1–§4.3 choices that no project
 
 ## Self-hosted assets (not packages)
 
-Fonts of the web theme sit in `apps/web/src/styles/fonts/` (bundled and content-hashed by the Angular build, served from the app origin, so `font-src 'self'` holds and no font CDN is contacted). Both are SIL Open Font License 1.1, which allows bundling and embedding in a closed-source commercial product. The licence texts sit beside the files and are copied into each locale output as `fonts-licences/*.txt`. Each file is the upstream variable TTF (taken from `docs/design/web-ui-v3/assets/fonts/`) converted to WOFF2 without subsetting (Vietnamese needs the Latin Extended Additional block), with `python -m fontTools.ttLib.woff2 compress` (fonttools 4.68.0, brotli 1.2.1).
+Fonts of the web theme sit in `apps/web/src/styles/fonts/` (bundled and content-hashed by the Angular build, served from the app origin, so `font-src 'self'` holds and no font CDN is contacted). All are SIL Open Font License 1.1, which allows bundling and embedding in a closed-source commercial product. The licence texts sit beside the files and are copied into each locale output as `fonts-licences/*.txt`. Manrope is the upstream variable TTF (taken from `docs/design/web-ui-v3/assets/fonts/`) converted to WOFF2 without subsetting (Vietnamese needs the Latin Extended Additional block), with `python -m fontTools.ttLib.woff2 compress` (fonttools 4.68.0, brotli 1.2.1). Inter and JetBrains Mono are the upstream variable WOFF2 files of the `@fontsource-variable/inter` and `@fontsource-variable/jetbrains-mono` 5.3.0 packages, copied unchanged (their `LICENSE` is the OFL text); they ship the `latin`, `latin-ext` and `vietnamese` subsets, and `fonts.css` restricts each with `unicode-range`. This replaces Public Sans, which is no longer shipped. The package tarballs are fetched once to obtain the files and are not dependencies. Changed by the UI roadmap PR 1.1 (this ADR is the one path outside `apps/web` that PR touches).
 
 | Asset | Upstream | Licence | SHA-256 of source TTF / shipped WOFF2 |
 | --- | --- | --- | --- |
 | Manrope-variable.woff2 | Manrope (The Manrope Project Authors, github.com/googlefonts/manrope) | OFL-1.1, `Manrope-OFL.txt` | `3ae11c49…6ae6` / `30b83738…f21f` |
-| PublicSans-variable.woff2 | Public Sans (The Public Sans Project Authors, github.com/uswds/public-sans) | OFL-1.1, `PublicSans-OFL.txt` | `d75a7dc1…30a8` / `82d45c7f…98ca` |
+| Inter-latin-variable.woff2 | Inter (The Inter Project Authors, github.com/rsms/inter) | OFL-1.1, `Inter-OFL.txt` | n/a (shipped unchanged) / `3100e775…6fbd4c62` |
+| Inter-latin-ext-variable.woff2 | Inter, as above | OFL-1.1, `Inter-OFL.txt` | n/a / `34b9c504…ff25c956` |
+| Inter-vietnamese-variable.woff2 | Inter, as above | OFL-1.1, `Inter-OFL.txt` | n/a / `5c66f9e0…952b3ff2` |
+| JetBrainsMono-latin-variable.woff2 | JetBrains Mono (The JetBrains Mono Project Authors, github.com/JetBrains/JetBrainsMono) | OFL-1.1, `JetBrainsMono-OFL.txt` | n/a / `18be4527…651f6a7e` |
+| JetBrainsMono-latin-ext-variable.woff2 | JetBrains Mono, as above | OFL-1.1, `JetBrainsMono-OFL.txt` | n/a / `79bfdab9…4ab99c6e` |
+| JetBrainsMono-vietnamese-variable.woff2 | JetBrains Mono, as above | OFL-1.1, `JetBrainsMono-OFL.txt` | n/a / `2288795d…8b582ca2` |
 
 ## Alternatives rejected
 
