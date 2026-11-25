@@ -35,7 +35,7 @@ const COPY: Record<ShellLocale, Copy> = {
     disabled: 'Tắt',
     notRecorded: 'Chưa được ghi lại',
     title: 'Tắt tự sửa cho Phạm vi dự án',
-    consequence: 'Mọi đề xuất tự sửa chế độ bóng của phạm vi này sẽ dừng ngay.',
+    consequence: 'Mọi đề xuất tự sửa đối chứng của phạm vi này sẽ dừng ngay.',
   },
 };
 

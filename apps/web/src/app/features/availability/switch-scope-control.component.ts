@@ -180,18 +180,22 @@ export class SwitchScopeControl {
   }
 
   /** Shared by every route that closes the dialog; a second close is a no-op. */
-  protected closeConfirm(): void {
+  protected closeConfirm(confirmed = false): void {
     if (!this.confirmOpen()) return;
     this.confirmOpen.set(false);
-    this.restoreFocusAfterClose();
+    this.restoreFocusAfterClose(confirmed);
   }
 
-  /** Returns focus to the containment trigger, or to the scope heading when a resize removed it. */
-  private restoreFocusAfterClose(): void {
+  /**
+   * Cancel and Escape return focus to the containment trigger. After a confirmed containment the
+   * readback removes that trigger, so focus goes to the stable scope heading instead (also the
+   * fallback when a resize removed the trigger).
+   */
+  private restoreFocusAfterClose(confirmed: boolean): void {
     afterNextRender(
       () => {
         const trigger = this.disableTrigger()?.nativeElement;
-        if (trigger !== undefined && trigger.isConnected && !trigger.disabled) {
+        if (!confirmed && trigger !== undefined && trigger.isConnected && !trigger.disabled) {
           trigger.focus();
           return;
         }
@@ -221,7 +225,7 @@ export class SwitchScopeControl {
   /** Single use: the confirm must be open, and closing it consumes that state before the emit. */
   protected confirmDisable(): void {
     if (!this.confirmOpen()) return;
-    this.closeConfirm();
+    this.closeConfirm(true);
     if (!this.canSend('healing-kill-switch')) return;
     this.submitted.emit({ mode: 'disabled', reason: null, action: 'healing-kill-switch' });
   }
