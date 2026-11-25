@@ -46,8 +46,9 @@ describe('ApiTokenListComponent', () => {
           provide: NarrowMutationPolicy,
           useValue: {
             canMutate: wide,
+            canMutateFor: (action?: string) => wide() || action === 'revoke-api-token',
             narrow: computed(() => !wide()),
-            allowsMutation: () => wide(),
+            allowsMutation: (action?: string) => wide() || action === 'revoke-api-token',
           },
         },
       ],
@@ -221,7 +222,7 @@ describe('ApiTokenListComponent', () => {
     );
   });
 
-  it('gates revoke by permission, busy state and viewport', async () => {
+  it('permits narrow revoke only for writable, non-revoked rows and rechecks before emitting', async () => {
     const { root, fixture, wide, harness } = await render(
       [ROW, { ...ROW, id: 'old', status: 'revoked' }],
       true,
@@ -247,9 +248,22 @@ describe('ApiTokenListComponent', () => {
     expect(revoke).toHaveBeenCalledTimes(1);
     wide.set(false);
     await fixture.whenStable();
-    expect(root.querySelector('[data-api-revoke]')).toBeNull();
+    expect(await harness.revokeButtons()).toHaveLength(1);
+    fixture.componentRef.setInput('busy', false);
+    await fixture.whenStable();
+    const [mobile] = await harness.revokeButtons();
+    if (!mobile) throw new Error('Missing mobile revoke action');
+    const live = vi.spyOn(TestBed.inject(NarrowMutationPolicy), 'allowsMutation');
+    live.mockReturnValueOnce(false);
+    await mobile.click();
+    expect(live).toHaveBeenCalledWith('revoke-api-token');
+    expect(revoke).toHaveBeenCalledTimes(1);
+    await mobile.click();
+    expect(revoke).toHaveBeenCalledTimes(2);
     for (const fact of [ROW.prefix, 'Active', 'Revoked']) expect(root.textContent).toContain(fact);
     fixture.componentRef.setInput('canWrite', false);
+    await fixture.whenStable();
+    expect(await harness.revokeButtons()).toHaveLength(0);
     wide.set(true);
     await fixture.whenStable();
     expect(root.querySelector('[data-api-revoke]')).toBeNull();

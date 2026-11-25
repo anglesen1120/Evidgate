@@ -122,7 +122,7 @@ for (const locale of LOCALES) {
       await expect(trigger).toBeFocused();
     });
 
-    test(`resized cancel dialog explains desktop-only confirmation and retains dismissal (${locale}, ${theme})`, async ({
+    test(`resized cancel dialog keeps confirmation at narrow width and retains dismissal (${locale}, ${theme})`, async ({
       page,
     }) => {
       await seedStoredTheme(page, theme);
@@ -138,14 +138,8 @@ for (const locale of LOCALES) {
         const reason = dialog.getByRole('textbox');
         await reason.fill('Deployment window changed');
         await page.setViewportSize({ width: 360, height: 800 });
-        const notice = dialog.locator('app-desktop-required-notice');
-        await expect(notice.getByRole('heading')).toHaveText(
-          locale === 'vi' ? 'Cần dùng máy tính' : 'Desktop required',
-        );
-        await expect(notice).toContainText(
-          locale === 'vi' ? 'Bạn vẫn có thể xem thông tin' : 'You can still inspect information',
-        );
-        await expect(dialog.locator('[data-run-cancel-confirm]')).toBeDisabled();
+        await expect(dialog.locator('app-desktop-required-notice')).toHaveCount(0);
+        await expect(dialog.locator('[data-run-cancel-confirm]')).toBeEnabled();
         await expect(reason).toHaveValue('Deployment window changed');
         await expectDialogFocusContainment(page, dialog);
         if (dismiss === 'escape') await page.keyboard.press('Escape');
@@ -180,17 +174,20 @@ for (const locale of LOCALES) {
     });
   }
 
-  test(`narrow detail keeps cancellation desktop-only (${locale})`, async ({ page }) => {
+  test(`narrow detail allows cancellation through the confirmation dialog (${locale})`, async ({
+    page,
+  }) => {
     await page.setViewportSize({ width: 360, height: 800 });
     await page.goto(path(locale, 'detail-collecting'));
     const trigger = page.locator('[data-run-cancel-trigger]');
-    await expect(trigger).toHaveAttribute('aria-disabled', 'true');
-    await expect(page.locator('#run-cancel-disabled-reason')).toContainText(
-      locale === 'vi' ? 'máy tính để bàn' : 'desktop-sized window',
-    );
+    await expect(trigger).not.toHaveAttribute('aria-disabled', 'true');
+    await expect(
+      page.getByText(locale === 'vi' ? 'máy tính để bàn' : 'desktop-sized window'),
+    ).toHaveCount(0);
     await trigger.focus();
     await page.keyboard.press('Enter');
-    await expect(page.getByRole('alertdialog')).toHaveCount(0);
+    await expect(page.getByRole('alertdialog')).toBeVisible();
+    await expect(page.locator('[data-run-cancel-confirm]')).toBeEnabled();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true,
     );

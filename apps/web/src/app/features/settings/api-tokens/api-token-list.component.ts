@@ -26,7 +26,6 @@ import {
 import { StatusPillComponent } from '../../../shared/ui/chips/status-pill.component';
 import { DataTableValueComponent } from '../../../shared/ui/data-table/data-table-value.component';
 import { RowActionComponent } from '../../../shared/ui/data-table/row-action.component';
-import { DesktopMutationDirective } from '../../../shared/ui/narrow/desktop-mutation.directive';
 import { NarrowMutationPolicy } from '../../../shared/ui/narrow/narrow-mutation-policy';
 import { EmptyPatternComponent } from '../../../shared/ui/states/empty-pattern.component';
 import { ApiTokenFactsComponent, apiTokenStateLabel } from './api-token-facts.component';
@@ -51,7 +50,6 @@ import { API_TOKENS_COPY } from './api-tokens.copy';
     RowActionComponent,
     ApiTokenFactsComponent,
     ApiTokenPermissionTagsComponent,
-    DesktopMutationDirective,
     EmptyPatternComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -183,7 +181,7 @@ import { API_TOKENS_COPY } from './api-tokens.copy';
                     }
                     @if (canWrite() && row.status !== 'revoked') {
                       <button
-                        *appDesktopMutation
+                        class="max-md:size-(--eg-control-touch)"
                         appRowAction
                         [icon]="'lucideX'"
                         [tone]="'danger'"
@@ -320,6 +318,7 @@ export class ApiTokenListComponent {
     return $localize`:@@settings.api-tokens.inspect-named:Inspect token ${name}:name:`;
   }
   protected requestRevoke(row: ApiTokenView): void {
-    if (this.viewport.allowsMutation() && this.canWrite() && !this.busy()) this.revoke.emit(row);
+    if (this.viewport.allowsMutation('revoke-api-token') && this.canWrite() && !this.busy())
+      this.revoke.emit(row);
   }
 }

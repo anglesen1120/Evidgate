@@ -369,6 +369,9 @@ export function devRoutes(): Routes {
         (m) => m.ArtifactViewerReviewPage,
       ),
     ),
+    reviewScreen('dev/healing-switch', 'healing:triage', () =>
+      import('../../features/availability/healing-switch.page').then((m) => m.HealingSwitchPage),
+    ),
     reviewScreen('dev/healing-queue', 'healing:triage', () =>
       import('../../features/repairs/queue/healing-queue.review.page').then(
         (m) => m.HealingQueueReviewPage,

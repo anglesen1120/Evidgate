@@ -56,6 +56,7 @@ describe('Fixture contract check (09.1.1-T12.2, AC10)', () => {
       'release-detail-forbidden',
       'release-detail-not-found',
       'security-events-list-slow',
+      'api-token-revoke-ok',
     ]);
     const securityFixture = corpusByName.get('security-events-list');
     if (securityFixture === undefined) throw new Error('no security-event page to derive from');

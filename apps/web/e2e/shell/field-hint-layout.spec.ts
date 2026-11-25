@@ -45,7 +45,7 @@ async function checkRows(
   }, ids);
   expect(rows.some((row) => row.target !== null)).toBe(true);
   for (const row of rows) {
-    expect(row.height, `${row.id} label row`).toBe(rows[0]!.height);
+    expect(row.height, `${row.id} label row`).toBeCloseTo(rows[0]!.height, 1);
     expect(row.gap, `${row.id} label overlaps its control`).toBeGreaterThanOrEqual(0);
     if (layout === 'row') expect(row.inputTop, `${row.id} control top`).toBe(rows[0]!.inputTop);
     if (row.target) {

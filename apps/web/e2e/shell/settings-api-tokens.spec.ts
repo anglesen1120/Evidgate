@@ -155,11 +155,29 @@ for (const locale of LOCALES) {
       });
     }
 
-    test('keeps metadata readable without write controls at mobile width', async ({ page }) => {
+    test('keeps create blocked, notice visible and revoke on the unrevoked row at mobile width', async ({
+      page,
+    }) => {
       await page.setViewportSize({ width: 375, height: 812 });
       await visit(page, locale);
       await expect(page.locator(`${PAGE} [data-api-create]`)).toBeHidden();
-      await expect(page.locator(`${PAGE} [data-api-revoke]`)).toBeHidden();
+      await expect(page.locator(`${PAGE} app-desktop-required-notice`)).toBeVisible();
+      const revoke = page.locator(`${PAGE} [data-api-revoke]`);
+      await expect(revoke).toHaveCount(1);
+      await expect(revoke).toBeEnabled();
+      await expect(
+        page.locator(`${PAGE} [data-api-token-row][data-state="revoked"] [data-api-revoke]`),
+      ).toHaveCount(0);
+      expect(
+        await page.locator(PAGE).evaluate((element) => element.scrollWidth <= element.clientWidth),
+      ).toBe(true);
+    });
+
+    test('hides revoke for read-only accounts at mobile width', async ({ page }) => {
+      await page.setViewportSize({ width: 375, height: 812 });
+      await visit(page, locale, false);
+      await expect(page.locator(`${PAGE} [data-api-create]`)).toBeHidden();
+      await expect(page.locator(`${PAGE} [data-api-revoke]`)).toHaveCount(0);
       expect(
         await page.locator(PAGE).evaluate((element) => element.scrollWidth <= element.clientWidth),
       ).toBe(true);

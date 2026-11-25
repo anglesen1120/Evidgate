@@ -4,7 +4,15 @@
   [attr.data-healing-editor]="scope()"
 >
   <header class="grid min-w-0 gap-(--eg-space-2)">
-    <h3 hlmCardTitle [size]="subsectionHeadingSize" [id]="titleId()">{{ title() }}</h3>
+    <h3
+      #scopeHeading
+      hlmCardTitle
+      [size]="subsectionHeadingSize"
+      [id]="titleId()"
+      [attr.tabindex]="-1"
+    >
+      {{ title() }}
+    </h3>
     <dl class="m-0 flex min-w-0 flex-wrap items-baseline gap-x-(--eg-space-3)">
       <dt class="text-xs text-muted-foreground" i18n="@@healingswitch.stored-setting">
         Stored setting
@@ -119,6 +127,25 @@
       }
     </div>
 
+    @if (containmentVisible()) {
+      <div class="grid min-w-0 gap-(--eg-space-2)" data-healing-containment>
+        <p class="m-0 max-w-[65ch] text-sm text-muted-foreground">{{ disableHint }}</p>
+        <button
+          hlmBtn
+          type="button"
+          [variant]="'destructive'"
+          class="min-h-(--eg-control-touch) h-auto w-full min-w-0 whitespace-normal wrap-anywhere"
+          #disableTrigger
+          data-healing-disable
+          [disabled]="saving()"
+          [attr.aria-busy]="saving()"
+          (click)="openDisableConfirm()"
+        >
+          {{ disableButton }}
+        </button>
+      </div>
+    }
+
     @if (error(); as failure) {
       <p [id]="errorId()" role="alert" class="m-0 text-sm text-destructive" data-healing-error>
         {{ errorText(failure) }}
@@ -131,4 +158,52 @@
       [textContent]="saved() ? copy.saved : ''"
     ></p>
   }
+
+  <hlm-dialog
+    [state]="confirmOpen() ? 'open' : 'closed'"
+    [role]="'alertdialog'"
+    [autoFocus]="'[data-healing-cancel]'"
+    [restoreFocus]="false"
+    [closeOnOutsidePointerEvents]="false"
+    [aria-label]="disableTitle()"
+    (stateChanged)="dialogStateChanged($event)"
+  >
+    <hlm-dialog-content
+      *hlmDialogPortal
+      [showCloseButton]="false"
+      [size]="'lg'"
+      class="wrap-anywhere"
+      data-healing-confirm-dialog
+    >
+      <header hlmDialogHeader>
+        <h2 hlmDialogTitle>{{ disableTitle() }}</h2>
+      </header>
+      <p hlmDialogDescription>{{ disableConsequence }}</p>
+      @if (scope() === 'tenant') {
+        <p hlmDialogDescription data-healing-tenant-impact>{{ disableTenantImpact }}</p>
+      }
+      <footer hlmDialogFooter>
+        <button
+          hlmBtn
+          type="button"
+          [variant]="'outline'"
+          class="min-h-(--eg-control-touch)"
+          data-healing-cancel
+          (click)="closeConfirm()"
+        >
+          {{ disableKeep }}
+        </button>
+        <button
+          hlmBtn
+          type="button"
+          [variant]="'destructive'"
+          class="min-h-(--eg-control-touch)"
+          data-healing-confirm
+          (click)="confirmDisable()"
+        >
+          {{ disableConfirm }}
+        </button>
+      </footer>
+    </hlm-dialog-content>
+  </hlm-dialog>
 </section>

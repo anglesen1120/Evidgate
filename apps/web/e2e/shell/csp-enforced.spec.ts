@@ -118,6 +118,7 @@ const READY: Readonly<Record<string, string>> = {
   DeployTargetsReviewPage: 'app-deploy-targets-review',
   GeneratedScriptsPage: 'app-generated-scripts-review',
   UiChangeProposalPage: 'app-ui-change-proposal-review',
+  HealingSwitchPage: 'app-healing-switch-page [data-healing-editor="project"]',
 };
 
 /** The fields of a catalogue document the walk reads; the corpus rows carry more than this. */

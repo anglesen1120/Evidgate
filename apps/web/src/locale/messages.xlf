@@ -481,7 +481,7 @@
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/api-tokens/api-token-list.component.ts</context>
-          <context context-type="linenumber">158,160</context>
+          <context context-type="linenumber">156,158</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/members/member-list.component.ts</context>
@@ -5214,7 +5214,56 @@
         <source> Stored setting </source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/availability/switch-scope-control.component.html</context>
-          <context context-type="linenumber">10,13</context>
+          <context context-type="linenumber">18,21</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="healingswitch.disable-scope-title" datatype="html">
+        <source>Disable healing for <x id="SCOPE" equiv-text="this.title()"/>?</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/availability/switch-scope-control.component.ts</context>
+          <context context-type="linenumber">107</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="healingswitch.disable-consequence" datatype="html">
+        <source>All shadow healing proposals for this scope will stop right away. Existing PRs and original failures stay as they are.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/availability/switch-scope-control.component.ts</context>
+          <context context-type="linenumber">109</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="healingswitch.disable-tenant-impact" datatype="html">
+        <source>This stops healing proposals for all projects in this tenant.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/availability/switch-scope-control.component.ts</context>
+          <context context-type="linenumber">110</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="healingswitch.disable-hint" datatype="html">
+        <source>Emergency stop only. Turning healing on or changing other modes needs a desktop screen.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/availability/switch-scope-control.component.ts</context>
+          <context context-type="linenumber">111</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="healingswitch.disable" datatype="html">
+        <source>Disable healing</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/availability/switch-scope-control.component.ts</context>
+          <context context-type="linenumber">112</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="healingswitch.disable-keep" datatype="html">
+        <source>Keep enabled</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/availability/switch-scope-control.component.ts</context>
+          <context context-type="linenumber">113</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="healingswitch.disable-confirm" datatype="html">
+        <source>Confirm disable</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/availability/switch-scope-control.component.ts</context>
+          <context context-type="linenumber">114</context>
         </context-group>
       </trans-unit>
       <trans-unit id="catalog.owner-forbidden" datatype="html">
@@ -17965,53 +18014,46 @@
           <context context-type="linenumber">16</context>
         </context-group>
       </trans-unit>
-      <trans-unit id="runs.actions.cancel.desktop" datatype="html">
-        <source>Use a desktop-sized window to cancel a run.</source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/runs/actions/cancel/cancel-run.copy.ts</context>
-          <context context-type="linenumber">17</context>
-        </context-group>
-      </trans-unit>
       <trans-unit id="runs.actions.cancel.recorded" datatype="html">
         <source>202 · Cancel request recorded. Waiting for collection state; this does not mean execution has stopped.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/actions/cancel/cancel-run.copy.ts</context>
-          <context context-type="linenumber">18</context>
+          <context context-type="linenumber">17</context>
         </context-group>
       </trans-unit>
       <trans-unit id="runs.actions.cancel.canceled" datatype="html">
         <source>202 · Cancel request recorded. Collection state is canceled; execution may still be stopping.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/actions/cancel/cancel-run.copy.ts</context>
-          <context context-type="linenumber">19</context>
+          <context context-type="linenumber">18</context>
         </context-group>
       </trans-unit>
       <trans-unit id="runs.actions.cancel.completed" datatype="html">
         <source>202 · Cancel request recorded. The run reached a terminal collection state other than canceled. No further automatic refresh is needed.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/actions/cancel/cancel-run.copy.ts</context>
-          <context context-type="linenumber">20</context>
+          <context context-type="linenumber">19</context>
         </context-group>
       </trans-unit>
       <trans-unit id="runs.actions.cancel.waiting" datatype="html">
         <source>202 · Cancel request recorded. Automatic refresh paused after 15 checks. Refresh state to check again; this does not send another cancel request.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/actions/cancel/cancel-run.copy.ts</context>
-          <context context-type="linenumber">21</context>
+          <context context-type="linenumber">20</context>
         </context-group>
       </trans-unit>
       <trans-unit id="runs.actions.cancel.poll-error" datatype="html">
         <source>202 · Cancel request recorded, but collection state could not be refreshed. The run is not confirmed canceled.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/actions/cancel/cancel-run.copy.ts</context>
-          <context context-type="linenumber">22</context>
+          <context context-type="linenumber">21</context>
         </context-group>
       </trans-unit>
       <trans-unit id="runs.actions.cancel.check" datatype="html">
         <source>Refresh collection state</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/actions/cancel/cancel-run.copy.ts</context>
-          <context context-type="linenumber">23</context>
+          <context context-type="linenumber">22</context>
         </context-group>
       </trans-unit>
       <trans-unit id="runs.actions.create.title" datatype="html">
@@ -18421,7 +18463,7 @@
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/detail/attempts/attempts-table.component.ts</context>
-          <context context-type="linenumber">167</context>
+          <context context-type="linenumber">168</context>
         </context-group>
       </trans-unit>
       <trans-unit id="runs.detail.attempts.attempt" datatype="html">
@@ -18432,7 +18474,7 @@
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/detail/attempts/attempts-table.component.ts</context>
-          <context context-type="linenumber">168</context>
+          <context context-type="linenumber">169</context>
         </context-group>
       </trans-unit>
       <trans-unit id="runs.detail.attempts.raw" datatype="html">
@@ -18443,7 +18485,7 @@
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/detail/attempts/attempts-table.component.ts</context>
-          <context context-type="linenumber">169</context>
+          <context context-type="linenumber">170</context>
         </context-group>
       </trans-unit>
       <trans-unit id="runs.detail.attempts.normalised" datatype="html">
@@ -18454,7 +18496,7 @@
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/detail/attempts/attempts-table.component.ts</context>
-          <context context-type="linenumber">170</context>
+          <context context-type="linenumber">171</context>
         </context-group>
       </trans-unit>
       <trans-unit id="runs.detail.attempts.retry-chain" datatype="html">
@@ -18496,14 +18538,14 @@
         <source>View attempt <x id="number" equiv-text="attempt.attemptNo"/>: <x id="execution" equiv-text="this.display(attempt.executionKey)"/></source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/detail/attempts/attempts-table.component.ts</context>
-          <context context-type="linenumber">159</context>
+          <context context-type="linenumber">160</context>
         </context-group>
       </trans-unit>
       <trans-unit id="runs.detail.attempts.title" datatype="html">
         <source>Attempts</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/detail/attempts/attempts-table.component.ts</context>
-          <context context-type="linenumber">164</context>
+          <context context-type="linenumber">165</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/detail/run-detail.page.ts</context>
@@ -18514,63 +18556,63 @@
         <source>Attempts table</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/detail/attempts/attempts-table.component.ts</context>
-          <context context-type="linenumber">165</context>
+          <context context-type="linenumber">166</context>
         </context-group>
       </trans-unit>
       <trans-unit id="runs.detail.attempts.server-order" datatype="html">
         <source>Server order: execution key ascending, then attempt number ascending.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/detail/attempts/attempts-table.component.ts</context>
-          <context context-type="linenumber">166</context>
+          <context context-type="linenumber">167</context>
         </context-group>
       </trans-unit>
       <trans-unit id="runs.detail.attempts.duration" datatype="html">
         <source>Duration</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/detail/attempts/attempts-table.component.ts</context>
-          <context context-type="linenumber">171</context>
+          <context context-type="linenumber">172</context>
         </context-group>
       </trans-unit>
       <trans-unit id="runs.detail.attempts.artifacts" datatype="html">
         <source>Artifacts</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/detail/attempts/attempts-table.component.ts</context>
-          <context context-type="linenumber">172</context>
+          <context context-type="linenumber">173</context>
         </context-group>
       </trans-unit>
       <trans-unit id="runs.detail.attempts.healing-candidates" datatype="html">
         <source>Healing candidates</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/detail/attempts/attempts-table.component.ts</context>
-          <context context-type="linenumber">173</context>
+          <context context-type="linenumber">174</context>
         </context-group>
       </trans-unit>
       <trans-unit id="runs.detail.attempts.page-loading" datatype="html">
         <source>Loading attempts page</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/detail/attempts/attempts-table.component.ts</context>
-          <context context-type="linenumber">175</context>
+          <context context-type="linenumber">176</context>
         </context-group>
       </trans-unit>
       <trans-unit id="runs.detail.attempts.page-loaded" datatype="html">
         <source>Attempts page loaded</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/detail/attempts/attempts-table.component.ts</context>
-          <context context-type="linenumber">176</context>
+          <context context-type="linenumber">177</context>
         </context-group>
       </trans-unit>
       <trans-unit id="runs.detail.attempts.empty" datatype="html">
         <source>No attempts recorded</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/detail/attempts/attempts-table.component.ts</context>
-          <context context-type="linenumber">177</context>
+          <context context-type="linenumber">178</context>
         </context-group>
       </trans-unit>
       <trans-unit id="runs.detail.attempts.actions" datatype="html">
         <source>Actions</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/detail/attempts/attempts-table.component.ts</context>
-          <context context-type="linenumber">178</context>
+          <context context-type="linenumber">179</context>
         </context-group>
       </trans-unit>
       <trans-unit id="runs.decision.title" datatype="html">
@@ -22186,77 +22228,77 @@
         <source>Prefixes on this page</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/api-tokens/api-token-list.component.ts</context>
-          <context context-type="linenumber">270</context>
+          <context context-type="linenumber">268</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.api-tokens.served-state" datatype="html">
         <source>Server-reported state</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/api-tokens/api-token-list.component.ts</context>
-          <context context-type="linenumber">276</context>
+          <context context-type="linenumber">274</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.api-tokens.not-usable" datatype="html">
         <source>Not usable</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/api-tokens/api-token-list.component.ts</context>
-          <context context-type="linenumber">282</context>
+          <context context-type="linenumber">280</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.api-tokens.revocation-recorded" datatype="html">
         <source>Revocation recorded</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/api-tokens/api-token-list.component.ts</context>
-          <context context-type="linenumber">288</context>
+          <context context-type="linenumber">286</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.api-tokens.showing-page" datatype="html">
         <source>Showing <x id="range" equiv-text="range"/> of <x id="count" equiv-text="formatNumber(this.rows().length, this.locale)"/> tokens on this page.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/api-tokens/api-token-list.component.ts</context>
-          <context context-type="linenumber">308</context>
+          <context context-type="linenumber">306</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.api-tokens.search" datatype="html">
         <source>Search name or prefix</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/api-tokens/api-token-list.component.ts</context>
-          <context context-type="linenumber">311</context>
+          <context context-type="linenumber">309</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.api-tokens.loaded-only" datatype="html">
         <source>Search applies to this loaded page only. Complete project totals are not available.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/api-tokens/api-token-list.component.ts</context>
-          <context context-type="linenumber">312</context>
+          <context context-type="linenumber">310</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.api-tokens.metadata-only" datatype="html">
         <source>Metadata only. Existing token values cannot be retrieved.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/api-tokens/api-token-list.component.ts</context>
-          <context context-type="linenumber">313</context>
+          <context context-type="linenumber">311</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.api-tokens.no-matches" datatype="html">
         <source>No tokens match this search</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/api-tokens/api-token-list.component.ts</context>
-          <context context-type="linenumber">314</context>
+          <context context-type="linenumber">312</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.api-tokens.clear-search" datatype="html">
         <source>Clear search</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/api-tokens/api-token-list.component.ts</context>
-          <context context-type="linenumber">315</context>
+          <context context-type="linenumber">313</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.api-tokens.inspect-named" datatype="html">
         <source>Inspect token <x id="name" equiv-text="name"/></source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/api-tokens/api-token-list.component.ts</context>
-          <context context-type="linenumber">320</context>
+          <context context-type="linenumber">318</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.api-tokens.permissions-close" datatype="html">

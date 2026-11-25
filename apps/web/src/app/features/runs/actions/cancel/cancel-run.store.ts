@@ -103,7 +103,7 @@ export const CancelRunStore = signalStore(
         store.scope() !== null &&
         run !== null &&
         !isTerminalRun(run.state) &&
-        store.viewport.canMutate() &&
+        store.viewport.canMutateFor('cancel-run') &&
         (phase === 'idle' || phase === 'error')
       );
     }),
@@ -167,7 +167,8 @@ export const CancelRunStore = signalStore(
   }),
   withMethods((store) => ({
     open(): void {
-      if (!store.canCancel() || !store.viewport.allowsMutation() || store.opened()) return;
+      if (!store.canCancel() || !store.viewport.allowsMutation('cancel-run') || store.opened())
+        return;
       store._stop();
       store._intent.controller = new AbortController();
       store._intent.key = store._data.newIdempotencyKey();
@@ -196,7 +197,7 @@ export const CancelRunStore = signalStore(
         !store._owned(scope) ||
         !store.opened() ||
         !store.canCancel() ||
-        !store.viewport.allowsMutation() ||
+        !store.viewport.allowsMutation('cancel-run') ||
         (store.error() && !store.retryReady())
       )
         return;

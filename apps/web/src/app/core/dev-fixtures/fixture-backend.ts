@@ -64,6 +64,7 @@ import {
   type FixtureEntry,
 } from './fixture-catalog';
 import { findRetentionFixture } from './fixture-retention';
+import { findHealingSwitchFixture, seededHealingSwitches } from './fixture-healing-switch';
 import { RunCancelFixtureScenario } from './fixture-run-cancel';
 import {
   apiRelativePath,
@@ -74,7 +75,7 @@ import {
 } from './fixture-routes';
 import { findSettingsRetentionWriteFixture } from './fixture-settings-permissions';
 import { findCatalogOwnerPermissionsFixture } from './fixture-catalog-owner-permissions';
-import { findHealingTriagePermissionsFixture } from './fixture-healing-triage-permissions';
+import { findHealingPermissionsFixture } from './fixture-healing-permissions';
 import { FixtureToggles } from './fixture-toggles';
 import { findUsageSummaryFixture } from './fixture-usage-summary';
 import { dashboardFixture } from './fixture-dashboard';
@@ -125,6 +126,7 @@ export const FIXTURE_BACKEND = new InjectionToken<FixtureHttpBackend>(
 export class FixtureHttpBackend implements HttpBackend {
   private readonly toggles: FixtureToggles = inject(FixtureToggles);
   private readonly retentionPolicies = new Map<string, RetentionPolicy>();
+  private readonly healingSwitches = seededHealingSwitches();
   private readonly runCancellation = new RunCancelFixtureScenario();
   private readonly authoring = new AuthoringTreeFixtureScenario();
   private readonly authoringCases = new AuthoringCasesFixtureScenario();
@@ -238,6 +240,22 @@ export class FixtureHttpBackend implements HttpBackend {
       const variant = this.toggles.variantFor(operation);
       if (supplement !== undefined || variant === 'ok') return supplement;
     }
+    // The healing kill switch keeps one row per scope, so a confirmed write reads back on the next GET.
+    if (
+      relativePath === '/healing/switch' &&
+      (request.method === 'GET' || request.method === 'PUT')
+    ) {
+      const operation = request.method === 'GET' ? 'getHealingSwitch' : 'setHealingSwitch';
+      const variant = this.toggles.variantFor(operation);
+      const supplement = findHealingSwitchFixture(
+        request.method,
+        variant,
+        queryParameter(request.urlWithParams, 'project_id'),
+        request.body,
+        this.healingSwitches,
+      );
+      if (supplement !== undefined || variant === 'ok') return supplement;
+    }
     // Keep computed UI specimens outside the corpus registry, whose rows mirror on-disk examples.
     if (request.method === 'GET' && /^\/orgs\/[^/]+\/usage\/summary$/.test(relativePath)) {
       return findUsageSummaryFixture(this.toggles.variantFor('getUsageSummary'));
@@ -259,10 +277,8 @@ export class FixtureHttpBackend implements HttpBackend {
         this.toggles.variantFor('listPermissions'),
       );
       if (catalogOwner !== undefined) return catalogOwner;
-      const healingTriage = findHealingTriagePermissionsFixture(
-        this.toggles.variantFor('listPermissions'),
-      );
-      if (healingTriage !== undefined) return healingTriage;
+      const healing = findHealingPermissionsFixture(this.toggles.variantFor('listPermissions'));
+      if (healing !== undefined) return healing;
     }
     // The catalogue's 200-row threshold is reviewed on a computed page, like usage summary: the
     // variant names no corpus file, and every other toggle still answers its directory.

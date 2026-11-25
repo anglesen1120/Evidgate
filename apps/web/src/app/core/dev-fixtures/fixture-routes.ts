@@ -214,6 +214,7 @@ export const FIXTURE_ROUTES: readonly FixtureRoute[] = [
   // list's `ok` page ends the walk (`next_cursor: null`), so it is not cursor-keyed.
   { operationId: 'createApiToken', method: 'POST', path: '/projects/{p}/api-tokens' },
   { operationId: 'listApiTokens', method: 'GET', path: '/projects/{p}/api-tokens' },
+  { operationId: 'revokeApiToken', method: 'DELETE', path: '/api-tokens/{t}' },
   { operationId: 'listMemberships', method: 'GET', path: '/orgs/{o}/memberships' },
   { operationId: 'getMembership', method: 'GET', path: '/orgs/{o}/memberships/{m}' },
   { operationId: 'createMembership', method: 'POST', path: '/orgs/{o}/memberships' },

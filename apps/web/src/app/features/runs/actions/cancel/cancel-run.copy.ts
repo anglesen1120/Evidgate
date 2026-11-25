@@ -14,7 +14,6 @@ export const CANCEL_RUN_COPY = {
   submitting: $localize`:@@runs.actions.cancel.submitting:Recording cancel request…`,
   noPermission: $localize`:@@runs.actions.cancel.no-permission:Canceling this run requires run:cancel permission in this project.`,
   terminal: $localize`:@@runs.actions.cancel.terminal:This run is already terminal. No cancellation is needed.`,
-  desktop: $localize`:@@runs.actions.cancel.desktop:Use a desktop-sized window to cancel a run.`,
   recorded: $localize`:@@runs.actions.cancel.recorded:202 · Cancel request recorded. Waiting for collection state; this does not mean execution has stopped.`,
   canceled: $localize`:@@runs.actions.cancel.canceled:202 · Cancel request recorded. Collection state is canceled; execution may still be stopping.`,
   completed: $localize`:@@runs.actions.cancel.completed:202 · Cancel request recorded. The run reached a terminal collection state other than canceled. No further automatic refresh is needed.`,

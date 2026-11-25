@@ -107,9 +107,17 @@ export class HealingSwitchPage {
 
   protected submit(
     scope: 'tenant' | 'project',
-    event: { mode: SettableMode; reason: string | null },
+    event: {
+      mode: SettableMode;
+      reason: string | null;
+      action?: 'healing-kill-switch' | undefined;
+    },
   ): void {
-    if (!this.narrowPolicy.allowsMutation()) return;
+    const action =
+      event.mode === 'disabled' && event.action === 'healing-kill-switch'
+        ? event.action
+        : undefined;
+    if (!this.narrowPolicy.allowsMutation(action)) return;
     void this.store.save(scope, event.mode, event.reason);
   }
 }

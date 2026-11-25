@@ -37,13 +37,19 @@ export function mount(
   data.holdReads = options.holdReads ?? false;
   data.readFailure = options.readFailure ?? null;
   const desktop = signal(true);
+  const allows = (action?: string): boolean => desktop() || action === 'healing-kill-switch';
   TestBed.configureTestingModule({
     imports: [HealingSwitchPage],
     providers: [
       provideZonelessChangeDetection(),
       {
         provide: NarrowMutationPolicy,
-        useValue: { canMutate: desktop, narrow: () => !desktop(), allowsMutation: () => desktop() },
+        useValue: {
+          canMutate: desktop,
+          narrow: () => !desktop(),
+          allowsMutation: allows,
+          canMutateFor: allows,
+        },
       },
       { provide: SessionStore, useValue: session },
       { provide: HealingSwitchDataService, useValue: data },

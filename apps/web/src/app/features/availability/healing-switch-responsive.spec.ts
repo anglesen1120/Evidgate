@@ -86,7 +86,7 @@ describe('Availability page composition and narrow policy', () => {
     expect(await page.decidingActor()).toBeNull();
   });
 
-  it('keeps every scope fact and dependency visible but removes narrow mutation controls', async () => {
+  it('keeps scope facts visible and offers only the containment action on narrow screens', async () => {
     const { fixture, root, desktop, data, settle } = mount({
       answer: resolution({
         project: switchRow('project', 'enabled', { reason: 'A complete scope reason' }),
@@ -97,6 +97,9 @@ describe('Availability page composition and narrow policy', () => {
     fixture.detectChanges();
     await fixture.whenStable();
     expect(root.querySelector('button[role="combobox"], textarea, [data-healing-save]')).toBeNull();
+    expect(
+      root.querySelector('[data-healing-editor="project"] [data-healing-disable]'),
+    ).not.toBeNull();
     expect(root.textContent).toContain('Desktop required');
     expect(root.querySelectorAll('app-desktop-required-notice')).toHaveLength(1);
     expect(root.textContent).toContain('A complete scope reason');
@@ -105,19 +108,21 @@ describe('Availability page composition and narrow policy', () => {
     expect(data.writes).toHaveLength(0);
   });
 
-  it('guards the page submit boundary too when a stale child output arrives during resize', async () => {
+  it('rechecks the requested direction when a child output arrives during resize', async () => {
     const { fixture, desktop, data, settle } = mount();
     await settle();
     const control = fixture.debugElement
       .query(By.directive(SwitchScopeControl))
       .injector.get(SwitchScopeControl);
     desktop.set(false);
-    control.submitted.emit({ mode: 'disabled', reason: null });
+    control.submitted.emit({ mode: 'enabled', reason: null });
+    control.submitted.emit({ mode: 'shadow', reason: null });
+    control.submitted.emit({ mode: 'enabled', reason: null, action: 'healing-kill-switch' });
     await settle();
     expect(data.writes).toHaveLength(0);
-    desktop.set(true);
+    control.submitted.emit({ mode: 'disabled', reason: null, action: 'healing-kill-switch' });
     await settle();
-    expect(data.writes).toHaveLength(0);
+    expect(data.writes.map((write) => write.body.mode)).toEqual(['disabled']);
   });
 
   it.each([{ codes: [] }, { codes: [TRIAGE] }])(
@@ -129,6 +134,7 @@ describe('Availability page composition and narrow policy', () => {
       fixture.detectChanges();
       await fixture.whenStable();
       expect(root.querySelector('[data-healing-save]')).toBeNull();
+      expect(root.querySelector('[data-healing-disable]')).toBeNull();
       expect(root.textContent).not.toContain('Desktop required');
       expect(data.writes).toHaveLength(0);
       if (codes.length === 0) {

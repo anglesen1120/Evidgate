@@ -74,6 +74,7 @@ describe('CancelRunActionComponent', () => {
   async function setup(permission = true, state: RunStateDto['state'] = 'collecting') {
     const run = signal<RunStateDto | null>({ ...ready.body, state } as RunStateDto);
     const canMutate = signal(true);
+    const canMutateFor = (action?: string) => action === 'cancel-run' || canMutate();
     const allowed = signal(permission);
     const cancelRun = vi.fn<RunDataService['cancelRun']>().mockResolvedValue(undefined);
     const refreshRun = vi.fn().mockResolvedValue(undefined);
@@ -99,7 +100,8 @@ describe('CancelRunActionComponent', () => {
           useValue: {
             canMutate,
             narrow: computed(() => !canMutate()),
-            allowsMutation: () => canMutate(),
+            canMutateFor,
+            allowsMutation: canMutateFor,
           },
         },
       ],
@@ -236,7 +238,7 @@ describe('CancelRunActionComponent', () => {
     expect(h.cancelRun).toHaveBeenCalledTimes(1);
   });
 
-  it('shows inline validation for whitespace and rejects a resized narrow submission', async () => {
+  it('validates the reason and submits the retained draft after narrowing', async () => {
     const h = await setup();
     await h.action.open();
     const dialog = await h.loader.getHarness(CancelDialogHarness);
@@ -246,14 +248,9 @@ describe('CancelRunActionComponent', () => {
     expect(h.cancelRun).not.toHaveBeenCalled();
     await dialog.fill('Reason');
     h.canMutate.set(false);
-    expect(await dialog.confirmDisabled()).toBe(true);
-    expect(await (await dialog.desktopNotice())?.text()).toContain('Use a wider screen');
-    expect(await dialog.draft()).toBe('Reason');
-    await dialog.submit();
-    expect(h.cancelRun).not.toHaveBeenCalled();
-    h.canMutate.set(true);
     expect(await dialog.confirmDisabled()).toBe(false);
     expect(await dialog.desktopNotice()).toBeNull();
+    expect(await dialog.draft()).toBe('Reason');
     await dialog.submit();
     expect(h.cancelRun).toHaveBeenCalledTimes(1);
   });
@@ -267,7 +264,7 @@ describe('CancelRunActionComponent', () => {
       await dialog.fill('Retain the draft while inspecting');
       h.canMutate.set(false);
       expect(await dialog.draft()).toBe('Retain the draft while inspecting');
-      expect(await dialog.desktopNotice()).not.toBeNull();
+      expect(await dialog.desktopNotice()).toBeNull();
       await dialog[dismiss]();
       expect(await h.loader.hasHarness(CancelDialogHarness)).toBe(false);
       expect(await h.action.focused()).toBe(true);

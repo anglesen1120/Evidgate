@@ -28,6 +28,8 @@ function setup() {
   const run = signal<RunStateDto | null>(collecting);
   const allowed = signal(true);
   const desktop = signal(true);
+  const canMutateFor = (action?: string) => action === 'cancel-run' || desktop();
+  const allowsMutation = vi.fn(canMutateFor);
   const org = signal('org-1');
   const cancelRun = vi.fn<RunDataService['cancelRun']>().mockResolvedValue(undefined);
   const refreshRun = vi.fn<(id: string) => Promise<void>>().mockImplementation(() => {
@@ -52,7 +54,8 @@ function setup() {
         provide: NarrowMutationPolicy,
         useValue: {
           canMutate: desktop,
-          allowsMutation: () => desktop(),
+          canMutateFor,
+          allowsMutation,
         },
       },
     ],
@@ -62,6 +65,7 @@ function setup() {
     run,
     allowed,
     desktop,
+    allowsMutation,
     org,
     cancelRun,
     refreshRun,
@@ -210,13 +214,31 @@ describe('CancelRunStore', () => {
     expect(h.run()?.state).toBe('complete');
   });
 
-  it('rechecks narrow viewport and changed scope before sending', async () => {
+  it('opens and submits on narrow using the explicit cancel exception, only after confirmation', async () => {
+    const h = setup();
+    h.desktop.set(false);
+    h.store.open();
+    expect(h.store.opened()).toBe(true);
+    expect(h.cancelRun).not.toHaveBeenCalled();
+    await h.store.confirm(undefined);
+    expect(h.cancelRun).toHaveBeenCalledTimes(1);
+  });
+
+  it('rechecks the live policy after narrowing even when the reactive control remains enabled', async () => {
     const h = setup();
     h.store.open();
     h.desktop.set(false);
+    expect(h.store.canCancel()).toBe(true);
+    h.allowsMutation.mockReturnValueOnce(false);
     await h.store.confirm(undefined);
+    expect(h.allowsMutation).toHaveBeenLastCalledWith('cancel-run');
     expect(h.cancelRun).not.toHaveBeenCalled();
-    h.desktop.set(true);
+  });
+
+  it('refuses a changed scope before sending even on an emergency-eligible viewport', async () => {
+    const h = setup();
+    h.store.open();
+    h.desktop.set(false);
     h.org.set('org-2');
     await h.store.confirm(undefined);
     expect(h.cancelRun).not.toHaveBeenCalled();
