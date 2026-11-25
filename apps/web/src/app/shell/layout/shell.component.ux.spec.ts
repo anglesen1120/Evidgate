@@ -1,3 +1,5 @@
+import { ComponentHarness } from '@angular/cdk/testing';
+import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { provideZonelessChangeDetection, signal } from '@angular/core';
 import {
   ComponentFixture,
@@ -14,6 +16,13 @@ import { NavViewService } from '../nav/nav-view';
 import { NotFoundPage } from '../pages/not-found.page';
 import { ShellComponent } from './shell.component';
 import { SCOPE_ORGANIZATIONS, SCOPE_PROJECTS, stubScopeBrowserApis } from './scope.fixture';
+
+class ShellScopeHarness extends ComponentHarness {
+  static hostSelector = 'app-shell';
+  readonly scopeValues = this.locatorForAll('header nav [role="combobox"] bdi');
+  readonly selects = this.locatorForAll('header nav hlm-select');
+  readonly staticCrumbs = this.locatorForAll('header nav li > bdi');
+}
 
 describe('ShellComponent scope, locale and drawer context', () => {
   let fixture: ComponentFixture<ShellComponent>;
@@ -73,23 +82,31 @@ describe('ShellComponent scope, locale and drawer context', () => {
     return vi.spyOn(window, 'scroll').mockImplementation(() => undefined);
   }
 
-  it('shows the organization alone on an org route and the project pair only when selected', async () => {
-    const scope = root.querySelector('header nav[aria-label="Breadcrumb"]')!;
-    expect(scope.textContent).toContain(SCOPE_ORGANIZATIONS[0].name);
-    expect(scope.textContent).toContain(SCOPE_PROJECTS[0].name);
+  it('uses each selected scope once, as a control on desktop and as text on mobile', async () => {
+    const shell = await TestbedHarnessEnvironment.harnessForFixture(fixture, ShellScopeHarness);
+    const [scopeBlock] = await fixture.getDeferBlocks();
+    await scopeBlock?.render(DeferBlockState.Complete);
+    const values = async () =>
+      Promise.all((await shell.scopeValues()).map((value) => value.text()));
+    expect(await values()).toEqual([SCOPE_ORGANIZATIONS[0].name, SCOPE_PROJECTS[0].name]);
+    expect(await shell.staticCrumbs()).toHaveLength(0);
     project.set(null);
-    await fixture.whenStable();
-    expect(scope.textContent).not.toContain(SCOPE_PROJECTS[0].name);
-    expect(scope.textContent).toContain(SCOPE_ORGANIZATIONS[0].name);
-    expect(scope.textContent).not.toContain('Project');
+    expect(await values()).not.toContain(SCOPE_PROJECTS[0].name);
+    expect(await (await shell.selects())[1]?.getAttribute('data-value')).toBe('');
+    expect(await (await shell.scopeValues())[0]?.text()).toBe(SCOPE_ORGANIZATIONS[0].name);
     project.set(SCOPE_PROJECTS[1]);
-    await fixture.whenStable();
-    expect(scope.textContent).toContain(SCOPE_PROJECTS[1].name);
+    expect(await values()).toEqual([SCOPE_ORGANIZATIONS[0].name, SCOPE_PROJECTS[1].name]);
+    await resize(390);
+    expect(await shell.scopeValues()).toHaveLength(0);
+    expect(await Promise.all((await shell.staticCrumbs()).map((part) => part.text()))).toEqual([
+      SCOPE_ORGANIZATIONS[0].name,
+      SCOPE_PROJECTS[1].name,
+    ]);
   });
 
   it('lets both tablet scope states grow within the remaining toolbar budget', async () => {
     await resize(768);
-    expect(root.querySelector('header .topbar-scope[aria-hidden="true"]')).not.toBeNull();
+    expect(root.querySelector('header .topbar-scope [aria-hidden="true"]')).not.toBeNull();
     const scopeBlocks = await fixture.getDeferBlocks();
     expect(scopeBlocks).toHaveLength(1);
     await scopeBlocks[0]!.render(DeferBlockState.Complete);

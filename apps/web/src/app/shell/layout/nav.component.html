@@ -3,25 +3,15 @@
   @for (group of groups(); track group.id) {
     @if (group.items.length > 0) {
       <div
-        class="nav-group border-0 border-t-(length:--eg-border-width) border-solid border-border py-(--eg-space-5) group-data-[collapsed=true]/nav:py-(--eg-space-3)"
+        class="nav-group py-(--eg-space-4) group-data-[collapsed=true]/nav:py-(--eg-space-3)"
         role="group"
         [attr.aria-labelledby]="'nav-group-' + group.id"
       >
         <h2
-          class="m-0 mb-(--eg-space-3) flex items-center justify-between gap-(--eg-space-3) px-(--eg-space-4) font-sans text-xs font-semibold tracking-wide text-muted-foreground uppercase [overflow-wrap:anywhere] group-data-[collapsed=true]/nav:sr-only"
+          class="m-0 mb-(--eg-space-2) px-(--eg-space-3) font-sans text-xs font-semibold text-muted-foreground [overflow-wrap:anywhere] group-data-[collapsed=true]/nav:sr-only"
           [id]="'nav-group-' + group.id"
         >
           {{ group.label }}
-          @if (!collapsed()) {
-            <span
-              hlmBadge
-              [variant]="'outline'"
-              class="min-w-(--eg-space-6) shrink-0 justify-center border-border px-(--eg-space-2) text-muted-foreground tabular-nums"
-              aria-hidden="true"
-              inert
-              >{{ group.items.length }}</span
-            >
-          }
         </h2>
         <ul class="m-0 grid list-none gap-(--eg-space-1) p-0">
           @for (item of group.items; track item.id) {
@@ -30,7 +20,7 @@
               <a
                 hlmBtn
                 [variant]="'ghost'"
-                class="h-auto w-full min-w-0 min-h-(--eg-control-md) justify-start gap-(--eg-space-3) rounded-md px-(--eg-space-3) py-(--eg-space-1) text-start text-sm font-normal whitespace-normal text-muted-foreground [overflow-wrap:anywhere] hover:text-foreground aria-[current=page]:border-border aria-[current=page]:bg-accent aria-[current=page]:font-bold aria-[current=page]:text-accent-foreground aria-[current=page]:shadow-[inset_var(--eg-space-2)_0_var(--eg-accent)] max-[767px]:min-h-(--eg-control-touch) pointer-coarse:min-h-(--eg-control-touch) group-data-[collapsed=true]/nav:min-h-(--eg-control-touch) group-data-[collapsed=true]/nav:justify-center group-data-[collapsed=true]/nav:px-0"
+                class="h-auto w-full min-w-0 min-h-(--eg-control-md) justify-start gap-(--eg-space-3) rounded-md px-(--eg-space-3) py-(--eg-space-1) text-start text-sm font-medium whitespace-normal text-muted-foreground [overflow-wrap:anywhere] hover:text-foreground aria-[current=page]:bg-accent aria-[current=page]:font-bold aria-[current=page]:text-accent-foreground aria-[current=page]:shadow-[inset_var(--eg-space-2)_0_var(--eg-accent)] max-[767px]:min-h-(--eg-control-touch) pointer-coarse:min-h-(--eg-control-touch) group-data-[collapsed=true]/nav:min-h-(--eg-control-touch) group-data-[collapsed=true]/nav:justify-center group-data-[collapsed=true]/nav:px-0"
                 [routerLink]="item.link"
                 [routerLinkActive]="'active'"
                 [ariaCurrentWhenActive]="'page'"

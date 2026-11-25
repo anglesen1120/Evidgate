@@ -13,12 +13,13 @@ import { HlmButton } from '@evidgate/ui/button';
 import { HlmDialog, HlmDialogImports } from '@evidgate/ui/dialog';
 import { HlmInput } from '@evidgate/ui/input';
 import { HlmLabel } from '@evidgate/ui/label';
+import { HlmTooltip } from '@evidgate/ui/tooltip';
 import { NavViewService } from '../nav/nav-view';
 import { ShellIconComponent } from './shell-icon.component';
 
 @Component({
   selector: 'app-shell-search',
-  imports: [HlmButton, HlmDialogImports, HlmInput, HlmLabel, ShellIconComponent],
+  imports: [HlmButton, HlmDialogImports, HlmInput, HlmLabel, HlmTooltip, ShellIconComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './shell-search.component.html',
 })

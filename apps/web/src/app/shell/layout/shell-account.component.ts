@@ -5,6 +5,7 @@ import {
   HlmDropdownMenuItem,
   HlmDropdownMenuTrigger,
 } from '@evidgate/ui/dropdown-menu';
+import { HlmTooltip } from '@evidgate/ui/tooltip';
 import { SessionStore } from '../../core/session/session.store';
 import { ShellIconComponent } from './shell-icon.component';
 
@@ -15,6 +16,7 @@ import { ShellIconComponent } from './shell-icon.component';
     HlmDropdownMenu,
     HlmDropdownMenuItem,
     HlmDropdownMenuTrigger,
+    HlmTooltip,
     ShellIconComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -23,18 +25,19 @@ import { ShellIconComponent } from './shell-icon.component';
       type="button"
       hlmBtn
       [variant]="'ghost'"
-      class="min-h-(--eg-control-touch) min-w-(--eg-control-touch) gap-(--eg-space-3) px-(--eg-space-2) py-(--eg-space-1) text-xs"
+      [size]="'icon'"
+      class="min-h-(--eg-control-touch) min-w-(--eg-control-touch)"
+      [hlmTooltip]="accountLabel"
       [hlmDropdownMenuTrigger]="accountMenu"
       [align]="'end'"
       aria-label="Account menu"
       i18n-aria-label="@@shell.account.menu"
     >
       <span
-        class="grid size-(--eg-control-md) shrink-0 place-items-center rounded-full bg-accent text-accent-foreground"
+        class="grid size-(--eg-control-sm) shrink-0 place-items-center rounded-full border-(length:--eg-border-width) border-solid border-primary bg-accent text-accent-foreground"
       >
         <app-shell-icon [name]="'account'" />
       </span>
-      <span class="max-[1279px]:sr-only" i18n="@@shell.account.label">Account</span>
     </button>
     <ng-template #accountMenu>
       <hlm-dropdown-menu>
@@ -53,4 +56,5 @@ import { ShellIconComponent } from './shell-icon.component';
 })
 export class ShellAccountComponent {
   protected readonly session = inject(SessionStore);
+  protected readonly accountLabel = $localize`:@@shell.account.label:Account`;
 }

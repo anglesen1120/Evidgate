@@ -332,7 +332,7 @@ for (const width of [360, 390]) {
   test.describe(`scope flow at ${width}px`, () => {
     test.use({ viewport: { width, height: 900 } });
 
-    test('keeps utilities together above the breadcrumb and scope in the closed drawer', async ({
+    test('keeps current location beside the utilities and scope in the closed drawer', async ({
       page,
     }) => {
       await page.goto(withVariant(overviewPath('en'), LIMITED_GRANTS));
@@ -357,9 +357,12 @@ for (const width of [360, 390]) {
       ]);
       expectSameRow(navBox, themeBox, 'both controls share a single row');
       expect(themeBox.x).toBeGreaterThan(navBox.x);
-      expect(topbarBox.height).toBeGreaterThanOrEqual(64);
-      const crumb = await boxOf(page.locator('app-shell-breadcrumbs'));
-      expect(crumb.y).toBeGreaterThanOrEqual(themeBox.y + themeBox.height);
+      const current = page.locator('app-shell-breadcrumbs [aria-current="page"]');
+      await expect(current).toHaveText(/\S/);
+      const crumb = await boxOf(current);
+      expectSameRow(navBox, crumb, 'current location shares the navigation row');
+      expect(crumb.x).toBeGreaterThanOrEqual(navBox.x + navBox.width);
+      expect(crumb.x + crumb.width).toBeLessThanOrEqual(themeBox.x);
       expect(crumb.y + crumb.height).toBeLessThanOrEqual(topbarBox.y + topbarBox.height);
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
         true,
