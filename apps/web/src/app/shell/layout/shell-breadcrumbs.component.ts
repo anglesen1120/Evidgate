@@ -19,12 +19,12 @@ import { NavViewService } from '../nav/nav-view';
           <ng-content />
           @for (part of trail().parts; track $index; let first = $first, last = $last) {
             <li
-              class="flex min-w-0 max-w-full items-baseline gap-(--eg-space-2) max-[768px]:not-last:sr-only"
+              class="flex min-w-0 max-w-full items-baseline gap-(--eg-space-2) max-[767px]:not-last:sr-only"
             >
               @if (interactiveScope() || !first) {
                 <hlm-icon
                   [name]="'lucideChevronRight'"
-                  class="size-(--eg-text-xs) self-center max-[768px]:hidden"
+                  class="size-(--eg-text-xs) self-center max-[767px]:hidden"
                 />
               }
               <bdi
