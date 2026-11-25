@@ -1,22 +1,38 @@
 import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
-import { ActivatedRoute, NavigationEnd, Router, RouterLink, RouterOutlet } from '@angular/router';
+import {
+  ActivatedRoute,
+  NavigationEnd,
+  Router,
+  RouterLink,
+  RouterLinkActive,
+  RouterOutlet,
+} from '@angular/router';
 import { filter, map } from 'rxjs';
 
 import { PageHeaderComponent } from '../../shared/ui/page-header';
 import { SessionStore } from '../../core/session/session.store';
-import { availableSettingsTabs, groupSettingsTabs } from './settings-tabs';
+import { NavViewService } from '../../shell/nav/nav-view';
+import { availableSettingsTabs } from './settings-tabs';
 import { RetentionFormComponent } from './quota-retention/retention-form.component';
 
 @Component({
   selector: 'app-settings-shell',
-  imports: [RouterLink, RouterOutlet, PageHeaderComponent, RetentionFormComponent],
+  imports: [
+    RouterLink,
+    RouterLinkActive,
+    RouterOutlet,
+    PageHeaderComponent,
+    RetentionFormComponent,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './settings-shell.page.html',
   host: { class: 'grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 font-sans text-foreground' },
 })
 export class SettingsShellPage {
   protected readonly session = inject(SessionStore);
+  /** The Settings strip grouped by section: the model the sidebar's Settings entry covers. */
+  protected readonly sections = inject(NavViewService).settingsSections;
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
 
@@ -27,8 +43,6 @@ export class SettingsShellPage {
     this.session.permissions();
     return availableSettingsTabs((code) => this.session.has(code));
   });
-  /** The visible tabs bucketed under their sections, so the strip reads as grouped. */
-  protected readonly sections = computed(() => groupSettingsTabs(this.tabs()));
 
   protected readonly activeSegment = toSignal(
     this.router.events.pipe(

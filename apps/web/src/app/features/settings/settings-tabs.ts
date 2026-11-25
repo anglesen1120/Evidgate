@@ -16,7 +16,6 @@
 
 import type { ProductPhase, SettingsGroupId } from '../../shell/nav/nav.models';
 import { isPhaseActive } from '../../shell/nav/product-phase';
-import { SETTINGS_GROUPS } from '../../shell/nav/nav-registry';
 
 /** `members`, `secrets`, ... — also the route segment under `/orgs/:orgId/settings/`. */
 export type SettingsTabId =
@@ -146,20 +145,4 @@ export function availableSettingsTabs(
   phaseReached: (phase: ProductPhase) => boolean = isPhaseActive,
 ): readonly SettingsTab[] {
   return SETTINGS_TABS.filter((tab) => isSettingsTabAvailable(tab, has, phaseReached));
-}
-
-/** A Settings section and the visible tabs listed under it, in strip order. */
-export interface SettingsTabSection {
-  readonly id: SettingsGroupId;
-  readonly label: string;
-  readonly tabs: readonly SettingsTab[];
-}
-
-/** Buckets visible tabs into their sections, dropping any section that has no visible tab. */
-export function groupSettingsTabs(tabs: readonly SettingsTab[]): readonly SettingsTabSection[] {
-  return SETTINGS_GROUPS.map(({ id, label }) => ({
-    id,
-    label,
-    tabs: tabs.filter((tab) => tab.group === id),
-  })).filter((section) => section.tabs.length > 0);
 }

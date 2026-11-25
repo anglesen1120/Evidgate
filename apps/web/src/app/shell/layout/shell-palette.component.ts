@@ -78,6 +78,8 @@ export class ShellPaletteComponent {
   }
 
   protected onKeydown(event: KeyboardEvent): void {
+    // Enter commits an IME candidate; it must not also run the highlighted command.
+    if (event.isComposing) return;
     if (event.key === 'ArrowDown') this.move(event, 1);
     else if (event.key === 'ArrowUp') this.move(event, -1);
     else if (event.key === 'Enter') {

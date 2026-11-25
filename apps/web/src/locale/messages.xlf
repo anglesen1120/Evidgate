@@ -28074,14 +28074,14 @@
         <source>Settings</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/settings-shell.page.ts</context>
-          <context context-type="linenumber">23</context>
+          <context context-type="linenumber">37</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.shell-intro" datatype="html">
         <source>Open a section to manage settings for your organization or project.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/settings-shell.page.ts</context>
-          <context context-type="linenumber">24</context>
+          <context context-type="linenumber">38</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.placeholder.body" datatype="html">
@@ -28095,63 +28095,63 @@
         <source>Members</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/settings-tabs.ts</context>
-          <context context-type="linenumber">60</context>
+          <context context-type="linenumber">59</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.tab.secrets" datatype="html">
         <source>Secrets</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/settings-tabs.ts</context>
-          <context context-type="linenumber">68</context>
+          <context context-type="linenumber">67</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.tab.api-tokens" datatype="html">
         <source>API tokens</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/settings-tabs.ts</context>
-          <context context-type="linenumber">76</context>
+          <context context-type="linenumber">75</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.tab.policy" datatype="html">
         <source>Policy</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/settings-tabs.ts</context>
-          <context context-type="linenumber">84</context>
+          <context context-type="linenumber">83</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.tab.quota-retention" datatype="html">
         <source>Quota &amp; retention</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/settings-tabs.ts</context>
-          <context context-type="linenumber">94</context>
+          <context context-type="linenumber">93</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.tab.audit" datatype="html">
         <source>Audit</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/settings-tabs.ts</context>
-          <context context-type="linenumber">102</context>
+          <context context-type="linenumber">101</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.tab.security-events" datatype="html">
         <source>Security events</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/settings-tabs.ts</context>
-          <context context-type="linenumber">110</context>
+          <context context-type="linenumber">109</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.tab.integrations" datatype="html">
         <source>Integrations</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/settings-tabs.ts</context>
-          <context context-type="linenumber">118</context>
+          <context context-type="linenumber">117</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.tab.agents" datatype="html">
         <source>Agents</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/settings-tabs.ts</context>
-          <context context-type="linenumber">126</context>
+          <context context-type="linenumber">125</context>
         </context-group>
       </trans-unit>
       <trans-unit id="review.editor.title" datatype="html">
@@ -34125,77 +34125,91 @@
         <source>Primary navigation</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shell/layout/nav.component.ts</context>
-          <context context-type="linenumber">38</context>
+          <context context-type="linenumber">39</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shell.palette.group-navigate" datatype="html">
         <source>Navigate</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shell/layout/palette-source.ts</context>
-          <context context-type="linenumber">36</context>
+          <context context-type="linenumber">38</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shell.palette.group-appearance" datatype="html">
         <source>Appearance</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shell/layout/palette-source.ts</context>
-          <context context-type="linenumber">37</context>
+          <context context-type="linenumber">39</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shell.palette.group-language" datatype="html">
         <source>Language</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shell/layout/palette-source.ts</context>
-          <context context-type="linenumber">38</context>
+          <context context-type="linenumber">40</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shell.palette.group-runs" datatype="html">
         <source>Runs</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shell/layout/palette-source.ts</context>
-          <context context-type="linenumber">39</context>
+          <context context-type="linenumber">41</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shell.palette.open-run" datatype="html">
         <source>Open run</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shell/layout/palette-source.ts</context>
-          <context context-type="linenumber">40</context>
+          <context context-type="linenumber">42</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shell.palette.switch-organization" datatype="html">
+        <source>Switch organization: <x id="name" equiv-text="name"/></source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shell/layout/palette-source.ts</context>
+          <context context-type="linenumber">44</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shell.palette.switch-project" datatype="html">
+        <source>Switch project: <x id="name" equiv-text="name"/></source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shell/layout/palette-source.ts</context>
+          <context context-type="linenumber">46</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shell.palette.theme-light" datatype="html">
         <source>Switch to light theme</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shell/layout/palette-source.ts</context>
-          <context context-type="linenumber">42</context>
+          <context context-type="linenumber">48</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shell.palette.theme-dark" datatype="html">
         <source>Switch to dark theme</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shell/layout/palette-source.ts</context>
-          <context context-type="linenumber">43</context>
+          <context context-type="linenumber">49</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shell.palette.theme-system" datatype="html">
         <source>Switch to system theme</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shell/layout/palette-source.ts</context>
-          <context context-type="linenumber">44</context>
+          <context context-type="linenumber">50</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shell.palette.locale-en" datatype="html">
         <source>Switch to English</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shell/layout/palette-source.ts</context>
-          <context context-type="linenumber">47</context>
+          <context context-type="linenumber">53</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shell.palette.locale-vi" datatype="html">
         <source>Switch to Vietnamese</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shell/layout/palette-source.ts</context>
-          <context context-type="linenumber">48</context>
+          <context context-type="linenumber">54</context>
         </context-group>
       </trans-unit>
       <trans-unit id="quota.badge.blocked" datatype="html">
@@ -34363,7 +34377,7 @@
         <source>Command palette (<x id="shortcut" equiv-text="this.shortcut"/>)</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shell/layout/shell-search.component.ts</context>
-          <context context-type="linenumber">36</context>
+          <context context-type="linenumber">47</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shell.layout.skip-content" datatype="html">

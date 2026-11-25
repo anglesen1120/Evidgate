@@ -25,6 +25,9 @@ import {
   navSegments,
   ORG_ACME,
   PROJECT_STOREFRONT,
+  SETTINGS_ADMIN_GRANTS,
+  settingsPath,
+  settingsTabPath,
   withVariant,
 } from './support';
 
@@ -111,6 +114,36 @@ test.describe('sidebar visibility (AC4)', () => {
     await expect(
       page.locator(`app-shell-nav nav a[href$="/projects/${PROJECT_STOREFRONT}/authoring"]`),
     ).toHaveCount(1);
+  });
+
+  test('Settings opens the grouped strip and keeps it visible when navigating to Audit', async ({
+    page,
+  }) => {
+    await page.goto(
+      withVariant(localePath('en', `/orgs/${ORG_ACME}/members`), SETTINGS_ADMIN_GRANTS),
+    );
+    const settings = page.locator('app-shell-nav').getByRole('link', { name: 'Settings' });
+    await expect(settings).toHaveAttribute('href', settingsPath('en'));
+    await settings.click();
+    await expect.poll(() => new URL(page.url()).pathname).toBe(settingsTabPath('en', 'members'));
+    const strip = page.getByRole('navigation', { name: 'Settings destinations' });
+    await expect(
+      strip.getByRole('group', { name: 'Access & Security' }).getByRole('link', {
+        name: 'Members',
+        exact: true,
+      }),
+    ).toHaveAttribute('aria-current', 'page');
+    const audit = strip.getByRole('group', { name: 'Billing & Audit' }).getByRole('link', {
+      name: 'Audit',
+      exact: true,
+    });
+    await audit.click();
+    await expect.poll(() => new URL(page.url()).pathname).toBe(settingsTabPath('en', 'audit'));
+    await expect(audit).toHaveAttribute('aria-current', 'page');
+    await expect(settings).toHaveAttribute('aria-current', 'page');
+    expect(
+      await settings.evaluate((link) => getComputedStyle(link, '::before').borderInlineStartWidth),
+    ).toBe('3px');
   });
 
   test('the limited grant set hides the rows it does not grant and shows the ones it does', async ({

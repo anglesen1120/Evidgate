@@ -19,15 +19,9 @@ import {
   viewChild,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import {
-  NavigationEnd,
-  PRIMARY_OUTLET,
-  Router,
-  RouterLink,
-  RouterOutlet,
-  UrlSegment,
-} from '@angular/router';
+import { NavigationEnd, PRIMARY_OUTLET, Router, RouterLink, RouterOutlet } from '@angular/router';
 import { filter } from 'rxjs';
+import { projectSwitchTree } from './scope-route';
 import { SessionStore } from '../../core/session/session.store';
 import { NavViewService } from '../nav/nav-view';
 import { NavComponent } from './nav.component';
@@ -261,33 +255,10 @@ export class ShellComponent {
     void this.router.navigate(['/orgs', id]);
   }
 
-  /**
-   * A project change stays inside the same organization, so the entry screen, its query string and
-   * its fragment stay; only the project id is replaced. Deeper segments belong to the previous
-   * project's data (a run id, a node id), so they are dropped instead of carried over.
-   */
+  /** Switches the project inside the current organization; see projectSwitchTree. */
   selectProject(id: string): void {
     const org = this.session.currentOrg();
     if (!org) return;
-    const tree = this.router.parseUrl(this.router.url);
-    const primary = tree.root.children[PRIMARY_OUTLET];
-    const projectIndex =
-      primary?.segments.findIndex((segment) => segment.path === 'projects') ?? -1;
-    const previous = primary?.segments[projectIndex + 1];
-    if (primary && projectIndex >= 0 && previous) {
-      const entry = primary.segments[projectIndex + 2] ?? new UrlSegment('overview', {});
-      primary.segments.splice(
-        projectIndex + 1,
-        primary.segments.length - projectIndex - 1,
-        new UrlSegment(id, previous.parameters),
-        entry,
-      );
-      void this.router.navigateByUrl(tree);
-    } else {
-      void this.router.navigate(['/orgs', org.id, 'projects', id, 'overview'], {
-        queryParams: tree.queryParams,
-        ...(tree.fragment === null ? {} : { fragment: tree.fragment }),
-      });
-    }
+    void this.router.navigateByUrl(projectSwitchTree(this.router, org.id, id));
   }
 }

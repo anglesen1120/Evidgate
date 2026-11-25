@@ -11,7 +11,7 @@
     }
   </p>
 }
-@if (tabs().length > 0) {
+@if (sections().length > 0) {
   <nav
     class="settings-tabs min-w-0 overflow-x-auto border-b border-border"
     aria-label="Settings destinations"
@@ -31,16 +31,17 @@
             >{{ section.label }}</span
           >
           <ul class="settings-links m-0 flex list-none flex-nowrap gap-1 p-0">
-            @for (tab of section.tabs; track tab.id) {
+            @for (item of section.items; track item.id) {
               <li class="shrink-0">
                 <a
                   class="flex min-h-(--eg-control-sm) items-center border-b-[3px] border-transparent px-4 py-2 text-sm font-medium whitespace-nowrap text-muted-foreground no-underline hover:text-foreground focus-visible:outline-(length:--eg-focus-width) focus-visible:-outline-offset-2 focus-visible:outline-(--eg-focus) pointer-coarse:min-h-(--eg-control-touch) aria-[current=page]:border-(--eg-accent) aria-[current=page]:font-bold aria-[current=page]:text-(--eg-accent)"
-                  [routerLink]="[tab.segment]"
-                  [attr.aria-current]="tab.segment === activeSegment() ? 'page' : null"
-                  [attr.data-settings-tab]="tab.id"
+                  [routerLink]="item.link"
+                  routerLinkActive
+                  [ariaCurrentWhenActive]="'page'"
+                  [attr.data-settings-tab]="item.id"
                   (focus)="reveal($event)"
                 >
-                  {{ tab.label }}
+                  {{ item.label }}
                 </a>
               </li>
             }

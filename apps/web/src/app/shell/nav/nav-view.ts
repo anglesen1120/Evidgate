@@ -14,6 +14,7 @@
 import { computed, inject, Injectable, type Signal } from '@angular/core';
 
 import { SessionStore } from '../../core/session/session.store';
+import { availableSettingsTabs } from '../../features/settings/settings-tabs';
 import type {
   NavDestinationView,
   NavEntry,
@@ -23,6 +24,11 @@ import type {
 } from './nav.models';
 import { NAV_ENTRIES, NAV_GROUPS, SETTINGS_GROUPS } from './nav-registry';
 import { isEntryActive } from './product-phase';
+import {
+  groupSettingsStrip,
+  type SettingsStripItem,
+  type SettingsStripSection,
+} from './settings-strip';
 
 /** One entry that survived the filters, with the router commands it renders (D-S68-Q4). */
 interface VisibleEntry {
@@ -30,14 +36,8 @@ interface VisibleEntry {
   readonly link: readonly string[];
 }
 
-/** A Settings entry with its sidebar link and the Settings tab URL it is listed under. */
-interface SettingsEntry {
-  readonly entry: NavEntry;
-  readonly link: readonly string[];
-  readonly tabLink: readonly string[];
-}
-
 const ADMINISTRATION_GROUP = 'administration';
+const SETTINGS_INDEX_ID = 'settings';
 
 function byOrder(left: VisibleEntry, right: VisibleEntry): number {
   return left.entry.order - right.entry.order;
@@ -69,22 +69,34 @@ export class NavViewService {
   });
 
   /**
-   * Every visible Settings entry, in registry order. Its tab URL (`/orgs/:orgId/settings/<tab>`)
-   * is what the Settings page links to; the sidebar link stays the entry's own route.
+   * The Settings destinations the caller may open, as one list: the Settings tabs (org-scoped, so
+   * they need no project) and the standalone administration pages filed under a section.
    */
-  private readonly settingsEntries: Signal<readonly SettingsEntry[]> = computed(() => {
+  private readonly settingsStrip: Signal<readonly SettingsStripItem[]> = computed(() => {
     const org = this.session.currentOrg();
     if (org === null) {
       return [];
     }
-    return this.visible()
-      .filter(({ entry }) => entry.settingsGroup !== undefined)
-      .map(({ entry, link }) => ({
-        entry,
-        link,
-        tabLink: entry.settingsTabId ? ['/orgs', org.id, 'settings', entry.settingsTabId] : link,
-      }));
+    const tabs = availableSettingsTabs((code) => this.session.has(code)).map(
+      (tab): SettingsStripItem => ({
+        id: tab.id,
+        group: tab.group,
+        label: tab.label,
+        link: ['/orgs', org.id, 'settings', tab.segment],
+      }),
+    );
+    const pages = this.visible().flatMap(({ entry, link }): SettingsStripItem[] =>
+      entry.group === ADMINISTRATION_GROUP && entry.settingsGroup && !entry.settingsTabId
+        ? [{ id: entry.id, group: entry.settingsGroup, label: entry.label, link }]
+        : [],
+    );
+    return [...tabs, ...pages];
   });
+
+  /** The Settings strip bucketed under its sections, in journey order. */
+  readonly settingsSections: Signal<readonly SettingsStripSection[]> = computed(() =>
+    groupSettingsStrip(this.settingsStrip()),
+  );
 
   /**
    * The groups the navigation renders for the current session and scope, groups in journey order and
@@ -131,22 +143,30 @@ export class NavViewService {
   );
 
   /**
-   * The single Settings entry at the foot of the sidebar. Null when no administration destination
-   * is visible. It lands on the first reachable one in registry order; `covers` lists every URL it
-   * stands for, so it reads as active on any of them.
+   * The single Settings entry at the foot of the sidebar; null when no administration destination is
+   * visible. It lands on the Settings index when that index has a tab the caller may open, else on
+   * the first standalone administration page the caller holds. `covers` lists every URL it stands
+   * for, so it reads as active on any of them.
    */
   readonly settings: Signal<NavSettingsItem | null> = computed(() => {
-    const reachable = this.visible().filter(({ entry }) => entry.group === ADMINISTRATION_GROUP);
-    const first = reachable[0];
-    const label = NAV_ENTRIES.find((entry) => entry.id === 'settings')?.label;
-    if (first === undefined || label === undefined) {
+    const administration = this.visible().filter(
+      ({ entry }) => entry.group === ADMINISTRATION_GROUP,
+    );
+    const index = administration.find(({ entry }) => entry.id === SETTINGS_INDEX_ID);
+    const standalone = administration.find(({ entry }) => entry.id !== SETTINGS_INDEX_ID);
+    const tabOpen = availableSettingsTabs((code) => this.session.has(code)).length > 0;
+    const landing = index !== undefined && tabOpen ? index : (standalone ?? index);
+    const label = NAV_ENTRIES.find((entry) => entry.id === SETTINGS_INDEX_ID)?.label;
+    if (landing === undefined || label === undefined) {
       return null;
     }
-    const tabCovers = this.settingsEntries().map(({ tabLink }) => tabLink);
     return {
       label,
-      link: first.link,
-      covers: [...reachable.map(({ link }) => link), ...tabCovers],
+      link: landing.link,
+      covers: [
+        ...administration.map(({ link }) => link),
+        ...this.settingsStrip().map(({ link }) => link),
+      ],
     };
   });
 

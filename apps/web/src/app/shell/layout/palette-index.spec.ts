@@ -14,6 +14,8 @@ const labels: PaletteLabels = {
   language: 'Language',
   runs: 'Runs',
   openRun: 'Open run',
+  switchOrganization: (name) => `Switch organization: ${name}`,
+  switchProject: (name) => `Switch project: ${name}`,
   theme: {
     light: 'Switch to light theme',
     dark: 'Switch to dark theme',
@@ -26,6 +28,7 @@ const RUN_ID = '0198a000-0000-7000-8000-00000000abcd';
 
 const destinations: NavDestinationView[] = [
   { id: 'overview', label: 'Tổng quan', link: ['/orgs', 'org', 'projects', 'project', 'overview'] },
+  { id: 'runs', label: 'Test runs', link: ['/orgs', 'org', 'projects', 'project', 'runs'] },
   {
     id: 'feature-tree',
     label: 'Feature tree',
@@ -44,6 +47,8 @@ function input(overrides: Partial<PaletteInput> = {}): PaletteInput {
     destinations,
     orgId: 'org',
     projectId: 'project',
+    organizations: [],
+    projects: [],
     localeHrefs: { vi: '/vi/orgs/org' },
     labels,
     ...overrides,
@@ -80,6 +85,7 @@ describe('buildPaletteSections', () => {
   it('lists every destination, theme and locale for an empty query', () => {
     expect(ids(buildPaletteSections(input(), ''))).toEqual([
       'nav:overview',
+      'nav:runs',
       'nav:feature-tree',
       'nav:billing',
       'theme:light',
@@ -111,6 +117,35 @@ describe('buildPaletteSections', () => {
 
   it('omits the locale command when no bundle path exists', () => {
     expect(ids(buildPaletteSections(input({ localeHrefs: {} }), ''))).not.toContain('locale:vi');
+  });
+
+  it('omits current scopes and never offers projects from another organization', () => {
+    const scopes = {
+      organizations: [
+        { id: 'org', name: 'Current Org' },
+        { id: 'other', name: 'Other Org' },
+      ],
+      projects: [
+        { id: 'project', name: 'Current Project', org_id: 'org' },
+        { id: 'next', name: 'Next Project', org_id: 'org' },
+        { id: 'foreign', name: 'Foreign Project', org_id: 'other' },
+      ],
+    };
+    const choices = buildPaletteSections(input(scopes), 'switch')
+      .flatMap((section) => section.items)
+      .filter((item) => item.action.kind === 'switch-org' || item.action.kind === 'switch-project');
+    expect(choices.map(({ label, action }) => ({ label, action }))).toEqual([
+      { label: 'Switch organization: Other Org', action: { kind: 'switch-org', id: 'other' } },
+      { label: 'Switch project: Next Project', action: { kind: 'switch-project', id: 'next' } },
+    ]);
+    expect(ids(buildPaletteSections(input({ ...scopes, orgId: null }), 'switch project'))).toEqual(
+      [],
+    );
+  });
+
+  it('offers no UUID action without the run:read destination', () => {
+    const withoutRuns = destinations.filter((destination) => destination.id !== 'runs');
+    expect(buildPaletteSections(input({ destinations: withoutRuns }), RUN_ID)).toEqual([]);
   });
 
   it('offers the run action for a UUID when org and project are present', () => {

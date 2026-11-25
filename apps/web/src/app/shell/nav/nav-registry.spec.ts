@@ -16,6 +16,7 @@ import { dirname, join } from 'node:path';
 
 import { NAV_ENTRIES, NAV_GROUPS } from './nav-registry';
 import { ACTIVE_PHASE, isPhaseActive } from './product-phase';
+import { groupSettingsStrip } from './settings-strip';
 import { SETTINGS_TABS } from '../../features/settings/settings-tabs';
 
 /* eslint-disable evidgate/no-hand-written-wire-dto -- `contracts/permissions.json` is a contract
@@ -219,14 +220,35 @@ describe('NAV_ENTRIES (09.1.1-T4.1)', () => {
   });
 });
 
-describe('settings tab sections (09.1.1-T4.1)', () => {
-  it('files every settings-linked entry under the section its tab is listed in', () => {
-    const linked = NAV_ENTRIES.filter((entry) => entry.settingsTabId !== undefined);
-    expect(linked.length).toBeGreaterThan(0);
-    for (const entry of linked) {
-      const tab = SETTINGS_TABS.find((candidate) => candidate.id === entry.settingsTabId);
-      expect(tab, entry.id).toBeDefined();
-      expect(tab?.group, entry.id).toBe(entry.settingsGroup);
-    }
+describe('settings strip sections (09.1.1-T4.1)', () => {
+  it('lists every grouped registry destination exactly once under its declared section', () => {
+    const strip = [
+      ...SETTINGS_TABS.map((tab) => ({
+        id: tab.id,
+        group: tab.group,
+        label: tab.label,
+        link: [tab.segment],
+      })),
+      ...NAV_ENTRIES.flatMap((entry) =>
+        entry.settingsGroup && entry.settingsTabId === undefined
+          ? [
+              {
+                id: entry.id,
+                group: entry.settingsGroup,
+                label: entry.label,
+                link: [entry.segment],
+              },
+            ]
+          : [],
+      ),
+    ];
+    const actual = groupSettingsStrip(strip).flatMap(({ id, items }) =>
+      items.map((item) => `${id}/${item.id}`),
+    );
+    const expected = NAV_ENTRIES.filter((entry) => entry.settingsGroup !== undefined).map(
+      (entry) => `${entry.settingsGroup}/${entry.settingsTabId ?? entry.id}`,
+    );
+    expect(new Set(actual).size).toBe(actual.length);
+    expect(actual.sort()).toEqual(expected.sort());
   });
 });

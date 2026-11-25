@@ -40,6 +40,8 @@ describe('Shell command palette boundaries', () => {
           useValue: {
             currentOrg: signal({ id: 'org' }),
             currentProject: signal({ id: 'project' }),
+            organizations: signal([]),
+            projects: signal([]),
             has: (code: string) => permissions().has(code),
           },
         },
@@ -63,8 +65,16 @@ describe('Shell command palette boundaries', () => {
   }
 
   it('offers no destinations without permissions; a non-matching query stays open with no active option', async () => {
+    vi.spyOn(document, 'baseURI', 'get').mockReturnValue('http://localhost/en/');
     const { picker, loader } = await open([]);
-    expect(await optionTexts(picker)).not.toEqual(expect.arrayContaining(NAV_LABELS));
+    const labels = await optionTexts(picker);
+    for (const destination of NAV_ENTRIES) expect(labels).not.toContain(destination.label);
+    expect(labels).toEqual([
+      'Switch to light theme',
+      'Switch to dark theme',
+      'Switch to system theme',
+      'Switch to Vietnamese',
+    ]);
     const input = await picker.input();
     await input.setInputValue('no-such-screen');
     await input.dispatchEvent('input');

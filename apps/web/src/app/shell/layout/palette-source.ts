@@ -6,7 +6,7 @@ import { NavViewService } from '../nav/nav-view';
 import { localeBundlePath } from './locale-switcher.component';
 import type { PaletteInput, PaletteLabels } from './palette-index';
 
-/** Reads the shell's live state once per open; the palette never subscribes to routing. */
+/** Reads the shell's live state each time the palette computes; it never subscribes to routing. */
 @Injectable({ providedIn: 'root' })
 export class PaletteSource {
   private readonly nav = inject(NavViewService);
@@ -26,6 +26,8 @@ export class PaletteSource {
       destinations: this.nav.destinations(),
       orgId: this.session.currentOrg()?.id ?? null,
       projectId: this.session.currentProject()?.id ?? null,
+      organizations: this.session.organizations(),
+      projects: this.session.projects(),
       localeHrefs,
       labels: LABELS,
     };
@@ -38,6 +40,9 @@ const LABELS: PaletteLabels = {
   language: $localize`:@@shell.palette.group-language:Language`,
   runs: $localize`:@@shell.palette.group-runs:Runs`,
   openRun: $localize`:@@shell.palette.open-run:Open run`,
+  switchOrganization: (name) =>
+    $localize`:@@shell.palette.switch-organization:Switch organization: ${name}:name:`,
+  switchProject: (name) => $localize`:@@shell.palette.switch-project:Switch project: ${name}:name:`,
   theme: {
     light: $localize`:@@shell.palette.theme-light:Switch to light theme`,
     dark: $localize`:@@shell.palette.theme-dark:Switch to dark theme`,

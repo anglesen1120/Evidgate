@@ -1,6 +1,6 @@
 import { ComponentHarness, TestKey } from '@angular/cdk/testing';
 import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
-import { signal } from '@angular/core';
+import { ErrorHandler, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { Router, provideRouter } from '@angular/router';
 import { provideLayoutTestStubs } from '../../shared/testing/layout.testing';
@@ -34,6 +34,8 @@ describe('Shell command palette', () => {
           useValue: {
             currentOrg: signal({ id: 'org' }),
             currentProject: signal({ id: 'project' }),
+            organizations: signal([]),
+            projects: signal([]),
             has: (code: string) => permissions().has(code),
           },
         },
@@ -45,7 +47,7 @@ describe('Shell command palette', () => {
     await (await trigger.button()).click();
     await vi.waitFor(async () => expect(await loader.hasHarness(PalettePicker)).toBe(true));
     const picker = await loader.getHarness(PalettePicker);
-    return { picker, permissions, loader };
+    return { picker, permissions, loader, trigger };
   }
 
   async function optionTexts(picker: PalettePicker): Promise<string[]> {
@@ -78,6 +80,29 @@ describe('Shell command palette', () => {
     await vi.waitFor(() =>
       expect(TestBed.inject(Router).url).toBe('/orgs/org/projects/project/overview'),
     );
+  });
+
+  it('does not commit the highlighted command while Enter is composing text', async () => {
+    const { picker, loader } = await open();
+    const input = await picker.input();
+    await input.sendKeys(TestKey.DOWN_ARROW);
+    await input.dispatchEvent('keydown', { key: 'Enter', isComposing: true });
+    expect(await loader.hasHarness(PalettePicker)).toBe(true);
+    expect(TestBed.inject(Router).url).toBe('/');
+    await input.sendKeys(TestKey.ENTER);
+    await vi.waitFor(() =>
+      expect(TestBed.inject(Router).url).toBe('/orgs/org/projects/project/overview'),
+    );
+  });
+
+  it('ignores a shortcut event with no key', async () => {
+    const { picker, trigger, loader } = await open();
+    await (await picker.input()).sendKeys(TestKey.ESCAPE);
+    await vi.waitFor(async () => expect(await loader.hasHarness(PalettePicker)).toBe(false));
+    const errors = vi.spyOn(TestBed.inject(ErrorHandler), 'handleError');
+    await (await trigger.button()).dispatchEvent('keydown', { ctrlKey: true });
+    expect(errors).not.toHaveBeenCalled();
+    expect(await loader.hasHarness(PalettePicker)).toBe(false);
   });
 
   it('dismisses the palette on Escape without navigating', async () => {

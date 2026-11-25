@@ -34,8 +34,8 @@ function palette(page: Page) {
   };
 }
 
-async function visit(page: Page, locale: ShellLocale = 'en') {
-  await page.goto(localePath(locale, AUTHORING));
+async function visit(page: Page, locale: ShellLocale = 'en', variants: readonly string[] = []) {
+  await page.goto(withVariants(localePath(locale, AUTHORING), variants));
   await expect(trigger(page)).toBeVisible();
   await expect(page.locator('#main-content')).toBeVisible();
 }
@@ -66,11 +66,52 @@ test('Ctrl+K opens from the page; the trigger advertises the shortcut and regain
   await expect(field).toBeFocused();
   await field.press('Escape');
   await expect(dialog).toHaveCount(0);
+  await expect(open).toBeFocused();
 
   await openFromTrigger(page);
   await field.press('Escape');
   await expect(dialog).toHaveCount(0);
   await expect(open).toBeFocused();
+});
+
+test('Enter during IME composition does not run the highlighted command', async ({ page }) => {
+  await visit(page);
+  const { dialog, field, options } = await openFromTrigger(page);
+  await field.pressSequentially('pending changes');
+  const pending = options.filter({ hasText: 'Pending changes' });
+  await expect(pending).toHaveCount(1);
+  await field.press('ArrowDown');
+  await expect(field).toHaveAttribute('aria-activedescendant', (await pending.getAttribute('id'))!);
+
+  const prevented = await field.evaluate((el) => {
+    const event = new KeyboardEvent('keydown', {
+      key: 'Enter',
+      isComposing: true,
+      bubbles: true,
+      cancelable: true,
+    });
+    el.dispatchEvent(event);
+    return event.defaultPrevented;
+  });
+  expect(prevented).toBe(false);
+  await expect(dialog).toBeVisible();
+  await expect(page).toHaveURL((url) => url.pathname === localePath('en', AUTHORING));
+
+  await field.press('Enter');
+  await expect(page).toHaveURL(
+    (url) => url.pathname === localePath('en', `${PROJECT}/pending-changes`),
+  );
+  await expect(dialog).toHaveCount(0);
+});
+
+test('a keydown without a key value does not throw in the palette', async ({ page }) => {
+  const errors: Error[] = [];
+  page.on('pageerror', (error) => errors.push(error));
+  await visit(page);
+  const { dialog, field } = await openFromTrigger(page);
+  await field.evaluate((el) => el.dispatchEvent(new Event('keydown', { bubbles: true })));
+  await expect(dialog).toBeVisible();
+  expect(errors).toEqual([]);
 });
 
 test('Ctrl+K does not open a palette or consume typing in a page input', async ({ page }) => {
@@ -139,22 +180,21 @@ test('Vietnamese destination labels match a typed unaccented query', async ({ pa
   await expect(options.filter({ hasText: 'Cây chức năng' })).toHaveCount(1);
 });
 
-test('pasting a run UUID offers Open run and Enter opens that scoped run URL', async ({
+test('pasting a run UUID offers no run jump while the runs destination is phase-hidden', async ({
   context,
   page,
 }) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
-  await visit(page);
+  await visit(page, 'en', [RUN_READ_GRANT]);
   const { dialog, field, options } = await openFromTrigger(page);
+  const before = new URL(page.url()).pathname;
   await page.evaluate((id) => navigator.clipboard.writeText(id), RUN_ID);
   await field.press('ControlOrMeta+v');
   await expect(field).toHaveValue(RUN_ID);
-  await expect(options).toHaveText([`Open run ${RUN_ID}`]);
+  await expect(options).toHaveCount(0);
   await field.press('Enter');
-  await expect(page).toHaveURL(
-    (url) => url.pathname === localePath('en', `${PROJECT}/runs/${RUN_ID}`),
-  );
-  await expect(dialog).toHaveCount(0);
+  await expect(dialog).toHaveCount(1);
+  expect(new URL(page.url()).pathname).toBe(before);
 });
 
 test('theme and locale actions change the page without losing the project route', async ({

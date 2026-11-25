@@ -156,18 +156,26 @@ describe('NavViewService (09.1.1-T4.1)', () => {
       'ai-settings',
     ]);
     expect(view.sidebarGroups().map((group) => group.id)).toEqual(['workspace', 'authoring']);
-    expect(view.settings()?.link).toEqual(['/orgs', ORG.id, 'members']);
+    expect(view.settings()?.link).toEqual(['/orgs', ORG.id, 'settings']);
     expect(view.destinations().find((entry) => entry.id === 'audit')?.groupLabel).toBe(
       'Billing & Audit',
     );
   });
 
-  it('lands Settings on the first reachable administration destination', async () => {
+  it('falls back to standalone Members without the Settings index permission', async () => {
     source.granted = new Set(['membership:read']);
     await authenticatedWithProject();
 
     expect(view.settings()?.link).toEqual(['/orgs', ORG.id, 'members']);
     expect(linkOf(view, 'members')).toEqual(['/orgs', ORG.id, 'members']);
+  });
+
+  it('prefers the reachable standalone destination over an index with no available child', async () => {
+    source.granted = new Set(['organization:read', 'authoring:read']);
+    await authenticatedWithProject();
+    expect(view.settings()?.link).toEqual(['/orgs', ORG.id, 'projects', PROJECT.id, 'ai-settings']);
+    await session.resolveScope(ORG.id, null);
+    expect(view.settings()?.link).toEqual(['/orgs', ORG.id, 'settings']);
   });
 
   it('hides a later-phase entry even when its permission is granted', async () => {

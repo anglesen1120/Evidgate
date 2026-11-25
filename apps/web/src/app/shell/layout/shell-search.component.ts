@@ -1,12 +1,21 @@
 import { DOCUMENT } from '@angular/common';
-import { ChangeDetectionStrategy, Component, Injector, inject } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  ElementRef,
+  Injector,
+  inject,
+  viewChild,
+} from '@angular/core';
 import { Router } from '@angular/router';
 import { HlmButton } from '@evidgate/ui/button';
 import { HlmDialogService } from '@evidgate/ui/dialog';
 import { HlmTooltip } from '@evidgate/ui/tooltip';
+import { SessionStore } from '../../core/session/session.store';
 import { ShellIconComponent } from './shell-icon.component';
 import type { PaletteAction } from './palette-index';
 import { ThemeService } from './theme.service';
+import { projectSwitchTree } from './scope-route';
 
 const SHORTCUT_KEY = 'k';
 
@@ -23,9 +32,11 @@ const SHORTCUT_KEY = 'k';
 export class ShellSearchComponent {
   private readonly dialogs = inject(HlmDialogService);
   private readonly router = inject(Router);
+  private readonly session = inject(SessionStore);
   private readonly theme = inject(ThemeService);
   private readonly document = inject(DOCUMENT);
   private readonly injector = inject(Injector);
+  private readonly trigger = viewChild.required<ElementRef<HTMLButtonElement>>('trigger');
   private loading = false;
 
   protected readonly shortcut = /Mac|iPhone|iPad|iPod/.test(
@@ -44,6 +55,7 @@ export class ShellSearchComponent {
       const ref = this.dialogs.open<PaletteAction | undefined>(ShellPaletteComponent, {
         contentClass: 'shell-palette',
         size: 'md',
+        restoreFocus: this.trigger().nativeElement,
       });
       ref.closed$.subscribe((action) => this.execute(action));
     } finally {
@@ -52,7 +64,7 @@ export class ShellSearchComponent {
   }
 
   protected onShortcut(event: KeyboardEvent): void {
-    if (event.key.toLowerCase() !== SHORTCUT_KEY || event.altKey || event.shiftKey) return;
+    if (event.key?.toLowerCase() !== SHORTCUT_KEY || event.altKey || event.shiftKey) return;
     if (!event.metaKey && !event.ctrlKey) return;
     if (isEditable(event.target)) return;
     event.preventDefault();
@@ -64,7 +76,14 @@ export class ShellSearchComponent {
     if (!action) return;
     if (action.kind === 'navigate') void this.router.navigate(action.link);
     else if (action.kind === 'theme') this.theme.choose(action.choice);
-    else this.document.location.assign(action.href);
+    else if (action.kind === 'locale') this.document.location.assign(action.href);
+    else if (action.kind === 'switch-org') void this.router.navigate(['/orgs', action.id]);
+    else this.switchProject(action.id);
+  }
+
+  private switchProject(id: string): void {
+    const org = this.session.currentOrg();
+    if (org) void this.router.navigateByUrl(projectSwitchTree(this.router, org.id, id));
   }
 }
 
