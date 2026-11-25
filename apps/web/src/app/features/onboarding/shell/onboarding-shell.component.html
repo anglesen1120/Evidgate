@@ -137,7 +137,7 @@
           #stepToggle
           [variant]="outlineVariant"
           type="button"
-          class="h-auto min-h-(--eg-control-touch) w-full justify-between gap-(--eg-space-3) whitespace-normal text-start"
+          class="h-auto w-full justify-between gap-(--eg-space-3) whitespace-normal text-start"
           data-testid="onboarding-step-toggle"
           [class.eg-wide-only-hidden]="!viewport.narrow()"
           [attr.aria-expanded]="stepsExpanded()"
@@ -177,7 +177,7 @@
                   #stepButton
                   [variant]="outlineVariant"
                   type="button"
-                  class="group grid h-auto min-h-(--eg-control-touch) w-full grid-cols-[auto_minmax(0,1fr)] content-center items-center justify-start gap-x-(--eg-space-3) rounded-(--eg-radius-md) border-b-2 px-(--eg-space-3) py-(--eg-space-2) text-start whitespace-nowrap focus-visible:outline-solid focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-ring focus-visible:outline-offset-(--eg-focus-offset) aria-[current=step]:border-b-primary aria-[current=step]:bg-(--eg-accent-soft) aria-[current=step]:text-foreground aria-[disabled=true]:cursor-not-allowed"
+                  class="group grid h-auto w-full grid-cols-[auto_minmax(0,1fr)] content-center items-center justify-start gap-x-(--eg-space-3) rounded-(--eg-radius-md) border-b-2 px-(--eg-space-3) py-(--eg-space-2) text-start whitespace-nowrap focus-visible:outline-solid focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-ring focus-visible:outline-offset-(--eg-focus-offset) aria-[current=step]:border-b-primary aria-[current=step]:bg-(--eg-accent-soft) aria-[current=step]:text-foreground aria-[disabled=true]:cursor-not-allowed"
                   [attr.data-testid]="'onboarding-select-step-' + step.number"
                   [attr.aria-current]="store.viewStep() === step.number ? 'step' : null"
                   [attr.aria-disabled]="!canSelect(step.number)"
@@ -247,7 +247,7 @@
       >
         <header
           hlmCardHeader
-          class="min-w-0 border-b border-border p-(--eg-space-5) md:px-(--eg-space-6)"
+          class="min-w-0 border-b border-border p-(--eg-space-5) md:p-(--eg-space-6)"
         >
           <h2
             hlmCardTitle
@@ -260,7 +260,7 @@
             {{ steps[store.viewStep() - 1]?.label }}
           </h2>
         </header>
-        <div hlmCardContent class="min-w-0 p-(--eg-space-5) md:px-(--eg-space-6)">
+        <div hlmCardContent class="min-w-0 p-(--eg-space-5) md:p-(--eg-space-6)">
           @if (store.project(); as project) {
             <div [hidden]="store.viewStep() !== 2">
               <app-onboarding-connect-ci
@@ -300,7 +300,7 @@
           }
         </div>
         <footer
-          class="grid min-w-0 gap-(--eg-space-3) border-t border-border p-(--eg-space-5) sm:flex sm:flex-wrap sm:items-center sm:justify-end md:px-(--eg-space-6)"
+          class="grid min-w-0 gap-(--eg-space-3) border-t border-border p-(--eg-space-5) md:p-(--eg-space-6) sm:flex sm:flex-wrap sm:items-center sm:justify-end"
         >
           @if (!store.canGoNext() && completionLink() === null) {
             <p
@@ -315,7 +315,7 @@
               type="button"
               hlmBtn
               [variant]="outlineVariant"
-              class="min-h-(--eg-control-touch) max-w-full whitespace-normal"
+              class="max-w-full whitespace-normal"
               data-testid="onboarding-back"
               [disabled]="!store.canGoBack()"
               (click)="store.back()"
@@ -325,7 +325,7 @@
             @if (completionLink(); as link) {
               <a
                 hlmBtn
-                class="h-auto min-h-(--eg-control-touch) max-w-full whitespace-normal"
+                class="h-auto max-w-full whitespace-normal"
                 data-testid="onboarding-complete"
                 [routerLink]="link"
               >
@@ -336,7 +336,7 @@
                 type="button"
                 hlmBtn
                 [variant]="store.canGoNext() ? 'default' : outlineVariant"
-                class="min-h-(--eg-control-touch) max-w-full whitespace-normal"
+                class="max-w-full whitespace-normal"
                 data-testid="onboarding-next"
                 [disabled]="!store.canGoNext()"
                 [attr.aria-describedby]="!store.canGoNext() ? 'onboarding-next-reason' : null"

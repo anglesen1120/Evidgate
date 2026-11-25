@@ -43,7 +43,7 @@ export interface RotateScope {
         hlmDialogTrigger
         hlmBtn
         [variant]="'outline'"
-        class="h-auto min-h-(--eg-control-touch) max-w-full justify-self-start whitespace-normal wrap-anywhere"
+        class="h-auto max-w-full justify-self-start whitespace-normal wrap-anywhere"
         type="button"
         data-testid="connect-token-rotate"
         [attr.aria-label]="triggerLabel()"
@@ -113,7 +113,7 @@ export interface RotateScope {
           <button
             hlmBtn
             [variant]="'outline'"
-            class="h-auto min-h-(--eg-control-touch) whitespace-normal wrap-anywhere"
+            class="h-auto whitespace-normal wrap-anywhere"
             type="button"
             data-ci-rotation-cancel
             data-testid="connect-rotation-cancel"
@@ -126,7 +126,7 @@ export interface RotateScope {
             *appDesktopMutation
             hlmBtn
             [variant]="'destructive'"
-            class="h-auto min-h-(--eg-control-touch) whitespace-normal wrap-anywhere"
+            class="h-auto whitespace-normal wrap-anywhere"
             type="button"
             data-testid="connect-rotation-confirm"
             [disabled]="disabled()"

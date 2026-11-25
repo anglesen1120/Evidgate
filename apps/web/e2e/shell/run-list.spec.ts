@@ -79,13 +79,19 @@ for (const locale of LOCALES) {
     await expect(page.locator('app-run-list-table [role="columnheader"]')).toHaveCount(6);
     await expect(page.locator(`${ROWS} td`).first()).toHaveCSS('vertical-align', 'middle');
     await expectSingleLineScope(page);
-    await expect(page.locator(`${ROWS} [data-run-evidence] .status-pill--neutral`)).toHaveCount(
-      runList.body.items.length,
-    );
-    await expect(page.locator(`${ROWS} [data-run-evidence] .status-pill--success`)).toHaveCount(0);
     await expect(page.locator('app-outcome-pill')).toHaveCount(0);
     for (const row of runList.body.items) {
       const rendered = page.locator(`${ROWS}[data-row-id="${row.run_id}"]`);
+      const evidenceLabels =
+        locale === 'vi'
+          ? { complete: 'Đủ bằng chứng', incomplete: 'Thiếu bằng chứng', unavailable: 'Chưa có' }
+          : { complete: 'Complete', incomplete: 'Incomplete', unavailable: 'Unavailable' };
+      const evidence = row.completeness;
+      await expect(rendered.locator('[data-run-evidence] [role="img"]')).toHaveText(
+        evidence === 'complete' || evidence === 'incomplete'
+          ? evidenceLabels[evidence]
+          : evidenceLabels.unavailable,
+      );
       // An omitted decision is unavailable; only an explicit null means not evaluated.
       const decision = 'decision' in row ? row.decision : undefined;
       await expect(rendered.locator('[data-run-decision]')).toContainText(
@@ -93,7 +99,7 @@ for (const locale of LOCALES) {
           ? locale === 'vi'
             ? 'Không khả dụng'
             : 'Unavailable'
-          : (decision ?? (locale === 'vi' ? 'Chưa đánh giá' : 'Not evaluated')),
+          : (decision ?? (locale === 'vi' ? 'Chờ đánh giá' : 'Pending')),
       );
       await expect(rendered.locator('time')).toHaveAttribute('datetime', row.created_at);
       await expect(rendered.locator('[data-run-unverified]')).toHaveCount(
@@ -293,7 +299,7 @@ for (const locale of LOCALES) {
       await expect(row).toBeVisible();
       await page.evaluate(() => document.fonts.ready);
       const host = page.locator('app-run-list-table app-data-table');
-      for (const width of [320, 390, 768, 800, 900, 1280, 1440]) {
+      for (const width of [320, 360, 390, 768, 800, 900, 1280, 1440]) {
         await page.setViewportSize({ width, height: 800 });
         // ResizeObserver measures the container; the two languages need not fit at the same width.
         await page.evaluate(
@@ -303,12 +309,14 @@ for (const locale of LOCALES) {
             ),
         );
         const narrow = await host.locator('.eg-table-narrow').isVisible();
-        if (width === 320 || width === 390) expect(narrow).toBe(true);
+        if (width <= 390) expect(narrow).toBe(true);
         if (width >= 1280) expect(narrow).toBe(false);
         await expect(row).toHaveJSProperty('tagName', narrow ? 'LI' : 'TR');
-        if (width >= 1280) {
+        if (narrow || width >= 1280) {
           await expect(
-            host.locator('app-decision-chip [hlmBadge].spartan-badge--clipped'),
+            host.locator(
+              ':is(app-decision-chip, app-evidence-badge) [hlmBadge].spartan-badge--clipped',
+            ),
           ).toHaveCount(0);
         }
         expect(

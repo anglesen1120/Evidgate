@@ -19,7 +19,7 @@ describe('EditorSandboxComponent', () => {
     expect(await panel.text()).toContain('Order receipt missing.');
     expect(await panel.text()).toContain('ev-s1');
     expect(await panel.text()).toContain('Screenshot ready; trace restricted');
-    expect(await (await panel.find('app-decision-chip')).text()).toContain('Not evaluated');
+    expect(await (await panel.find('app-decision-chip')).text()).toContain('Pending');
     expect(await (await panel.find('app-decision-chip')).text()).not.toContain('PASS');
   });
 

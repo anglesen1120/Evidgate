@@ -66,7 +66,7 @@
   @if (directory()) {
     <app-settings-page-counts [metrics]="metrics()" />
     <section hlmCard class="min-w-0 gap-0 rounded-xl p-0">
-      <header class="grid gap-3 border-b border-border p-4">
+      <header class="grid gap-3 border-b border-border p-(--eg-space-5) md:p-(--eg-space-6)">
         <h2 hlmCardTitle>{{ copy.list }}</h2>
         <div class="grid gap-3 sm:grid-cols-2">
           <div class="grid gap-1">
@@ -195,7 +195,7 @@
         />
       }
       <footer
-        class="flex flex-wrap items-center justify-between gap-2 border-t border-border p-3 text-xs text-muted-foreground"
+        class="flex flex-wrap items-center justify-between gap-2 border-t border-border p-(--eg-space-5) md:p-(--eg-space-6) text-xs text-muted-foreground"
       >
         <span
           >{{ filtered().length | number }} {{ copy.of }} {{ grants().length | number }} ·
@@ -323,7 +323,7 @@
         </footer>
       </hlm-dialog-content></hlm-dialog
     >
-    <details hlmCard class="min-w-0 p-4">
+    <details hlmCard class="min-w-0 p-(--eg-space-5) md:p-(--eg-space-6)">
       <summary class="cursor-pointer font-semibold">{{ copy.how }}</summary>
       <p>{{ copy.bannerHelp }}</p>
     </details>

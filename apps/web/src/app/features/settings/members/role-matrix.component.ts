@@ -32,7 +32,7 @@ const ROLE_VALUE_WIDTH: DataTableColumnWidth = { min: '0px', max: 'none' };
   template: `
     @if (matrix().columns.length) {
       <section hlmCard class="min-w-0 gap-0 rounded-xl p-0">
-        <div hlmCardHeader class="border-b border-border px-5 py-4">
+        <div hlmCardHeader class="border-b border-border p-(--eg-space-5) md:p-(--eg-space-6)">
           @if (headingLevel() === 2) {
             <h2 hlmCardTitle [size]="subsectionHeadingSize" class="m-0">{{ copy.matrix }}</h2>
           } @else {
@@ -40,7 +40,7 @@ const ROLE_VALUE_WIDTH: DataTableColumnWidth = { min: '0px', max: 'none' };
           }
           <p class="m-0 text-sm text-muted-foreground">{{ copy.authority }}</p>
         </div>
-        <div class="grid min-w-0 gap-3 p-4 md:hidden">
+        <div class="grid min-w-0 gap-3 p-(--eg-space-5) md:p-(--eg-space-6) md:hidden">
           @if (!fullMatrix()) {
             <dl class="m-0 grid min-w-0 gap-3" data-members-granted-summary>
               @for (row of grantedRows(); track row.membership.id) {
@@ -61,7 +61,7 @@ const ROLE_VALUE_WIDTH: DataTableColumnWidth = { min: '0px', max: 'none' };
             hlmBtn
             [variant]="'outline'"
             type="button"
-            class="min-h-[var(--eg-control-touch)] w-fit max-w-full whitespace-normal"
+            class="w-fit max-w-full whitespace-normal"
             [attr.aria-expanded]="fullMatrix()"
             [attr.aria-controls]="'members-full-matrix'"
             (click)="fullMatrix.set(!fullMatrix())"

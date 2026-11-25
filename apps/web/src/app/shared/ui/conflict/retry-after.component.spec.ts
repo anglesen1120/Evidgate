@@ -167,16 +167,7 @@ describe('RetryAfterComponent', () => {
 
   it('lets the waiting recovery label reflow and grow without changing eligibility', () => {
     const { button, root } = render(30, false);
-    for (const token of [
-      'h-auto',
-      'min-w-0',
-      'max-w-full',
-      'whitespace-normal',
-      'min-h-(--eg-control-md)',
-      'py-(--eg-space-2)',
-      'pointer-coarse:min-h-(--eg-control-touch)',
-      'pointer-coarse:min-w-(--eg-control-touch)',
-    ]) {
+    for (const token of ['h-auto', 'max-w-full', 'whitespace-normal']) {
       expect(button.classList.contains(token)).toBe(true);
     }
     expect(button.disabled).toBe(true);

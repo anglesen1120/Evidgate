@@ -145,7 +145,7 @@ for (const locale of LOCALES) {
           locale === 'vi' ? 'Lưu giữ dự án' : 'Project retention',
         );
         const size = await page.locator('[data-retention-save]').boundingBox();
-        expect(size?.height).toBeGreaterThanOrEqual(44);
+        expect(size?.height).toBe(32);
         await enterDays(page, '#retention-artifact', '7');
         await tabTo(page, '[data-retention-save]');
         await page.keyboard.press('Enter');

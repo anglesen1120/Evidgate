@@ -40,6 +40,22 @@ describe('ThemeService', () => {
     expect(localStorage.getItem('evidgate-theme')).toBe('light');
   });
 
+  it('restores OS tracking and removes the stored override when System is selected', () => {
+    const media = Object.assign(new EventTarget(), { matches: false });
+    vi.stubGlobal('matchMedia', () => media);
+    const theme = TestBed.inject(ThemeService);
+    theme.choose('dark');
+    expect(theme.isDark()).toBe(true);
+    expect(localStorage.getItem('evidgate-theme')).toBe('dark');
+    theme.choose('system');
+    expect(theme.isDark()).toBe(false);
+    expect(localStorage.getItem('evidgate-theme')).toBeNull();
+    expect(document.documentElement.hasAttribute('data-theme')).toBe(false);
+    media.dispatchEvent(Object.assign(new Event('change'), { matches: true }));
+    expect(theme.isDark()).toBe(true);
+    expect(theme.choice()).toBe('system');
+  });
+
   it('resolves an OS dark preference without persisting it; toggle chooses light', () => {
     vi.stubGlobal(
       'matchMedia',

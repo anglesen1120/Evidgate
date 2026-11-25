@@ -60,7 +60,7 @@ type SignInState = 'idle' | 'submitting' | 'wrong-secret' | 'unavailable' | 'fai
           <button
             hlmBtn
             [variant]="'outline'"
-            class="h-auto min-h-(--eg-control-touch) whitespace-normal"
+            class="h-auto whitespace-normal"
             type="submit"
             [disabled]="state() === 'submitting'"
           >

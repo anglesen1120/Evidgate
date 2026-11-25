@@ -42,7 +42,7 @@ import { HlmCard, HlmCardDescription, HlmCardTitle } from '@evidgate/ui/card';
         @if (actionHref(); as actionHref) {
           <a
             hlmBtn
-            class="state-panel__action state-panel__action--primary h-auto min-h-(--eg-control-md) max-w-full whitespace-normal py-(--eg-space-2) pointer-coarse:min-h-(--eg-control-touch) pointer-coarse:min-w-(--eg-control-touch)"
+            class="state-panel__action state-panel__action--primary h-auto max-w-full whitespace-normal py-(--eg-space-2) pointer-coarse:min-h-(--eg-control-touch) pointer-coarse:min-w-(--eg-control-touch)"
             [href]="actionHref"
           >
             {{ actionLabel }}
@@ -50,7 +50,7 @@ import { HlmCard, HlmCardDescription, HlmCardTitle } from '@evidgate/ui/card';
         } @else {
           <button
             hlmBtn
-            class="state-panel__action state-panel__action--primary h-auto min-h-(--eg-control-md) max-w-full whitespace-normal py-(--eg-space-2) pointer-coarse:min-h-(--eg-control-touch) pointer-coarse:min-w-(--eg-control-touch)"
+            class="state-panel__action state-panel__action--primary h-auto max-w-full whitespace-normal py-(--eg-space-2) pointer-coarse:min-h-(--eg-control-touch) pointer-coarse:min-w-(--eg-control-touch)"
             type="button"
             (click)="action.emit()"
           >

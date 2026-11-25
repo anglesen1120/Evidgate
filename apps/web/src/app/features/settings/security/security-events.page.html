@@ -16,7 +16,7 @@
     class="m-0 grid min-w-0 grid-cols-1 gap-3 @xs:grid-cols-2 @2xl:grid-cols-4"
   >
     @for (card of summary(); track card.label; let first = $first; let last = $last) {
-      <div hlmCard class="min-w-0 gap-3 rounded-xl p-4">
+      <div hlmCard class="min-w-0 gap-3 rounded-xl p-(--eg-space-5) md:p-(--eg-space-6)">
         <dt class="flex items-center gap-2 text-sm font-semibold">
           <span
             class="grid size-7 shrink-0 place-items-center rounded-lg"
@@ -41,7 +41,9 @@
   </dl>
 }
 <div hlmCard class="min-w-0 gap-0 overflow-visible rounded-xl p-0">
-  <header class="flex items-center justify-between gap-3 border-b border-border px-5 py-4">
+  <header
+    class="flex items-center justify-between gap-3 border-b border-border p-(--eg-space-5) md:p-(--eg-space-6)"
+  >
     <app-section-header
       [title]="copy.activity"
       [size]="'subsection'"
@@ -52,7 +54,7 @@
     </span>
   </header>
   <form
-    class="grid min-w-0 gap-3 border-b border-border px-5 py-4"
+    class="grid min-w-0 gap-3 border-b border-border p-(--eg-space-5) md:p-(--eg-space-6)"
     (ngSubmit)="!(store.phase() === 'loading') && apply()"
     aria-labelledby="security-filters-heading"
   >
@@ -237,7 +239,9 @@
   </section>
 </div>
 <section hlmCard class="min-w-0 gap-0 rounded-xl p-0" aria-labelledby="security-safe-data-title">
-  <header class="flex items-center justify-between gap-3 border-b border-border px-5 py-4">
+  <header
+    class="flex items-center justify-between gap-3 border-b border-border p-(--eg-space-5) md:p-(--eg-space-6)"
+  >
     <app-section-header
       [titleId]="'security-safe-data-title'"
       [title]="copy.safeData"
@@ -248,7 +252,9 @@
       <hlm-icon [name]="'lucideInfo'" /> {{ copy.readOnly }}
     </span>
   </header>
-  <div class="grid min-w-0 gap-2 px-5 py-4 text-sm text-muted-foreground">
+  <div
+    class="grid min-w-0 gap-2 p-(--eg-space-5) md:p-(--eg-space-6) text-sm text-muted-foreground"
+  >
     <p class="m-0">{{ copy.boundary }}</p>
     @if (store.phase() === 'ready') {
       <p class="m-0 text-xs">{{ copy.hidden }}</p>

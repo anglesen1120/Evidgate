@@ -33,8 +33,7 @@ async function settle(page: Page): Promise<void> {
 }
 
 /** Desktop stops in document and visual order. */
-type TopbarStop =
-  'navigation' | 'theme' | 'organization' | 'project' | 'locale' | 'search' | 'account';
+type TopbarStop = 'navigation' | 'theme' | 'organization' | 'project' | 'search' | 'account';
 
 /** Walk from the document start without synthetic focus moves. */
 async function walkTopbar(
@@ -62,7 +61,6 @@ async function walkTopbar(
     ['project', page.getByRole('combobox', { name: 'Project' })],
     ['search', page.locator('.screen-search')],
     ['theme', page.locator('button.theme-toggle')],
-    ['locale', page.locator('header.topbar button.locale-toggle')],
     ['account', page.locator('app-shell-account button')],
   ];
   const last = stops.findIndex(([name]) => name === stop);
@@ -186,30 +184,25 @@ test.describe('scope flow: keyboard order (AC2, F-SWITCH-01)', () => {
     await page.keyboard.press('Tab');
     await expectFocusVisible(page, themeToggle);
     await expect(themeToggle).toHaveAttribute('aria-pressed', /^(true|false)$/);
-    const localeToggle = page.locator('header.topbar button.locale-toggle');
+    const account = page.locator('app-shell-account button');
     await page.keyboard.press('Tab');
-    await expectFocusVisible(page, localeToggle);
-    await expect(localeToggle).toHaveAccessibleName(
-      'EN / VI: Switch language between English and Vietnamese',
-    );
-    await page.keyboard.press('Tab');
-    await expectFocusVisible(page, page.locator('app-shell-account button'));
+    await expectFocusVisible(page, account);
+    await expect(account).toHaveAccessibleName('Account and preferences');
 
     // Traversing the switcher is not a commitment; only activating an option navigates.
     expect(new URL(page.url()).pathname).toBe(startPath);
 
     // Every named utility has the same exact order in the keyboard walk and the visual row.
-    const [navBox, themeBox, orgBox, projectBox, localeBox] = await Promise.all([
+    const [navBox, themeBox, orgBox, projectBox, accountBox] = await Promise.all([
       boxOf(navToggle),
       boxOf(themeToggle),
       boxOf(orgSelect),
       boxOf(projectSelect),
-      boxOf(localeToggle),
+      boxOf(account),
     ]);
     expect(themeBox.x, 'theme follows the project selector').toBeGreaterThan(projectBox.x);
     expect(orgBox.x, 'scope follows navigation').toBeGreaterThan(navBox.x);
-    expect(localeBox.x, 'language follows the project selector').toBeGreaterThan(projectBox.x);
-    expect(localeBox.x, 'language follows theme').toBeGreaterThan(themeBox.x);
+    expect(accountBox.x, 'preferences follow theme').toBeGreaterThan(themeBox.x);
     expect(
       projectBox.x,
       'the project select is painted right of the organization select',
@@ -218,7 +211,7 @@ test.describe('scope flow: keyboard order (AC2, F-SWITCH-01)', () => {
       ['the theme toggle', themeBox],
       ['the organization select', orgBox],
       ['the project select', projectBox],
-      ['the locale switch', localeBox],
+      ['the account menu', accountBox],
     ] as const) {
       expectSameRow(navBox, box, `${label} shares the toggle's row`);
     }
@@ -314,7 +307,6 @@ test.describe('scope flow: keyboard order (AC2, F-SWITCH-01)', () => {
       scopeControl(page, 1),
       page.locator('.screen-search'),
       page.locator('button.theme-toggle'),
-      page.locator('header.topbar button.locale-toggle'),
       page.locator('app-shell-account button'),
     ];
     for (const stop of stops) {
@@ -332,7 +324,7 @@ for (const width of [360, 390]) {
   test.describe(`scope flow at ${width}px`, () => {
     test.use({ viewport: { width, height: 900 } });
 
-    test('keeps current location beside the utilities and scope in the closed drawer', async ({
+    test('keeps current location above the page title and scope in the closed drawer', async ({
       page,
     }) => {
       await page.goto(withVariant(overviewPath('en'), LIMITED_GRANTS));
@@ -357,13 +349,11 @@ for (const width of [360, 390]) {
       ]);
       expectSameRow(navBox, themeBox, 'both controls share a single row');
       expect(themeBox.x).toBeGreaterThan(navBox.x);
-      const current = page.locator('app-shell-breadcrumbs [aria-current="page"]');
+      const current = page.locator('main > app-shell-breadcrumbs [aria-current="page"]');
       await expect(current).toHaveText(/\S/);
       const crumb = await boxOf(current);
-      expectSameRow(navBox, crumb, 'current location shares the navigation row');
-      expect(crumb.x).toBeGreaterThanOrEqual(navBox.x + navBox.width);
-      expect(crumb.x + crumb.width).toBeLessThanOrEqual(themeBox.x);
-      expect(crumb.y + crumb.height).toBeLessThanOrEqual(topbarBox.y + topbarBox.height);
+      expect(crumb.y).toBeGreaterThanOrEqual(topbarBox.y + topbarBox.height);
+      expect(crumb.y + crumb.height).toBeLessThanOrEqual((await boxOf(page.locator('main h1'))).y);
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
         true,
       );
@@ -408,15 +398,7 @@ for (const width of [360, 390]) {
         await expectFocusVisible(page, links.nth(index));
       }
       await page.keyboard.press('Tab');
-      const localeToggle = aside.locator('button.locale-toggle');
-      await expectFocusVisible(page, localeToggle);
-      await expect(localeToggle).toHaveAccessibleName(
-        'EN / VI: Switch language between English and Vietnamese',
-      );
-      await page.keyboard.press('Tab');
       await expectFocusVisible(page, close);
-      await page.keyboard.press('Shift+Tab');
-      await expectFocusVisible(page, localeToggle);
       await page.keyboard.press('Shift+Tab');
       await expectFocusVisible(page, links.last());
       await page.keyboard.press('Escape');

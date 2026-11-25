@@ -59,14 +59,14 @@
       class="col-span-full min-w-0 gap-0 py-0"
       aria-labelledby="suite-identity-heading"
     >
-      <header hlmCardHeader class="border-b border-border px-(--eg-space-6) py-(--eg-space-5)">
+      <header hlmCardHeader class="border-b border-border p-(--eg-space-5) md:p-(--eg-space-6)">
         <h2 hlmCardTitle [size]="sectionHeadingSize" id="suite-identity-heading">
           {{ copy.identity }}
         </h2>
       </header>
       <dl
         hlmCardContent
-        class="flex min-w-0 flex-wrap items-start gap-x-(--eg-space-7) gap-y-(--eg-space-4) px-(--eg-space-6) py-(--eg-space-5) [&>div]:grid [&>div]:min-w-0 [&>div]:gap-(--eg-space-2)"
+        class="flex min-w-0 flex-wrap items-start gap-x-(--eg-space-7) gap-y-(--eg-space-4) p-(--eg-space-5) md:p-(--eg-space-6) [&>div]:grid [&>div]:min-w-0 [&>div]:gap-(--eg-space-2)"
       >
         <div>
           <dt>{{ copy.suite }}</dt>
@@ -106,14 +106,14 @@
       class="col-span-full min-w-0 gap-0 py-0"
       aria-labelledby="suite-matrix-heading"
     >
-      <header hlmCardHeader class="border-b border-border px-(--eg-space-6) py-(--eg-space-5)">
+      <header hlmCardHeader class="border-b border-border p-(--eg-space-5) md:p-(--eg-space-6)">
         <h2 hlmCardTitle [size]="sectionHeadingSize" id="suite-matrix-heading">
           {{ copy.matrix }}
         </h2>
       </header>
       <div
         hlmCardContent
-        class="grid min-w-0 gap-(--eg-space-4) px-(--eg-space-6) py-(--eg-space-5)"
+        class="grid min-w-0 gap-(--eg-space-4) p-(--eg-space-5) md:p-(--eg-space-6)"
       >
         @if (view.layout === 'matrix' && view.duplicateMembers > 0) {
           <!-- Only the matrix collapses a repeated cell; the flat table lists every served member,
@@ -377,12 +377,12 @@
       </div>
     </section>
     <section hlmCard class="min-w-0 gap-0 py-0" aria-labelledby="suite-dependencies-heading">
-      <header hlmCardHeader class="border-b border-border px-(--eg-space-6) py-(--eg-space-5)">
+      <header hlmCardHeader class="border-b border-border p-(--eg-space-5) md:p-(--eg-space-6)">
         <h2 hlmCardTitle [size]="sectionHeadingSize" id="suite-dependencies-heading">
           {{ copy.dependencies }}
         </h2>
       </header>
-      <div hlmCardContent class="grid gap-(--eg-space-4) px-(--eg-space-6) py-(--eg-space-5)">
+      <div hlmCardContent class="grid gap-(--eg-space-4) p-(--eg-space-5) md:p-(--eg-space-6)">
         @if (view.dependencies.length === 0) {
           <p>{{ copy.noDependencies }}</p>
         } @else {
@@ -440,12 +440,12 @@
       aria-labelledby="suite-strategy-heading"
       data-testid="suite-strategy"
     >
-      <header hlmCardHeader class="border-b border-border px-(--eg-space-6) py-(--eg-space-5)">
+      <header hlmCardHeader class="border-b border-border p-(--eg-space-5) md:p-(--eg-space-6)">
         <h2 hlmCardTitle [size]="sectionHeadingSize" id="suite-strategy-heading">
           {{ copy.strategy }}
         </h2>
       </header>
-      <div hlmCardContent class="grid gap-(--eg-space-4) px-(--eg-space-6) py-(--eg-space-5)">
+      <div hlmCardContent class="grid gap-(--eg-space-4) p-(--eg-space-5) md:p-(--eg-space-6)">
         @switch (view.strategy.kind) {
           @case ('none') {
             <p>{{ copy.noSharding }}</p>

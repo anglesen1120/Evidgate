@@ -151,6 +151,16 @@ describe('Spartan theme contract', () => {
     expect(expanded.get('background')).toBe('var(--eg-surface-raised)');
   });
 
+  it('gives semantic h1 and nested page titles the same responsive display type', () => {
+    const styles = source('../styles.css');
+    for (const selector of ['h1', '.eg-type-page-title']) {
+      const heading = declarations(styles, selector);
+      expect(heading.get('font-family')).toBe('var(--eg-font-display)');
+      expect(heading.get('font-size')).toBe('clamp(var(--eg-text-xl), 2vw, var(--eg-text-2xl))');
+      expect(heading.get('line-height')).toBe('var(--eg-leading-2xl)');
+    }
+  });
+
   it.each([
     ['default', 'accent', 'on-accent'],
     ['outline', 'surface', 'text'],

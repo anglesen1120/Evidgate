@@ -104,6 +104,7 @@ describe('InlineFeedbackComponent', () => {
       .injector.get(HlmButton);
     expect(button.type).toBe('button');
     expect(renderedButton.variant()).toBe('outline');
+    expect(renderedButton.size()).toBe('sm');
     expect(button.classList.contains('h-auto')).toBe(true);
     expect(button.classList.contains('max-w-full')).toBe(true);
     expect(button.classList.contains('whitespace-normal')).toBe(true);
@@ -140,7 +141,7 @@ describe('InlineFeedbackComponent', () => {
     expect(root.querySelector('[data-slot="alert-title"]')?.textContent).toBe(literal);
     expect(root.querySelector('[data-slot="alert-description"]')?.textContent).toContain(literal);
     expect(root.querySelector('button')?.textContent?.trim()).toBe(literal);
-    expect(root.querySelector('button')?.classList.contains('min-w-0')).toBe(true);
+    expect(root.querySelector('button')?.classList.contains('max-w-full')).toBe(true);
     expect(root.querySelector('script, img, [title]')).toBeNull();
   });
 

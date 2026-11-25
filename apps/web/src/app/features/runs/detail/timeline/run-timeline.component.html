@@ -3,33 +3,42 @@
     hlmCardTitle
     [size]="sectionSize"
     id="run-timeline-title"
-    class="m-0 border-b border-(--eg-border) px-(--eg-space-5) py-(--eg-space-4)"
+    class="m-0 border-b border-(--eg-border) px-(--eg-space-5) md:px-(--eg-space-6) py-(--eg-space-4)"
     [textContent]="copy.title"
   ></h2>
   <ol
-    class="m-0 grid list-none px-(--eg-space-5) py-(--eg-space-4)"
+    class="m-0 grid list-none grid-cols-1 gap-(--eg-space-3) px-(--eg-space-5) md:px-(--eg-space-6) py-(--eg-space-4) md:grid-cols-[repeat(auto-fill,minmax(min(100%,calc(3*var(--eg-space-12))),1fr))]"
+    role="list"
     aria-labelledby="run-timeline-title"
     data-timeline-steps
   >
     @for (step of steps(); track step.state) {
       <li
-        class="relative grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,2fr)] items-start gap-x-(--eg-space-3) gap-y-(--eg-space-1) py-(--eg-space-2) ps-(--eg-space-5) min-[768px]:grid-cols-[12ch_minmax(0,1fr)]"
+        class="grid min-w-0 grid-cols-[minmax(0,1fr)_fit-content(45%)] content-start items-start gap-(--eg-space-2) rounded-(--eg-radius-sm) border border-border p-(--eg-space-4) aria-[current=step]:border-primary aria-[current=step]:bg-accent data-[step=incomplete]:border-(--eg-warning-fg) data-[step=incomplete]:bg-(--eg-warning-bg)"
         [attr.data-step]="step.state"
         [attr.data-status]="step.status"
         [attr.aria-current]="step.status === 'current' ? 'step' : null"
       >
         <span class="min-w-0 font-semibold" data-step-label>{{ stepLabel(step.state) }}</span>
         <app-status-pill
+          class="col-span-full"
           data-step-status
           [tone]="stepTone(step.status, step.state)"
           [label]="statusLabel(step.status)"
         />
-        @if (step.at; as at) {
-          <span
+        @if (stateHistory()?.length && (step.status === 'current' || step.status === 'reached')) {
+          <app-absolute-time
             class="eg-type-caption col-span-full min-w-0 text-muted-foreground tabular-nums"
-            data-step-time
+            [attr.data-step-time]="step.at ? '' : null"
+            [value]="step.at"
+          />
+        }
+        @if (step.elapsed; as elapsed) {
+          <span
+            class="eg-type-caption col-start-2 row-start-1 min-w-0 justify-self-end text-end text-muted-foreground tabular-nums"
+            data-step-delta
           >
-            <app-absolute-time [value]="at" />
+            <span class="sr-only">{{ copy.elapsed }} </span>+{{ elapsed }}
           </span>
         }
       </li>

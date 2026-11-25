@@ -40,7 +40,8 @@ const icons = {
           <button
             hlmBtn
             [variant]="'outline'"
-            class="h-auto min-h-(--eg-control-md) min-w-0 max-w-full whitespace-normal py-(--eg-space-2) pointer-coarse:min-h-(--eg-control-touch) pointer-coarse:min-w-(--eg-control-touch)"
+            [size]="'sm'"
+            class="h-auto max-w-full whitespace-normal"
             type="button"
             [disabled]="actionDisabled()"
             (click)="requestAction()"

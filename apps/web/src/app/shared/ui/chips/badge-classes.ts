@@ -9,6 +9,11 @@ export const BADGE_CLASSES =
 /** Keep the full-value disclosure, but let the stored decision carry the visual emphasis. */
 export const QUIET_BADGE_CLASSES = hlm(BADGE_CLASSES, 'px-0 font-normal');
 
+export const COMPACT_VERDICT_CLASSES = hlm(
+  BADGE_CLASSES,
+  'rounded-(--eg-radius-md) [&>hlm-icon]:size-[calc(var(--eg-space-4)/2)] [&>hlm-icon_svg]:fill-current',
+);
+
 export const IDENTITY_BADGE_CLASSES = hlm(
   BADGE_CLASSES,
   'bg-[var(--eg-neutral-bg)] text-[var(--eg-neutral-fg)] font-mono font-normal',

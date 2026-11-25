@@ -10,6 +10,7 @@ import {
 import { Router, provideRouter } from '@angular/router';
 import { ViewportRuler } from '@angular/cdk/scrolling';
 import type { ProjectDto } from '@evidgate/sdk';
+import { IdentityDataService } from '../../core/data/identity-data.service';
 import { SessionStore } from '../../core/session/session.store';
 import { QuotaStore } from '../../features/settings/quota-retention/quota.store';
 import { NavViewService } from '../nav/nav-view';
@@ -19,9 +20,15 @@ import { SCOPE_ORGANIZATIONS, SCOPE_PROJECTS, stubScopeBrowserApis } from './sco
 
 class ShellScopeHarness extends ComponentHarness {
   static hostSelector = 'app-shell';
-  readonly scopeValues = this.locatorForAll('header nav [role="combobox"] bdi');
-  readonly selects = this.locatorForAll('header nav hlm-select');
-  readonly staticCrumbs = this.locatorForAll('header nav li > bdi');
+  readonly scopeValues = this.locatorForAll('header [role="combobox"] bdi');
+  readonly selects = this.locatorForAll('header hlm-select');
+  readonly staticCrumbs = this.locatorForAll('main > app-shell-breadcrumbs li > bdi');
+  readonly account = this.locatorFor('header app-shell-account button');
+}
+
+class LanguageMenu extends ComponentHarness {
+  static hostSelector = '[role="menu"]';
+  readonly vietnamese = this.locatorForOptional('button[lang="vi"]');
 }
 
 describe('ShellComponent scope, locale and drawer context', () => {
@@ -49,6 +56,10 @@ describe('ShellComponent scope, locale and drawer context', () => {
             currentOrg: signal(SCOPE_ORGANIZATIONS[0]),
             currentProject: project,
           },
+        },
+        {
+          provide: IdentityDataService,
+          useValue: { getMyProfile: vi.fn().mockResolvedValue({ display_name: null }) },
         },
         { provide: QuotaStore, useValue: { badge: signal(null), load: vi.fn() } },
         { provide: NavViewService, useValue: { groups: signal([]) } },
@@ -82,14 +93,19 @@ describe('ShellComponent scope, locale and drawer context', () => {
     return vi.spyOn(window, 'scroll').mockImplementation(() => undefined);
   }
 
-  it('uses each selected scope once, as a control on desktop and as text on mobile', async () => {
+  it('keeps a single scope trail above the routed content on desktop and mobile', async () => {
     const shell = await TestbedHarnessEnvironment.harnessForFixture(fixture, ShellScopeHarness);
     const [scopeBlock] = await fixture.getDeferBlocks();
     await scopeBlock?.render(DeferBlockState.Complete);
     const values = async () =>
       Promise.all((await shell.scopeValues()).map((value) => value.text()));
     expect(await values()).toEqual([SCOPE_ORGANIZATIONS[0].name, SCOPE_PROJECTS[0].name]);
-    expect(await shell.staticCrumbs()).toHaveLength(0);
+    expect(root.querySelector('header app-shell-breadcrumbs')).toBeNull();
+    expect(root.querySelector('main')?.firstElementChild?.tagName).toBe('APP-SHELL-BREADCRUMBS');
+    expect(await Promise.all((await shell.staticCrumbs()).map((part) => part.text()))).toEqual([
+      SCOPE_ORGANIZATIONS[0].name,
+      SCOPE_PROJECTS[0].name,
+    ]);
     project.set(null);
     expect(await values()).not.toContain(SCOPE_PROJECTS[0].name);
     expect(await (await shell.selects())[1]?.getAttribute('data-value')).toBe('');
@@ -113,28 +129,11 @@ describe('ShellComponent scope, locale and drawer context', () => {
     await fixture.whenStable();
     expect(root.querySelector('header app-scope-switcher')).not.toBeNull();
     expect(root.querySelectorAll('header [role="combobox"]')).toHaveLength(2);
-    expect(root.querySelector('header .locale-toggle')).not.toBeNull();
+    expect(root.querySelector('header app-shell-account button')).not.toBeNull();
     expect(root.querySelector('header .theme-toggle')).not.toBeNull();
     await resize(767);
     expect(root.querySelector('header .topbar-scope')).toBeNull();
-    expect(root.querySelector('aside .locale-toggle')).not.toBeNull();
-  });
-
-  it('keeps one labelled locale control in the topbar, moving it into the mobile drawer', async () => {
-    expect(root.querySelectorAll('.locale-toggle')).toHaveLength(1);
-    expect(root.querySelector('header .locale-toggle')?.getAttribute('aria-label')).toContain(
-      'EN / VI',
-    );
-    await resize(767);
-    expect(root.querySelector('header .locale-toggle')).toBeNull();
-    expect(root.querySelectorAll('aside .locale-toggle')).toHaveLength(1);
-    root.querySelector<HTMLButtonElement>('.nav-toggle')!.click();
-    await fixture.whenStable();
-    expect(root.querySelector('aside')?.hasAttribute('inert')).toBe(false);
-    expect(root.querySelector<HTMLButtonElement>('aside .locale-toggle')?.disabled).toBe(false);
-    await resize(768);
-    expect(root.querySelectorAll('header .locale-toggle')).toHaveLength(1);
-    expect(root.querySelector('aside .locale-toggle')).toBeNull();
+    expect(root.querySelector('header app-shell-account button')).not.toBeNull();
   });
 
   it.each(['Escape', 'close button', 'scrim'])(
@@ -183,8 +182,14 @@ describe('ShellComponent scope, locale and drawer context', () => {
         return value;
       },
     });
+    const shell = await TestbedHarnessEnvironment.harnessForFixture(fixture, ShellScopeHarness);
+    await (await shell.account()).click();
+    const menu =
+      await TestbedHarnessEnvironment.documentRootLoader(fixture).getHarness(LanguageMenu);
+    const vietnamese = await menu.vietnamese();
+    expect(vietnamese).not.toBeNull();
     vi.spyOn(document, 'defaultView', 'get').mockReturnValue(view);
-    root.querySelector<HTMLButtonElement>('.locale-toggle')!.click();
+    await vietnamese!.click();
     expect(navigate).toHaveBeenCalledExactlyOnceWith('/vi' + route);
     expect(router.url).toBe(route);
   });
@@ -193,7 +198,11 @@ describe('ShellComponent scope, locale and drawer context', () => {
     vi.spyOn(document, 'baseURI', 'get').mockReturnValue('https://evidgate.test/preview/');
     const unlocalized = TestBed.createComponent(ShellComponent);
     await unlocalized.whenStable();
-    expect((unlocalized.nativeElement as HTMLElement).querySelector('.locale-toggle')).toBeNull();
+    const shell = await TestbedHarnessEnvironment.harnessForFixture(unlocalized, ShellScopeHarness);
+    await (await shell.account()).click();
+    const menu =
+      await TestbedHarnessEnvironment.documentRootLoader(unlocalized).getHarness(LanguageMenu);
+    expect(await menu.vietnamese()).toBeNull();
     unlocalized.destroy();
   });
 

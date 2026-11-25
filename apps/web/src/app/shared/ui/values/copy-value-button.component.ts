@@ -70,6 +70,7 @@ let nextCopyId = 0;
     }
     button.icon-only {
       inline-size: var(--eg-control-sm);
+      min-block-size: var(--eg-control-sm);
       padding: var(--eg-space-2);
       white-space: nowrap;
     }
@@ -80,7 +81,6 @@ let nextCopyId = 0;
     button {
       max-inline-size: 100%;
       block-size: auto;
-      min-block-size: var(--eg-control-sm);
       white-space: normal;
       overflow-wrap: anywhere;
     }
@@ -88,8 +88,9 @@ let nextCopyId = 0;
       min-block-size: var(--eg-control-touch);
       min-inline-size: var(--eg-control-touch);
     }
-    @media (pointer: coarse) {
-      button {
+    @media (max-width: 767px), (pointer: coarse) {
+      button,
+      button.icon-only {
         min-block-size: var(--eg-control-touch);
         min-inline-size: var(--eg-control-touch);
       }

@@ -2,7 +2,12 @@ import { ChangeDetectionStrategy, Component, computed, input } from '@angular/co
 import { HlmBadge } from '@evidgate/ui/badge';
 import { HlmIcon } from '@evidgate/ui/icon';
 
-import { BADGE_CLASSES, BADGE_ICON_NAMES, BADGE_TONE_CLASSES } from '../chips/badge-classes';
+import {
+  BADGE_CLASSES,
+  BADGE_ICON_NAMES,
+  BADGE_TONE_CLASSES,
+  COMPACT_VERDICT_CLASSES,
+} from '../chips/badge-classes';
 
 import type { DecisionValue } from './verdict-values';
 
@@ -15,6 +20,7 @@ import type { DecisionValue } from './verdict-values';
     <span
       class="verdict__label whitespace-nowrap"
       [class.sr-only]="compact()"
+      [attr.aria-hidden]="compact() ? 'true' : null"
       i18n="@@shared.decision-chip.dimension"
       >Decision:
     </span>
@@ -23,11 +29,15 @@ import type { DecisionValue } from './verdict-values';
       [variant]="'outline'"
       class="verdict verdict--decision"
       [class]="badgeClasses()"
+      [attr.role]="compact() ? 'img' : null"
+      [attr.aria-label]="compact() ? compactName() : null"
       [attr.data-tone]="tone()"
     >
-      <hlm-icon [name]="icons[tone()]" />
+      <hlm-icon [name]="compact() ? 'lucideCircle' : icons[tone()]" />
       @if (value(); as decision) {
-        <span class="verdict__value min-w-0 whitespace-nowrap">{{ decision }}</span>
+        <span class="verdict__value min-w-0 whitespace-nowrap">{{
+          compact() ? compactLabel() : decision
+        }}</span>
       } @else {
         <span
           class="verdict__value min-w-0 whitespace-nowrap"
@@ -82,7 +92,8 @@ export class DecisionChipComponent {
     }
   });
   protected readonly badgeClasses = computed(
-    () => `${BADGE_CLASSES} ${BADGE_TONE_CLASSES[this.tone()]}`,
+    () =>
+      `${this.compact() ? COMPACT_VERDICT_CLASSES : BADGE_CLASSES} ${BADGE_TONE_CLASSES[this.tone()]}`,
   );
 
   readonly value = computed(() => {
@@ -101,4 +112,12 @@ export class DecisionChipComponent {
         return null;
     }
   });
+  protected readonly compactLabel = computed(() =>
+    this.tone() === 'pending'
+      ? $localize`:@@shared.decision-chip.short-pending:Pending`
+      : (this.value() ?? $localize`:@@shared.decision-chip.short-unavailable:Unavailable`),
+  );
+  protected readonly compactName = computed(
+    () => $localize`:@@shared.decision-chip.compact-name:Decision: ${this.compactLabel()}:value:`,
+  );
 }

@@ -11,6 +11,16 @@ import { ShellIconComponent } from './shell-icon.component';
   imports: [RouterLink, RouterLinkActive, ShellIconComponent, HlmButton, HlmTooltip],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './nav.component.html',
+  styles: `
+    a[aria-current='page']::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-inline-start: calc(3 * var(--eg-border-width)) solid var(--eg-accent);
+      border-radius: inherit;
+      pointer-events: none;
+    }
+  `,
   host: {
     class:
       'group/nav block min-h-0 overflow-y-auto overscroll-contain scroll-py-(--eg-space-3) px-(--eg-space-4) data-[collapsed=true]:px-(--eg-space-3) pb-(--eg-space-5) [scrollbar-width:thin]',

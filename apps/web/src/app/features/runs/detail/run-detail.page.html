@@ -13,7 +13,7 @@
       hlmBtn
       appPageHeaderActions
       [variant]="'outline'"
-      class="min-h-(--eg-control-touch) text-foreground visited:text-foreground hover:text-foreground md:col-start-1 md:row-start-1"
+      class="max-md:min-h-(--eg-control-touch) text-foreground visited:text-foreground hover:text-foreground md:col-start-1 md:row-start-1"
       routerLink=".."
       [queryParamsHandling]="'preserve'"
     >
@@ -28,7 +28,7 @@
         <button
           hlmBtn
           type="button"
-          class="min-h-(--eg-control-touch) whitespace-normal md:col-start-3 md:row-start-1"
+          class="max-md:min-h-(--eg-control-touch) whitespace-normal md:col-start-3 md:row-start-1"
           (click)="showEvidence()"
         >
           {{ copy.inspectEvidence }}

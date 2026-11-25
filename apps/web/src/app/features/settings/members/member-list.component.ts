@@ -197,7 +197,7 @@ export const MEMBERS_COPY = {
               hlmDialogTrigger
               [variant]="'ghost'"
               type="button"
-              class="shrink-0 min-h-[var(--eg-control-touch)]"
+              class="shrink-0"
               [attr.aria-label]="moreRoles(member)"
               data-members-more-roles
             >

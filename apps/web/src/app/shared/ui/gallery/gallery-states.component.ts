@@ -86,7 +86,14 @@ import { LiveStatusComponent } from '../states/live-status.component';
         [description]="longWarningDescription"
         [announcement]="'off'"
       >
-        <button feedbackAction hlmBtn [variant]="'outline'" type="button" (click)="recordRetry()">
+        <button
+          feedbackAction
+          hlmBtn
+          [variant]="'outline'"
+          [size]="'sm'"
+          type="button"
+          (click)="recordRetry()"
+        >
           {{ longWarningAction }}
         </button>
       </app-inline-feedback>

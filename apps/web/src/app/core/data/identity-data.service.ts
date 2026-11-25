@@ -12,12 +12,14 @@
 
 import { inject, Injectable } from '@angular/core';
 import {
+  getMyProfile,
   listMyOrganizations,
   listPermissions,
   listProjects,
   type OrganizationSummaryDto,
   type PermissionView,
   type ProjectDto,
+  type UserProfileDto,
 } from '@evidgate/sdk';
 
 import { ApiGateway } from '../http/api-gateway';
@@ -32,6 +34,10 @@ export const MAX_CURSOR_PAGES = 20;
 @Injectable({ providedIn: 'root' })
 export class IdentityDataService {
   private readonly gateway = inject(ApiGateway);
+
+  getMyProfile(signal: AbortSignal): Promise<UserProfileDto> {
+    return this.gateway.call((client) => getMyProfile({ client, signal }));
+  }
 
   /**
    * The whole permission catalogue (`GET /v1/permissions`, 02.2.1), every page.

@@ -37,7 +37,7 @@ describe('HashChipComponent', () => {
       await fixture.whenStable();
       const root = fixture.nativeElement as HTMLElement;
       const badge = root.querySelector('[hlmBadge]');
-      expect(badge?.querySelector('hlm-icon[aria-hidden="true"] svg')).not.toBeNull();
+      expect(root.querySelector('button hlm-icon[aria-hidden="true"] svg')).not.toBeNull();
       expect(root.querySelector('.identity-chip__value')?.textContent).toBe(visible);
       expect(badge?.getAttribute('data-full-value')).toBe(HASH);
       expect(badge?.classList.contains('font-mono')).toBe(true);
@@ -50,7 +50,7 @@ describe('HashChipComponent', () => {
         expect(badge?.querySelector('[popover]')).toBeNull();
       }
       expect(root.querySelector('button')?.getAttribute('aria-label')).toBe('Copy hash');
-      expect(root.querySelector('[title]')).toBeNull();
+      expect(badge?.querySelector('[title]')).toBeNull();
     },
   );
 
@@ -65,6 +65,16 @@ describe('HashChipComponent', () => {
       expect(root.querySelector('[data-full-value], [popover], button')).toBeNull();
     },
   );
+
+  it('can display a hash without a copy action', async () => {
+    const fixture = TestBed.createComponent(HashChipComponent);
+    fixture.componentRef.setInput('value', HASH);
+    fixture.componentRef.setInput('copyable', false);
+    await fixture.whenStable();
+    const root = fixture.nativeElement as HTMLElement;
+    expect(root.querySelector('.identity-chip__value')?.textContent).toBe('012345…abcdef');
+    expect(root.querySelector('button')).toBeNull();
+  });
 
   it('copies the complete original with a contextual accessible action', async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
@@ -94,7 +104,7 @@ describe('HashChipComponent', () => {
     expect(
       root.querySelector('.identity-chip__value')?.classList.contains('whitespace-nowrap'),
     ).toBe(true);
-    expect(root.querySelector('img, [title]')).toBeNull();
+    expect(root.querySelector('img, [hlmBadge] [title]')).toBeNull();
     expect(root.querySelector('[data-full-value]')?.getAttribute('data-full-value')).toBe(value);
   });
 });

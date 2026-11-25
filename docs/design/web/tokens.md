@@ -97,8 +97,10 @@ danger or warning; pending is not an amber warning and is not a green PASS.
 These values are shared by both themes. Fonts are self-hosted from `apps/web/src/styles/fonts/`
 (SIL OFL 1.1, ADR-0002): Manrope variable (display 600/700), Inter variable (body 400/500/600) and
 JetBrains Mono variable (mono 400/500), the last two as `latin`, `latin-ext` and `vietnamese`
-`.woff2` subsets with `font-display: swap`. `h1`–`h3` use `letter-spacing: -0.02em` and
-`text-wrap: balance`; `table`, `time` and `.tabular-nums` use `font-variant-numeric: tabular-nums`.
+`.woff2` subsets with `font-display: swap`. Headings balance text; `h2`–`h3` track at `-0.02em`.
+Page `h1` and `.eg-type-page-title` share the bold display face, `tracking-tight`, and a fluid
+`clamp(var(--eg-text-xl), 2vw, var(--eg-text-2xl))` size with `--eg-leading-2xl` line height.
+`table`, `time` and `.tabular-nums` use `font-variant-numeric: tabular-nums`.
 
 | Token                  | Value                                                                        |
 | ---------------------- | ---------------------------------------------------------------------------- |
@@ -121,7 +123,10 @@ JetBrains Mono variable (mono 400/500), the last two as `latin`, `latin-ext` and
 
 ### Spacing
 
-Shared by both themes. Do not substitute a familiar spacing scale: v2 `space-4` is 12px, not 16px.
+`spartan-theme.css` maps Tailwind `--spacing` to `var(--eg-space-2)` (4px): numeric spacing is
+4px × N. For example, `p-4` is 16px, but `--eg-space-4` is 12px. Use
+`p-(--eg-space-5) md:p-(--eg-space-6)` for feature card interiors (16px, then 20px).
+For cards with a full-width table or divider, pad the header/content instead of the outer shell.
 
 | Token           | Value  |
 | --------------- | ------ |
@@ -198,9 +203,12 @@ rule (like `--eg-scrim`).
 | `--eg-focus-width`   | `2px`          |
 | `--eg-focus-offset`  | `2px`          |
 
-A compact visual control is not permission to shrink a touch target below 44×44px. Layout and
-small-screen behaviour are specified in [layout.md](layout.md), including the 360px no-horizontal-
-scroll requirement; tokens alone do not implement responsive behaviour.
+On desktop fine pointers, default Helm buttons are at least 32px tall (`--eg-control-sm`), with
+4px × 10px padding and a 13px (`--eg-text-button`), medium (500) label. Small inline, banner
+and table actions are 28px (`--eg-button-sm`); icon targets are 24/28/32/40px for xs/sm/default/lg.
+Use a localized accessible name and a tooltip for icon-only actions. Multiline labels may grow.
+At ≤767px **or** on a coarse pointer, the button target is at least 44×44px. See [layout.md](layout.md)
+for the 360px no-horizontal-scroll requirement.
 
 ### Motion
 

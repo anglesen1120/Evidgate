@@ -180,7 +180,7 @@ import {
       <div class="flex flex-wrap gap-(--eg-space-3) md:col-span-2">
         <button
           hlmBtn
-          class="h-auto min-h-(--eg-control-touch) max-w-full justify-self-start whitespace-normal wrap-anywhere"
+          class="h-auto max-w-full justify-self-start whitespace-normal wrap-anywhere"
           data-testid="onboarding-project-submit"
           type="submit"
           [disabled]="submitDisabled()"

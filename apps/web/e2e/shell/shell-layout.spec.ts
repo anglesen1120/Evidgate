@@ -27,14 +27,16 @@ for (const locale of LOCALES) {
       await page.setViewportSize({ width, height: 900 });
       await page.goto(withVariant(overviewPath(locale), LIMITED_GRANTS));
       const header = page.locator('header.topbar');
-      const breadcrumb = header.locator('app-shell-breadcrumbs nav');
-      const scopes = breadcrumb.getByRole('combobox');
+      const breadcrumb = page.locator('main > app-shell-breadcrumbs nav');
+      const scopes = header.getByRole('combobox');
+      await expect(breadcrumb).toBeVisible();
+      await expect(header.locator('app-shell-breadcrumbs')).toHaveCount(0);
       await expect(scopes).toHaveCount(2);
-      await expect(header.getByRole('combobox')).toHaveCount(2);
       for (const scope of await scopes.all()) {
         const selected = (await scope.innerText()).trim();
         expect(selected).not.toBe('');
         await expect(header.getByText(selected, { exact: true })).toHaveCount(1);
+        await expect(breadcrumb.getByText(selected, { exact: true })).toHaveCount(1);
       }
       await expect(header.locator('.theme-toggle')).toHaveAttribute(
         'aria-pressed',
@@ -56,7 +58,6 @@ for (const locale of LOCALES) {
         scopes.nth(1),
         header.locator('.screen-search'),
         header.locator('.theme-toggle'),
-        header.locator('.locale-toggle'),
         header.locator('app-shell-account button'),
       ];
       const boxes = [];
@@ -162,6 +163,22 @@ async function expectUsageLabel(page: Page, locale: (typeof LOCALES)[number], ac
   }
 }
 
+test('centers the 1600px workspace between the expanded sidebar and the window edge', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 2048, height: 1000 });
+  await page.goto(withVariant(overviewPath('en'), LIMITED_GRANTS));
+  const main = page.getByRole('main');
+  await expect(main).toHaveCSS('width', '1600px');
+  const margins = await main.evaluate((element) => {
+    const outer = element.parentElement!.getBoundingClientRect();
+    const inner = element.getBoundingClientRect();
+    return [inner.left - outer.left, outer.right - inner.right];
+  });
+  expect(margins[0]).toBeGreaterThan(0);
+  expect(margins[0]).toBeCloseTo(margins[1]!, 0);
+});
+
 test('rail navigation exposes the focused destination and keeps focus on Escape', async ({
   page,
 }) => {
@@ -169,6 +186,10 @@ test('rail navigation exposes the focused destination and keeps focus on Escape'
   await page.goto(withVariant(overviewPath('en'), LIMITED_GRANTS));
   const link = page.locator('app-shell-nav a[aria-current="page"]');
   await expect(link).toHaveAccessibleName(/\S/);
+  const marker = await link.evaluate(
+    (element) => getComputedStyle(element, '::before').borderInlineStartWidth,
+  );
+  expect(marker).toBe('3px');
   const name = await link.getAttribute('aria-label');
   if (!name) throw new Error('The current rail destination has no name');
   await link.focus();
@@ -193,8 +214,28 @@ test('mobile search and account overlays return focus without changing the route
   await page.keyboard.press('Escape');
   await expect(picker).toHaveCount(0);
   await expect(search).toBeFocused();
-  const account = topbar.getByRole('button', { name: 'Account menu' });
+  const account = topbar.getByRole('button', { name: 'Account and preferences' });
   await account.press('Enter');
+  const language = page.getByRole('group', { name: 'Language' });
+  await expect(language.getByRole('menuitemradio', { name: 'EN' })).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await expect(language.getByRole('menuitemradio', { name: 'VI' })).toBeFocused();
+  const theme = page.getByRole('group', { name: 'Theme' });
+  await expect(theme.getByRole('menuitemradio', { name: 'System' })).toHaveAttribute(
+    'aria-checked',
+    'true',
+  );
+  await page.keyboard.press('ArrowDown');
+  await expect(theme.getByRole('menuitemradio', { name: 'Light' })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(theme.getByRole('menuitemradio', { name: 'Light' })).toHaveAttribute(
+    'aria-checked',
+    'true',
+  );
+  await expect(language.getByRole('menuitemradio', { name: 'EN' })).toHaveAttribute(
+    'aria-checked',
+    'true',
+  );
   await expect(page.getByRole('menuitem', { name: 'Sign out of this tab' })).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(page.getByRole('menu')).toHaveCount(0);

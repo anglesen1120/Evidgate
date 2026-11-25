@@ -1,3 +1,5 @@
+import { ComponentHarness } from '@angular/cdk/testing';
+import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import type { RunStateDto } from '@evidgate/sdk';
@@ -14,6 +16,39 @@ const ALL_STATES: readonly State[] = [
   'incomplete',
   'canceled',
 ];
+
+class TimelineHarness extends ComponentHarness {
+  static hostSelector = 'app-run-timeline';
+  readonly milestones = this.locatorForAll('ol > li');
+  readonly deltas = this.locatorForAll('[data-step-delta]');
+  readonly statusIcons = this.locatorForAll('[data-step-status] hlm-icon');
+  readonly section = this.locatorFor('section');
+  readonly list = this.locatorFor('ol');
+  readonly heading = this.locatorFor('#run-timeline-title');
+  readonly current = this.locatorForAll('[aria-current="step"]');
+  readonly times = this.locatorForAll('time');
+  readonly historyNote = this.locatorForOptional('[data-step-times]');
+  readonly cancelNote = this.locatorForOptional('[data-after-cancel-note]');
+  readonly cancelCount = this.locatorFor('[data-after-cancel-count]');
+  readonly cancelCountPill = this.locatorForOptional('[data-after-cancel-count] app-status-pill');
+  readonly alert = this.locatorForOptional('[role="alert"]');
+
+  async states() {
+    return Promise.all((await this.milestones()).map((step) => step.getAttribute('data-step')));
+  }
+
+  async status(state: State) {
+    return (await this.locatorFor(`[data-step="${state}"] [data-step-status]`)()).text();
+  }
+
+  time(state: State) {
+    return this.locatorForOptional(`[data-step="${state}"] time`)();
+  }
+
+  milestone(state: State) {
+    return this.locatorFor(`[data-step="${state}"]`)();
+  }
+}
 
 describe('RunTimelineComponent', () => {
   beforeEach(() =>
@@ -34,127 +69,138 @@ describe('RunTimelineComponent', () => {
     fixture.componentRef.setInput('afterCancelEvents', afterCancelEvents);
     fixture.componentRef.setInput('stateHistory', stateHistory);
     await fixture.whenStable();
-    return { fixture, root: fixture.nativeElement as HTMLElement };
+    const timeline = await TestbedHarnessEnvironment.harnessForFixture(fixture, TimelineHarness);
+    return { fixture, timeline };
   }
 
-  const stepStatus = (root: HTMLElement, state: State) =>
-    root.querySelector(`[data-step="${state}"] [data-step-status]`)?.textContent ?? '';
-
   it('renders a named ordered list with one current step and visible status text', async () => {
-    const { root } = await render('running');
-    const section = root.querySelector('section');
-    expect(section?.getAttribute('aria-labelledby')).toBe('run-timeline-title');
-    expect(root.querySelector('ol')?.getAttribute('aria-labelledby')).toBe('run-timeline-title');
-    expect(root.querySelector('#run-timeline-title')?.textContent).toBe('Run state timeline');
-    expect(root.querySelectorAll('ol > li')).toHaveLength(3);
-    expect(root.querySelectorAll('[aria-current="step"]')).toHaveLength(1);
-    expect(root.querySelector('[aria-current="step"]')?.getAttribute('data-step')).toBe('running');
-    expect(root.querySelector('[data-step="created"]')).toBeNull();
-    expect(stepStatus(root, 'running')).toContain('Current step');
-    expect(stepStatus(root, 'collecting')).toContain('Not reached yet');
-    expect(stepStatus(root, 'complete')).toContain('Not reached yet');
+    const { timeline } = await render('running');
+    expect(await (await timeline.section()).getAttribute('aria-labelledby')).toBe(
+      'run-timeline-title',
+    );
+    expect(await (await timeline.list()).getAttribute('aria-labelledby')).toBe(
+      'run-timeline-title',
+    );
+    expect(await (await timeline.heading()).text()).toBe('Run state timeline');
+    expect(await timeline.states()).toEqual(['running', 'collecting', 'complete']);
+    expect(await timeline.current()).toHaveLength(1);
+    expect(await timeline.status('running')).toBe('Current step');
+    expect(await timeline.status('collecting')).toBe('Not reached yet');
+    expect(await timeline.status('complete')).toBe('Not reached yet');
   });
 
-  it('binds labels and status into compact aligned tracks rather than opposite card edges', async () => {
-    const { root } = await render('complete');
-    const row = root.querySelector('ol > li');
-    expect(row?.classList.contains('min-[768px]:grid-cols-[12ch_minmax(0,1fr)]')).toBe(true);
-    expect(row?.classList.contains('justify-between')).toBe(false);
-    expect(row?.children[0]?.hasAttribute('data-step-label')).toBe(true);
-    expect(row?.children[1]?.hasAttribute('data-step-status')).toBe(true);
+  it('keeps milestone labels, status icons and UTC times together in reading order', async () => {
+    const { timeline } = await render('running', null, [
+      { from_state: 'queued', to_state: 'running', occurred_at: '2026-11-07T10:00:00Z' },
+    ]);
+    expect(await timeline.states()).toEqual(['queued', 'running', 'collecting', 'complete']);
+    expect(await timeline.statusIcons()).toHaveLength(4);
+    const running = await timeline.milestone('running');
+    expect(await running.text()).toMatch(/Running.*Current step.*UTC/s);
+    expect(await (await timeline.milestone('queued')).text()).toContain('Time unavailable');
+  });
+
+  it('shows elapsed time between recorded transitions, including a real zero and a side exit', async () => {
+    const { timeline } = await render('canceled', null, [
+      { from_state: 'created', to_state: 'queued', occurred_at: '2026-11-07T11:00:00+01:00' },
+      { from_state: 'queued', to_state: 'running', occurred_at: '2026-11-07T10:00:00Z' },
+      { from_state: 'running', to_state: 'canceled', occurred_at: '2026-11-07T10:00:02.250Z' },
+    ]);
+    expect(await timeline.deltas()).toHaveLength(2);
+    expect(await (await timeline.milestone('running')).text()).toContain('+0 ms');
+    expect(await (await timeline.milestone('canceled')).text()).toContain('+2.25 s');
+  });
+
+  it('never bridges an undated transition or reports a negative duration', async () => {
+    const { timeline } = await render('complete', null, [
+      { from_state: 'created', to_state: 'queued', occurred_at: '2026-11-07T10:00:00Z' },
+      { from_state: 'queued', to_state: 'running', occurred_at: 'not-a-date' },
+      { from_state: 'running', to_state: 'collecting', occurred_at: '2026-11-07T10:01:00Z' },
+      { from_state: 'collecting', to_state: 'complete', occurred_at: '2026-11-07T10:00:59Z' },
+    ]);
+    expect(await timeline.deltas()).toHaveLength(0);
+    expect(await (await timeline.milestone('running')).text()).toContain('Time unavailable');
   });
 
   it.each(ALL_STATES.map((state) => ({ state })))(
     'marks exactly the $state step as current',
     async ({ state }) => {
-      const { root } = await render(state);
-      const current = root.querySelectorAll('[aria-current="step"]');
+      const { timeline } = await render(state);
+      const current = await timeline.current();
       expect(current).toHaveLength(1);
-      expect(current[0]?.getAttribute('data-step')).toBe(state);
-      expect(current[0]?.querySelector('[data-step-status]')?.textContent).toContain(
-        'Current step',
-      );
+      expect(await current[0]?.getAttribute('data-step')).toBe(state);
+      expect(await timeline.status(state)).toBe('Current step');
     },
   );
 
   it('omits inferred historical steps instead of presenting them as recorded facts', async () => {
-    const { root } = await render('collecting');
-    for (const state of ['created', 'queued', 'running'] as const) {
-      expect(root.querySelector(`[data-step="${state}"]`)).toBeNull();
-    }
-    expect(stepStatus(root, 'complete')).toContain('Not reached yet');
+    const { timeline } = await render('collecting');
+    expect(await timeline.states()).toEqual(['collecting', 'complete']);
+    expect(await timeline.status('complete')).toBe('Not reached yet');
   });
 
   it('ends an incomplete run at its own terminal step, never reaching complete', async () => {
-    const { root } = await render('incomplete');
-    const rows = [...root.querySelectorAll('ol > li')];
-    expect(rows.map((row) => row.getAttribute('data-step'))).toEqual([
+    const { timeline } = await render('incomplete');
+    expect(await timeline.states()).toEqual([
       'queued',
       'running',
       'collecting',
       'complete',
       'incomplete',
     ]);
-    expect(root.querySelector('[data-step="created"]')).toBeNull();
     // The deadline can close the run straight from queued or running, so no intermediate step is
     // claimed as served.
     for (const state of ['queued', 'running', 'collecting'] as const) {
-      expect(stepStatus(root, state)).toContain('Not recorded');
-      expect(stepStatus(root, state)).not.toContain('Reached');
+      expect(await timeline.status(state)).toBe('Not recorded');
     }
-    expect(stepStatus(root, 'incomplete')).toContain('Current step');
-    expect(stepStatus(root, 'complete')).toContain('Not reached');
-    expect(stepStatus(root, 'complete')).not.toContain('Reached');
+    expect(await timeline.status('incomplete')).toBe('Current step');
+    expect(await timeline.status('complete')).toBe('Not reached');
   });
 
   it('never marks a canceled run complete, even when late events arrived', async () => {
-    const { root } = await render('canceled', 3);
-    const complete = root.querySelector('[data-step="complete"]');
-    expect(complete?.getAttribute('data-status')).toBe('not-reached');
-    const completeStatus = stepStatus(root, 'complete');
-    expect(completeStatus).toContain('Not reached');
-    expect(completeStatus).not.toContain('Reached');
-    expect(completeStatus).not.toContain('Complete');
-    expect(root.querySelector('[aria-current="step"]')?.getAttribute('data-step')).toBe('canceled');
-    expect(root.querySelector('[data-step="created"]')).toBeNull();
-    expect(stepStatus(root, 'running')).toContain('Not recorded');
+    const { timeline } = await render('canceled', 3);
+    const complete = await timeline.milestone('complete');
+    expect(await complete.getAttribute('data-status')).toBe('not-reached');
+    expect(await timeline.status('complete')).toBe('Not reached');
+    expect(await (await timeline.milestone('canceled')).getAttribute('aria-current')).toBe('step');
+    expect(await timeline.states()).not.toContain('created');
+    expect(await timeline.status('running')).toBe('Not recorded');
   });
 
   it('keeps a canceled run informational and names the after-cancel event count', async () => {
-    const { root } = await render('canceled', 3);
-    const note = root.querySelector('[data-after-cancel-note]');
-    expect(note?.textContent).toContain(
+    const { timeline } = await render('canceled', 3);
+    const note = await timeline.cancelNote();
+    expect(await note?.text()).toContain(
       'Events that arrive after cancel are kept as evidence and never complete the run.',
     );
-    expect(root.querySelector('[data-after-cancel-count]')?.textContent).toContain(
+    expect(await (await timeline.cancelCount()).text()).toContain(
       '3 events arrived after cancel (informational)',
     );
-    expect(note?.getAttribute('role')).toBe('note');
-    expect(root.querySelector('[role="alert"]')).toBeNull();
-    expect(note?.className).toContain('eg-info');
-    expect(note?.className).not.toContain('eg-warning');
-    expect(note?.className).not.toContain('eg-danger');
+    expect(await note?.getAttribute('role')).toBe('note');
+    expect(await timeline.alert()).toBeNull();
+    const classes = await note?.getAttribute('class');
+    expect(classes).toContain('eg-info');
+    expect(classes).not.toContain('eg-warning');
+    expect(classes).not.toContain('eg-danger');
   });
 
   it('shows the unavailable state for an unserved after-cancel count', async () => {
-    const { root } = await render('canceled', null);
-    const count = root.querySelector('[data-after-cancel-count]');
-    expect(count?.textContent).toContain('After-cancel events');
-    expect(count?.textContent).toContain('Not provided');
-    expect(count?.querySelector('app-status-pill')).toBeNull();
-    expect(count?.textContent).not.toMatch(/\d+ events/);
+    const { timeline } = await render('canceled', null);
+    const count = await (await timeline.cancelCount()).text();
+    expect(count).toContain('After-cancel events');
+    expect(count).toContain('Not provided');
+    expect(await timeline.cancelCountPill()).toBeNull();
+    expect(count).not.toMatch(/\d+ events/);
   });
 
   it('says no events arrived after cancel when the count is zero', async () => {
-    const { root } = await render('canceled', 0);
-    const count = root.querySelector('[data-after-cancel-count]');
-    expect(count?.textContent).toContain('No events after cancel');
-    expect(count?.textContent).not.toContain('Status unavailable');
+    const { timeline } = await render('canceled', 0);
+    expect(await (await timeline.cancelCount()).text()).toBe('No events after cancel');
   });
 
   it('uses singular copy for exactly one after-cancel event', async () => {
-    const { root } = await render('canceled', 1);
-    expect(root.querySelector('[data-after-cancel-count]')?.textContent).toContain(
+    const { timeline } = await render('canceled', 1);
+    expect(await (await timeline.cancelCount()).text()).toContain(
       '1 event arrived after cancel (informational)',
     );
   });
@@ -162,26 +208,24 @@ describe('RunTimelineComponent', () => {
   it.each(ALL_STATES.filter((state) => state !== 'canceled').map((state) => ({ state })))(
     'shows no after-cancel note for a $state run',
     async ({ state }) => {
-      const { root } = await render(state, 3);
-      expect(root.querySelector('[data-after-cancel-note]')).toBeNull();
+      const { timeline } = await render(state, 3);
+      expect(await timeline.cancelNote()).toBeNull();
     },
   );
 
   it('shows unknown history copy without inventing any step times', async () => {
-    const { root } = await render('collecting');
-    const line = root.querySelector('[data-step-times]');
-    expect(line?.textContent?.trim()).toBe('History unavailable for this run');
-    expect(root.querySelector('time')).toBeNull();
+    const { timeline } = await render('collecting');
+    expect(await (await timeline.historyNote())?.text()).toBe('History unavailable for this run');
+    expect(await timeline.times()).toHaveLength(0);
+    expect(await timeline.deltas()).toHaveLength(0);
   });
 
   it('distinguishes a known empty history from unavailable history', async () => {
-    const { root } = await render('created', null, []);
-    expect(root.querySelector('[data-step-times]')?.textContent).toContain(
-      'No state changes recorded yet',
-    );
-    expect(root.textContent).not.toContain('History unavailable for this run');
-    expect(root.querySelector('[data-step="created"]')?.getAttribute('aria-current')).toBe('step');
-    expect(root.querySelector('time')).toBeNull();
+    const { timeline } = await render('created', null, []);
+    expect(await (await timeline.historyNote())?.text()).toBe('No state changes recorded yet');
+    expect(await (await timeline.milestone('created')).getAttribute('aria-current')).toBe('step');
+    expect(await timeline.times()).toHaveLength(0);
+    expect(await timeline.deltas()).toHaveLength(0);
   });
 
   it('renders served arrival instants as formatted semantic times without a history note', async () => {
@@ -190,24 +234,23 @@ describe('RunTimelineComponent', () => {
       { from_state: 'running', to_state: 'collecting', occurred_at: '2026-11-07T10:01:00Z' },
       { from_state: 'collecting', to_state: 'complete', occurred_at: '2026-11-07T10:02:00Z' },
     ];
-    const { root } = await render('complete', null, history);
-    const times = [...root.querySelectorAll<HTMLTimeElement>('[data-step-time] time')];
+    const { timeline } = await render('complete', null, history);
+    const times = await timeline.times();
     expect(times).toHaveLength(3);
-    expect(times.map((time) => time.tagName)).toEqual(['TIME', 'TIME', 'TIME']);
-    expect(times.map((time) => time.getAttribute('datetime'))).toEqual(
+    expect(await Promise.all(times.map((time) => time.getAttribute('datetime')))).toEqual(
       history.map((transition) => transition.occurred_at),
     );
-    expect(times.map((time) => time.textContent?.replace(/\s+/g, ' ').trim())).toEqual([
+    const labels = await Promise.all(times.map((time) => time.text()));
+    expect(labels.map((label) => label.replace(/\s+/g, ' ').trim())).toEqual([
       '11/7/2026, 10:00:00 AM UTC',
       '11/7/2026, 10:01:00 AM UTC',
       '11/7/2026, 10:02:00 AM UTC',
     ]);
-    expect(root.querySelector('[data-step="created"] time')).toBeNull();
-    expect(root.querySelector('[data-step="queued"] time')).toBeNull();
-    expect(root.querySelector('[data-step-times]')).toBeNull();
-    expect(stepStatus(root, 'queued').trim()).toBe('Reached');
-    expect(root.querySelector('[data-step="created"]')).toBeNull();
-    expect(stepStatus(root, 'running').trim()).toBe('Reached');
+    expect(await timeline.time('queued')).toBeNull();
+    expect(await timeline.historyNote()).toBeNull();
+    expect(await timeline.status('queued')).toBe('Reached');
+    expect(await timeline.states()).not.toContain('created');
+    expect(await timeline.status('running')).toBe('Reached');
   });
 
   it('preserves after-cancel information while suppressing late completion times', async () => {
@@ -215,47 +258,45 @@ describe('RunTimelineComponent', () => {
       { from_state: 'queued', to_state: 'canceled', occurred_at: '2026-11-07T10:00:00Z' },
       { from_state: 'running', to_state: 'complete', occurred_at: '2026-11-07T10:01:00Z' },
     ];
-    const { root } = await render('canceled', 3, history);
-    expect(root.querySelector('[data-step="complete"]')?.getAttribute('data-status')).toBe(
+    const { timeline } = await render('canceled', 3, history);
+    expect(await (await timeline.milestone('complete')).getAttribute('data-status')).toBe(
       'not-reached',
     );
-    expect(root.querySelector('[data-step="complete"] time')).toBeNull();
-    expect(root.querySelector('[data-step="canceled"] time')?.getAttribute('datetime')).toBe(
+    expect(await timeline.time('complete')).toBeNull();
+    expect(await (await timeline.time('canceled'))?.getAttribute('datetime')).toBe(
       '2026-11-07T10:00:00Z',
     );
-    expect(root.querySelector('[data-after-cancel-note]')?.textContent).toContain(
+    expect(await (await timeline.cancelNote())?.text()).toContain(
       'Events that arrive after cancel are kept as evidence and never complete the run.',
     );
-    expect(root.querySelector('[data-after-cancel-count]')?.textContent).toContain(
+    expect(await (await timeline.cancelCount()).text()).toContain(
       '3 events arrived after cancel (informational)',
     );
   });
 
   it('keeps malformed history timestamps from breaking the timeline', async () => {
-    const { root } = await render('running', null, [
+    const { timeline } = await render('running', null, [
       { from_state: 'queued', to_state: 'running', occurred_at: 'not-a-date' },
     ]);
-    expect(root.querySelector('[aria-current="step"]')?.getAttribute('data-step')).toBe('running');
-    expect(root.querySelector('time')).toBeNull();
-    expect(root.querySelector('[data-step-times]')).toBeNull();
+    expect(await (await timeline.milestone('running')).getAttribute('aria-current')).toBe('step');
+    expect(await timeline.times()).toHaveLength(0);
+    expect(await timeline.historyNote()).toBeNull();
   });
 
   it('updates derived step times and notes when the served history changes', async () => {
-    const { root, fixture } = await render('running');
+    const { timeline, fixture } = await render('running');
     fixture.componentRef.setInput('stateHistory', [
       { from_state: 'queued', to_state: 'running', occurred_at: '2026-11-07T10:00:00Z' },
     ]);
     await fixture.whenStable();
-    expect(root.querySelector('[data-step="running"] time')?.getAttribute('datetime')).toBe(
+    expect(await (await timeline.time('running'))?.getAttribute('datetime')).toBe(
       '2026-11-07T10:00:00Z',
     );
-    expect(root.querySelector('[data-step-times]')).toBeNull();
+    expect(await timeline.historyNote()).toBeNull();
 
     fixture.componentRef.setInput('stateHistory', null);
     await fixture.whenStable();
-    expect(root.querySelector('time')).toBeNull();
-    expect(root.querySelector('[data-step-times]')?.textContent).toContain(
-      'History unavailable for this run',
-    );
+    expect(await timeline.times()).toHaveLength(0);
+    expect(await (await timeline.historyNote())?.text()).toBe('History unavailable for this run');
   });
 });

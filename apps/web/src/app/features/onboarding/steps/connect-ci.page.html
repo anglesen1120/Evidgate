@@ -89,7 +89,8 @@
         hlmBtn
         feedbackAction
         [variant]="'outline'"
-        class="h-auto min-h-(--eg-control-touch) max-w-full justify-self-start whitespace-normal wrap-anywhere aria-disabled:pointer-events-auto aria-disabled:cursor-default aria-disabled:bg-muted aria-disabled:text-muted-foreground"
+        [size]="'sm'"
+        class="h-auto max-w-full justify-self-start whitespace-normal wrap-anywhere aria-disabled:pointer-events-auto aria-disabled:cursor-default aria-disabled:bg-muted aria-disabled:text-muted-foreground"
         type="button"
         [attr.aria-disabled]="busy() || refreshing() ? 'true' : null"
         [attr.aria-busy]="refreshing()"
@@ -132,7 +133,7 @@
   <div class="grid min-w-0 gap-(--eg-space-5) min-[1280px]:grid-cols-2 min-[1280px]:items-start">
     <section
       hlmCard
-      class="min-w-0 gap-(--eg-space-4) overflow-visible p-(--eg-space-4) md:p-(--eg-space-5)"
+      class="min-w-0 gap-(--eg-space-4) overflow-visible p-(--eg-space-5) md:p-(--eg-space-6)"
       data-testid="connect-oidc-panel"
       aria-labelledby="connect-oidc-heading"
     >
@@ -283,7 +284,7 @@
         <button
           hlmBtn
           [variant]="bindingVariant()"
-          class="h-auto min-h-(--eg-control-touch) max-w-full justify-self-start whitespace-normal wrap-anywhere"
+          class="h-auto max-w-full justify-self-start whitespace-normal wrap-anywhere"
           data-testid="connect-oidc-submit"
           type="submit"
           [disabled]="busy() || !bindingPermitted()"
@@ -309,7 +310,7 @@
     </section>
     <section
       hlmCard
-      class="min-w-0 gap-(--eg-space-4) overflow-visible p-(--eg-space-4) md:p-(--eg-space-5)"
+      class="min-w-0 gap-(--eg-space-4) overflow-visible p-(--eg-space-5) md:p-(--eg-space-6)"
       data-testid="connect-token-panel"
       aria-labelledby="connect-token-heading"
     >
@@ -370,7 +371,7 @@
         <button
           hlmBtn
           [variant]="'outline'"
-          class="h-auto min-h-(--eg-control-touch) max-w-full justify-self-start whitespace-normal wrap-anywhere"
+          class="h-auto max-w-full justify-self-start whitespace-normal wrap-anywhere"
           data-testid="connect-token-submit"
           type="submit"
           [disabled]="busy() || !tokenPermitted()"

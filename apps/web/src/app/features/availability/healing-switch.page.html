@@ -16,7 +16,7 @@
     hlmCard
     role="status"
     data-healing-forbidden
-    class="min-w-0 items-start gap-2 rounded-lg bg-(--eg-surface-raised) p-5"
+    class="min-w-0 items-start gap-2 rounded-lg bg-(--eg-surface-raised) p-(--eg-space-5) md:p-(--eg-space-6)"
   >
     <hlm-icon [name]="'lucideOctagonX'" class="size-6 text-muted-foreground" />
     <h2 hlmCardTitle [size]="sectionHeadingSize" i18n="@@shared.states.forbidden.heading">
@@ -36,7 +36,11 @@
 } @else if (store.loading()) {
   <app-loading-pattern [layout]="'table'" [busy]="true" [label]="copy.loading" />
 } @else if (store.readFailed()) {
-  <div hlmCard class="min-w-0 items-start gap-3 rounded-lg p-5" data-healing-read-error>
+  <div
+    hlmCard
+    class="min-w-0 items-start gap-3 rounded-lg p-(--eg-space-5) md:p-(--eg-space-6)"
+    data-healing-read-error
+  >
     <hlm-icon [name]="'lucideTriangleAlert'" class="size-6 text-destructive" />
     <p role="alert" class="m-0 text-sm text-destructive">
       {{ store.readError()?.message || copy.readFailed }}
@@ -45,7 +49,7 @@
       hlmBtn
       type="button"
       [variant]="'outline'"
-      class="min-h-(--eg-control-touch) w-full whitespace-normal sm:w-fit"
+      class="w-full whitespace-normal sm:w-fit"
       data-healing-reload
       (click)="store.reload()"
     >
@@ -54,7 +58,7 @@
   </div>
 } @else if (store.resolution(); as resolution) {
   @if (!store.canConfigure()) {
-    <section hlmCard class="min-w-0 gap-2 rounded-xl px-5 py-4">
+    <section hlmCard class="min-w-0 gap-2 rounded-xl p-(--eg-space-5) md:p-(--eg-space-6)">
       <strong class="text-sm" i18n="@@settings.scope-label">Organization settings</strong>
       <p class="m-0 text-muted-foreground">{{ copy.readOnly }}</p>
     </section>
@@ -70,7 +74,7 @@
     >
       <header
         hlmCardHeader
-        class="flex flex-wrap items-center justify-between gap-(--eg-space-3) border-b border-border p-(--eg-space-4) lg:px-(--eg-space-6) lg:py-(--eg-space-5)"
+        class="flex flex-wrap items-center justify-between gap-(--eg-space-3) border-b border-border p-(--eg-space-5) md:p-(--eg-space-6)"
       >
         <h2
           hlmCardTitle
@@ -87,7 +91,7 @@
       </header>
       <div
         hlmCardContent
-        class="grid min-w-0 gap-3 px-5 py-4"
+        class="grid min-w-0 gap-3 p-(--eg-space-5) md:p-(--eg-space-6)"
         [attr.data-healing-resolved]="resolution.resolved === 'unavailable' ? null : ''"
       >
         @let decidingScope = store.decidingScope();
@@ -147,10 +151,7 @@
       class="min-w-0 gap-0 rounded-(--eg-radius-lg) py-0"
       aria-labelledby="healing-switch-runtime"
     >
-      <header
-        hlmCardHeader
-        class="border-b border-border p-(--eg-space-4) lg:px-(--eg-space-6) lg:py-(--eg-space-5)"
-      >
+      <header hlmCardHeader class="border-b border-border p-(--eg-space-5) md:p-(--eg-space-6)">
         <h2
           hlmCardTitle
           [size]="sectionHeadingSize"
@@ -162,7 +163,7 @@
       </header>
       <div
         hlmCardContent
-        class="grid min-w-0 gap-(--eg-space-3) px-(--eg-space-6) py-(--eg-space-5)"
+        class="grid min-w-0 gap-(--eg-space-3) p-(--eg-space-5) md:p-(--eg-space-6)"
       >
         <span
           hlmBadge
@@ -185,15 +186,12 @@
     class="min-w-0 gap-0 rounded-(--eg-radius-lg) py-0"
     aria-labelledby="healing-switch-hierarchy"
   >
-    <header
-      hlmCardHeader
-      class="border-b border-border p-(--eg-space-4) lg:px-(--eg-space-6) lg:py-(--eg-space-5)"
-    >
+    <header hlmCardHeader class="border-b border-border p-(--eg-space-5) md:p-(--eg-space-6)">
       <h2 hlmCardTitle [size]="sectionHeadingSize" id="healing-switch-hierarchy">
         {{ copy.hierarchy }}
       </h2>
     </header>
-    <div hlmCardContent class="min-w-0 px-(--eg-space-6) py-(--eg-space-5)">
+    <div hlmCardContent class="min-w-0 p-(--eg-space-5) md:p-(--eg-space-6)">
       <app-switch-scope-hierarchy
         [fetching]="store.switchResource.isLoading()"
         [resolution]="resolution"
@@ -206,10 +204,7 @@
     class="min-w-0 gap-0 rounded-(--eg-radius-lg) py-0"
     aria-labelledby="healing-switch-configuration"
   >
-    <header
-      hlmCardHeader
-      class="border-b border-border p-(--eg-space-4) lg:px-(--eg-space-6) lg:py-(--eg-space-5)"
-    >
+    <header hlmCardHeader class="border-b border-border p-(--eg-space-5) md:p-(--eg-space-6)">
       <h2 hlmCardTitle [size]="sectionHeadingSize" id="healing-switch-configuration">
         {{ copy.configuration }}
       </h2>
@@ -247,17 +242,14 @@
     class="min-w-0 gap-0 rounded-(--eg-radius-lg) py-0"
     aria-labelledby="healing-switch-health"
   >
-    <header
-      hlmCardHeader
-      class="border-b border-border p-(--eg-space-4) lg:px-(--eg-space-6) lg:py-(--eg-space-5)"
-    >
+    <header hlmCardHeader class="border-b border-border p-(--eg-space-5) md:p-(--eg-space-6)">
       <h2 hlmCardTitle [size]="sectionHeadingSize" id="healing-switch-health">
         {{ copy.dependencies }}
       </h2>
     </header>
     <dl
       hlmCardContent
-      class="m-0 grid min-w-0 gap-(--eg-space-4) px-(--eg-space-6) pt-(--eg-space-5) sm:grid-cols-2"
+      class="m-0 grid min-w-0 gap-(--eg-space-4) px-(--eg-space-5) pt-(--eg-space-5) sm:grid-cols-2 md:px-(--eg-space-6) md:pt-(--eg-space-6)"
     >
       <div
         class="grid min-w-0 content-start gap-(--eg-space-1) [&>dt]:text-xs [&>dt]:text-muted-foreground"
@@ -299,7 +291,7 @@
       </div>
     </dl>
     <p
-      class="m-0 px-(--eg-space-6) pt-(--eg-space-3) pb-(--eg-space-5) text-sm text-muted-foreground"
+      class="m-0 px-(--eg-space-5) pt-(--eg-space-3) pb-(--eg-space-5) text-sm text-muted-foreground md:px-(--eg-space-6) md:pb-(--eg-space-6)"
     >
       {{ copy.healthHint }}
     </p>

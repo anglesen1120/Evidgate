@@ -12,7 +12,7 @@ import { SETTINGS_TABS } from './settings-tabs';
   template: `
     @if (tab; as tab) {
       <section hlmCard class="min-w-0 gap-0 rounded-xl p-0 wrap-anywhere">
-        <header hlmCardHeader class="border-b border-border px-5 py-4">
+        <header hlmCardHeader class="border-b border-border p-(--eg-space-5) md:p-(--eg-space-6)">
           <h2 hlmCardTitle [size]="'section'" class="m-0">{{ tab.label }}</h2>
         </header>
         <p hlmCardDescription class="m-0 px-5 py-4" i18n="@@settings.placeholder.body">

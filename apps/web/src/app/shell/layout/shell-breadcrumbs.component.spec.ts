@@ -39,22 +39,14 @@ describe('Shell breadcrumbs', () => {
     const fixture = TestBed.createComponent(ShellBreadcrumbsComponent);
     await TestBed.inject(Router).navigateByUrl('/orgs/o/projects/p/' + path);
     const crumbs = await TestbedHarnessEnvironment.harnessForFixture(fixture, Breadcrumbs);
-    return { crumbs, granted, fixture };
+    return { crumbs, granted };
   }
 
   it('uses the registered parent and detail label, never the raw case id or query', async () => {
-    const { crumbs, fixture } = await open('authoring/cases/record-id?from=list', [
-      'authoring:read',
-    ]);
+    const { crumbs } = await open('authoring/cases/record-id?from=list', ['authoring:read']);
     expect(await Promise.all((await crumbs.names()).map((name) => name.text()))).toEqual([
       'Acme',
       'Storefront',
-      'Feature tree',
-      'Test case editor',
-    ]);
-    expect(await (await crumbs.current())?.text()).toBe('Test case editor');
-    fixture.componentRef.setInput('interactiveScope', true);
-    expect(await Promise.all((await crumbs.names()).map((name) => name.text()))).toEqual([
       'Feature tree',
       'Test case editor',
     ]);

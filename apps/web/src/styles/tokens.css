@@ -40,6 +40,7 @@
     --eg-font-mono: 'JetBrains Mono', 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
 
     --eg-text-xs: 12px;
+    --eg-text-button: 13px;
     --eg-text-sm: 14px;
     --eg-text-md: 16px;
     --eg-text-lg: 18px;
@@ -77,6 +78,7 @@
     --eg-radius-lg: 12px;
     --eg-radius-pill: 999px;
     --eg-border-width: 1px;
+    --eg-button-sm: 28px;
     --eg-control-sm: 32px;
     --eg-control-md: 36px;
     --eg-control-lg: 40px;

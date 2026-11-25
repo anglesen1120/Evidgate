@@ -432,16 +432,18 @@ test.describe('table specimen layout pins', () => {
     await expect(specimen.locator('app-hash-chip')).toHaveCount(2);
     await expect(specimen.locator('app-status-pill')).toHaveCount(2);
 
-    // The copy utility keeps a one-line label, so its action never wraps into a tall sliver.
-    const copyLines = await specimen
+    // The copy action is an icon with a screen-reader name: it must stay one control tall and
+    // wide enough to hit, so it never wraps into a tall sliver.
+    const copyBox = await specimen
       .locator('app-copy-value-button button')
       .first()
       .evaluate((button) => {
-        const range = document.createRange();
-        range.selectNodeContents(button);
-        return range.getClientRects().length;
+        const box = button.getBoundingClientRect();
+        return { height: box.height, width: box.width };
       });
-    expect(copyLines).toBe(1);
+    expect(copyBox.height).toBeLessThanOrEqual(48);
+    expect(copyBox.width).toBeGreaterThanOrEqual(24);
+    expect(copyBox.width).toBeLessThanOrEqual(copyBox.height * 4);
 
     await page.setViewportSize({ width: 390, height: 900 });
     await expect(specimen.locator('dt')).toHaveCount(8);

@@ -1,5 +1,5 @@
 <section
-  class="grid min-w-0 content-start gap-(--eg-space-4) px-(--eg-space-6) py-(--eg-space-5)"
+  class="grid min-w-0 content-start gap-(--eg-space-4) p-(--eg-space-5) md:p-(--eg-space-6)"
   [attr.aria-labelledby]="titleId()"
   [attr.data-healing-editor]="scope()"
 >
@@ -108,7 +108,7 @@
           type="button"
           [variant]="saveVariant()"
           [attr.aria-describedby]="titleId()"
-          class="h-auto min-h-(--eg-control-touch) w-fit max-w-full whitespace-normal wrap-anywhere"
+          class="h-auto w-fit max-w-full whitespace-normal wrap-anywhere"
           data-healing-save
           [disabled]="saving() || reasonTooLong()"
           [attr.aria-busy]="saving()"

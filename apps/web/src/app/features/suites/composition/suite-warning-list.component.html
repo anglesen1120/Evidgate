@@ -4,10 +4,10 @@
   data-testid="suite-warnings"
   [attr.aria-label]="copy.title"
 >
-  <header hlmCardHeader class="border-b border-border px-(--eg-space-6) py-(--eg-space-5)">
+  <header hlmCardHeader class="border-b border-border p-(--eg-space-5) md:p-(--eg-space-6)">
     <h2 hlmCardTitle [size]="sectionHeadingSize">{{ copy.title }}</h2>
   </header>
-  <div hlmCardContent class="px-(--eg-space-6) py-(--eg-space-5)">
+  <div hlmCardContent class="p-(--eg-space-5) md:p-(--eg-space-6)">
     @if (warnings(); as items) {
       @if (items.length === 0) {
         <p data-testid="suite-warnings-empty">{{ copy.empty }}</p>

@@ -43,7 +43,7 @@ import type { StepNumber } from '../data/step-derivation';
           <a
             hlmBtn
             [variant]="'outline'"
-            class="h-auto min-h-(--eg-control-touch) max-w-full justify-self-start whitespace-normal"
+            class="h-auto max-w-full justify-self-start whitespace-normal"
             [routerLink]="link"
             data-testid="onboarding-pending-runs"
           >

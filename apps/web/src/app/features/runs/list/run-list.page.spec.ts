@@ -191,7 +191,7 @@ describe('RunListPage', () => {
     expect(root.querySelector('#run-decision-hint')?.textContent).toContain(
       'Not evaluated means no live evaluation yet.',
     );
-    expect(root.querySelector('[data-run-decision]')?.textContent).toContain('Not evaluated');
+    expect(root.querySelector('[data-run-decision]')?.textContent).toContain('Pending');
   });
   it('uses the responsive page title scale rather than a section-heading size', async () => {
     const { root } = await render();

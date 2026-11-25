@@ -39,6 +39,7 @@
           type="button"
           class="absolute end-0 top-0 pointer-coarse:size-(--eg-control-touch)"
           [attr.aria-label]="copy.close"
+          [hlmTooltip]="copy.close"
           [disabled]="saving() || busy()"
           (click)="requestLeave()"
         >

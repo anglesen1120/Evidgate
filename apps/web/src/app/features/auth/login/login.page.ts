@@ -19,6 +19,7 @@ import {
   HlmCardHeader,
   HlmCardTitle,
 } from '@evidgate/ui/card';
+import { HlmTooltip } from '@evidgate/ui/tooltip';
 
 import {
   InlineFeedbackComponent,
@@ -54,6 +55,7 @@ interface LoginNotice {
     HlmCardTitle,
     HlmCardContent,
     HlmCardFooter,
+    HlmTooltip,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: {

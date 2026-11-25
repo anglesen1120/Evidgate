@@ -131,7 +131,7 @@ const MAX_CONFLICT_FIELDS = 100;
           <button
             hlmBtn
             [variant]="'outline'"
-            class="min-h-[var(--eg-control-touch)] whitespace-normal"
+            class="whitespace-normal"
             type="button"
             [disabled]="submitting() || store.publishing()"
             (click)="requestClose()"
@@ -141,7 +141,7 @@ const MAX_CONFLICT_FIELDS = 100;
           <button
             type="button"
             hlmBtn
-            class="min-h-[var(--eg-control-touch)] whitespace-normal"
+            class="whitespace-normal"
             data-policy-publish-submit
             [disabled]="busy() || seedFailed() || !session.has('policy:write')"
             (click)="submit()"

@@ -167,7 +167,7 @@ const DETAILS_WIDTH: DataTableColumnWidth = {
                     hlmBtn
                     [variant]="'ghost'"
                     type="button"
-                    class="support-access h-auto min-h-[var(--eg-control-touch)] max-w-full whitespace-normal p-0"
+                    class="support-access h-auto max-w-full whitespace-normal p-0"
                     [hlmTooltip]="supportDescription(access.grantId)"
                     [position]="'top'"
                   >
