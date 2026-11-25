@@ -181,7 +181,7 @@ describe('RunListStore (09.3.1-T1)', () => {
         expect(store.visibleRows()).toEqual(
           data.all.filter((row) => row.decision === (decision === 'pending' ? null : decision)),
         );
-        expect(store.toQuery()).toEqual({ decision });
+        expect(store.toQuery()).toEqual({ decision: decision === 'FAIL' ? 'fail' : decision });
         expect(data.calls[0]?.request).toEqual({ limit: RUN_LIST_PAGE_LIMIT, decision });
         await store.setFilters({ decision: '' });
         expect(data.calls.at(-1)?.request).toEqual({ limit: RUN_LIST_PAGE_LIMIT });

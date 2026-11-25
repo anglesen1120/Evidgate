@@ -1,3 +1,4 @@
+import { FilterToolbarComponent } from '../../../shared/ui/forms/filter-toolbar.component';
 import { FieldHintComponent } from '../../../shared/ui/forms/field-hint.component';
 import { DOCUMENT, formatNumber } from '@angular/common';
 import {
@@ -39,6 +40,7 @@ import { EMPTY_RUN_LIST_FILTERS, RunListStore } from './run-list.store';
 @Component({
   selector: 'app-run-list-page',
   imports: [
+    FilterToolbarComponent,
     FieldHintComponent,
     FormsModule,
     HlmAlert,
@@ -79,23 +81,21 @@ export class RunListPage {
   private readonly injector = inject(Injector);
   private readonly destroyRef = inject(DestroyRef);
 
-  protected readonly filtersOpen = signal(false);
-  // Safari does not focus a button on pointer click, so collapsing must focus the
-  // disclosure explicitly; otherwise a focused filter inside the hidden panel drops focus to body.
-  private readonly filterDisclosure = viewChild<ElementRef<HTMLButtonElement>>('filterDisclosure');
-  protected toggleFilters(): void {
-    const open = !this.filtersOpen();
-    this.filtersOpen.set(open);
-    if (!open) this.filterDisclosure()?.nativeElement.focus();
-  }
+  private readonly toolbar = viewChild.required(FilterToolbarComponent);
   protected draft = { ...EMPTY_RUN_LIST_FILTERS };
-  protected readonly activeFilterCount = computed(() =>
-    formatNumber(Object.values(this.store.filters()).filter(Boolean).length, this.locale),
-  );
-  protected readonly activeFilterLabel = computed(() => {
-    const count = this.activeFilterCount();
-    return $localize`:@@runs.list.active-filters:Active filters: ${count}:count:`;
+  protected readonly secondaryCount = computed(() => {
+    const { state, decision, scope } = this.store.filters();
+    return Number(!!state) + Number(!!decision) + Number(!!scope);
   });
+  protected readonly quickFilters = [
+    { id: 'all', decision: '', label: $localize`:@@runs.list.any:All` },
+    { id: 'fail', decision: 'FAIL', label: $localize`:@@runs.list.quick-fail:Decision: FAIL` },
+    {
+      id: 'pending',
+      decision: 'pending',
+      label: $localize`:@@runs.list.quick-pending:Decision: pending`,
+    },
+  ] as const;
   protected readonly status = computed<'loading' | 'ready' | 'error'>(() => {
     const status = this.store.status();
     return status === 'idle' ? 'loading' : status;
@@ -134,6 +134,7 @@ export class RunListPage {
     original: $localize`:@@runs.list.original:Original run`,
     rerun: $localize`:@@runs.list.rerun:Rerun`,
     reprocess: $localize`:@@runs.list.reprocess:Reprocessed`,
+    filters: $localize`:@@runs.list.filter-toggle:Filters`,
     apply: $localize`:@@runs.list.apply:Apply filters`,
     clear: $localize`:@@runs.list.clear:Clear filters`,
     emptyProject: {
@@ -271,8 +272,19 @@ export class RunListPage {
     });
   }
 
+  protected quick(decision: 'FAIL' | 'pending' | ''): void {
+    this.draft = { ...this.store.filters(), decision };
+    this.apply();
+  }
+
+  protected searchRef(): void {
+    this.draft = { ...this.store.filters(), refName: this.draft.refName };
+    this.apply();
+  }
+
   protected apply(): void {
     void this.store.setFilters({ ...this.draft });
+    this.toolbar().close();
     this.syncQuery();
   }
 

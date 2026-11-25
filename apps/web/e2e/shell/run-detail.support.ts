@@ -36,6 +36,7 @@ export type RunStateVariant =
 /** The operations whose answer a caller chooses; every other one keeps the corpus default. */
 export interface RunDetailAddress {
   readonly locale?: ShellLocale;
+  readonly tab?: 'attempts' | 'evidence' | 'decision' | 'context';
   readonly run?: RunStateVariant;
   readonly decision?: RunDecisionVariant;
   readonly attempts?: RunAttemptsVariant;
@@ -59,6 +60,7 @@ export function runDetailPath(options: RunDetailAddress = {}): string {
     ),
     [
       RUN_DETAIL_GRANT,
+      ...(options.tab ? [`?tab=${options.tab}`] : []),
       `?fixture.variant.getRun=detail-${run}`,
       ...(attempts === undefined ? [] : [`?fixture.variant.listRunAttempts=${attempts}`]),
       ...(decision === undefined ? [] : [`?fixture.variant.getRunDecision=${decision}`]),

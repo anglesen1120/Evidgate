@@ -47,16 +47,21 @@ for (const locale of LOCALES) {
 
     // The navigation keeps the list's query, so the header facts are the requested variant's.
     expect(new URL(page.url()).searchParams.get('fixture.variant.getRun')).toBe('detail-ready');
-    await expect(detail.headerId).toHaveText(RUN_ID);
+    await expect(detail.headerId).toHaveText(
+      `${locale === 'vi' ? 'Mã lượt chạy' : 'Run id'}: ${RUN_ID}`,
+    );
     await expect(detail.headerRef).toContainText(runDetail.body.ref.name);
-    await expect(detail.headerVersion).toHaveText(String(runDetail.body.version));
+    await detail.showContext();
+    await expect(detail.contextVersion).toHaveText(String(runDetail.body.version));
   });
 
   test(`an evaluated FAIL shows the missing shard and never PASS (${locale})`, async ({ page }) => {
     const detail = new RunDetailPage(page);
-    await detail.openDetail(runDetailPath({ locale, decision: 'evaluated-fail-missing-shard' }));
+    await detail.openDetail(
+      runDetailPath({ locale, decision: 'evaluated-fail-missing-shard', tab: 'evidence' }),
+    );
 
-    // Evidence is the default tab, so the missing shard is readable without switching tabs.
+    // A shared evidence URL opens directly on the revision.
     await expect(detail.missingReasonCode).toHaveText(MISSING_SHARD);
 
     await detail.showDecision();

@@ -4,6 +4,7 @@ import attemptsFixture from '../../../../fixtures/web-api/run-attempts/input.jso
 import readyFixture from '../../../../fixtures/web-api/run-detail/input.json';
 import collecting from '../../../../fixtures/web-api/run-detail-collecting/input.json';
 import runList from '../../../../fixtures/web-api/run-list/input.json';
+import { openRunFilters } from './run-list.support';
 import { expectNoA11yViolations } from '../a11y/axe-scan';
 import {
   localePath,
@@ -64,12 +65,15 @@ for (const locale of LOCALES) {
   }) => {
     await page.goto(path(locale));
     await ready(page);
-    await expect(page.locator('[data-run-id] > bdi')).toHaveText(RUN.run_id);
+    await expect(page.locator('[data-run-id] .identifier-accessible bdi')).toContainText(
+      RUN.run_id,
+    );
+    await page.locator('[data-run-tab="context"]').click();
     await expect(page.locator('[data-run-version]')).toHaveText(String(RUN.version));
     await expect(page.locator('[data-run-purpose]')).toHaveText(
       locale === 'vi' ? 'Chạy lại từ dữ liệu' : 'Replay',
     );
-    await openDisclosure(page, 'app-run-header details');
+    await openDisclosure(page, 'app-run-context details');
     await expect(page.locator('[data-run-evidence-revision] > bdi')).toHaveText(
       RUN.current_evidence_revision_id,
     );
@@ -85,6 +89,7 @@ for (const locale of LOCALES) {
     );
     await expect(page.locator('app-manifest-panel li bdi')).toHaveText(RUN.declared_producers);
     await expect(page.locator('app-manifest-panel app-status-pill')).toHaveCount(0);
+    await page.locator('[data-run-tab="attempts"]').click();
     await expect(page.locator('app-attempts-table [data-attempt-row]')).toHaveCount(
       attemptsFixture.body.items.length,
     );
@@ -102,11 +107,35 @@ for (const locale of LOCALES) {
     expect(await page.locator('app-run-detail-page').textContent()).not.toContain('PASS');
     await page.reload();
     await ready(page);
-    await expect(page.locator('[data-run-id] > bdi')).toHaveText(RUN.run_id);
-    await openDisclosure(page, 'app-run-header details');
+    await expect(page.locator('[data-run-id] .identifier-accessible bdi')).toContainText(
+      RUN.run_id,
+    );
+    await page.locator('[data-run-tab="context"]').click();
+    await openDisclosure(page, 'app-run-context details');
     await expect(page.locator('[data-run-evidence-revision] > bdi')).toHaveText(
       RUN.current_evidence_revision_id,
     );
+  });
+  test(`tab navigation preserves browser history and the run breadcrumb (${locale})`, async ({
+    page,
+  }) => {
+    await page.goto(`${path(locale)}&tab=invalid`);
+    await ready(page);
+    const tab = (id: string) => page.locator(`[data-run-tab="${id}"]`);
+    await expect(tab('attempts')).toHaveAttribute('aria-selected', 'true');
+    await expect.poll(() => new URL(page.url()).searchParams.get('tab')).toBe('attempts');
+    const crumb = page.locator('app-shell-breadcrumbs');
+    await expect(crumb.locator('[aria-current="page"]')).toHaveText(
+      `${RUN.run_id.slice(0, 5)}…${RUN.run_id.slice(-5)}`,
+    );
+    await expect(crumb.getByRole('link')).toHaveText(locale === 'vi' ? 'Lần chạy' : 'Runs');
+    await tab('evidence').click();
+    await tab('context').click();
+    await page.goBack();
+    await expect(tab('evidence')).toHaveAttribute('aria-selected', 'true');
+    await page.goForward();
+    await expect(tab('context')).toHaveAttribute('aria-selected', 'true');
+    await expect(page.locator('app-run-timeline')).toBeVisible();
   });
   test(`terminal runs hide cancel and say why; active runs keep it (${locale})`, async ({
     page,
@@ -200,9 +229,12 @@ for (const locale of LOCALES) {
     await expect(page.locator('app-run-detail-page script')).toHaveCount(0);
     await page.goto(path(locale, 'detail-null-evidence', RUN.run_id, 'ok', 'empty'));
     await ready(page);
+    await page.locator('[data-run-tab="context"]').click();
+    await openDisclosure(page, 'app-run-context details');
     await expect(page.locator('[data-run-evidence-revision]')).toHaveText(
       locale === 'vi' ? 'Chưa ghi nhận' : 'None recorded',
     );
+    await page.locator('[data-run-tab="evidence"]').click();
     // A run with no current evidence revision has no frozen revision page either.
     await expect(page.locator('#evidence-panel [data-evidence-empty]')).toBeVisible();
     expect(await page.locator('app-run-detail-page').textContent()).not.toContain('PASS');
@@ -241,6 +273,7 @@ for (const locale of LOCALES) {
       'ready',
     );
     expect(page.url()).toBe(before);
+    await openRunFilters(page);
     await expect(page.locator('#run-state')).toContainText(
       locale === 'vi' ? 'Hoàn tất' : 'Complete',
     );

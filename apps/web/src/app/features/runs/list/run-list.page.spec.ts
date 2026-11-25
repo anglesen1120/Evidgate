@@ -40,7 +40,7 @@ class RunPagerHarness extends ComponentHarness {
 
 class RunListPageHarness extends ComponentHarness {
   static hostSelector = 'app-run-list-page';
-  readonly view = this.locatorFor('button[aria-haspopup="dialog"]');
+  readonly view = this.locatorFor('app-run-list-table button[aria-haspopup="dialog"]');
   readonly dialog = this.documentRootLocatorFactory().locatorForOptional('[role="dialog"]');
   readonly close = this.documentRootLocatorFactory().locatorFor('[role="dialog"] [hlmDialogClose]');
 }
@@ -91,7 +91,7 @@ describe('RunListPage', () => {
     await fixture.whenStable();
     const root = fixture.nativeElement as HTMLElement;
     if (showFilters) {
-      root.querySelector<HTMLButtonElement>('[data-run-filter-disclosure]')!.click();
+      root.querySelector<HTMLButtonElement>('button[aria-controls="run-filter-panel"]')!.click();
       await fixture.whenStable();
     }
     return { fixture, root };
@@ -102,13 +102,8 @@ describe('RunListPage', () => {
     field.value = value;
     field.dispatchEvent(new Event('input', { bubbles: true }));
   }
-  async function choose(
-    fixture: ComponentFixture<RunListPage>,
-    root: HTMLElement,
-    name: string,
-    value: string,
-  ) {
-    root.querySelector<HTMLButtonElement>(`[name="${name}"] button`)?.click();
+  async function choose(fixture: ComponentFixture<RunListPage>, name: string, value: string) {
+    document.querySelector<HTMLButtonElement>(`#run-filter-panel [name="${name}"] button`)?.click();
     await fixture.whenStable();
     const option = document.querySelector<HTMLElement>(`[role="option"][data-value="${value}"]`);
     if (!option) throw new Error(`Missing ${name} option ${value}`);
@@ -147,7 +142,7 @@ describe('RunListPage', () => {
       { ...run, run_id: 'second', state: 'complete', decision: 'FAIL', rerun_label: 'retry' },
       { ...run, run_id: 'third', state: 'incomplete', decision: 'INCONCLUSIVE' },
     ]);
-    const { fixture, root } = await render();
+    const { fixture, root } = await render(true);
     const header = await TestbedHarnessEnvironment.loader(fixture).getHarness(HeaderHarness);
     expect(await header.getDescription()).toBeNull();
     const metrics = root.querySelector('[data-run-metrics]')!;
@@ -161,11 +156,11 @@ describe('RunListPage', () => {
     expect(root.querySelector('app-data-table-pager .page-range')?.textContent?.trim()).toMatch(
       /1–3$/,
     );
-    root.querySelector<HTMLButtonElement>('#run-state')?.click();
+    document.querySelector<HTMLButtonElement>('#run-state')?.click();
     await fixture.whenStable();
     const running = document.querySelector('[role="option"][data-value="running"]');
     expect(running?.textContent?.trim()).toBe('Running');
-    root.querySelector<HTMLButtonElement>('#run-state')?.click();
+    document.querySelector<HTMLButtonElement>('#run-state')?.click();
     store.status.set('loading');
     await fixture.whenStable();
     expect(root.querySelector('[data-run-metrics]')).toBeNull();
@@ -177,18 +172,18 @@ describe('RunListPage', () => {
   });
   it('offers not evaluated separately from verdicts and explains server filtering', async () => {
     const { fixture, root } = await render(true);
-    root.querySelector<HTMLButtonElement>('#run-decision')?.click();
+    document.querySelector<HTMLButtonElement>('#run-decision')?.click();
     await fixture.whenStable();
     expect(
       document.querySelector('[role="option"][data-value="pending"]')?.textContent?.trim(),
     ).toBe('Not evaluated');
     expect(document.querySelector('[role="listbox"]')?.getAttribute('aria-label')).toBe('Decision');
-    root.querySelector<HTMLButtonElement>('#run-decision')?.click();
+    document.querySelector<HTMLButtonElement>('#run-decision')?.click();
     await fixture.whenStable();
-    expect(root.querySelector('#run-decision')?.getAttribute('aria-describedby')).toBe(
+    expect(document.querySelector('#run-decision')?.getAttribute('aria-describedby')).toBe(
       'run-decision-hint',
     );
-    expect(root.querySelector('#run-decision-hint')?.textContent).toContain(
+    expect(document.querySelector('#run-decision-hint')?.textContent).toContain(
       'Not evaluated means no live evaluation yet.',
     );
     expect(root.querySelector('[data-run-decision]')?.textContent).toContain('Pending');
@@ -204,8 +199,8 @@ describe('RunListPage', () => {
   });
   it('restores a pending filter from the URL without rewriting its context', async () => {
     query.next(convertToParamMap({ decision: 'pending', ref: 'main' }));
-    const { root } = await render();
-    expect(root.querySelector('#run-decision hlm-select-value')?.textContent).toContain(
+    await render(true);
+    expect(document.querySelector('#run-decision hlm-select-value')?.textContent).toContain(
       'Not evaluated',
     );
     expect(navigate).not.toHaveBeenCalled();
@@ -269,13 +264,13 @@ describe('RunListPage', () => {
   it('applies filters to the store and merges URL state while clearing obsolete filter keys', async () => {
     query.next(convertToParamMap({ decision: 'pending' }));
     const { fixture, root } = await render(true);
-    await choose(fixture, root, 'state', 'running');
-    await choose(fixture, root, 'scope', 'original');
-    await choose(fixture, root, 'decision', 'PASS');
+    await choose(fixture, 'state', 'running');
+    await choose(fixture, 'scope', 'original');
+    await choose(fixture, 'decision', 'PASS');
     expect(store.setFilters).not.toHaveBeenCalled();
     change(root, 'refName', 'main');
-    root
-      .querySelector('form')!
+    document
+      .querySelector('#run-filter-panel form')!
       .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
     await fixture.whenStable();
     expect(store.setFilters).toHaveBeenLastCalledWith({
@@ -284,8 +279,8 @@ describe('RunListPage', () => {
       scope: 'original',
       refName: 'main',
     });
-    expect(root.querySelector('[data-run-filter-disclosure]')?.textContent).toContain(
-      'Active filters: 4',
+    expect(root.querySelector('button[aria-controls="run-filter-panel"]')?.textContent).toContain(
+      'Filters (3)',
     );
     expect(navigate).toHaveBeenLastCalledWith(
       [],
@@ -307,7 +302,7 @@ describe('RunListPage', () => {
     );
     await fixture.whenStable();
     expect(store.init).toHaveBeenCalledTimes(calls);
-    root.querySelector<HTMLButtonElement>('[data-run-clear]')!.click();
+    root.querySelector<HTMLButtonElement>('[data-filter-clear]')!.click();
     await fixture.whenStable();
     expect(navigate).toHaveBeenLastCalledWith(
       [],
@@ -322,8 +317,8 @@ describe('RunListPage', () => {
         },
       }),
     );
-    expect(root.querySelector('[data-run-filter-disclosure]')?.textContent).toContain(
-      'Active filters: 0',
+    expect(root.querySelector('button[aria-controls="run-filter-panel"]')?.textContent).toContain(
+      'Filters (0)',
     );
   });
   it('restores cursor and page size from the URL without walking earlier pages', async () => {
@@ -343,13 +338,13 @@ describe('RunListPage', () => {
     expect(navigate).not.toHaveBeenCalled();
   });
   it('restores back/forward query changes and reloads when the project changes', async () => {
-    const { fixture, root } = await render();
+    const { fixture } = await render(true);
     query.next(convertToParamMap({ decision: 'FAIL' }));
     await fixture.whenStable();
-    expect(root.querySelector('#run-decision hlm-select-value')?.textContent).toContain('FAIL');
+    expect(document.querySelector('#run-decision hlm-select-value')?.textContent).toContain('FAIL');
     query.next(convertToParamMap({}));
     await fixture.whenStable();
-    expect(root.querySelector('#run-decision hlm-select-value')?.textContent).toContain('All');
+    expect(document.querySelector('#run-decision hlm-select-value')?.textContent).toContain('All');
     project.next(convertToParamMap({ projectId: 'project-2' }));
     await fixture.whenStable();
     expect(store.init).toHaveBeenLastCalledWith('project-2', {
@@ -412,8 +407,9 @@ describe('RunListPage', () => {
 
   it('does not steal focus from another control after navigation', async () => {
     store.hasNext.set(true);
-    const { fixture, root } = await render(true);
-    const clear = root.querySelector<HTMLButtonElement>('[data-run-clear]');
+    query.next(convertToParamMap({ decision: 'pending' }));
+    const { fixture, root } = await render();
+    const clear = root.querySelector<HTMLButtonElement>('[data-filter-clear]')!;
     clear?.focus();
     expect(document.activeElement).toBe(clear);
     const pager = await TestbedHarnessEnvironment.loader(fixture).getHarness(RunPagerHarness);

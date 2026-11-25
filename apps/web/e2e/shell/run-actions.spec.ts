@@ -100,22 +100,15 @@ for (const locale of LOCALES) {
       const trigger = page.locator('[data-run-cancel-trigger]');
       await expect(trigger).not.toHaveAttribute('aria-disabled', 'true');
       await page.locator('app-page-header a[href]').focus();
-      // The header actions follow the back link in DOM order: cancel, then inspect evidence.
-      await page.keyboard.press('Tab');
-      await expect(trigger).toBeFocused();
-      await page.keyboard.press('Tab');
-      await expect(
-        page.getByRole('button', { name: /^(Inspect evidence|Kiểm tra bằng chứng)/ }),
-      ).toBeFocused();
-      // The run id and ref copy controls are the only stops in the summary.
-      const identityControls = page
-        .locator('app-run-header')
-        .first()
-        .locator('button, [tabindex="0"]');
-      await expect(identityControls).toHaveCount(2);
-      for (const control of await identityControls.all()) {
+      // Identity, the backed mutation, ref/commit provenance and revision actions follow in DOM order.
+      const summary = page.locator('app-run-header');
+      const controls = summary.locator('button');
+      await expect(controls).toHaveCount(8);
+      await expect(controls.nth(2)).toHaveAttribute('data-run-cancel-trigger', '');
+      for (const control of await controls.all()) {
         await page.keyboard.press('Tab');
         await expect(control).toBeFocused();
+        await expect(control).toHaveAccessibleName(/\S/);
       }
       await trigger.focus();
       await page.keyboard.press('Enter');

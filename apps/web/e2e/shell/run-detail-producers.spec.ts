@@ -19,7 +19,7 @@ async function producersOf(
   run: RunStateVariant,
   locale: ShellLocale = 'en',
 ): Promise<Locator> {
-  await page.goto(runDetailPath({ locale, run }));
+  await page.goto(runDetailPath({ locale, run, tab: 'evidence' }));
   await expect(page.locator('app-run-detail-page')).toHaveAttribute(
     'data-run-detail-status',
     'ready',
@@ -168,8 +168,7 @@ for (const locale of LOCALES) {
     page,
   }) => {
     const producers = await producersOf(page, 'many-producers', locale);
-    await producers.locator('app-data-table-pager hlm-select-trigger button').click();
-    await page.getByRole('option', { name: '50', exact: true }).click();
+    await page.locator('[data-run-tab="context"]').click();
     // The manifest is a collapsed disclosure; its copy controls are reachable only once open.
     const manifest = page.locator('app-manifest-panel details').first();
     await manifest.locator('summary').click();
@@ -183,13 +182,16 @@ for (const locale of LOCALES) {
       await expect(copy).toBeFocused();
       await expect(copy).toHaveAccessibleName(/^(Copy|Sao chép) /);
     }
+    await page.locator('[data-run-tab="evidence"]').click();
+    await producers.locator('app-data-table-pager hlm-select-trigger button').click();
+    await page.getByRole('option', { name: '50', exact: true }).click();
     const scroller = producers.locator('.scroll');
     await expect(scroller).toHaveCount(1);
     await expect(scroller).not.toHaveAttribute('tabindex', '0');
     expect(
       await scroller.evaluate((element) => element.scrollHeight <= element.clientHeight + 1),
     ).toBe(true);
-    // The producer table precedes the evidence tabs in the page flow.
+    // All producer controls remain in page flow after the evidence panel.
     const producerCopies = producers.locator('app-copy-value-button button');
     await expect(producerCopies).toHaveCount(50);
     await producerCopies.first().focus();
@@ -211,7 +213,7 @@ for (const locale of LOCALES) {
       await expect(action).toBeFocused();
     }
     await page.keyboard.press('Tab');
-    await expect(page.getByRole('tab', { name: /^(Evidence|Bằng chứng)/ })).toBeFocused();
+    expect(await page.evaluate(() => document.activeElement?.tagName)).toBe('BODY');
     for (const control of [producerNext, producerPrevious, pageSize]) {
       await page.keyboard.press('Shift+Tab');
       await expect(control).toBeFocused();
@@ -221,11 +223,14 @@ for (const locale of LOCALES) {
       await expect(copy).toBeFocused();
       await page.keyboard.press('Shift+Tab');
     }
-    // A single attempts page adds no pager stops before the producer copies.
     await expect(scroller).not.toBeFocused();
+    await expect(page.locator('[data-evidence-revision-select]')).toBeFocused();
+    await page.locator('[data-run-tab="attempts"]').click();
     const attempts = page.locator('app-attempts-table');
     await expect(attempts.locator('app-data-table-pager button')).toHaveCount(0);
-    await expect(attempts.locator('app-copy-value-button button').last()).toBeFocused();
+    const lastCopy = attempts.locator('app-copy-value-button button').last();
+    await lastCopy.focus();
+    await expect(lastCopy).toBeFocused();
 
     // `#producer-<slot>` is the documented anchor: a deep link lands on, and focuses, that row.
     await page.goto(`${runDetailPath({ locale, run: 'many-producers' })}#producer-shard-42`);

@@ -83,7 +83,6 @@
   @let attempt = entry.attempt;
   <div
     data-attempt-row
-    [attr.data-pre-healing]="entry.preHealing ? '' : null"
     [id]="entry.anchor"
     tabindex="-1"
     class="scroll-mt-[calc(var(--eg-topbar-height)+var(--eg-space-4))] focus-visible:outline-solid focus-visible:outline-(--eg-focus)"
@@ -104,32 +103,17 @@
         >{{ copy.attempt }} {{ attempt.attemptNo }}</span
       >
     </div>
-    @if (entry.preHealing) {
-      <div
-        hlmAlert
-        class="pre-healing-block mt-(--eg-space-3) block border-s-2 border-(--eg-warning-fg) bg-(--eg-warning-bg) p-(--eg-space-3) text-(--eg-warning-fg)"
-      >
-        <strong>{{ copy.preHealing }}</strong>
-      </div>
-    }
-    @if (attempt.healingCandidate; as candidate) {
-      <div
-        class="mt-(--eg-space-3) grid min-w-0 gap-(--eg-space-2) border-s border-border ps-(--eg-space-4) text-xs"
-        data-healing-candidate
-      >
-        <strong>{{ copy.candidate }}</strong>
-        <bdi
-          ><app-data-table-value [value]="display(candidate.candidateHash)" [truncate]="true"
-        /></bdi>
-        <app-copy-value-button
-          [value]="candidate.candidateHash"
-          [label]="copy.candidate"
-          [iconOnly]="true"
-        />
-        <span>{{ candidate.mode === 'shadow' ? copy.shadow : copy.official }}</span>
-      </div>
-    }
   </div>
+</ng-template>
+<ng-template #actionCell let-entry let-label="value">
+  <button
+    #opener
+    appRowAction
+    [label]="label"
+    [attr.aria-label]="label"
+    [attr.aria-haspopup]="'dialog'"
+    (click)="inspectAttempt(entry.attempt, opener.nativeElement)"
+  ></button>
 </ng-template>
 <ng-template #rawCell let-entry>
   <span data-attempt-raw

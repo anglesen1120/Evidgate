@@ -1,6 +1,7 @@
 // State sheet: docs/design/web/state-sheet.md#evidencebadge
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
+import { clearTranslations, loadTranslations } from '@angular/localize';
 
 import { EvidenceBadgeComponent } from './evidence-badge.component';
 
@@ -12,7 +13,33 @@ describe('EvidenceBadgeComponent', () => {
     }).compileComponents();
   });
 
-  afterEach(() => vi.restoreAllMocks());
+  afterEach(() => {
+    clearTranslations();
+    vi.restoreAllMocks();
+  });
+
+  it.each([
+    ['complete', 'Đủ', 'Đủ bằng chứng'],
+    ['incomplete', 'Thiếu', 'Thiếu bằng chứng'],
+    [null, 'Không khả dụng', 'Chưa có'],
+  ] as const)(
+    'uses standalone vocabulary until explicitly compact (%s)',
+    async (value, full, short) => {
+      const state = value ?? 'unavailable';
+      loadTranslations({
+        [`shared.evidence-badge.full.${state}`]: full,
+        [`shared.evidence-badge.short.${state}`]: short,
+      });
+      const fixture = TestBed.createComponent(EvidenceBadgeComponent);
+      fixture.componentRef.setInput('completeness', value);
+      await fixture.whenStable();
+      const root = fixture.nativeElement as HTMLElement;
+      expect(root.querySelector('.verdict__value')?.textContent).toBe(full);
+      fixture.componentRef.setInput('compact', true);
+      await fixture.whenStable();
+      expect(root.querySelector('[role="img"]')?.textContent?.trim()).toBe(short);
+    },
+  );
 
   it.each([
     ['default', 'incomplete', 'warning', 'Incomplete'],

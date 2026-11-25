@@ -56,7 +56,7 @@ for (const locale of LOCALES) {
     page,
   }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.goto(runDetailPath({ locale, run: 'many-producers' }));
+    await page.goto(runDetailPath({ locale, run: 'many-producers', tab: 'evidence' }));
     await ready(page);
     const table = page.locator('app-producer-status-table app-data-table');
     for (const width of [1440, 1280, 1024]) {
@@ -83,12 +83,20 @@ for (const locale of LOCALES) {
     }
   });
 
-  test(`release identifiers receive useful width beside the intrinsic component key (${locale})`, async ({
+  test(`context uses the full width for the timeline and gives release identifiers useful width (${locale})`, async ({
     page,
   }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.goto(runDetailPath({ locale, run: 'releases' }));
+    await page.goto(runDetailPath({ locale, run: 'releases', tab: 'context' }));
     await ready(page);
+    await page.setViewportSize({ width: 1280, height: 900 });
+    const verdict = page.locator('app-run-header');
+    await expect(verdict).toHaveCSS('position', 'sticky');
+    await expect(verdict.locator('.run-summary')).toHaveCSS('border-inline-start-width', '3px');
+    const timeline = await page.locator('app-run-timeline').boundingBox();
+    const panel = await page.getByRole('tabpanel').boundingBox();
+    expect(panel).not.toBeNull();
+    expect(timeline?.width).toBe(panel!.width);
     const table = page.locator('app-release-panel app-data-table');
     for (const width of [1440, 1280, 1024]) {
       await page.setViewportSize({ width, height: 900 });
@@ -115,7 +123,7 @@ for (const locale of LOCALES) {
     page,
   }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.goto(runDetailPath({ locale }));
+    await page.goto(runDetailPath({ locale, tab: 'evidence' }));
     await ready(page);
     const revision = page.locator('[data-evidence-revision-select]');
     const selectorWidth = await revision.evaluate(
@@ -126,13 +134,14 @@ for (const locale of LOCALES) {
       .evaluate((element) => element.clientWidth);
     expect(selectorWidth).toBeLessThan(panelWidth * 0.75);
     const tabs = page.locator('app-run-detail-page [role="tablist"]').first().getByRole('tab');
-    await expect(tabs).toHaveCount(2);
-    const decision = tabs.nth(1);
+    await expect(tabs).toHaveCount(4);
+    const decision = tabs.nth(2);
+    await decision.click();
     await expect(decision).toHaveText(locale === 'vi' ? 'Quyết định' : 'Live decision');
     await expect(page.locator('app-decision-view #decision-title')).toHaveText(
       (await decision.getAttribute('aria-label'))!,
     );
-    for (const width of [390, 320]) {
+    for (const width of [390, 360, 320]) {
       await page.setViewportSize({ width, height: 900 });
       for (const fontSize of ['100%', '200%']) {
         await page.evaluate((size) => {
@@ -141,7 +150,7 @@ for (const locale of LOCALES) {
         for (const tab of await tabs.all()) {
           expect((await tab.boundingBox())?.height).toBeGreaterThanOrEqual(44);
         }
-        expect(await textLineCounts(tabs)).toEqual([1, 1]);
+        expect(await textLineCounts(tabs)).toEqual([1, 1, 1, 1]);
         expect(
           await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth),
         ).toBeLessThanOrEqual(1);

@@ -125,7 +125,11 @@ const FLOWS: readonly CoreFlow[] = [
     async open(page) {
       const detail = new RunDetailPage(page);
       await detail.openDetail(
-        runDetailPath({ locale: LOCALE, decision: 'evaluated-fail-missing-shard' }),
+        runDetailPath({
+          locale: LOCALE,
+          decision: 'evaluated-fail-missing-shard',
+          tab: 'evidence',
+        }),
       );
       await expect(detail.evidencePanel.locator('[data-evidence-missing]').first()).toBeVisible();
     },

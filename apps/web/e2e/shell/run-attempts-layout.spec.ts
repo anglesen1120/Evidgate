@@ -7,7 +7,7 @@ import { seedStoredTheme, type ShellLocale } from './support';
 // labelled records below 768 px of container width, or when its columns do not fit. The mode is
 // therefore read from the rendered DOM (see renderedStacked). Both neighbouring widths are still
 // covered because the strict max-width utility stopped at 766 px in the past.
-const WIDTHS = [390, 766, 767, 768] as const;
+const WIDTHS = [360, 390, 766, 767, 768] as const;
 const RECORD = '.eg-table-record[data-row-id]';
 const DESKTOP_ROW = 'tr[data-row-id]';
 
@@ -125,17 +125,17 @@ for (const { width, locale } of WIDTHS.flatMap((width) =>
     await openAttempts(page, locale);
     const stacked = await renderedStacked(page);
     const layout = await attemptLayout(page, stacked);
-    expect(layout.fieldBoxes).toHaveLength(5);
+    expect(layout.fieldBoxes).toHaveLength(6);
     expect(layout.containerOverflow, JSON.stringify(layout)).toBeLessThanOrEqual(1);
     const distinct = (values: number[]): number => new Set(values.map(Math.round)).size;
     if (stacked) {
       // The ordered list replaces the table entirely; each value now has a visible term.
       expect.soft(layout.head).toBeNull();
-      expect.soft(layout.labelDisplays).toEqual(Array(5).fill('block'));
+      expect.soft(layout.labelDisplays).toEqual(Array(6).fill('block'));
       expect.soft(layout.firstRecordOffset, JSON.stringify(layout)).toBeLessThanOrEqual(2);
       expect.soft(distinct(layout.fieldBoxes.map((field) => field.x))).toBe(1);
-      expect.soft(distinct(layout.fieldBoxes.map((field) => field.y))).toBe(5);
-      expect.soft(layout.fieldMinimums).toEqual(Array(5).fill('0px'));
+      expect.soft(distinct(layout.fieldBoxes.map((field) => field.y))).toBe(6);
+      expect.soft(layout.fieldMinimums).toEqual(Array(6).fill('0px'));
       for (const field of layout.fieldBoxes) {
         expect
           .soft(Math.abs(field.width - layout.recordInnerWidth), JSON.stringify(layout))
@@ -155,7 +155,7 @@ for (const { width, locale } of WIDTHS.flatMap((width) =>
       expect.soft(layout.labelDisplays).toEqual([]);
       expect.soft(layout.firstRecordOffset, JSON.stringify(layout)).toBeGreaterThan(2);
       expect.soft(distinct(layout.fieldBoxes.map((field) => field.y))).toBe(1);
-      expect.soft(distinct(layout.fieldBoxes.map((field) => field.x))).toBe(5);
+      expect.soft(distinct(layout.fieldBoxes.map((field) => field.x))).toBe(6);
       expect.soft(layout.headerWordsFit, JSON.stringify(layout)).toBe(true);
     }
   });
@@ -174,8 +174,8 @@ for (const locale of ['en', 'vi'] as const) {
       const row = table.locator(stacked ? RECORD : DESKTOP_ROW).first();
       const fields = row.locator(stacked ? ':scope > dl > div' : ':scope > td');
       const headers = table.getByRole('columnheader');
-      await expect(fields).toHaveCount(5);
-      await expect(headers).toHaveCount(stacked ? 0 : 5);
+      await expect(fields).toHaveCount(6);
+      await expect(headers).toHaveCount(stacked ? 0 : 6);
       for (const field of await fields.all()) {
         await expect(field).toHaveCSS('display', stacked ? 'block' : 'table-cell');
         if (!stacked) await expect(field).toHaveCSS('vertical-align', 'middle');
@@ -194,6 +194,33 @@ for (const locale of ['en', 'vi'] as const) {
     }
   });
 }
+
+test('attempt View traps focus and restores the row without scrolling or changing tabs', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 800 });
+  await page.goto(runDetailPath({ locale: 'en', attempts: 'ok' }) + '&tab=attempts');
+  const opener = page.locator('app-attempts-table button[appRowAction]').last();
+  await opener.scrollIntoViewIfNeeded();
+  await opener.focus();
+  const scroll = await page.evaluate(() => scrollY);
+  const url = page.url();
+  await opener.press('Enter');
+  const dialog = page.getByRole('dialog', { name: 'Attempt details' });
+  await expect(dialog.locator('dl.hlm-field-grid')).toBeVisible();
+  const controls = dialog.getByRole('button');
+  await controls.last().focus();
+  await page.keyboard.press('Tab');
+  await expect(controls.first()).toBeFocused();
+  await page.keyboard.press('Shift+Tab');
+  await expect(controls.last()).toBeFocused();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
+  await page.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0);
+  await expect(opener).toBeFocused();
+  expect(page.url()).toBe(url);
+  expect(await page.evaluate(() => scrollY)).toBe(scroll);
+});
 
 test('attempts switch between labelled records and table rows on resize', async ({ page }) => {
   await seedStoredTheme(page, 'light');

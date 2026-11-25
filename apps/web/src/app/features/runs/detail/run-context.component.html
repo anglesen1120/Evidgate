@@ -1,0 +1,130 @@
+<section hlmCard class="gap-0 py-0" aria-labelledby="run-environment-title">
+  <h2
+    hlmCardTitle
+    [size]="sectionSize"
+    id="run-environment-title"
+    class="m-0 border-b border-(--eg-border) px-(--eg-space-5) md:px-(--eg-space-6) py-(--eg-space-4)"
+    [textContent]="copy.context"
+  ></h2>
+  <dl
+    class="hlm-field-grid p-(--eg-space-5) md:p-(--eg-space-6) sm:[--hlm-field-columns:2] [&_dd]:flex [&_dd]:flex-wrap [&_dd]:items-center [&_dd]:gap-(--eg-space-2) [&_bdi]:max-w-full"
+  >
+    <div>
+      <dt>{{ copy.version }}</dt>
+      <dd data-run-version><app-number-value [value]="run().version" /></dd>
+    </div>
+    <div>
+      <dt>{{ copy.purpose }}</dt>
+      <dd data-run-purpose>
+        <bdi>{{ valueLabel('purpose', run().purpose) }}</bdi>
+      </dd>
+    </div>
+    <div>
+      <dt>{{ copy.environment }}</dt>
+      <dd data-run-environment>
+        <bdi class="font-mono">{{ display(run().environment.environment_key) }}</bdi>
+        <app-copy-value-button
+          [value]="run().environment.environment_key"
+          [label]="copy.environment"
+          [iconOnly]="true"
+        />
+      </dd>
+    </div>
+    <div>
+      <dt>{{ copy.revision }}</dt>
+      <dd data-run-environment-revision>
+        <app-number-value [value]="run().environment.revision_no" />
+      </dd>
+    </div>
+  </dl>
+  <details class="border-t border-border px-(--eg-space-5) md:px-(--eg-space-6) py-(--eg-space-3)">
+    <summary
+      class="max-md:min-h-(--eg-control-touch) pointer-coarse:min-h-(--eg-control-touch) cursor-pointer content-center font-semibold"
+      i18n="@@runs.detail.context-details"
+    >
+      Additional execution context
+    </summary>
+    <dl
+      class="hlm-field-grid py-(--eg-space-3) sm:[--hlm-field-columns:2] [&_dd]:flex [&_dd]:flex-wrap [&_dd]:items-center [&_dd]:gap-(--eg-space-2)"
+    >
+      <div>
+        <dt>{{ copy.refKind }}</dt>
+        <dd data-run-ref-kind>
+          @let kind = run().ref.kind;
+          @if (kind !== null) {
+            <bdi>{{ display(kind) }}</bdi>
+          } @else {
+            <span class="text-muted-foreground">{{ copy.notProvided }}</span>
+          }
+        </dd>
+      </div>
+      <div>
+        <dt>{{ copy.pr }}</dt>
+        <dd>
+          @if (run().ref.pr_number !== null) {
+            <app-number-value [value]="run().ref.pr_number" />
+          } @else {
+            <span class="text-muted-foreground">{{ copy.notProvided }}</span>
+          }
+        </dd>
+      </div>
+      <div>
+        <dt>{{ copy.head }}</dt>
+        <dd>
+          @let head = run().ref.head_sha;
+          @if (head !== null) {
+            <bdi class="font-mono">{{ display(head) }}</bdi>
+            <app-copy-value-button [value]="head" [label]="copy.head" [iconOnly]="true" />
+          } @else {
+            <span class="text-muted-foreground">{{ copy.notProvided }}</span>
+          }
+        </dd>
+      </div>
+      <div>
+        <dt>{{ copy.base }}</dt>
+        <dd>
+          @let base = run().ref.base_sha;
+          @if (base !== null) {
+            <bdi class="font-mono">{{ display(base) }}</bdi>
+            <app-copy-value-button [value]="base" [label]="copy.base" [iconOnly]="true" />
+          } @else {
+            <span class="text-muted-foreground">{{ copy.notProvided }}</span>
+          }
+        </dd>
+      </div>
+      <div>
+        <dt>{{ copy.trigger }}</dt>
+        <dd>
+          @let trigger = run().ref.trigger_event;
+          @if (trigger !== null) {
+            <bdi>{{ display(trigger) }}</bdi>
+          } @else {
+            <span class="text-muted-foreground">{{ copy.notProvided }}</span>
+          }
+        </dd>
+      </div>
+      <div>
+        <dt>{{ copy.fork }}</dt>
+        <dd data-run-fork>
+          @if (run().ref.is_fork !== null) {
+            {{ run().ref.is_fork ? copy.yes : copy.no }}
+          } @else {
+            <span class="text-muted-foreground">{{ copy.notProvided }}</span>
+          }
+        </dd>
+      </div>
+      <div>
+        <dt>{{ copy.evidence }}</dt>
+        <dd data-run-evidence-revision>
+          @let revision = run().current_evidence_revision_id;
+          @if (revision !== null) {
+            <bdi class="font-mono">{{ display(revision) }}</bdi>
+            <app-copy-value-button [value]="revision" [label]="copy.evidence" [iconOnly]="true" />
+          } @else {
+            <span>{{ copy.none }}</span>
+          }
+        </dd>
+      </div>
+    </dl>
+  </details>
+</section>

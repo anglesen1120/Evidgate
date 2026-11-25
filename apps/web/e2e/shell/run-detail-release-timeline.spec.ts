@@ -67,7 +67,7 @@ for (const locale of LOCALES) {
   test(`a canceled run shows one current step, the after-cancel note and no bound release (${locale})`, async ({
     page,
   }) => {
-    await page.goto(runDetailPath({ locale, run: 'canceled' }));
+    await page.goto(runDetailPath({ tab: 'context', locale, run: 'canceled' }));
     await ready(page);
     const copy = COPY[locale];
     const timeline = page.getByRole('region', { name: copy.timeline });
@@ -96,7 +96,7 @@ for (const locale of LOCALES) {
   test(`a bound run loads release components without a single-release selector (${locale})`, async ({
     page,
   }) => {
-    await page.goto(runDetailPath({ locale, run: 'release' }));
+    await page.goto(runDetailPath({ tab: 'context', locale, run: 'release' }));
     await ready(page);
     const release = page.getByRole('region', { name: COPY[locale].release, exact: true });
     await expect(release.locator('[data-release-name]')).toContainText('Storefront release');
@@ -108,7 +108,7 @@ for (const locale of LOCALES) {
   });
 
   test(`two distinct releases select only their own components (${locale})`, async ({ page }) => {
-    await page.goto(runDetailPath({ locale, run: 'releases' }));
+    await page.goto(runDetailPath({ tab: 'context', locale, run: 'releases' }));
     await ready(page);
     const release = page.getByRole('region', { name: COPY[locale].release, exact: true });
     const selector = release.getByRole('combobox', { name: COPY[locale].selector });
@@ -130,7 +130,7 @@ for (const locale of LOCALES) {
   test(`release typeahead searches the visible name rather than the id (${locale})`, async ({
     page,
   }) => {
-    await page.goto(runDetailPath({ locale, run: 'releases' }));
+    await page.goto(runDetailPath({ tab: 'context', locale, run: 'releases' }));
     await ready(page);
     const release = page.locator('app-release-panel');
     const selector = release.getByRole('combobox');
@@ -163,7 +163,7 @@ async function tabThroughProducers(page: Page): Promise<Locator[]> {
 }
 
 test('the unbound regions add no keyboard stops', async ({ page }) => {
-  await page.goto(runDetailPath({ run: 'canceled' }));
+  await page.goto(runDetailPath({ tab: 'context', run: 'canceled' }));
   await ready(page);
   await expect(page.locator('app-run-timeline button, app-release-panel button')).toHaveCount(0);
   const manifest = page.locator('app-manifest-panel');
@@ -179,10 +179,13 @@ test('the unbound regions add no keyboard stops', async ({ page }) => {
   // Nothing in the unbound timeline or release panel adds a stop after the manifest.
   await page.keyboard.press('Tab');
   expect((await activeElement(page)).tag).toBe('body');
+  await page.locator('[data-run-tab="evidence"]').click();
   const producerStops = await tabThroughProducers(page);
   await page.keyboard.press('Tab');
-  await expect(page.getByRole('tab', { name: 'Evidence' })).toBeFocused();
-  for (const stop of producerStops.reverse()) {
+  await expect(page.getByRole('link', { name: 'Skip to main content' })).toBeFocused();
+  // Crossing browser chrome is platform-specific; verify reverse order inside the table itself.
+  await producerStops.at(-1)!.focus();
+  for (const stop of producerStops.slice(0, -1).reverse()) {
     await page.keyboard.press('Shift+Tab');
     await expect(stop).toBeFocused();
   }
@@ -197,7 +200,7 @@ test('the unbound regions add no keyboard stops', async ({ page }) => {
 test('the compact release chooser and both identifier actions preserve keyboard reachability', async ({
   page,
 }) => {
-  await page.goto(runDetailPath({ run: 'releases' }));
+  await page.goto(runDetailPath({ tab: 'context', run: 'releases' }));
   await ready(page);
   const release = page.locator('app-release-panel');
   const selector = release.getByRole('combobox');
@@ -211,8 +214,10 @@ test('the compact release chooser and both identifier actions preserve keyboard 
     await page.keyboard.press('Tab');
     await expect(copy).toBeFocused();
   }
-  // The producer table precedes the evidence tabs; the release panel follows the manifest.
+  await page.locator('[data-run-tab="evidence"]').click();
   await tabThroughProducers(page);
+  await page.locator('[data-run-tab="context"]').click();
+  await page.locator('app-manifest-panel summary').click();
   await manifestCopies.last().focus();
   await page.keyboard.press('Tab');
   await expect(selector).toBeFocused();
@@ -239,7 +244,7 @@ test('the compact release chooser and both identifier actions preserve keyboard 
 
 for (const status of ['forbidden', 'not-found'] as const) {
   test(`release ${status} stays inside a ready run`, async ({ page }) => {
-    await page.goto(runDetailPath({ run: 'release-refused', release: status }));
+    await page.goto(runDetailPath({ tab: 'context', run: 'release-refused', release: status }));
     await ready(page);
     await expect(page.locator(`app-release-panel app-${status}-pattern`)).toBeVisible();
     await expect(page.locator('app-manifest-panel')).toBeVisible();
@@ -252,7 +257,7 @@ for (const locale of LOCALES) {
     page,
   }) => {
     await page.setViewportSize({ width: 320, height: 800 });
-    await page.goto(runDetailPath({ locale, run: 'releases' }));
+    await page.goto(runDetailPath({ tab: 'context', locale, run: 'releases' }));
     await ready(page);
     await expect(page.locator('[data-release-digest]')).toBeVisible();
     for (const region of [page.locator('app-run-timeline'), page.locator('app-release-panel')]) {
@@ -280,7 +285,7 @@ for (const locale of LOCALES) {
 for (const locale of LOCALES) {
   test(`an unbound run makes no release read at 320px (${locale})`, async ({ page }) => {
     await page.setViewportSize({ width: 320, height: 800 });
-    await page.goto(runDetailPath({ locale, run: 'canceled' }));
+    await page.goto(runDetailPath({ tab: 'context', locale, run: 'canceled' }));
     await ready(page);
     await expect(page.locator('app-release-panel [data-release-unbound]')).toHaveText(
       COPY[locale].unbound,
@@ -298,7 +303,7 @@ for (const locale of LOCALES) {
     page,
   }) => {
     await page.goto(
-      `${runDetailPath({ locale, run: 'release-refused' })}&fixture.variant.getRelease=missing`,
+      `${runDetailPath({ tab: 'context', locale, run: 'release-refused' })}&fixture.variant.getRelease=missing`,
     );
     await ready(page);
     await expect(page.locator('app-release-panel app-error-pattern')).toBeVisible();
@@ -313,7 +318,7 @@ for (const locale of LOCALES) {
     page,
   }, testInfo) => {
     await page.setViewportSize({ width: 320, height: 800 });
-    await page.goto(runDetailPath({ locale, run: 'releases' }));
+    await page.goto(runDetailPath({ tab: 'context', locale, run: 'releases' }));
     await ready(page);
     const release = page.locator('app-release-panel');
     const selector = release.getByRole('combobox');

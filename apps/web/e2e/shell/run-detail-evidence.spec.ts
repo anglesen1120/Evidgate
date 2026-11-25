@@ -40,7 +40,7 @@ const BANNER_TITLE: Record<ShellLocale, string> = {
   vi: 'Đã có phiên bản mới hơn',
 };
 
-/** Both regions stay mounted; the selected tab decides which panel is visible. */
+/** Only the selected panel mounts its contents. */
 const EVIDENCE_TAB: Record<ShellLocale, string> = {
   en: 'Evidence',
   vi: 'Bằng chứng',
@@ -85,6 +85,7 @@ function detailPath(
   return runDetailPath({
     locale,
     decision,
+    tab: 'evidence',
     attempts: 'ok',
     revisions,
     evidenceRevision,
@@ -289,6 +290,11 @@ for (const locale of LOCALES) {
 
     await page.reload();
     await ready(page);
+    await expect(page.getByRole('tab', { name: DECISION_TAB[locale] })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    await showEvidence(page, locale);
     await expect(select).toContainText(revisionText(locale, OLDEST_REVISION.revision_no));
     await expect(page.locator('#evidence-panel [data-evidence-newer]')).toBeVisible();
     await showDecision(page, locale);

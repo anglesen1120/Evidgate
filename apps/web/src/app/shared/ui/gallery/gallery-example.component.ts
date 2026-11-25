@@ -16,6 +16,7 @@ import { HlmLabel } from '@evidgate/ui/label';
 import { HlmSelectImports } from '@evidgate/ui/select';
 import { HlmSkeleton } from '@evidgate/ui/skeleton';
 import { HlmTabsImports } from '@evidgate/ui/tabs';
+import { HlmPopover } from '@evidgate/ui/popover';
 import { HlmTooltip } from '@evidgate/ui/tooltip';
 import { toast } from '@spartan-ng/brain/sonner';
 import { ReviewStatusChipComponent, type ReviewStatus } from '../chips';
@@ -77,6 +78,7 @@ const approval = {
     HlmSkeleton,
     GalleryEvidenceTableComponent,
     HlmTabsImports,
+    HlmPopover,
     HlmTooltip,
     ReviewStatusChipComponent,
     InlineFeedbackComponent,

@@ -5,6 +5,7 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
+  DestroyRef,
   effect,
   ElementRef,
   inject,
@@ -16,9 +17,10 @@ import {
   viewChild,
   type WritableSignal,
 } from '@angular/core';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { HlmButton } from '@evidgate/ui/button';
+import { HlmDialogService } from '@evidgate/ui/dialog';
 import { HlmIcon } from '@evidgate/ui/icon';
 import { HlmTabsImports } from '@evidgate/ui/tabs';
 import { combineLatest } from 'rxjs';
@@ -33,10 +35,19 @@ import { EvidencePanelComponent } from './evidence/evidence-panel.component';
 import { decodeEvidenceAnchor, resolveEvidenceAnchor } from './evidence/run-evidence-anchors';
 import { ManifestPanelComponent } from './manifest-panel.component';
 import { producerSlotsFromRun } from './producers/producer-slots';
-import { ProducerStatusTableComponent } from './producers/producer-status-table.component';
+import {
+  type ProducerPaging,
+  ProducerStatusTableComponent,
+} from './producers/producer-status-table.component';
 import { ReleasePanelComponent } from './release/release-panel.component';
 import { releaseFromDetail } from './release/release-summary';
 import { parsePinnedRevision } from './revision-pin';
+import { RunContextComponent } from './run-context.component';
+import { NumberValueComponent } from '../../../shared/ui/values/number-value.component';
+import { RunBreadcrumbItem } from '../../../shell/layout/shell-breadcrumbs.run-item';
+import { AttemptInspectorHandle } from './attempts/attempt-inspector.dialog';
+import type { AttemptRow } from './attempts/attempt-summary';
+import { observeVerdictHeight, revealSelectedTab } from './run-detail-layout';
 import { RunHeaderComponent } from './run-header.component';
 import { RunDetailStore } from './run-detail.store';
 import { RunTimelineComponent } from './timeline/run-timeline.component';
@@ -48,6 +59,8 @@ import { runValueLabel } from './run-value-label';
     RouterLink,
     RequestStateComponent,
     RunHeaderComponent,
+    RunContextComponent,
+    NumberValueComponent,
     CancelRunActionComponent,
     ManifestPanelComponent,
     ProducerStatusTableComponent,
@@ -88,21 +101,28 @@ export class RunDetailPage {
   private readonly injector = inject(Injector);
   private readonly locale = inject(LOCALE_ID);
 
-  protected readonly detailTab = signal('evidence');
+  private readonly attemptInspector = new AttemptInspectorHandle(inject(HlmDialogService));
+  private readonly destroyRef = inject(DestroyRef);
+  private readonly breadcrumb = inject(RunBreadcrumbItem);
+  private readonly query = toSignal(this.route.queryParamMap, { requireSync: true });
+  protected readonly producerPaging = signal<ProducerPaging | null>(null);
+  protected readonly countStatuses = [
+    'passed',
+    'failed',
+    'skipped',
+    'timed_out',
+    'error',
+    'blocked',
+  ] as const;
+  protected readonly statusLabel = runValueLabel;
+  protected readonly detailTab = computed(() => {
+    const anchor = decodeEvidenceAnchor(this.fragment() ?? '');
+    if (anchor) return anchor.startsWith('attempt-') ? 'attempts' : 'evidence';
+    const tab = this.query().get('tab');
+    return tab === 'evidence' || tab === 'decision' || tab === 'context' ? tab : 'attempts';
+  });
+  private readonly verdict = viewChild('verdict', { read: ElementRef<HTMLElement> });
   private readonly tabStrip = viewChild<ElementRef<HTMLElement>>('tabStrip');
-
-  private revealSelectedTab(): void {
-    const selected = this.detailTab();
-    const strip = this.tabStrip()?.nativeElement;
-    if (!strip || strip.scrollWidth <= strip.clientWidth) return;
-    const tab = strip.querySelector<HTMLElement>(`[data-run-tab="${selected}"]`);
-    if (!tab) return;
-    const box = strip.getBoundingClientRect();
-    const inset = strip.clientLeft + Number.parseFloat(getComputedStyle(strip).paddingInlineStart);
-    const { left, right } = tab.getBoundingClientRect();
-    const delta = Math.min(0, left - box.left - inset) || Math.max(0, right - box.right + inset);
-    if (delta) strip.scrollLeft += delta;
-  }
 
   // The header describes the current collection, not every decision this run has ever had.
   // Never place an older or differently pinned evaluation next to its completeness badge.
@@ -147,8 +167,6 @@ export class RunDetailPage {
   );
   /** The fragment landed once: a polling update never moves focus a second time. */
   private landed = false;
-  /** The producer landing was re-applied once the attempts read settled. */
-  private settled = false;
   private attemptAnchorCanceled = false;
   private anchorFocus: Element | null = null;
   protected readonly retryEligible = signal(false);
@@ -230,11 +248,34 @@ export class RunDetailPage {
     back: $localize`:@@runs.detail.back:Back to runs`,
     evidence: $localize`:@@runs.evidence.title:Evidence`,
     decision: $localize`:@@runs.decision.title:Latest live decision`,
-    inspectEvidence: $localize`:@@runs.detail.inspect-evidence:Inspect evidence`,
     decisionTab: $localize`:@@runs.detail.decision-tab-compact:Live decision`,
   };
+  protected readonly tabs = [
+    { id: 'attempts', label: $localize`:@@runs.detail.attempts.title:Attempts` },
+    { id: 'evidence', label: this.copy.evidence },
+    { id: 'decision', label: this.copy.decisionTab },
+    { id: 'context', label: $localize`:@@runs.detail.context-tab:Context` },
+  ] as const;
+
   constructor() {
-    afterRenderEffect(() => this.revealSelectedTab());
+    this.observeRoute();
+    this.observeUrlSelection();
+    this.observeAnchor();
+    this.watchRetryWindow(this.store.loadError, this.retryEligible);
+    this.watchRetryWindow(this.store.decisionError, this.decisionRetryEligible);
+    this.watchRetryWindow(this.store.revisionsError, this.revisionsRetryEligible);
+    this.watchRetryWindow(this.store.releaseError, this.releaseRetryEligible);
+    effect((cleanup) => {
+      this.breadcrumb.id.set(
+        this.requestStatus() === 'ready' ? (this.store.run()?.run_id ?? null) : null,
+      );
+      cleanup(() => this.breadcrumb.id.set(null));
+    });
+    observeVerdictHeight(this.host.nativeElement, this.verdict);
+  }
+
+  private observeRoute(): void {
+    afterRenderEffect(() => revealSelectedTab(this.detailTab(), this.tabStrip()?.nativeElement));
     this.route.fragment.pipe(takeUntilDestroyed()).subscribe((fragment) => {
       if (this.fragment() === fragment) return;
       const anchor = decodeEvidenceAnchor(fragment ?? '');
@@ -247,66 +288,53 @@ export class RunDetailPage {
       }
       this.fragment.set(fragment);
       this.landed = false;
-      this.settled = false;
       this.attemptAnchorCanceled = false;
       this.anchorFocus = this.document.activeElement;
-      if (anchor?.startsWith('producer-')) this.detailTab.set('evidence');
     });
+    this.destroyRef.onDestroy(() => this.attemptInspector.close());
     combineLatest([this.route.paramMap, this.route.queryParamMap])
       .pipe(takeUntilDestroyed())
       .subscribe(([params, query]) => {
         const runId = params.get('runId');
         if (runId && runId !== this.runId) {
+          this.attemptInspector.close();
           this.runId = runId;
+          this.producerPaging.set(null);
           this.landed = false;
-          this.settled = false;
           this.attemptAnchorCanceled = false;
           this.anchorFocus = this.document.activeElement;
           void this.store.load(runId);
         }
         this.store.applyUrlPin(parsePinnedRevision(query.get('evidence_revision')));
       });
-    // The pin is committed to the URL with replacement navigation, so Back/Forward restores it and
-    // the history stays one entry per view. Unrelated parameters and the fragment are preserved.
+  }
+
+  private observeUrlSelection(): void {
     effect(() => {
       const revision = this.store.pinnedRevision();
-      if (revision === null) return;
-      const current = parsePinnedRevision(
-        this.route.snapshot.queryParamMap.get('evidence_revision'),
-      );
-      if (revision === current) return;
+      const query = this.query();
+      const tab = this.detailTab();
+      const supplied = query.get('tab');
+      const fixTab =
+        (supplied !== null || decodeEvidenceAnchor(this.fragment() ?? '') !== null) &&
+        supplied !== tab;
+      const fixPin =
+        revision !== null && parsePinnedRevision(query.get('evidence_revision')) !== revision;
+      if (!fixTab && !fixPin) return;
       void this.router.navigate([], {
         relativeTo: this.route,
-        queryParams: { evidence_revision: revision },
+        queryParams: {
+          ...(fixTab ? { tab } : {}),
+          ...(fixPin ? { evidence_revision: revision } : {}),
+        },
         queryParamsHandling: 'merge',
         replaceUrl: true,
         preserveFragment: true,
       });
     });
-    // The attempts table sits above the producer table, so its height arriving displaces a row that
-    // was landed on first. Re-landing happens once, when that read settles, and only while the
-    // visitor has not moved focus elsewhere.
-    effect(() => {
-      if (this.attemptsStatus() === 'loading' || this.settled) return;
-      const fragment = this.fragment();
-      if (!this.landed || !fragment?.startsWith('producer-')) return;
-      this.settled = true;
-      afterNextRender(
-        () => {
-          if (this.fragment() !== fragment) return;
-          const target = resolveEvidenceAnchor(fragment, this.document);
-          const active = this.document.activeElement;
-          if (target && (active === target || active === this.document.body)) {
-            this.focusEvidenceTarget(target);
-          }
-        },
-        { injector: this.injector },
-      );
-    });
-    this.watchRetryWindow(this.store.loadError, this.retryEligible);
-    this.watchRetryWindow(this.store.decisionError, this.decisionRetryEligible);
-    this.watchRetryWindow(this.store.revisionsError, this.revisionsRetryEligible);
-    this.watchRetryWindow(this.store.releaseError, this.releaseRetryEligible);
+  }
+
+  private observeAnchor(): void {
     effect(() => {
       const fragment = this.fragment();
       const run = this.store.run();
@@ -346,6 +374,22 @@ export class RunDetailPage {
       );
     });
   }
+  protected activateTab(tab: string): Promise<boolean> {
+    if (tab === this.detailTab()) return Promise.resolve(false);
+    return this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: {
+        tab,
+        evidence_revision: this.store.pinnedRevision() ?? this.query().get('evidence_revision'),
+      },
+      queryParamsHandling: 'merge',
+    });
+  }
+
+  protected inspectAttempt(attempt: AttemptRow): void {
+    this.attemptInspector.open({ attempt, attempts: this.store.attempts() ?? [] });
+  }
+
   protected cancelPendingAttemptAnchor(): void {
     if (!this.landed && decodeEvidenceAnchor(this.fragment() ?? '')?.startsWith('attempt-')) {
       this.attemptAnchorCanceled = true;
@@ -410,9 +454,9 @@ export class RunDetailPage {
       return true;
     };
     if (this.detailTab() === 'evidence' && focus()) return;
-    this.detailTab.set('evidence');
-    // Wait for the destination to mount or become visible before moving focus.
-    afterNextRender(focus, { injector: this.injector });
+    void this.activateTab('evidence').then(() =>
+      afterNextRender(focus, { injector: this.injector }),
+    );
   }
   /**
    * Moves focus to the evidence heading after the render that removed `controlSelector`, and only

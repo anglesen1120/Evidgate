@@ -6,7 +6,7 @@ import { By } from '@angular/platform-browser';
 import { provideLayoutTestStubs } from '../../../../shared/testing/layout.testing';
 import { DataTableComponent } from '../../../../shared/ui/data-table/data-table.component';
 import { AttemptsTableComponent } from './attempts-table.component';
-import { render, row } from './attempts-table.test-support';
+import { inspect, render, row } from './attempts-table.test-support';
 
 describe('Attempts table shared presentation', () => {
   provideLayoutTestStubs();
@@ -32,6 +32,7 @@ describe('Attempts table shared presentation', () => {
       'status',
       'number',
       'number',
+      'actions',
     ]);
     expect(headers[0]?.getAttribute('data-column-priority')).toBe('primary');
     expect(headers[0]?.getAttribute('data-column-kind')).toBe('identifier');
@@ -80,8 +81,8 @@ describe('Attempts table shared presentation', () => {
         .narrow.set(true);
       await fixture.whenStable();
       const record = root.querySelector('.eg-table-record')!;
-      expect(record.querySelectorAll('dt')).toHaveLength(5);
-      expect(record.querySelectorAll('dd')).toHaveLength(5);
+      expect(record.querySelectorAll('dt')).toHaveLength(6);
+      expect(record.querySelectorAll('dd')).toHaveLength(6);
       expect(record.querySelector('[data-attempt-raw] bdi')?.textContent).toBe(attempt.rawStatus);
       expect(record.querySelector('[data-attempt-duration]')?.textContent?.trim()).toBe(
         attempt.durationMs === null ? 'Not provided' : '134 ms',
@@ -134,7 +135,8 @@ describe('Attempts table shared presentation', () => {
     expect(copy?.querySelector('[role="status"]')?.textContent).toBe(
       'Could not copy Execution. Show the full value and copy it manually.',
     );
-    const candidate = root.querySelector('[data-healing-candidate]');
+    const dialog = await inspect(fixture);
+    const candidate = dialog.querySelector('[data-healing-candidate]');
     expect(candidate?.querySelector('bdi')?.textContent).toBe('sha256:hash⟨U+202E⟩<script>');
     candidate?.querySelector<HTMLButtonElement>('app-copy-value-button button')?.click();
     await fixture.whenStable();
@@ -163,7 +165,8 @@ describe('Attempts table shared presentation', () => {
     expect(identity?.querySelector('app-copy-value-button [role="status"]')?.textContent).toBe(
       'Execution copied.',
     );
-    const candidate = root.querySelector('[data-healing-candidate]');
+    const dialog = await inspect(fixture);
+    const candidate = dialog.querySelector('[data-healing-candidate]');
     candidate?.querySelector<HTMLButtonElement>('app-copy-value-button button')?.click();
     await fixture.whenStable();
     expect(writeText).toHaveBeenCalledTimes(2);

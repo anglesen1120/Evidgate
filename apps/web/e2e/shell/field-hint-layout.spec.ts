@@ -10,8 +10,16 @@ import {
   withVariants,
 } from './support';
 
-/** Measure real field rows, not just the icon: the neighboring plain label must align too. */
-async function checkRows(page: Page, ids: string[], minimum: number, sameRow = false) {
+/**
+ * Measure real field rows, not just the icon: the neighboring plain label must align too.
+ * `row` aligns control tops on one line; `stack` aligns lefts for a popover's single column.
+ */
+async function checkRows(
+  page: Page,
+  ids: string[],
+  minimum: number,
+  layout: 'row' | 'stack' | 'free' = 'free',
+) {
   await expect(page.locator(`#${ids[0]}`)).toBeVisible();
   const rows = await page.evaluate(async (ids) => {
     await document.fonts.ready;
@@ -39,7 +47,7 @@ async function checkRows(page: Page, ids: string[], minimum: number, sameRow = f
   for (const row of rows) {
     expect(row.height, `${row.id} label row`).toBe(rows[0]!.height);
     expect(row.gap, `${row.id} label overlaps its control`).toBeGreaterThanOrEqual(0);
-    if (sameRow) expect(row.inputTop, `${row.id} control top`).toBe(rows[0]!.inputTop);
+    if (layout === 'row') expect(row.inputTop, `${row.id} control top`).toBe(rows[0]!.inputTop);
     if (row.target) {
       expect(
         Math.min(row.target.width, row.target.height),
@@ -50,7 +58,25 @@ async function checkRows(page: Page, ids: string[], minimum: number, sameRow = f
       );
     }
   }
-  if (sameRow && rows.length > 1) expect(rows[1]!.inputLeft).toBeGreaterThan(rows[0]!.inputLeft);
+  if (layout === 'row' && rows.length > 1) {
+    expect(rows[1]!.inputLeft).toBeGreaterThan(rows[0]!.inputLeft);
+  }
+  if (layout === 'stack') {
+    for (const row of rows)
+      expect(row.inputLeft, `${row.id} control left`).toBe(rows[0]!.inputLeft);
+    for (let i = 1; i < rows.length; i++) {
+      expect(rows[i]!.inputTop, `${rows[i]!.id} stacks below`).toBeGreaterThan(
+        rows[i - 1]!.inputTop,
+      );
+    }
+  }
+}
+
+/** Inline search inputs have sr-only labels and no hint row, so measure the control box. */
+async function checkInline(page: Page, selector: string, minimum: number) {
+  const box = await page.locator(selector).boundingBox();
+  expect(box, `${selector} rendered`).not.toBeNull();
+  expect(Math.min(box!.width, box!.height), `${selector} hit area`).toBeGreaterThanOrEqual(minimum);
 }
 
 const list = localePath(
@@ -66,23 +92,22 @@ for (const width of [1440, 390]) {
 
     test('aligns audit filters with and without guidance', async ({ page }) => {
       await page.goto(withVariants(settingsTabPath('vi', 'audit'), [SETTINGS_AUDIT_ONLY_GRANTS]));
+      await page.locator('button[aria-controls="audit-filter-panel"]').click();
+      await expect(page.locator('#audit-filter-panel')).toBeVisible();
       await checkRows(
         page,
-        ['audit-actor', 'audit-action', 'audit-object', 'audit-from', 'audit-to'],
+        ['audit-actor', 'audit-object', 'audit-from', 'audit-to'],
         minimum,
-        desktop,
+        'stack',
       );
+      await checkInline(page, '#audit-action', minimum);
     });
 
     test('aligns run filters and preserves the create dialog field rhythm', async ({ page }) => {
       await page.goto(withVariants(list, ['?fixture.variant.listPermissions=run-actions']));
       await openRunFilters(page);
-      await checkRows(
-        page,
-        ['run-state', 'run-decision', 'run-scope', 'run-ref'],
-        minimum,
-        desktop,
-      );
+      await checkRows(page, ['run-state', 'run-decision', 'run-scope'], minimum, 'stack');
+      await checkInline(page, '#run-ref', minimum);
       const trigger = page.locator('[data-run-create-trigger]');
       if (desktop) {
         await trigger.click();
@@ -105,7 +130,7 @@ for (const width of [1440, 390]) {
         ]),
       );
       if (desktop)
-        await checkRows(page, ['retention-artifact', 'retention-metadata'], minimum, true);
+        await checkRows(page, ['retention-artifact', 'retention-metadata'], minimum, 'row');
       else {
         await expect(page.locator('[data-retention-current]')).toBeVisible();
         await expect(page.locator('app-retention-form form')).toHaveCount(0);

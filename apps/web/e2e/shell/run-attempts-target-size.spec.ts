@@ -63,21 +63,31 @@ async function openEnlargedAttempts(
   await expect(
     page.locator('[data-attempt-identity] app-data-table-value .value').first(),
   ).toHaveClass(/clipped/);
-  await page.locator('app-run-detail-page').getByRole('tab').nth(1).click();
+  const tabs = page.locator('app-run-detail-page').getByRole('tab');
+  await tabs.nth(2).click();
+  await tabs.first().click();
+  await expect(tabs.first()).toHaveAttribute('aria-selected', 'true');
   await page.mouse.move(0, 0);
 }
 
-async function placeUnderTopbar(target: Locator) {
+async function placeUnderVerdict(target: Locator) {
   return target.evaluate((target) => {
-    const scroller = document.scrollingElement!;
-    const bar = document.querySelector('header.topbar')!;
-    const barBottom = bar.getBoundingClientRect().bottom;
-    scroller.scrollTop += target.getBoundingClientRect().bottom - barBottom - 13;
+    const topbar = document.querySelector('header.topbar')!;
+    const verdict = document.querySelector('app-run-header')!;
+    // Align the target at the top first, so the verdict edge is measured at its real offset.
+    target.scrollIntoView({ block: 'start', behavior: 'instant' });
+    const edge = () =>
+      Math.max(topbar.getBoundingClientRect().bottom, verdict.getBoundingClientRect().bottom);
+    const offset = target.getBoundingClientRect().bottom - edge() - 13;
+    window.scrollBy({ top: offset, behavior: 'instant' });
     const box = target.getBoundingClientRect();
-    const hit = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 4);
+    const boundary = edge();
+    const centerX = box.left + box.width / 2;
     return {
-      visibleHeight: box.bottom - barBottom,
-      coveredByTopbar: hit !== null && hit.closest('header.topbar') !== null,
+      visibleHeight: box.bottom - boundary,
+      coveredByVerdict: verdict.contains(document.elementFromPoint(centerX, boundary - 2)),
+      exposedTarget: target.contains(document.elementFromPoint(centerX, boundary + 2)),
+      scroll: window.scrollY,
     };
   });
 }
@@ -88,18 +98,23 @@ for (const locale of LOCALES) {
       page,
     }) => {
       await openEnlargedAttempts(page, locale, theme, '100%');
-      const target = page.locator(
-        `#attempt-${failedAttempt.execution_key}-${failedAttempt.attempt_no} [data-attempt-identity] app-copy-value-button button`,
+      await page.setViewportSize({ width: 767, height: 900 });
+      const record = page.locator(
+        `.eg-table-record:has(#attempt-${failedAttempt.execution_key}-${failedAttempt.attempt_no})`,
       );
-      const covered = await placeUnderTopbar(target);
+      await expect(record.locator('[data-attempt-identity] .value')).toHaveClass(/clipped/);
+      const target = record.locator('[data-attempt-identity] app-copy-value-button button');
+      const covered = await placeUnderVerdict(target);
+      expect(covered.scroll).toBeGreaterThan(0);
       expect(covered.visibleHeight).toBeGreaterThanOrEqual(12);
       expect(covered.visibleHeight).toBeLessThanOrEqual(14);
-      expect(covered.coveredByTopbar).toBe(true);
+      expect(covered.coveredByVerdict).toBe(true);
+      expect(covered.exposedTarget).toBe(true);
 
       await expectNoA11yViolations(page, `enlarged attempt after Decision ${locale}/${theme}`);
 
       expect(await page.evaluate(() => scrollY)).toBe(0);
-      await expect(page.locator('app-run-detail-page').getByRole('tab').nth(1)).toHaveAttribute(
+      await expect(page.locator('app-run-detail-page').getByRole('tab').first()).toHaveAttribute(
         'aria-selected',
         'true',
       );
@@ -112,6 +127,7 @@ for (const locale of LOCALES) {
       for (const width of [1280, 768, 390]) {
         await page.setViewportSize({ width, height: 900 });
         const identities = page.locator('[data-attempt-identity]');
+        await expect(identities).toHaveCount(attemptsFixture.body.items.length);
         for (const identity of await identities.all()) {
           const targets = identity.locator(
             'app-data-table-value .value, app-copy-value-button button',

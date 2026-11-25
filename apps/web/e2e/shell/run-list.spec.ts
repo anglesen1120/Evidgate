@@ -9,6 +9,8 @@ import runListUnavailable from '../../../../fixtures/web-api/run-list-unavailabl
 import type { FixtureCallRecord } from '../../src/app/core/dev-fixtures/fixture-request-log';
 import { expectNoA11yViolations } from '../a11y/axe-scan';
 import {
+  FILTER_LABEL,
+  chooseFilter,
   expectCenteredRunIdentity,
   expectSingleLineScope,
   openRunFilters,
@@ -38,22 +40,6 @@ const VARIANTS = {
 const ROWS = RUN_RECORDS;
 /** The review route requires the fixture grant set that includes run:read. */
 const RUN_READ_GRANT = '?fixture.variant.listPermissions=settings-policy-readonly';
-/** The filters are Helm comboboxes now: the trigger shows the selected label, not a value. */
-const FILTER_LABEL = {
-  any: { en: 'All', vi: 'Tất cả' },
-  running: { en: 'Running', vi: 'Đang chạy' },
-  complete: { en: 'Complete', vi: 'Hoàn tất' },
-  pending: { en: 'Not evaluated', vi: 'Chưa đánh giá' },
-  fail: { en: 'FAIL', vi: 'FAIL' },
-  rerun: { en: 'Rerun', vi: 'Chạy lại' },
-} satisfies Record<string, Record<ShellLocale, string>>;
-
-/** A combobox commits on an option click; it exposes no form value to read back. */
-async function chooseFilter(page: Page, trigger: string, label: string): Promise<void> {
-  await openRunFilters(page);
-  await page.locator(trigger).click();
-  await page.getByRole('option', { name: label, exact: true }).click();
-}
 
 /** `/dev/run-list/orgs/:orgId/projects/:projectId` — the review address, without a query. */
 function reviewPath(locale: ShellLocale) {
@@ -141,17 +127,28 @@ for (const locale of LOCALES) {
     await ready(page);
     const expected = runList.body.items.filter((row) => row.decision === null);
     expect(expected.length).toBeGreaterThan(0);
+    await expect(page.locator('[data-run-quick="pending"]')).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    await openRunFilters(page);
     await expect(page.locator('#run-decision')).toContainText(FILTER_LABEL.pending[locale]);
+    await page.keyboard.press('Escape');
     await expect(page.locator(ROWS)).toHaveCount(expected.length);
     await expect(page.locator(`${ROWS} [data-run-decision] [data-tone="pending"]`)).toHaveCount(
       expected.length,
     );
     await page.reload();
     await ready(page);
-    await expect(page.locator('#run-decision')).toContainText(FILTER_LABEL.pending[locale]);
-    await expect(page.locator(ROWS)).toHaveCount(expected.length);
+    await expect(page.locator('[data-run-quick="pending"]')).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
     await openRunFilters(page);
-    await page.locator('[data-run-clear]').click();
+    await expect(page.locator('#run-decision')).toContainText(FILTER_LABEL.pending[locale]);
+    await page.keyboard.press('Escape');
+    await expect(page.locator(ROWS)).toHaveCount(expected.length);
+    await page.locator('[data-filter-clear]').click();
     await expect(page.locator(ROWS)).toHaveCount(runList.body.items.length);
     expect(new URL(page.url()).searchParams.has('decision')).toBe(false);
   });
@@ -160,7 +157,7 @@ for (const locale of LOCALES) {
     await page.goto(withVariants(path(locale), [VARIANTS.runs]));
     await ready(page);
     await chooseFilter(page, '#run-state', FILTER_LABEL.running[locale]);
-    await page.locator('[data-run-apply]').click();
+    await page.locator('[data-filter-apply]').click();
     await expect(page).toHaveURL(/state=running/);
     // The filter navigation is relative to the page's own route, so the review address survives it
     // and the reload below re-matches the same route.
@@ -170,12 +167,13 @@ for (const locale of LOCALES) {
     );
     await page.reload();
     await ready(page);
+    await openRunFilters(page);
     await expect(page.locator('#run-state')).toContainText(FILTER_LABEL.running[locale]);
     await chooseFilter(page, '#run-state', FILTER_LABEL.complete[locale]);
     await chooseFilter(page, '#run-decision', FILTER_LABEL.fail[locale]);
     await chooseFilter(page, '#run-scope', FILTER_LABEL.rerun[locale]);
-    await page.locator('[data-run-apply]').click();
-    await expect(page).toHaveURL(/decision=FAIL/);
+    await page.locator('[data-filter-apply]').click();
+    await expect(page).toHaveURL(/decision=fail/);
     await expect(page.locator(ROWS)).toHaveCount(1);
     const requests: readonly FixtureCallRecord[] = await page.evaluate(
       () => window.__evidgateFixtureRequests ?? [],
@@ -190,21 +188,24 @@ for (const locale of LOCALES) {
     expect(wireFilters.has('rerun_scope')).toBe(false);
     await page.goBack();
     await ready(page);
+    await openRunFilters(page);
     await expect(page.locator('#run-state')).toContainText(FILTER_LABEL.running[locale]);
     await expect(page.locator('#run-decision')).toContainText(FILTER_LABEL.any[locale]);
     await expect(page.locator('#run-scope')).toContainText(FILTER_LABEL.any[locale]);
     await page.goForward();
     await ready(page);
+    await openRunFilters(page);
     await expect(page.locator('#run-state')).toContainText(FILTER_LABEL.complete[locale]);
     await expect(page.locator('#run-decision')).toContainText(FILTER_LABEL.fail[locale]);
     await expect(page.locator('#run-scope')).toContainText(FILTER_LABEL.rerun[locale]);
-    await page.locator('[data-run-clear]').click();
+    await page.keyboard.press('Escape');
+    await page.locator('[data-filter-clear]').click();
     await expect(page.locator(ROWS)).toHaveCount(runList.body.items.length);
     const query = new URL(page.url()).searchParams;
     expect(query.get('fixture.variant.listRuns')).toBe('runs');
     for (const key of ['state', 'decision', 'scope', 'ref']) expect(query.has(key)).toBe(false);
     await page.locator('#run-ref').fill('feature/việt');
-    await page.locator('[data-run-apply]').click();
+    await page.locator('[data-filter-search]').click();
     await expect.poll(() => new URL(page.url()).searchParams.get('ref')).toBe('feature/việt');
     await page.reload();
     await ready(page);
@@ -228,8 +229,7 @@ for (const locale of LOCALES) {
       'true',
     );
     await expect(page.locator(ROWS)).toHaveCount(0);
-    await openRunFilters(page);
-    await page.locator('[data-run-clear]').click();
+    await page.locator('[data-filter-clear]').click();
     await expect(page.locator(ROWS)).toHaveCount(2);
   });
 
@@ -429,6 +429,10 @@ for (const locale of LOCALES) {
       await page.setViewportSize({ width: 390, height: 800 });
       await page.goto(withVariants(path(locale), [VARIANTS.runs]));
       await ready(page);
+      await expect(page.locator('[data-filter-clear]')).toHaveCount(0);
+      await page.locator('[data-run-quick="fail"]').click();
+      await expect(page).toHaveURL(/decision=fail/);
+      await expect(page.locator('[data-run-quick="fail"]')).toHaveAttribute('aria-pressed', 'true');
       await openRunFilters(page);
       await page.locator('#run-state').focus();
       await page.keyboard.press('Tab');
@@ -436,16 +440,20 @@ for (const locale of LOCALES) {
       await page.keyboard.press('Tab');
       await expect(page.locator('#run-decision')).toBeFocused();
       await page.keyboard.press('Tab');
+      await expect(page.locator('button[aria-controls="run-filter-hint"]')).toBeFocused();
+      await page.keyboard.press('Tab');
       await expect(page.locator('#run-scope')).toBeFocused();
       await page.keyboard.press('Tab');
-      await expect(page.locator('#run-ref')).toBeFocused();
+      await expect(page.locator('[data-filter-apply]')).toBeFocused();
       for (const selector of [
         '#run-state',
         '#run-decision',
         '#run-scope',
         '#run-ref',
-        '[data-run-apply]',
-        '[data-run-clear]',
+        '[data-run-quick="all"]',
+        '[data-filter-search]',
+        '[data-filter-apply]',
+        '[data-filter-clear]',
       ]) {
         const box = await page.locator(selector).boundingBox();
         expect(box?.height).toBeGreaterThanOrEqual(44);

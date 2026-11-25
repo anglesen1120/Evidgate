@@ -1,6 +1,6 @@
 import { expect, test, type Locator } from '@playwright/test';
 import { latencyToggle } from './onboarding-support';
-import { openRunFilters, RUN_RECORDS } from './run-list.support';
+import { RUN_RECORDS } from './run-list.support';
 import {
   localePath,
   LOCALES,
@@ -48,10 +48,8 @@ for (const locale of LOCALES) {
     await page.evaluate(() => document.fonts.ready);
     const idle = await documentBox(footer);
     expect(idle.height).toBe((await documentBox(range)).height);
-
-    await openRunFilters(page);
     await page.locator('#run-ref').fill('main');
-    await page.locator('[data-run-apply]').click();
+    await page.locator('[data-filter-search]').click();
     await expect(pager.getByRole('progressbar')).toBeVisible();
     expect((await documentBox(footer)).height).toBe(idle.height);
     await expect(feedback).toBeHidden();

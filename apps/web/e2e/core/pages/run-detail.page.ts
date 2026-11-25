@@ -29,15 +29,15 @@ export class RunDetailPage {
   }
 
   get headerId(): Locator {
-    return this.detail.locator('app-run-header [data-run-id] > bdi');
+    return this.detail.locator('app-run-header [data-run-id] .identifier-accessible bdi');
   }
 
   get headerRef(): Locator {
     return this.detail.locator('app-run-header [data-run-ref] > bdi');
   }
 
-  get headerVersion(): Locator {
-    return this.detail.locator('app-run-header [data-run-version]');
+  get contextVersion(): Locator {
+    return this.detail.locator('app-run-context [data-run-version]');
   }
 
   get evidencePanel(): Locator {
@@ -78,9 +78,14 @@ export class RunDetailPage {
     await expect(this.detail).toHaveAttribute('data-run-detail-status', 'ready');
   }
 
-  /** Evidence is the default tab, so a case that reads the decision has to ask for it. */
+  async showContext(): Promise<void> {
+    await this.detail.locator('[data-run-tab="context"]').click();
+    await expect(this.contextVersion).toBeVisible();
+  }
+
+  /** Select by stable tab identity, independent of locale. */
   async showDecision(): Promise<void> {
-    await this.detail.getByRole('tab').nth(1).click();
+    await this.detail.locator('[data-run-tab="decision"]').click();
     await expect(this.decisionPanel).toBeVisible();
   }
 

@@ -186,6 +186,7 @@ export function devRoutes(): Routes {
                 },
                 {
                   path: ':runId',
+                  data: { runBreadcrumb: true },
                   loadComponent: () =>
                     // eslint-disable-next-line evidgate/no-feature-cross-import -- review-only detail child makes relative product row links usable in G1 review.
                     import('../../features/runs/detail/run-detail.page').then(
@@ -262,6 +263,7 @@ export function devRoutes(): Routes {
                     },
                     {
                       path: ':runId',
+                      data: { runBreadcrumb: true },
                       loadComponent: () =>
                         // eslint-disable-next-line evidgate/no-feature-cross-import -- review-only file replacement; real G2 detail, no product phase change.
                         import('../../features/runs/detail/run-detail.page').then(

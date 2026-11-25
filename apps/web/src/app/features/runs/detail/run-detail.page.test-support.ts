@@ -100,3 +100,12 @@ export async function settle(harness: RouterTestingHarness): Promise<void> {
   await tick.promise;
   await harness.fixture.whenStable();
 }
+
+export async function selectTab(harness: RouterTestingHarness, tab: string): Promise<void> {
+  const button = harness.routeNativeElement?.querySelector<HTMLButtonElement>(
+    `[data-run-tab="${tab}"]`,
+  );
+  if (!button) throw new Error(`Missing run tab ${tab}`);
+  button.click();
+  await settle(harness);
+}

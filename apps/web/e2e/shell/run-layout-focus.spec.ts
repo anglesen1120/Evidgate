@@ -1,6 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
 import { runDetailPath } from './run-detail.support';
-import { openRunFilters } from './run-list.support';
 import {
   localePath,
   ORG_ACME,
@@ -27,6 +26,7 @@ function listPath(variant: 'runs' | '250-rows'): string {
 function detailPath(revision = 3, revisions: 'ok' | 'empty' | 'unavailable' = 'ok'): string {
   return runDetailPath({
     decision: 'evaluated-fail-missing-shard',
+    tab: 'evidence',
     attempts: 'ok',
     revisions,
     evidenceRevision: revision,
@@ -332,7 +332,11 @@ for (const theme of THEMES) {
           : `Viewing evidence revision ${selected}. Newer revision 3 is available.`;
       messages.push(message);
       await expect(region).toHaveText(message);
-      await expect(page.locator('app-evidence-panel').locator('..')).toHaveAttribute('hidden', '');
+      await expect(page.locator('app-evidence-panel')).toHaveCount(0);
+      await expect(page.locator('[data-run-tab="decision"]')).toHaveAttribute(
+        'aria-selected',
+        'true',
+      );
       await expect(region).toHaveAttribute('data-test-announcements', messages.join('\n'));
       await page.getByRole('tab', { name: 'Evidence', exact: true }).click();
       await expect(page.locator('[data-evidence-revision-select]')).toContainText(
@@ -387,7 +391,7 @@ for (const theme of THEMES) {
     await expect(decision).toHaveAttribute('aria-selected', 'true');
     const decisionPanel = page.getByRole('tabpanel');
     await expect(decisionPanel).toHaveAttribute('tabindex', '0');
-    await expect(page.locator('[role="tabpanel"][hidden]')).toHaveAttribute('tabindex', '-1');
+    await expect(page.locator('[role="tabpanel"][hidden][tabindex="-1"]')).toHaveCount(3);
     const mismatch = page.locator('[data-decision-mismatch] button');
     await expect(mismatch).toBeVisible();
     await page.keyboard.press('Tab');
@@ -399,6 +403,8 @@ for (const theme of THEMES) {
     await page.keyboard.press('Shift+Tab');
     await expect(decision).toBeFocused();
     await page.keyboard.press('Home');
+    await expect(page.locator('[data-run-tab="attempts"]')).toBeFocused();
+    await page.keyboard.press('ArrowRight');
     await expect(evidence).toBeFocused();
     await expect(evidence).toHaveAttribute('aria-selected', 'true');
     await page.keyboard.press('Tab');
@@ -448,9 +454,8 @@ test('a loading reference filter keeps the fitted run records mounted', async ({
       attributeOldValue: true,
     });
   });
-  await openRunFilters(page);
   await page.locator('#run-ref').fill('feature/batch-000');
-  await page.locator('[data-run-apply]').click();
+  await page.locator('[data-filter-search]').click();
   await expect.poll(() => new URL(page.url()).searchParams.get('ref')).toBe('feature/batch-000');
   await expect(list).toHaveAttribute('data-run-list-status', 'ready');
   await expect(table).toHaveAttribute('data-test-saw-loading', 'true');

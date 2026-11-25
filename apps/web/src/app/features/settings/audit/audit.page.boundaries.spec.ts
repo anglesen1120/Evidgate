@@ -2,7 +2,8 @@ import { ComponentHarness, TestKey } from '@angular/cdk/testing';
 import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { provideZonelessChangeDetection, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, Router, convertToParamMap, type NavigationExtras } from '@angular/router';
+import { BehaviorSubject } from 'rxjs';
 import type { AuditEntryDto } from '@evidgate/sdk';
 import { AuditDataService } from '../../../core/data/audit-data.service';
 import { ApiRequestError } from '../../../core/http/api-error';
@@ -87,13 +88,26 @@ describe('AuditPage boundary browsing and export scope', () => {
   beforeEach(() => {
     org.set({ id: 'org-1' });
     list.mockReset();
+    const query = new BehaviorSubject(convertToParamMap({}));
     TestBed.configureTestingModule({
       imports: [AuditPage],
       providers: [
         provideZonelessChangeDetection(),
         { provide: AuditDataService, useValue: { list } },
         { provide: SessionStore, useValue: { currentOrg: org } },
-        { provide: ActivatedRoute, useValue: { snapshot: { data: { pageHeadingLevel: 1 } } } },
+        {
+          provide: Router,
+          useValue: {
+            navigate: (_commands: unknown[], extras: NavigationExtras) => {
+              query.next(convertToParamMap(extras.queryParams ?? {}));
+              return Promise.resolve(true);
+            },
+          },
+        },
+        {
+          provide: ActivatedRoute,
+          useValue: { queryParamMap: query, snapshot: { data: { pageHeadingLevel: 1 } } },
+        },
       ],
     });
   });

@@ -16,6 +16,7 @@ import {
   open,
   refRun,
   run,
+  selectTab,
 } from './run-detail.page.test-support';
 
 class DetailPagingHarness extends ComponentHarness {
@@ -40,7 +41,10 @@ describe('RunDetailPage', () => {
     expect(await header.getDescription()).toBe(`Replay · Version ${run.version}`);
     expect(get).toHaveBeenCalledWith(run.run_id);
     expect(root.querySelectorAll('h1')).toHaveLength(1);
-    expect(root.querySelector('[data-run-id] bdi')?.textContent).toBe(run.run_id);
+    expect(root.querySelector('[data-run-id] .identifier-accessible bdi')?.textContent).toBe(
+      `Run id: ${run.run_id}`,
+    );
+    await selectTab(harness, 'context');
     expect(root.querySelector('[data-run-version]')?.textContent).toBe(String(run.version));
     expect(root.querySelector('[data-run-purpose]')?.textContent).toBe('Replay');
     expect(root.querySelector('[data-run-ref] bdi')?.textContent).toBe(run.ref.name);
@@ -63,38 +67,37 @@ describe('RunDetailPage', () => {
     expect(root.querySelector('app-evidence-badge')?.textContent).toContain(
       'Completeness: Unavailable',
     );
-    expect(root.querySelector('app-decision-chip')?.textContent).toContain('Not evaluated');
+    expect(root.querySelector('app-decision-chip')?.textContent).toContain('Pending');
     expect(root.querySelector('app-outcome-pill')).toBeNull();
     expect(root.textContent).not.toContain('PASS');
+    await selectTab(harness, 'evidence');
     const slotRows = root.querySelectorAll('#producers tr[data-row-id]');
     expect(slotRows).toHaveLength(run.declared_producers.length);
     expect(root.querySelectorAll('#producers [data-fact][data-unavailable]')).toHaveLength(0);
   });
-  it('places summary beside execution context before attempts and evidence, with manifest last', async () => {
-    const { root } = await open();
-    const regions = [
-      ...root.querySelectorAll(
-        'app-run-header, app-attempts-table, app-evidence-panel, app-decision-view, app-manifest-panel',
-      ),
-    ];
-    expect(regions.map((region) => region.tagName.toLowerCase())).toEqual([
-      'app-run-header',
-      'app-run-header',
-      'app-attempts-table',
-      'app-evidence-panel',
-      'app-decision-view',
-      'app-manifest-panel',
-    ]);
-    expect(regions[0]?.querySelector('[data-run-environment]')).toBeNull();
-    expect(regions[1]?.querySelector('[data-run-environment]')).not.toBeNull();
-    expect(regions[0]?.querySelector('app-decision-chip')).toBeNull();
+  it('shows one sticky verdict above the four independent panels', async () => {
+    const { harness, root } = await open();
+    expect(root.querySelectorAll('app-run-header')).toHaveLength(1);
+    expect(root.querySelector('app-run-header')?.classList.contains('sticky')).toBe(true);
+    expect(root.querySelector('app-run-header app-cancel-run-action')).not.toBeNull();
+    expect(root.querySelector('app-attempts-table')).not.toBeNull();
+    expect(root.querySelector('[data-attempt-counts] dd')?.textContent).toBe(
+      String(run.counts.passed),
+    );
+    expect(
+      root.querySelector('app-manifest-panel, app-evidence-panel, app-decision-view'),
+    ).toBeNull();
+    await selectTab(harness, 'context');
+    expect(root.querySelector('app-run-context [data-run-environment]')).not.toBeNull();
+    expect(root.querySelector('app-attempts-table')).toBeNull();
   });
   it('explains incomplete collection before attempts without inventing a missing reason', async () => {
     get.mockResolvedValue({ ...run, state: 'incomplete' });
-    const { root } = await open();
+    const { harness, root } = await open();
     const note = root.querySelector('[data-run-missing-summary]');
     expect(note?.textContent).toContain('Collection is incomplete');
     note?.querySelector('button')?.click();
+    await harness.fixture.whenStable();
     expect(document.activeElement).toBe(root.querySelector('#evidence-title'));
     expect(note?.textContent).not.toMatch(/PASS|FAIL|missing_shard/);
   });
@@ -104,7 +107,7 @@ describe('RunDetailPage', () => {
     expect(root.querySelector('[data-run-missing-summary]')).toBeNull();
   });
   it('renders the manifest panel verbatim from the run read', async () => {
-    const { root } = await open();
+    const { root } = await open(run.run_id, '', '?tab=context');
     const panel = root.querySelector('app-manifest-panel')!;
     expect(panel.querySelector('[data-manifest-hash] bdi')?.textContent).toBe(run.manifest_hash);
     expect(panel.querySelector('[data-manifest-suite] bdi')?.textContent).toBe(
@@ -146,8 +149,10 @@ describe('RunDetailPage', () => {
     const table = await TestbedHarnessEnvironment.loader(harness.fixture).getHarness(
       DetailPagingHarness,
     );
+    await selectTab(harness, 'evidence');
     const producerText = await (await table.producers()).text();
     const evidenceText = await (await table.evidence()).text();
+    await selectTab(harness, 'attempts');
     expect(await table.rows()).toHaveLength(first.items.length);
     await (await table.next()).click();
     expect(await (await table.summary()).text()).toBe('Page 2');
@@ -156,8 +161,10 @@ describe('RunDetailPage', () => {
       limit: 20,
       cursor: 'attempt-tail',
     });
+    await selectTab(harness, 'evidence');
     expect(await (await table.producers()).text()).toBe(producerText);
     expect(await (await table.evidence()).text()).toBe(evidenceText);
+    await selectTab(harness, 'attempts');
     await (await table.previous()).click();
     expect(await (await table.summary()).text()).toBe('Page 1');
     expect(await table.rows()).toHaveLength(first.items.length);
@@ -192,7 +199,7 @@ describe('RunDetailPage', () => {
     [false, 'No'],
   ] as const)('localizes the fork flag %s as %s', async (isFork, label) => {
     get.mockResolvedValue({ ...run, ref: { ...run.ref, is_fork: isFork } });
-    const { root } = await open();
+    const { root } = await open(run.run_id, '', '?tab=context');
     expect(root.querySelector('[data-run-fork]')?.textContent?.trim()).toBe(label);
   });
   it('escapes U+202E and isolates body-only unverified refs', async () => {
@@ -207,7 +214,7 @@ describe('RunDetailPage', () => {
   });
   it('null evidence revision says none recorded, never PASS', async () => {
     get.mockResolvedValue({ ...run, current_evidence_revision_id: null });
-    const { root } = await open();
+    const { root } = await open(run.run_id, '', '?tab=context');
     expect(root.querySelector('[data-run-evidence-revision]')?.textContent).toContain(
       'None recorded',
     );
@@ -215,7 +222,7 @@ describe('RunDetailPage', () => {
   });
   it('renders a missing ref kind as plain not provided rather than a status', async () => {
     get.mockResolvedValue({ ...run, ref: { ...run.ref, kind: null } });
-    const { root } = await open();
+    const { root } = await open(run.run_id, '', '?tab=context');
     expect(root.querySelector('[data-run-ref-kind]')?.textContent).toContain('Not provided');
     expect(root.querySelector('[data-run-ref-kind] app-status-pill')).toBeNull();
   });
@@ -276,7 +283,7 @@ describe('RunDetailPage', () => {
     await harness.navigateByUrl('/projects/project-1/runs/old-id', RunDetailPage);
     expect(harness.routeNativeElement?.querySelector('app-loading-pattern')).not.toBeNull();
     get.mockResolvedValueOnce({ ...run, version: 8 });
-    await harness.navigateByUrl('/projects/project-1/runs/new-id', RunDetailPage);
+    await harness.navigateByUrl('/projects/project-1/runs/new-id?tab=context', RunDetailPage);
     resolveOld(run);
     await harness.fixture.whenStable();
     expect(harness.routeNativeElement?.querySelector('[data-run-version]')?.textContent).toBe('8');

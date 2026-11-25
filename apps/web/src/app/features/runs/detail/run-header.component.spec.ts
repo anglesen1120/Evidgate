@@ -2,6 +2,7 @@ import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import type { RunStateDto } from '@evidgate/sdk';
 import { run } from './run-detail-store.fixtures';
+import { RunContextComponent } from './run-context.component';
 import { RunHeaderComponent } from './run-header.component';
 
 describe('RunHeaderComponent', () => {
@@ -13,12 +14,18 @@ describe('RunHeaderComponent', () => {
   );
   afterEach(() => TestBed.resetTestingModule());
 
-  async function render(value: RunStateDto = run, view: 'summary' | 'context' = 'summary') {
+  async function render(value: RunStateDto = run) {
     const fixture = TestBed.createComponent(RunHeaderComponent);
     fixture.componentRef.setInput('run', value);
-    fixture.componentRef.setInput('view', view);
     await fixture.whenStable();
     return { fixture, root: fixture.nativeElement as HTMLElement };
+  }
+
+  async function renderContext(value: RunStateDto) {
+    const fixture = TestBed.createComponent(RunContextComponent);
+    fixture.componentRef.setInput('run', value);
+    await fixture.whenStable();
+    return fixture.nativeElement as HTMLElement;
   }
 
   it('labels four independent summary facts without fabricating an outcome or a decision', async () => {
@@ -36,7 +43,7 @@ describe('RunHeaderComponent', () => {
       'Stored run decision',
       'Evidence revision',
     ]);
-    expect(root.querySelector('app-run-state-pill')).toBeNull();
+    expect(root.querySelector('app-run-state-pill')).not.toBeNull();
     expect(root.querySelector('app-evidence-badge')?.textContent).toContain(
       'Completeness: Unavailable',
     );
@@ -83,7 +90,10 @@ describe('RunHeaderComponent', () => {
     const button = note?.querySelector<HTMLButtonElement>('button');
     expect(note?.textContent).toContain('Collection is incomplete');
     expect(button?.getAttribute('data-slot')).toBe('button');
-    expect(button?.classList.contains('min-h-(--eg-control-touch)')).toBe(true);
+    expect(button?.classList.contains('min-h-(--eg-control-touch)')).toBe(false);
+    for (const prefix of ['max-md', 'pointer-coarse']) {
+      expect(button?.classList.contains(`${prefix}:min-h-(--eg-control-touch)`)).toBe(true);
+    }
     button?.focus();
     expect(document.activeElement).toBe(button);
     button?.click();
@@ -97,8 +107,7 @@ describe('RunHeaderComponent', () => {
     fixture.componentRef.setInput('runCompleteness', 'incomplete');
     await fixture.whenStable();
     expect(root.querySelector('[data-run-missing-summary]')).not.toBeNull();
-    const context = await render({ ...run, state: 'complete' }, 'context');
-    expect(context.root.querySelector('app-run-state-pill')?.textContent).toContain('Complete');
+    expect(root.querySelector('app-run-state-pill')?.textContent).toContain('Complete');
     fixture.componentRef.setInput('runCompleteness', 'complete');
     await fixture.whenStable();
     expect(root.querySelector('[data-run-missing-summary]')).toBeNull();
@@ -110,7 +119,7 @@ describe('RunHeaderComponent', () => {
   ] as const)(
     'labels the %s purpose without translating the environment identifier',
     async (purpose, label) => {
-      const { root } = await render({ ...run, purpose }, 'context');
+      const root = await renderContext({ ...run, purpose });
       expect(root.querySelector('[data-run-purpose]')?.textContent?.trim()).toBe(label);
       expect(root.querySelector('[data-run-environment] bdi')?.textContent).toBe(
         run.environment.environment_key,
@@ -132,31 +141,33 @@ describe('RunHeaderComponent', () => {
       },
       unverified_ref: false,
     };
-    const { root } = await render(value, 'context');
-    expect(root.textContent?.match(/Not provided/g)).toHaveLength(6);
+    const root = await renderContext(value);
+    const { root: header } = await render(value);
+    expect(root.textContent?.match(/Not provided/g)).toHaveLength(5);
+    expect(header.querySelector('[data-run-ref]')?.textContent).toContain('Not provided');
     expect(root.querySelector('[data-run-fork]')?.textContent?.trim()).toBe('No');
     expect(root.textContent).not.toContain('Status unavailable');
-    expect(root.querySelector('[data-run-ref] app-status-pill')).toBeNull();
-    expect(root.querySelector('[data-run-ref]')?.textContent?.trim()).toBe('Not provided');
-    expect(root.querySelector('app-run-state-pill')).not.toBeNull();
+    expect(header.querySelector('[data-run-ref] app-status-pill')).toBeNull();
+    expect(header.querySelector('app-run-state-pill')).not.toBeNull();
   });
 
   it('preserves complete provenance in one context card and escapes long untrusted refs', async () => {
     const ref = 'release-'.repeat(80) + '\u202e<script>';
-    const { root } = await render(
-      { ...run, ref: { ...run.ref, name: ref }, unverified_ref: true },
-      'context',
-    );
+    const value = { ...run, ref: { ...run.ref, name: ref }, unverified_ref: true };
+    const root = await renderContext(value);
+    const { root: header } = await render(value);
     expect(root.querySelectorAll('[data-slot="card"]')).toHaveLength(1);
     expect(root.querySelector('section')?.getAttribute('aria-labelledby')).toBe(
       'run-environment-title',
     );
     expect(root.querySelector('#run-environment-title')?.textContent).toBe('Execution context');
-    expect(root.querySelector('[data-run-id] bdi')?.textContent).toBe(run.run_id);
-    expect(root.querySelector('[data-run-ref] bdi')?.textContent).toBe(
+    expect(header.querySelector('[data-run-id] .identifier-accessible bdi')?.textContent).toBe(
+      `Run id: ${run.run_id}`,
+    );
+    expect(header.querySelector('[data-run-ref] bdi')?.textContent).toBe(
       'release-'.repeat(80) + '⟨U+202E⟩<script>',
     );
-    expect(root.querySelector('[data-run-unverified]')).not.toBeNull();
+    expect(header.querySelector('[data-run-unverified]')).not.toBeNull();
     expect(root.querySelector('[data-run-environment] bdi')?.textContent).toBe(
       run.environment.environment_key,
     );

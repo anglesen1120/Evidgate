@@ -36,6 +36,20 @@ describe('UiGalleryComponent', () => {
     );
   });
 
+  it('shows both standalone and compact evidence wording for every supplied state', () => {
+    const specimens = root.querySelector('[aria-labelledby="gallery-evidence"]')!;
+    const values = ['Complete', 'Incomplete', 'Unavailable'];
+    expect(
+      [...specimens.querySelectorAll('.verdict:not([role]) .verdict__value')].map(
+        (el) => el.textContent,
+      ),
+    ).toEqual(values);
+    expect(
+      [...specimens.querySelectorAll('[role="img"]')].map((el) => el.getAttribute('aria-label')),
+    ).toEqual(values.map((value) => 'Completeness: ' + value));
+    expect(specimens.textContent).not.toMatch(/Completeness:\s*Evidence/);
+  });
+
   it('never paints incomplete evidence and a pending decision as success', () => {
     const row = root.querySelector('[data-demo="evaluation-pending"]');
     expect(row).not.toBeNull();

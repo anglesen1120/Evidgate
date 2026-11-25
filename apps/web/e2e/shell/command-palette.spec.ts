@@ -1,7 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 
 import { expectNoA11yViolations } from '../a11y/axe-scan';
-import { openRunFilters } from './run-list.support';
 import {
   LOCALES,
   ORG_ACME,
@@ -118,7 +117,6 @@ test('Ctrl+K does not open a palette or consume typing in a page input', async (
   await page.goto(
     withVariants(localePath('en', `/dev/run-list${PROJECT}`), [RUNS_VARIANT, RUN_READ_GRANT]),
   );
-  await openRunFilters(page);
   const ref = page.locator('#run-ref');
   await ref.fill('feature/');
   await ref.press('End');

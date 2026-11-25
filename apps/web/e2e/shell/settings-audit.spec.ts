@@ -4,9 +4,19 @@
 import { expect, test, type Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 
-import auditList from '../../../../fixtures/web-api/audit-list/input.json';
+import {
+  CSV_COLUMNS,
+  DEFAULT_ROWS,
+  FLAGGED_ROWS,
+  PLAIN_ROWS,
+  AUDIT_ROWS,
+  SUPPORT_ROWS,
+  SUPPORT_ROWS_SELECTOR,
+  PLAIN_ROWS_SELECTOR,
+  SUPPORT_CHIPS,
+  supportMarker,
+} from './settings-audit.support';
 import auditListEmpty from '../../../../fixtures/web-api/audit-list-empty/input.json';
-import auditListSupport from '../../../../fixtures/web-api/audit-list-support/input.json';
 import { expectNoA11yViolations } from '../a11y/axe-scan';
 import {
   expectIndistinguishableNotFound,
@@ -26,75 +36,6 @@ const AUDIT_SUPPORT_PAGE = '?fixture.variant.listAudit=support';
 
 /** `?fixture.variant.listAudit=empty` — the page with no audit entry at all. */
 const AUDIT_EMPTY_PAGE = '?fixture.variant.listAudit=empty';
-
-/** The fixed header row `audit-csv.ts` writes, in the column order every exported line follows. */
-const CSV_COLUMNS = [
-  'seq',
-  'created_at',
-  'actor_type',
-  'actor_id',
-  'action',
-  'object_type',
-  'object_id',
-  'request_id',
-  'support_grant_id',
-  'metadata',
-] as const;
-
-/** The `metadata` key `support-access.ts` reads: the grant a support action was taken under. */
-const SUPPORT_GRANT_KEY = 'support_grant_id';
-
-/**
- * One audit row of the corpus, as the fixtures spell it. Declared here (rather than taken from the
- * generated SDK type) because the spec reads the JSON documents directly, and their `metadata` is a
- * different shape in each document.
- */
-interface FixtureAuditRow {
-  readonly id: string;
-  readonly seq: number;
-  readonly actor_type: string;
-  readonly actor_id: string;
-  readonly action: string;
-  readonly created_at: string;
-  readonly metadata: Readonly<Record<string, unknown>> | null;
-}
-
-/** The default page the tab opens with: six entries, no support-access row among them. */
-const DEFAULT_ROWS: readonly FixtureAuditRow[] = auditList.body.items;
-
-/** The `support` page: the same log with two `user` rows carrying a support grant on top. */
-const SUPPORT_ROWS: readonly FixtureAuditRow[] = auditListSupport.body.items;
-
-/**
- * The support-access marker of one corpus row, by the rule `support-access.ts` implements: the
- * `metadata.support_grant_id` marker alone flags a row here (no corpus row names the wire's
- * `platform_operator` actor — the fixture catalogue header records why), and a plain row is `null`.
- * Kept tri-state, because "operator without a recorded grant" and "ordinary row" render differently.
- */
-function supportMarker(row: FixtureAuditRow): { readonly grantId: string | null } | null {
-  const marker = row.metadata?.[SUPPORT_GRANT_KEY];
-  if (typeof marker === 'string' && marker !== '') {
-    return { grantId: marker };
-  }
-  return row.actor_type === 'platform_operator' ? { grantId: null } : null;
-}
-
-/** The rows the chip must appear on, in corpus order (newest first, the server's order). */
-const FLAGGED_ROWS: readonly FixtureAuditRow[] = SUPPORT_ROWS.filter(
-  (row) => supportMarker(row) !== null,
-);
-
-/** The rows that must render without a chip on the same page. */
-const PLAIN_ROWS: readonly FixtureAuditRow[] = SUPPORT_ROWS.filter(
-  (row) => supportMarker(row) === null,
-);
-
-/** The shared table's real records enclose every cell; the actor marker is only one fact. */
-const AUDIT_ROWS = 'app-audit-table [data-row-id]';
-const SUPPORT_ROWS_SELECTOR = `${AUDIT_ROWS}:has([data-audit-support="true"])`;
-const PLAIN_ROWS_SELECTOR = `${AUDIT_ROWS}:has([data-audit-support="false"])`;
-
-const SUPPORT_CHIPS = `${AUDIT_ROWS} [data-audit-support-chip]`;
 
 /** The tab's own phase hook, awaited before any content claim (loading → ready). */
 async function expectAuditReady(page: Page): Promise<void> {
@@ -139,7 +80,12 @@ test.describe('AC7: an audit:read session reads the log and exports it', () => {
         await expect(note).toBeHidden();
         await expect(hint).toBeFocused();
       }
-      const actor = form.locator('button#audit-actor');
+      const filters = page.locator('button[aria-controls="audit-filter-panel"]');
+      await expect(filters).toHaveText(/\(0\)/);
+      await expect(page.locator('[data-filter-clear]')).toHaveCount(0);
+      await filters.click();
+      const panel = page.locator('#audit-filter-panel');
+      const actor = panel.locator('button#audit-actor');
       await expect(actor).toHaveRole('combobox');
       await actor.click();
       const actorOptions = page.getByRole('listbox').getByRole('option');
@@ -157,11 +103,24 @@ test.describe('AC7: an audit:read session reads the log and exports it', () => {
       await page.keyboard.press('Escape');
       await expect(actor).toHaveAttribute('aria-expanded', 'false');
       await expect(form.locator('input#audit-action')).toBeVisible();
-      await expect(form.locator('input#audit-object')).toBeVisible();
-      await expect(form.locator('input#audit-from[type="datetime-local"]')).toBeVisible();
-      await expect(form.locator('input#audit-to[type="datetime-local"]')).toBeVisible();
-      await expect(form.locator('[data-audit-apply]')).toBeEnabled();
-      await expect(form.locator('[data-audit-clear]')).toBeEnabled();
+      await expect(panel.locator('input#audit-object')).toBeVisible();
+      await expect(panel.locator('input#audit-from[type="datetime-local"]')).toBeVisible();
+      await expect(panel.locator('input#audit-to[type="datetime-local"]')).toBeVisible();
+      await expect(panel.locator('[data-filter-apply]')).toBeEnabled();
+      await panel.locator('#audit-object').fill('run');
+      await panel.locator('[data-filter-apply]').click();
+      await expect(page).toHaveURL(/object_type=run/);
+      await expect(filters).toHaveText(/\(1\)/);
+      await page.reload();
+      await expectAuditReady(page);
+      await filters.click();
+      await expect(panel.locator('#audit-object')).toHaveValue('run');
+      await panel.locator('#audit-object').press('Escape');
+      const clear = page.locator('[data-filter-clear]');
+      await expect(clear).toBeEnabled();
+      await clear.click();
+      await expect(page).not.toHaveURL(/object_type=/);
+      await expect(clear).toHaveCount(0);
 
       // The table renders the corpus page whole — the count, the order and the action cells are
       // the fixture's, and no row here is a support-access row.

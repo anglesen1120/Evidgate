@@ -46,7 +46,7 @@ class RunListPageHarness extends ComponentHarness {
   static hostSelector = 'app-run-list-page';
   readonly retry = this.locatorFor('[data-run-paging-error] button');
   readonly reload = this.locatorFor('app-error-pattern button');
-  readonly clear = this.locatorFor('[data-run-clear]');
+  readonly all = this.locatorFor('[data-run-quick="all"]');
 }
 
 describe('RunListPage paging recovery', () => {
@@ -174,7 +174,7 @@ describe('RunListPage paging recovery', () => {
     focus.mockRestore();
   });
 
-  it.each(['clear', 'reload'] as const)(
+  it.each(['all', 'reload'] as const)(
     'drops an invalid restored cursor from the URL on explicit %s',
     async (action) => {
       query.next(convertToParamMap({ cursor: 'expired', pageSize: '50' }));

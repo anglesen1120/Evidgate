@@ -1,5 +1,55 @@
 import { expect, type Locator, type Page } from '@playwright/test';
 
+import { RUN_FILTER_BUTTON } from './run-list.support';
+
+const SELECT_STOPS = [
+  '#run-state',
+  'button[aria-label="Hint: Decision"]',
+  '#run-decision',
+  'button[aria-controls="run-filter-hint"]',
+  '#run-scope',
+] as const;
+
+/**
+ * The focus ring every stop must show: the token pair the page styles its own controls with
+ * (`--eg-focus-width` / `--eg-focus` on the light theme, which is this suite's default).
+ */
+export async function expectFocusRing(target: Locator, offset: string): Promise<void> {
+  await expect(target).toHaveCSS('outline-width', '2px');
+  await expect(target).toHaveCSS('outline-style', 'solid');
+  await expect(target).toHaveCSS('outline-color', 'rgb(0, 107, 102)');
+  await expect(target).toHaveCSS('outline-offset', offset);
+}
+
+/** The inline quick decisions and ref search precede secondary filters. */
+export async function enterFilterDisclosure(page: Page): Promise<void> {
+  for (const selector of [
+    '[data-run-quick="all"]',
+    '[data-run-quick="fail"]',
+    '[data-run-quick="pending"]',
+    '#run-ref',
+    '[data-filter-search]',
+  ]) {
+    await page.keyboard.press('Tab');
+    await expect(page.locator(selector)).toBeFocused();
+    await expectFocusRing(page.locator(selector), '2px');
+  }
+  await page.keyboard.press('Tab');
+  const button = page.locator(RUN_FILTER_BUTTON);
+  await expect(button).toBeFocused();
+  await expectFocusRing(button, '2px');
+  if ((await button.getAttribute('aria-expanded')) === 'false') await page.keyboard.press('Enter');
+  await expect(button).toHaveAttribute('aria-expanded', 'true');
+  for (const [index, selector] of [...SELECT_STOPS, '[data-filter-apply]'].entries()) {
+    if (index > 0) await page.keyboard.press('Tab');
+    await expect(page.locator(selector)).toBeFocused();
+    await expectFocusRing(page.locator(selector), '2px');
+  }
+  await page.keyboard.press('Escape');
+  await expect(button).toHaveAttribute('aria-expanded', 'false');
+  await expect(button).toBeFocused();
+}
+
 /** Open a collapsed native disclosure in sequence, without moving focus programmatically. */
 export async function enterRunDetails(page: Page, details: Locator): Promise<void> {
   const summary = details.locator(':scope > summary');

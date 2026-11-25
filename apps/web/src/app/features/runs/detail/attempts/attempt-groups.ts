@@ -6,6 +6,18 @@ export interface AttemptGroup {
   preHealingFailure: AttemptRow | null;
 }
 
+/** Only an observed failure at or before a candidate is a pre-healing failure. */
+export function preHealingFailureFor(sortedAttempts: readonly AttemptRow[]): AttemptRow | null {
+  let failure: AttemptRow | null = null;
+  for (const attempt of sortedAttempts) {
+    if (!failure && ['failed', 'timed_out', 'error'].includes(attempt.normalisedStatus)) {
+      failure = attempt;
+    }
+    if (attempt.healingCandidate && failure) return failure;
+  }
+  return null;
+}
+
 /** Preserve key arrival order and every attempt; never derive a verdict or flaky label. */
 export function groupAttempts(rows: readonly AttemptRow[]): AttemptGroup[] {
   const byKey = new Map<string, AttemptRow[]>();
@@ -16,11 +28,7 @@ export function groupAttempts(rows: readonly AttemptRow[]): AttemptGroup[] {
   }
   return [...byKey].map(([executionKey, attempts]) => {
     attempts.sort((a, b) => a.attemptNo - b.attemptNo);
-    const preHealingFailure = attempts.some((attempt) => attempt.healingCandidate)
-      ? (attempts.find((attempt) =>
-          ['failed', 'timed_out', 'error'].includes(attempt.normalisedStatus),
-        ) ?? null)
-      : null;
+    const preHealingFailure = preHealingFailureFor(attempts);
     if (preHealingFailure) {
       const index = attempts.indexOf(preHealingFailure);
       attempts.splice(index, 1);
