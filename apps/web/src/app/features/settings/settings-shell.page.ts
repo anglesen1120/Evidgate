@@ -5,7 +5,7 @@ import { filter, map } from 'rxjs';
 
 import { PageHeaderComponent } from '../../shared/ui/page-header';
 import { SessionStore } from '../../core/session/session.store';
-import { availableSettingsTabs } from './settings-tabs';
+import { availableSettingsTabs, groupSettingsTabs } from './settings-tabs';
 import { RetentionFormComponent } from './quota-retention/retention-form.component';
 
 @Component({
@@ -27,6 +27,8 @@ export class SettingsShellPage {
     this.session.permissions();
     return availableSettingsTabs((code) => this.session.has(code));
   });
+  /** The visible tabs bucketed under their sections, so the strip reads as grouped. */
+  protected readonly sections = computed(() => groupSettingsTabs(this.tabs()));
 
   protected readonly activeSegment = toSignal(
     this.router.events.pipe(

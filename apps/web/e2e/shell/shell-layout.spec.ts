@@ -4,6 +4,7 @@ import {
   LIMITED_GRANTS,
   LOCALES,
   fixturesBaseUrl,
+  USAGE_READ_GRANTS,
   localePath,
   ORG_ACME,
   overviewPath,
@@ -91,23 +92,36 @@ for (const locale of LOCALES) {
   }
 
   for (const width of [1280, 1440]) {
-    test(`usage label fits the expanded rail at ${width}px in ${locale}`, async ({ page }) => {
+    test(`Settings rail label fits the expanded rail at ${width}px in ${locale}`, async ({
+      page,
+    }) => {
       await page.setViewportSize({ width, height: 1000 });
       const variant = '?fixture.variant.listPermissions=settings-secrets-write';
       await page.goto(
         withVariant(localePath(locale, `/dev/settings-secrets/orgs/${ORG_ACME}`), variant),
       );
-      await expectUsageLabel(page, locale, false);
+      await expectSettingsRailLabel(page, locale, false);
       // Active navigation uses a heavier weight; it must fit the same budget without smaller type.
-      await page.goto(withVariant(localePath(locale, `/orgs/${ORG_ACME}/usage`), variant));
-      await expectUsageLabel(page, locale, true);
+      await page.goto(
+        withVariant(localePath(locale, `/orgs/${ORG_ACME}/usage`), USAGE_READ_GRANTS),
+      );
+      await expect
+        .poll(() => new URL(page.url()).pathname)
+        .toBe(localePath(locale, `/orgs/${ORG_ACME}/usage`));
+      await expect(page.locator('app-quota-panel')).toBeVisible();
+      await expectSettingsRailLabel(page, locale, true);
     });
   }
 }
 
-async function expectUsageLabel(page: Page, locale: (typeof LOCALES)[number], active: boolean) {
-  const link = page.locator('app-shell-nav a[href$="/usage"]');
-  const fullName = locale === 'vi' ? 'Mức sử dụng và tín dụng AI' : 'Usage and AI credits';
+async function expectSettingsRailLabel(
+  page: Page,
+  locale: (typeof LOCALES)[number],
+  active: boolean,
+) {
+  // The rail carries one bottom Settings row, lit on every administration URL including /usage.
+  const link = page.locator('app-shell-nav a').last();
+  const fullName = locale === 'vi' ? 'Cài đặt' : 'Settings';
   await expect(link).toBeVisible();
   await expect(link).toHaveAccessibleName(fullName);
   if (active) await expect(link).toHaveAttribute('aria-current', 'page');
@@ -118,7 +132,9 @@ async function expectUsageLabel(page: Page, locale: (typeof LOCALES)[number], ac
     const icon = element.querySelector('app-shell-icon')!;
     const style = getComputedStyle(element);
     const labelStyle = getComputedStyle(label);
-    const peer = element.closest('nav')!.querySelector('a:not([href$="/usage"]) span')!;
+    const peer = Array.from(element.closest('nav')!.querySelectorAll('a'))
+      .find((other) => other !== element)!
+      .querySelector('span')!;
     const gap = Number.parseFloat(style.columnGap);
     const available =
       element.clientWidth -
@@ -145,21 +161,11 @@ async function expectUsageLabel(page: Page, locale: (typeof LOCALES)[number], ac
   expect(geometry.textOverflow).not.toBe('ellipsis');
   expect(geometry.fontSize).toBe(geometry.peerFontSize);
   if (locale === 'vi') {
+    // The expanded rail shows no tooltip unless the label is shortened; "Cài đặt" fits in full.
     await link.focus();
-    const tooltip = page.getByRole('tooltip');
-    await expect(tooltip).toHaveText(fullName);
-    const tooltipId = await tooltip.getAttribute('id');
-    if (!tooltipId) throw new Error('The rendered tooltip has no description target');
-    // Check the settled relationship, not a transient empty description before Brain attaches it.
-    await expect(link).toHaveAttribute('aria-describedby', tooltipId);
-    await expect(tooltip.getByText(fullName, { exact: true })).toBeVisible();
     await expect(link).toBeFocused();
     await expect(link).toHaveAccessibleName(fullName);
-    await expect(link).toHaveAccessibleDescription('');
-    await page.keyboard.press('Escape');
     await expect(page.getByRole('tooltip')).toHaveCount(0);
-    await expect(link).toHaveAccessibleDescription('');
-    await expect(link).toBeFocused();
   }
 }
 
@@ -207,9 +213,9 @@ test('mobile search and account overlays return focus without changing the route
   await page.goto(withVariant(overviewPath('en'), LIMITED_GRANTS));
   const start = page.url();
   const topbar = page.locator('header.topbar');
-  const search = topbar.getByRole('button', { name: 'Search', exact: true });
+  const search = topbar.getByRole('button', { name: /^Command palette \((?:⌘K|Ctrl K)\)$/ });
   await search.press('Enter');
-  const picker = page.getByRole('dialog', { name: 'Find a screen' });
+  const picker = page.getByRole('dialog', { name: 'Command palette', exact: true });
   await expect(picker.getByRole('combobox')).toBeFocused();
   await page.keyboard.press('Escape');
   await expect(picker).toHaveCount(0);

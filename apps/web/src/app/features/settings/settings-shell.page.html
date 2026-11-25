@@ -17,21 +17,37 @@
     aria-label="Settings destinations"
     i18n-aria-label="@@settings.navigation"
   >
-    <ul class="settings-links m-0 flex w-max min-w-full list-none flex-nowrap gap-1 p-0">
-      @for (tab of tabs(); track tab.id) {
-        <li class="shrink-0">
-          <a
-            class="flex min-h-(--eg-control-sm) items-center border-b-[3px] border-transparent px-4 py-2 text-sm font-medium whitespace-nowrap text-muted-foreground no-underline hover:text-foreground focus-visible:outline-(length:--eg-focus-width) focus-visible:-outline-offset-2 focus-visible:outline-(--eg-focus) pointer-coarse:min-h-(--eg-control-touch) aria-[current=page]:border-(--eg-accent) aria-[current=page]:font-bold aria-[current=page]:text-(--eg-accent)"
-            [routerLink]="[tab.segment]"
-            [attr.aria-current]="tab.segment === activeSegment() ? 'page' : null"
-            [attr.data-settings-tab]="tab.id"
-            (focus)="reveal($event)"
+    <div class="settings-groups flex w-max min-w-full flex-nowrap items-start gap-6">
+      @for (section of sections(); track section.id) {
+        <div
+          class="settings-group shrink-0"
+          role="group"
+          [attr.aria-labelledby]="'settings-group-' + section.id"
+          [attr.data-settings-group]="section.id"
+        >
+          <span
+            class="block px-4 pt-2 text-xs font-semibold whitespace-nowrap text-muted-foreground"
+            [id]="'settings-group-' + section.id"
+            >{{ section.label }}</span
           >
-            {{ tab.label }}
-          </a>
-        </li>
+          <ul class="settings-links m-0 flex list-none flex-nowrap gap-1 p-0">
+            @for (tab of section.tabs; track tab.id) {
+              <li class="shrink-0">
+                <a
+                  class="flex min-h-(--eg-control-sm) items-center border-b-[3px] border-transparent px-4 py-2 text-sm font-medium whitespace-nowrap text-muted-foreground no-underline hover:text-foreground focus-visible:outline-(length:--eg-focus-width) focus-visible:-outline-offset-2 focus-visible:outline-(--eg-focus) pointer-coarse:min-h-(--eg-control-touch) aria-[current=page]:border-(--eg-accent) aria-[current=page]:font-bold aria-[current=page]:text-(--eg-accent)"
+                  [routerLink]="[tab.segment]"
+                  [attr.aria-current]="tab.segment === activeSegment() ? 'page' : null"
+                  [attr.data-settings-tab]="tab.id"
+                  (focus)="reveal($event)"
+                >
+                  {{ tab.label }}
+                </a>
+              </li>
+            }
+          </ul>
+        </div>
       }
-    </ul>
+    </div>
   </nav>
 }
 <div class="settings-content min-w-0">

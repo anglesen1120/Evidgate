@@ -14,8 +14,9 @@
 // The gate is a convenience, never the authority: the API pipeline (C2) answers every call with its
 // own 403/404 (plan 09.7.1 §8 S2).
 
-import type { ProductPhase } from '../../shell/nav/nav.models';
+import type { ProductPhase, SettingsGroupId } from '../../shell/nav/nav.models';
 import { isPhaseActive } from '../../shell/nav/product-phase';
+import { SETTINGS_GROUPS } from '../../shell/nav/nav-registry';
 
 /** `members`, `secrets`, ... — also the route segment under `/orgs/:orgId/settings/`. */
 export type SettingsTabId =
@@ -40,6 +41,8 @@ export interface SettingsTab {
   readonly phase: ProductPhase;
   /** Localised label (`@@settings.tab.<id>`). */
   readonly label: string;
+  /** Settings section the tab is listed under; equals the sidebar registry's `settingsGroup`. */
+  readonly group: SettingsGroupId;
 }
 
 /**
@@ -53,6 +56,7 @@ export const SETTINGS_TABS: readonly SettingsTab[] = [
     segment: 'members',
     permission: 'membership:read',
     phase: 'G1',
+    group: 'access',
     label: $localize`:@@settings.tab.members:Members`,
   },
   {
@@ -60,6 +64,7 @@ export const SETTINGS_TABS: readonly SettingsTab[] = [
     segment: 'secrets',
     permission: 'ingest_token:read',
     phase: 'G2',
+    group: 'access',
     label: $localize`:@@settings.tab.secrets:Secrets`,
   },
   {
@@ -67,6 +72,7 @@ export const SETTINGS_TABS: readonly SettingsTab[] = [
     segment: 'api-tokens',
     permission: 'api_token:read',
     phase: 'G4',
+    group: 'access',
     label: $localize`:@@settings.tab.api-tokens:API tokens`,
   },
   {
@@ -74,6 +80,7 @@ export const SETTINGS_TABS: readonly SettingsTab[] = [
     segment: 'policy',
     permission: 'policy:read',
     phase: 'G4',
+    group: 'workspace',
     label: $localize`:@@settings.tab.policy:Policy`,
   },
   {
@@ -83,6 +90,7 @@ export const SETTINGS_TABS: readonly SettingsTab[] = [
     // `usage:read`; the sidebar's `quota` entry already uses the same code.
     permission: 'usage:read',
     phase: 'G1',
+    group: 'billing',
     label: $localize`:@@settings.tab.quota-retention:Quota & retention`,
   },
   {
@@ -90,6 +98,7 @@ export const SETTINGS_TABS: readonly SettingsTab[] = [
     segment: 'audit',
     permission: 'audit:read',
     phase: 'G1',
+    group: 'billing',
     label: $localize`:@@settings.tab.audit:Audit`,
   },
   {
@@ -97,6 +106,7 @@ export const SETTINGS_TABS: readonly SettingsTab[] = [
     segment: 'security-events',
     permission: 'security_event:read',
     phase: 'G2',
+    group: 'access',
     label: $localize`:@@settings.tab.security-events:Security events`,
   },
   {
@@ -104,6 +114,7 @@ export const SETTINGS_TABS: readonly SettingsTab[] = [
     segment: 'integrations',
     permission: 'webhook:read',
     phase: 'G4',
+    group: 'automation',
     label: $localize`:@@settings.tab.integrations:Integrations`,
   },
   {
@@ -111,6 +122,7 @@ export const SETTINGS_TABS: readonly SettingsTab[] = [
     segment: 'agents',
     permission: 'agent_pool:read',
     phase: 'G4',
+    group: 'automation',
     label: $localize`:@@settings.tab.agents:Agents`,
   },
 ];
@@ -134,4 +146,20 @@ export function availableSettingsTabs(
   phaseReached: (phase: ProductPhase) => boolean = isPhaseActive,
 ): readonly SettingsTab[] {
   return SETTINGS_TABS.filter((tab) => isSettingsTabAvailable(tab, has, phaseReached));
+}
+
+/** A Settings section and the visible tabs listed under it, in strip order. */
+export interface SettingsTabSection {
+  readonly id: SettingsGroupId;
+  readonly label: string;
+  readonly tabs: readonly SettingsTab[];
+}
+
+/** Buckets visible tabs into their sections, dropping any section that has no visible tab. */
+export function groupSettingsTabs(tabs: readonly SettingsTab[]): readonly SettingsTabSection[] {
+  return SETTINGS_GROUPS.map(({ id, label }) => ({
+    id,
+    label,
+    tabs: tabs.filter((tab) => tab.group === id),
+  })).filter((section) => section.tabs.length > 0);
 }

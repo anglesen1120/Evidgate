@@ -120,6 +120,9 @@ describe('NavViewService (09.1.1-T4.1)', () => {
     await session.bootstrap();
 
     expect(view.groups()).toEqual([]);
+    expect(view.sidebarGroups()).toEqual([]);
+    expect(view.settings()).toBeNull();
+    expect(view.destinations()).toEqual([]);
   });
 
   it('renders nothing for an empty permission set', async () => {
@@ -127,6 +130,8 @@ describe('NavViewService (09.1.1-T4.1)', () => {
     await authenticatedWithProject();
 
     expect(view.groups()).toEqual([]);
+    expect(view.settings()).toBeNull();
+    expect(view.destinations()).toEqual([]);
   });
 
   it('renders only the G1 entries, in the groups that hold them', async () => {
@@ -150,6 +155,19 @@ describe('NavViewService (09.1.1-T4.1)', () => {
       'audit',
       'ai-settings',
     ]);
+    expect(view.sidebarGroups().map((group) => group.id)).toEqual(['workspace', 'authoring']);
+    expect(view.settings()?.link).toEqual(['/orgs', ORG.id, 'members']);
+    expect(view.destinations().find((entry) => entry.id === 'audit')?.groupLabel).toBe(
+      'Billing & Audit',
+    );
+  });
+
+  it('lands Settings on the first reachable administration destination', async () => {
+    source.granted = new Set(['membership:read']);
+    await authenticatedWithProject();
+
+    expect(view.settings()?.link).toEqual(['/orgs', ORG.id, 'members']);
+    expect(linkOf(view, 'members')).toEqual(['/orgs', ORG.id, 'members']);
   });
 
   it('hides a later-phase entry even when its permission is granted', async () => {

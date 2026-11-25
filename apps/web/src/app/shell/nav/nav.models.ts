@@ -4,6 +4,9 @@ export type ProductPhase = 'G1' | 'G2' | 'G3' | 'G4';
 /** Sidebar groups in manifest order. */
 export type NavGroupId = 'workspace' | 'quality' | 'healing' | 'authoring' | 'administration';
 
+/** Sections of the Settings page; the sidebar shows one Settings entry instead of these. */
+export type SettingsGroupId = 'workspace' | 'access' | 'automation' | 'billing';
+
 /** Statically compiled navigation glyphs. */
 export type NavIconName =
   | 'grid'
@@ -78,6 +81,8 @@ export interface NavEntry {
   readonly label: string;
   /** Optional visible label; `label` remains the complete accessible name. */
   readonly shortLabel?: string;
+  /** Settings section that lists this destination; omitted for the Settings index itself. */
+  readonly settingsGroup?: SettingsGroupId;
 }
 
 /** A group header with its localised label (`@@shell.nav.group.<id>`). */
@@ -108,4 +113,25 @@ export interface NavGroupView {
 export interface ReviewOpenEntry {
   readonly id: string;
   readonly mount: string;
+}
+
+/** A Settings section header with its localised label (`@@shell.settings.group.<id>`). */
+export interface SettingsGroupDef {
+  readonly id: SettingsGroupId;
+  readonly label: string;
+}
+
+/** Every visible entry, for breadcrumbs, search and Settings; `groupLabel` names its Settings section. */
+export interface NavDestinationView {
+  readonly id: string;
+  readonly label: string;
+  readonly link: readonly string[];
+  readonly groupLabel?: string;
+}
+
+/** The single Settings entry at the foot of the sidebar; `covers` lists every URL it stands for. */
+export interface NavSettingsItem {
+  readonly label: string;
+  readonly link: readonly string[];
+  readonly covers: readonly (readonly string[])[];
 }

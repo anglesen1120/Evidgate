@@ -73,6 +73,10 @@ describe('SettingsShellPage', () => {
     expect(root.querySelector('nav ul')?.classList.contains('flex-nowrap')).toBe(true);
     expect(root.querySelector('.settings-content[hlmCard]')).toBeNull();
     expect(root.querySelector('[hidden]')).toBeNull();
+    expect(root.querySelectorAll('[data-settings-group]')).toHaveLength(1);
+    expect(root.querySelector('[data-settings-group="billing"]')?.textContent).toContain(
+      'Billing & Audit',
+    );
   });
 
   it('preserves Members, Quota & retention, Audit order in the tab links', async () => {
@@ -103,6 +107,22 @@ describe('SettingsShellPage', () => {
     permissions.set(new Set());
     await fixture.whenStable();
     expect(root.querySelector('nav')).toBeNull();
+  });
+
+  it('groups the visible tabs under their sections in section order', async () => {
+    permissions.set(new Set(['membership:read', 'usage:read', 'audit:read']));
+    const root = await render();
+    const sections = Array.from(root.querySelectorAll('[data-settings-group]'), (el) =>
+      el.getAttribute('data-settings-group'),
+    );
+    expect(sections).toEqual(['access', 'billing']);
+    expect(tabIds(root.querySelector('[data-settings-group="access"]') as HTMLElement)).toEqual([
+      'members',
+    ]);
+    expect(tabIds(root.querySelector('[data-settings-group="billing"]') as HTMLElement)).toEqual([
+      'quota-retention',
+      'audit',
+    ]);
   });
 
   it('renders the current organization as text without inventing a missing scope', async () => {

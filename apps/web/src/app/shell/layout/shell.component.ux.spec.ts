@@ -13,7 +13,6 @@ import type { ProjectDto } from '@evidgate/sdk';
 import { IdentityDataService } from '../../core/data/identity-data.service';
 import { SessionStore } from '../../core/session/session.store';
 import { QuotaStore } from '../../features/settings/quota-retention/quota.store';
-import { NavViewService } from '../nav/nav-view';
 import { NotFoundPage } from '../pages/not-found.page';
 import { ShellComponent } from './shell.component';
 import { SCOPE_ORGANIZATIONS, SCOPE_PROJECTS, stubScopeBrowserApis } from './scope.fixture';
@@ -55,6 +54,7 @@ describe('ShellComponent scope, locale and drawer context', () => {
             projects: signal(SCOPE_PROJECTS),
             currentOrg: signal(SCOPE_ORGANIZATIONS[0]),
             currentProject: project,
+            has: () => false,
           },
         },
         {
@@ -62,7 +62,6 @@ describe('ShellComponent scope, locale and drawer context', () => {
           useValue: { getMyProfile: vi.fn().mockResolvedValue({ display_name: null }) },
         },
         { provide: QuotaStore, useValue: { badge: signal(null), load: vi.fn() } },
-        { provide: NavViewService, useValue: { groups: signal([]) } },
       ],
     }).compileComponents();
     fixture = TestBed.createComponent(ShellComponent);

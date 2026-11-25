@@ -11,7 +11,6 @@ import { By } from '@angular/platform-browser';
 import { SessionStore } from '../../core/session/session.store';
 import { QuotaStore } from '../../features/settings/quota-retention/quota.store';
 import { routes as suiteRoutes } from '../../features/suites/suites.routes';
-import { NavViewService } from '../nav/nav-view';
 import { ShellComponent } from './shell.component';
 import { stubScopeBrowserApis } from './scope.fixture';
 
@@ -64,9 +63,9 @@ describe('Shell destination title', () => {
             projects: signal([]),
             currentOrg: signal(null),
             currentProject: signal(null),
+            has: () => false,
           },
         },
-        { provide: NavViewService, useValue: { groups: signal([]) } },
         { provide: QuotaStore, useValue: { badge: signal(null), load: vi.fn() } },
       ],
     }).compileComponents();

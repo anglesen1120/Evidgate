@@ -143,11 +143,13 @@ test.describe('scope flow: keyboard order (AC2, F-SWITCH-01)', () => {
 
     // 3. Every sidebar row, in document order: the walk neither skips one nor repeats one.
     const navLinks = page.locator('app-shell-nav nav a');
-    const linkCount = await navLinks.count();
-    expect(linkCount).toBe(5);
-    for (let index = 0; index < linkCount; index += 1) {
+    const sidebarNames = ['Overview', 'Feature tree', 'Settings'];
+    await expect(navLinks).toHaveCount(sidebarNames.length);
+    for (const [index, name] of sidebarNames.entries()) {
+      const link = navLinks.nth(index);
+      await expect(link).toHaveAccessibleName(name);
       await page.keyboard.press('Tab');
-      await expectFocusVisible(page, navLinks.nth(index));
+      await expectFocusVisible(page, link);
     }
     const primaryNavigation = page.getByRole('navigation', {
       name: 'Primary navigation',
@@ -179,7 +181,8 @@ test.describe('scope flow: keyboard order (AC2, F-SWITCH-01)', () => {
     await expectFocusVisible(page, projectSelect);
     await expectScopeValue(projectSelect, PROJECT_STOREFRONT);
     await page.keyboard.press('Tab');
-    await expectFocusVisible(page, page.locator('.screen-search'));
+    const palette = page.locator('.screen-search');
+    await expectFocusVisible(page, palette);
     const themeToggle = page.locator('button.theme-toggle');
     await page.keyboard.press('Tab');
     await expectFocusVisible(page, themeToggle);
@@ -193,14 +196,16 @@ test.describe('scope flow: keyboard order (AC2, F-SWITCH-01)', () => {
     expect(new URL(page.url()).pathname).toBe(startPath);
 
     // Every named utility has the same exact order in the keyboard walk and the visual row.
-    const [navBox, themeBox, orgBox, projectBox, accountBox] = await Promise.all([
+    const [navBox, themeBox, orgBox, projectBox, paletteBox, accountBox] = await Promise.all([
       boxOf(navToggle),
       boxOf(themeToggle),
       boxOf(orgSelect),
       boxOf(projectSelect),
+      boxOf(palette),
       boxOf(account),
     ]);
-    expect(themeBox.x, 'theme follows the project selector').toBeGreaterThan(projectBox.x);
+    expect(paletteBox.x, 'palette follows the project selector').toBeGreaterThan(projectBox.x);
+    expect(themeBox.x, 'theme follows the palette').toBeGreaterThan(paletteBox.x);
     expect(orgBox.x, 'scope follows navigation').toBeGreaterThan(navBox.x);
     expect(accountBox.x, 'preferences follow theme').toBeGreaterThan(themeBox.x);
     expect(
@@ -211,6 +216,7 @@ test.describe('scope flow: keyboard order (AC2, F-SWITCH-01)', () => {
       ['the theme toggle', themeBox],
       ['the organization select', orgBox],
       ['the project select', projectBox],
+      ['the command palette', paletteBox],
       ['the account menu', accountBox],
     ] as const) {
       expectSameRow(navBox, box, `${label} shares the toggle's row`);
