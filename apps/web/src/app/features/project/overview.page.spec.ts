@@ -16,6 +16,12 @@ class OverviewHarness extends ComponentHarness {
   );
   readonly text = async () => (await this.host()).text();
   readonly runViews = this.locatorForAll('[data-dashboard-run-view]');
+  readonly subjects = this.locatorForAll('app-dashboard-runs bdi');
+  readonly registerCopy = this.locatorForAll('app-dashboard-runs app-copyable-identifier');
+  readonly subjectTime = this.locatorFor('app-dashboard-runs time:not([title])');
+  readonly strips = this.locatorForAll('[data-dashboard-kpis] dl');
+  readonly readings = this.locatorForAll('[data-dashboard-kpis] dd');
+  readonly totals = this.locatorForAll('[role="toolbar"] button .trend-total');
   readonly failureLabel = this.locatorFor('[data-dashboard-failures] dt');
   readonly failureValue = this.locatorFor('[data-dashboard-failures] app-number-value');
   readonly failureDescription = this.locatorFor('[data-dashboard-failures] p');
@@ -114,6 +120,66 @@ describe('ProjectOverviewPage dashboard', () => {
     expect(await harness.runViews()).toHaveLength(1);
   });
 
+  it('identifies runs by safe reference names and keeps identifiers out of the register', async () => {
+    const { fixture } = mount([{ ...RUN, ref: { ...RUN.ref, name: 'main\u202E' } }]);
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, OverviewHarness);
+    expect(await (await harness.subjects())[0]!.text()).toBe('main⟨U+202E⟩');
+    expect(await harness.registerCopy()).toHaveLength(0);
+  });
+
+  it('uses the absolute creation time as the subject when the run has no reference', async () => {
+    const { fixture } = mount([{ ...RUN, ref: { ...RUN.ref, name: null } }]);
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, OverviewHarness);
+    expect(await (await harness.subjectTime()).getAttribute('datetime')).toBe(RUN.created_at);
+    expect(await harness.registerCopy()).toHaveLength(0);
+  });
+
+  it('scopes capped counts to the latest 100 even when all source pages loaded', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-11-24T12:00:00Z'));
+    const rows = Array.from({ length: 101 }, (_, i): RunSummary => ({
+      ...RUN,
+      run_id: `run-${i}`,
+      decision: i === 0 ? 'FAIL' : 'PASS',
+    }));
+    const { fixture } = mount(rows);
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, OverviewHarness);
+    expect(await (await harness.readings())[0]!.text()).toMatch(/latest 100/i);
+    expect(await (await harness.failureValue()).text()).toBe('0');
+  });
+
+  it('distinguishes dated counts, the entire sample and the last seven days', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-11-24T12:00:00Z'));
+    const decisions = (pass: number, fail: number, inconclusive: number) => [
+      ...Array<NonNullable<RunSummary['decision']>>(pass).fill('PASS'),
+      ...Array<NonNullable<RunSummary['decision']>>(fail).fill('FAIL'),
+      ...Array<NonNullable<RunSummary['decision']>>(inconclusive).fill('INCONCLUSIVE'),
+    ];
+    const rows = [decisions(1, 1, 1), decisions(18, 7, 5)].flatMap((day, index) =>
+      day.map((decision, i) => ({
+        ...RUN,
+        run_id: `${index}-${i}`,
+        created_at: `2026-11-${index ? '23' : '15'}T00:00:00Z`,
+        decision,
+      })),
+    );
+    const { fixture } = mount(rows);
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, OverviewHarness);
+    expect(await harness.strips()).toHaveLength(1);
+    const readings = await Promise.all((await harness.readings()).map((item) => item.text()));
+    expect(readings.slice(1, 4)).toEqual([
+      expect.stringMatching(/57\.6%.*19\s*\/\s*33/s),
+      expect.stringMatching(/24\.2%.*8\s*\/\s*33/s),
+      expect.stringMatching(/18\.2%.*6\s*\/\s*33/s),
+    ]);
+    expect(await Promise.all((await harness.totals()).map((total) => total.text()))).toEqual([
+      '3',
+      '30',
+    ]);
+    expect(await (await harness.failureValue()).text()).toBe('7');
+    expect(await (await harness.failureDescription()).text()).toMatch(/7 days.*8/s);
+    expect(await harness.runViews()).toHaveLength(5);
+  });
+
   it('shows incidents as neutral unavailable text without an error or retry control', async () => {
     const { fixture } = mount();
     const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, OverviewHarness);
@@ -149,7 +215,7 @@ describe('ProjectOverviewPage dashboard', () => {
   it('labels truncated ascending run pages as not latest instead of recent', async () => {
     const { fixture } = mount([RUN], false);
     const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, OverviewHarness);
-    expect(await harness.text()).toContain('oldest loaded runs — not the latest');
+    expect(await (await harness.readings())[0]?.text()).toMatch(/oldest pages/i);
     expect(await harness.text()).not.toContain('Recent runs');
   });
 
@@ -177,9 +243,6 @@ describe('ProjectOverviewPage dashboard', () => {
 
       expect(await (await harness.failureLabel()).text()).toBe('New FAILs');
       expect(await (await harness.failureValue()).text()).toBe(count);
-      expect(await (await harness.failureDescription()).text()).toBe(
-        'FAIL decisions among sampled runs created in the last 7 days.',
-      );
       expect(
         await Promise.all(
           (await harness.attentionMetrics()).slice(1).map((metric) => metric.text()),

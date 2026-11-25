@@ -43,7 +43,9 @@ import { DashboardWidgetComponent } from './dashboard-widget.component';
       [emptyIcon]="'navAudit'"
       (retry)="retry.emit()"
     >
-      <ng-template #timeCell let-row><app-absolute-time [value]="row.created_at" /></ng-template>
+      <ng-template #timeCell let-row>
+        <app-absolute-time [value]="row.created_at" [utcColumn]="utcColumn()" />
+      </ng-template>
       <ng-template #actionCell let-row>
         <button
           appRowAction
@@ -125,6 +127,7 @@ import { DashboardWidgetComponent } from './dashboard-widget.component';
 export class DashboardActivityComponent {
   readonly rows = input.required<readonly AuditEntryDto[]>();
   readonly loading = input(false);
+  readonly utcColumn = input(false);
   readonly error = input<ApiError | null>(null);
   readonly retry = output<void>();
   protected readonly title = $localize`:@@shared.dashboard.activity-title:Organization activity`;
@@ -155,6 +158,7 @@ export class DashboardActivityComponent {
               id: 'time',
               header: $localize`:@@shared.dashboard.activity-time:Time (UTC)`,
               role: 'date' as const,
+              ...(this.utcColumn() ? { width: { min: 'calc(24ch + var(--eg-space-4) * 2)' } } : {}),
               cell: () => '',
               cellTemplate: time,
             },

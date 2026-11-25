@@ -1,3 +1,5 @@
+import { ComponentHarness } from '@angular/cdk/testing';
+import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { registerLocaleData } from '@angular/common';
 import localeVi from '@angular/common/locales/vi';
 import { LOCALE_ID, provideZonelessChangeDetection } from '@angular/core';
@@ -8,6 +10,11 @@ import { AbsoluteTimeComponent } from './absolute-time.component';
 registerLocaleData(localeVi);
 
 const raw = '2026-11-07T15:10:00.123456+07:00';
+
+class TimeHarness extends ComponentHarness {
+  static hostSelector = 'app-absolute-time';
+  readonly instant = this.locatorFor('time');
+}
 
 describe.each(['en-US', 'vi'])('AbsoluteTimeComponent (%s)', (locale) => {
   beforeEach(() => {
@@ -31,6 +38,22 @@ describe.each(['en-US', 'vi'])('AbsoluteTimeComponent (%s)', (locale) => {
     expect(time.getAttribute('datetime')).toBe(raw);
     expect(host.getAttribute('data-theme')).toBe(theme);
     fixture.destroy();
+  });
+
+  it('keeps UTC inspectable when the register already labels its time column', async () => {
+    const fixture = TestBed.createComponent(AbsoluteTimeComponent);
+    fixture.componentRef.setInput('value', raw);
+    fixture.componentRef.setInput('utcColumn', true);
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, TimeHarness);
+    const time = await harness.instant();
+    expect(await time.getAttribute('datetime')).toBe(raw);
+    const label = locale === 'vi' ? '08:10:00 07/11/2026' : '11/7/2026, 8:10:00\u202fAM';
+    expect(await time.getAttribute('title')).toBe(`${label} UTC`);
+    expect(await time.text()).not.toContain(',');
+    fixture.componentRef.setInput('utcColumn', false);
+    const standalone = await harness.instant();
+    expect(await standalone.text()).toMatch(/ UTC$/);
+    expect(await standalone.getAttribute('title')).toBeNull();
   });
 
   it('preserves seconds and raw provenance when UTC crosses the year boundary', () => {

@@ -50,6 +50,18 @@ describe('Dashboard sampled calculations', () => {
     expect(runCounts(rows, false).pending).toBe(3);
     expect(decisionsByDay(rows, true)[0]?.day).toBe('2026-11-23');
   });
+  it('groups runs sharing a UTC date even when their supplied local dates differ', () => {
+    const offsetRun = { ...run('offset', 'FAIL'), created_at: '2026-11-24T02:00:00+07:00' };
+    expect(decisionsByDay([run('utc', 'PASS'), offsetRun], true)).toEqual([
+      expect.objectContaining({ day: '2026-11-23', pass: 1, fail: 1, total: 2 }),
+    ]);
+  });
+  it('does not normalize impossible failure dates into the seven-day window', () => {
+    const created = (day: string) => ({ ...run(day, 'FAIL'), created_at: `${day}T00:00:00Z` });
+    expect(
+      recentFailures([created('2026-02-30'), created('2026-03-02')], Date.UTC(2026, 2, 3)),
+    ).toBe(1);
+  });
   it('counts only approved future waiver expiries within seven days including the upper boundary', () => {
     const now = Date.parse('2026-11-23T00:00:00Z');
     const waiver: WaiverDto = {

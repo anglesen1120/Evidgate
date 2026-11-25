@@ -1,5 +1,6 @@
 import type { RunSummary, WaiverDto } from '@evidgate/sdk';
 import type { DashboardRunSample } from '../../../core/data/project-dashboard-data.service';
+import { rfc3339InstantMs } from '../../../shared/time/rfc3339-instant';
 
 export function sampleRuns(sample: DashboardRunSample | undefined): readonly RunSummary[] {
   if (!sample) return [];
@@ -24,7 +25,11 @@ export function runCounts(rows: readonly RunSummary[], canReadDecisions: boolean
 export function decisionsByDay(rows: readonly RunSummary[], canReadDecisions: boolean) {
   const days = new Map<string, RunSummary[]>();
   for (const row of rows) {
-    const day = row.created_at.slice(0, 10);
+    const instant = rfc3339InstantMs(row.created_at);
+    if (instant === null) continue;
+    const day = row.created_at.endsWith('Z')
+      ? row.created_at.slice(0, 10)
+      : new Date(instant).toISOString().slice(0, 10);
     const group = days.get(day) ?? [];
     group.push(row);
     days.set(day, group);
@@ -46,10 +51,11 @@ export function expiringWaivers(rows: readonly WaiverDto[], now: number): number
 
 export function recentFailures(rows: readonly RunSummary[], now: number): number {
   const start = now - 7 * 24 * 60 * 60 * 1000;
-  return rows.filter(
-    (row) =>
-      row.decision === 'FAIL' &&
-      Date.parse(row.created_at) >= start &&
-      Date.parse(row.created_at) <= now,
-  ).length;
+  let count = 0;
+  for (const row of rows) {
+    if (row.decision !== 'FAIL') continue;
+    const instant = rfc3339InstantMs(row.created_at);
+    if (instant !== null && instant >= start && instant <= now) count++;
+  }
+  return count;
 }

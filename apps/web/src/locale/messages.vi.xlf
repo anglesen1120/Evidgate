@@ -22640,12 +22640,11 @@
       <trans-unit id="orgoverview.project-column" datatype="html"><source>Project</source><target>Dự án</target></trans-unit>
       <trans-unit id="orgoverview.decision-column" datatype="html"><source>Latest decision</source><target>Quyết định mới nhất</target></trans-unit>
       <trans-unit id="orgoverview.time-column" datatype="html"><source>Latest run (UTC)</source><target>Lượt chạy mới nhất (UTC)</target></trans-unit>
-      <trans-unit id="orgoverview.action-column" datatype="html"><source>Action</source><target>Thao tác</target></trans-unit>
       <trans-unit id="orgoverview.view-project" datatype="html"><source>View project <x id="name" equiv-text="name"/></source><target>Xem dự án <x id="name" equiv-text="name"/></target></trans-unit>
       <trans-unit id="orgoverview.projects-more" datatype="html"><source>{VAR_PLURAL, plural, =1 {Showing 1 project; more available} other {Showing <x id="INTERPOLATION"/> projects; more available}}</source><target>{VAR_PLURAL, plural, other {Hiển thị <x id="INTERPOLATION"/> dự án; còn dự án khác}}</target></trans-unit>
       <trans-unit id="orgoverview.projects-count" datatype="html"><source>{VAR_PLURAL, plural, =1 {Showing 1 project} other {Showing <x id="INTERPOLATION"/> projects}}</source><target>{VAR_PLURAL, plural, other {Hiển thị <x id="INTERPOLATION"/> dự án}}</target></trans-unit>
-      <trans-unit id="orgoverview.members-sample" datatype="html"><source>Among <x id="count" equiv-text="count"/> memberships shown; more available</source><target>Trong <x id="count" equiv-text="count"/> tư cách thành viên đã tải; còn dữ liệu khác</target></trans-unit>
-      <trans-unit id="orgoverview.members-complete" datatype="html"><source>Among <x id="count" equiv-text="count"/> memberships</source><target>Trong <x id="count" equiv-text="count"/> tư cách thành viên</target></trans-unit>
+      <trans-unit id="orgoverview.members-loaded" datatype="html"><source>Loaded memberships</source><target>Tư cách thành viên đã tải</target></trans-unit>
+      <trans-unit id="orgoverview.members-partial" datatype="html"><source>Loaded memberships; more available</source><target>Tư cách thành viên đã tải; còn dữ liệu khác</target></trans-unit>
       <trans-unit id="shared.dashboard.trend-empty" datatype="html"><source>No observed dates in this sample.</source><target>Không có ngày nào được ghi nhận trong mẫu này.</target></trans-unit>
       <trans-unit id="shared.dashboard.trend-sample" datatype="html"><source>Sampled runs: <x id="runs" equiv-text="runs"/> · Observed dates: <x id="dates" equiv-text="dates"/></source><target>Lượt chạy trong mẫu: <x id="runs" equiv-text="runs"/> · Số ngày có dữ liệu: <x id="dates" equiv-text="dates"/></target></trans-unit>
       <trans-unit id="shared.dashboard.activity-details" datatype="html"><source>Organization event</source><target>Sự kiện tổ chức</target></trans-unit>
@@ -22670,34 +22669,32 @@
       <trans-unit id="project.dashboard.run-snapshot" datatype="html"><source>Read-only facts from the loaded run sample.</source><target>Thông tin chỉ đọc từ mẫu lượt chạy đã tải.</target></trans-unit>
       <trans-unit id="project.dashboard.ref" datatype="html"><source>Reference</source><target>Tham chiếu</target></trans-unit>
       <trans-unit id="project.dashboard.unavailable" datatype="html"><source>Unavailable</source><target>Không khả dụng</target></trans-unit>
-      <trans-unit id="project.dashboard.view-run" datatype="html"><source>View run <x id="id" equiv-text="id"/></source><target>Xem lượt chạy <x id="id"/></target></trans-unit>
+      <trans-unit id="project.dashboard.view-run-subject" datatype="html"><source>View run <x id="subject" equiv-text="subject"/></source><target>Xem lượt chạy <x id="subject"/></target></trans-unit>
       <trans-unit id="project.dashboard.runs" datatype="html"><source>Recent runs</source><target>Lượt chạy gần đây</target></trans-unit>
       <trans-unit id="project.dashboard.summary" datatype="html"><source>Run summary</source><target>Tổng quan lượt chạy</target></trans-unit>
       <trans-unit id="project.dashboard.collecting" datatype="html"><source>Still collecting</source><target>Đang thu thập</target></trans-unit>
       <trans-unit id="project.dashboard.pending" datatype="html"><source>Not evaluated</source><target>Chưa đánh giá</target></trans-unit>
       <trans-unit id="project.dashboard.no-data" datatype="html"><source>No data</source><target>Chưa có dữ liệu</target></trans-unit>
       <trans-unit id="project.dashboard.view-runs" datatype="html"><source>View runs</source><target>Xem lượt chạy</target></trans-unit>
-      <trans-unit id="project.dashboard.trend" datatype="html"><source>Decision trend</source><target>Xu hướng quyết định</target></trans-unit>
-      <trans-unit id="project.dashboard.trend-context" datatype="html"><source>Counts by UTC creation day. Dates with runs only; categorical spacing.</source><target>Số lượng theo ngày tạo UTC. Chỉ hiển thị ngày có lượt chạy; khoảng cách giữa các ngày là như nhau.</target></trans-unit>
+      <trans-unit id="project.dashboard.trend" datatype="html"><source>Decisions by day</source><target>Quyết định theo ngày</target></trans-unit>
+      <trans-unit id="project.dashboard.trend-context" datatype="html"><source>Runs by creation date (UTC). Only dates with sampled runs are shown.</source><target>Lượt chạy theo ngày tạo (UTC). Chỉ hiển thị những ngày có lượt chạy trong mẫu.</target></trans-unit>
       <trans-unit id="project.dashboard.empty-runs" datatype="html"><source>No runs yet. Evidence appears after a run is recorded.</source><target>Chưa có lượt chạy. Bằng chứng xuất hiện sau khi ghi nhận lượt chạy.</target></trans-unit>
       <trans-unit id="project.dashboard.empty-trend" datatype="html"><source>No runs to chart. A decision appears after evaluation.</source><target>Chưa có lượt chạy để vẽ biểu đồ. Quyết định xuất hiện sau khi đánh giá.</target></trans-unit>
       <trans-unit id="project.dashboard.attention" datatype="html"><source>Needs attention</source><target>Cần chú ý</target></trans-unit>
       <trans-unit id="project.dashboard.failures" datatype="html"><source>New FAILs</source><target>FAIL mới</target></trans-unit>
-      <trans-unit id="project.dashboard.failure-context" datatype="html"><source>FAIL decisions among sampled runs created in the last 7 days.</source><target>Quyết định FAIL trong mẫu lượt chạy được tạo trong 7 ngày qua.</target></trans-unit>
+      <trans-unit id="project.dashboard.failure-scope" datatype="html"><source>Sampled FAILs in the last 7 days; <x id="total" equiv-text="total"/> FAIL across the sample.</source><target>Lượt FAIL trong 7 ngày qua của mẫu này; cả mẫu có <x id="total"/> lượt FAIL.</target></trans-unit>
       <trans-unit id="project.dashboard.failures-unavailable" datatype="html"><source>Not available (latest runs not loaded)</source><target>Không có dữ liệu (chưa tải các lượt chạy mới nhất)</target></trans-unit>
-      <trans-unit id="project.dashboard.waivers" datatype="html"><source>Expiring waivers</source><target>Miễn trừ sắp hết hạn</target></trans-unit>
-      <trans-unit id="project.dashboard.waiver-context" datatype="html"><source>Approved waivers expiring in the next 7 days, among up to 10 shown.</source><target>Miễn trừ đã duyệt sẽ hết hạn trong 7 ngày tới, trong tối đa 10 mục hiển thị.</target></trans-unit>
+      <trans-unit id="project.dashboard.waivers" datatype="html"><source>Approved waivers expiring within 7 days</source><target>Miễn trừ đã duyệt sẽ hết hạn trong 7 ngày tới</target></trans-unit>
       <trans-unit id="project.dashboard.quarantine" datatype="html"><source>Active quarantine</source><target>Cách ly đang áp dụng</target></trans-unit>
-      <trans-unit id="project.dashboard.quarantine-context" datatype="html"><source>Active entries among up to 10 shown.</source><target>Mục đang áp dụng trong tối đa 10 mục hiển thị.</target></trans-unit>
+      <trans-unit id="project.dashboard.attention-scope" datatype="html"><source>Waiver and quarantine counts use up to 10 entries per list.</source><target>Số liệu miễn trừ và cách ly được tính trên tối đa 10 mục mỗi danh sách.</target></trans-unit>
       <trans-unit id="project.dashboard.incidents" datatype="html"><source>Incidents</source><target>Sự cố</target></trans-unit>
       <trans-unit id="project.dashboard.incidents-unavailable" datatype="html"><source>Not available yet</source><target>Chưa khả dụng</target></trans-unit>
       <trans-unit id="project.dashboard.authoring" datatype="html"><source>Authoring</source><target>Soạn thảo</target></trans-unit>
       <trans-unit id="project.dashboard.cases" datatype="html"><source>Manual cases</source><target>Ca kiểm thử thủ công</target></trans-unit>
-      <trans-unit id="project.dashboard.case-context" datatype="html"><source>Cases shown, up to 20.</source><target>Số ca hiển thị, tối đa 20.</target></trans-unit>
+      <trans-unit id="project.dashboard.authoring-scope" datatype="html"><source>Case and change counts use up to 20 entries per list.</source><target>Số liệu ca kiểm thử và thay đổi được tính trên tối đa 20 mục mỗi danh sách.</target></trans-unit>
       <trans-unit id="project.dashboard.checklist" datatype="html"><source>Checklist items on loaded roots</source><target>Mục kiểm tra trên các nút gốc đã tải</target></trans-unit>
       <trans-unit id="project.dashboard.checklist-context" datatype="html"><source>Direct items on up to 10 root nodes, not the whole tree.</source><target>Các mục trực tiếp trên tối đa 10 nút gốc, không phải toàn bộ cây.</target></trans-unit>
       <trans-unit id="project.dashboard.changes" datatype="html"><source>Pending changes</source><target>Thay đổi đang chờ</target></trans-unit>
-      <trans-unit id="project.dashboard.change-context" datatype="html"><source>Pending changes shown, up to 20.</source><target>Số thay đổi đang chờ hiển thị, tối đa 20.</target></trans-unit>
       <trans-unit id="project.dashboard.ci" datatype="html"><source>CI setup</source><target>Thiết lập CI</target></trans-unit>
       <trans-unit id="project.dashboard.ci-context" datatype="html"><source>Configuration from up to 10 bindings. Active does not prove a recent successful workflow.</source><target>Cấu hình từ tối đa 10 liên kết. Đang hoạt động không chứng minh quy trình gần nhất thành công.</target></trans-unit>
       <trans-unit id="project.dashboard.active-bindings" datatype="html"><source>Active bindings</source><target>Liên kết đang hoạt động</target></trans-unit>
@@ -22711,19 +22708,21 @@
       <trans-unit id="project.dashboard.usage" datatype="html"><source>Organization usage and AI</source><target>Mức sử dụng tổ chức và AI</target></trans-unit>
       <trans-unit id="project.dashboard.ai" datatype="html"><source>AI tokens</source><target>Token AI</target></trans-unit>
       <trans-unit id="project.dashboard.not-metered" datatype="html"><source>Not metered</source><target>Chưa được đo</target></trans-unit>
-      <trans-unit id="project.dashboard.ai-unavailable" datatype="html"><source>This API has no measured AI tokens or credit balance. No zero usage is inferred.</source><target>API này chưa có số token AI đã đo hoặc số dư tín dụng. Không suy diễn mức sử dụng bằng 0.</target></trans-unit>
       <trans-unit id="project.dashboard.credit-unavailable" datatype="html"><source>AI credit balance is not available from this API.</source><target>API này không cung cấp số dư tín dụng AI.</target></trans-unit>
       <trans-unit id="project.dashboard.results" datatype="html"><source>Organization results quota</source><target>Hạn mức kết quả của tổ chức</target></trans-unit>
-      <trans-unit id="project.dashboard.quota-unset" datatype="html"><source>Quota not set</source><target>Chưa đặt hạn mức</target></trans-unit>
       <trans-unit id="project.dashboard.empty-usage" datatype="html"><source>No usage metrics returned.</source><target>Không có chỉ số sử dụng được trả về.</target></trans-unit>
       <trans-unit id="project.dashboard.no-access" datatype="html"><source>No dashboard data is available with your current permissions.</source><target>Không có dữ liệu tổng quan với quyền hiện tại của bạn.</target></trans-unit>
-      <trans-unit id="project.dashboard.last-runs" datatype="html"><source>Last <x id="count" equiv-text="count"/> runs</source><target><x id="count"/> lượt chạy gần nhất</target></trans-unit>
-      <trans-unit id="project.dashboard.oldest-runs" datatype="html"><source><x id="count" equiv-text="count"/> oldest loaded runs — not the latest</source><target><x id="count"/> lượt chạy cũ nhất đã tải — không phải mới nhất</target></trans-unit>
+      <trans-unit id="project.dashboard.register-recent" datatype="html"><source>Showing the <x id="count" equiv-text="count"/> most recent runs in the sample.</source><target>Hiển thị <x id="count"/> lượt chạy gần nhất trong mẫu.</target></trans-unit>
+      <trans-unit id="project.dashboard.register-loaded" datatype="html"><source>Showing <x id="count" equiv-text="count"/> runs from the oldest loaded pages.</source><target>Hiển thị <x id="count"/> lượt chạy từ các trang cũ nhất đã tải.</target></trans-unit>
+      <trans-unit id="project.dashboard.sample-loaded" datatype="html"><source>Loaded sample</source><target>Mẫu đã tải</target></trans-unit>
+      <trans-unit id="project.dashboard.sample-latest" datatype="html"><source>Latest <x id="total" equiv-text="total"/> runs</source><target><x id="total"/> lượt chạy mới nhất</target></trans-unit>
+      <trans-unit id="project.dashboard.sample-partial" datatype="html"><source>Oldest pages only; newer runs are not loaded.</source><target>Chỉ có các trang cũ nhất; chưa tải các lượt chạy mới hơn.</target></trans-unit>
       <trans-unit id="project.dashboard.loaded-runs" datatype="html"><source>Loaded runs (not the latest)</source><target>Lượt chạy đã tải (không phải mới nhất)</target></trans-unit>
-      <trans-unit id="project.dashboard.share-detail" datatype="html"><source><x id="count" equiv-text="numerator"/> of <x id="total" equiv-text="denominator"/> sampled runs</source><target><x id="count"/> trên <x id="total"/> lượt chạy trong mẫu</target></trans-unit>
-      <trans-unit id="project.dashboard.quota-no-limit" datatype="html"><source><x id="used" equiv-text="used"/> results used · Quota not set</source><target>Đã dùng <x id="used"/> kết quả · Chưa đặt hạn mức</target></trans-unit>
+      <trans-unit id="project.dashboard.sample-fraction" datatype="html"><source><x id="count" equiv-text="count"/> / <x id="total" equiv-text="total"/> runs</source><target><x id="count"/> / <x id="total"/> lượt chạy</target></trans-unit>
+      <trans-unit id="project.dashboard.sample-of" datatype="html"><source>Of <x id="total" equiv-text="total"/> runs</source><target>Trong <x id="total"/> lượt chạy</target></trans-unit>
+      <trans-unit id="project.dashboard.quota-no-limit" datatype="html"><source><x id="used" equiv-text="used"/> results used · Limit unavailable</source><target>Đã dùng <x id="used"/> kết quả · Hạn mức không khả dụng</target></trans-unit>
       <trans-unit id="project.dashboard.quota-used" datatype="html"><source><x id="used" equiv-text="used"/> of <x id="limit" equiv-text="limit"/> results used</source><target>Đã dùng <x id="used"/> trên <x id="limit"/> kết quả</target></trans-unit>
-      <trans-unit id="project.dashboard.ai-no-limit" datatype="html"><source><x id="used" equiv-text="used"/> tokens used · Quota not set</source><target>Đã dùng <x id="used"/> token · Chưa đặt hạn mức</target></trans-unit>
+      <trans-unit id="project.dashboard.ai-no-limit" datatype="html"><source><x id="used" equiv-text="used"/> tokens used · Limit unavailable</source><target>Đã dùng <x id="used"/> token · Hạn mức không khả dụng</target></trans-unit>
       <trans-unit id="project.dashboard.ai-used" datatype="html"><source><x id="used" equiv-text="used"/> of <x id="limit" equiv-text="limit"/> tokens used</source><target>Đã dùng <x id="used"/> trên <x id="limit"/> token</target></trans-unit>
       <trans-unit id="shared.dashboard.trend-table" datatype="html"><source> View as table </source><target>Xem dạng bảng</target></trans-unit>
       <trans-unit id="shared.dashboard.trend-date" datatype="html"><source>Date (UTC)</source><target>Ngày (UTC)</target></trans-unit>

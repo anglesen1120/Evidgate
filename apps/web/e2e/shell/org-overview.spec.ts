@@ -31,6 +31,53 @@ for (const locale of LOCALES) {
         await expect(main.locator('[aria-busy="true"]')).toHaveCount(0);
         await expect(main.locator('[data-table-progress]')).toHaveCount(0);
         await expect(main.locator('app-data-table')).toHaveCount(2);
+        if (width === 1440) {
+          const header = main.locator('.projects').getByRole('columnheader', {
+            name: locale === 'vi' ? 'Xem' : 'View',
+            exact: true,
+          });
+          await expect(header).toBeVisible();
+          expect(
+            await header.evaluate((element) => {
+              const bounds = element.getBoundingClientRect();
+              const range = document.createRange();
+              range.selectNodeContents(element);
+              const rect = range.getBoundingClientRect();
+              return rect.left >= bounds.left - 1 && rect.right <= bounds.right + 1;
+            }),
+          ).toBe(true);
+        }
+        const memberships = main.locator('.members dl');
+        await expect(memberships).toHaveCount(1);
+        await expect(memberships.getByRole('definition')).toHaveText([
+          /\d+\s*\/\s*\d+/,
+          /\d+\s*\/\s*\d+/,
+        ]);
+        for (const register of [
+          main.locator('.projects'),
+          main.locator('app-dashboard-activity'),
+        ]) {
+          const instant = register.locator('time[datetime]').first();
+          await expect(instant).toHaveAttribute('title', /UTC$/);
+          if (width === 1440) {
+            await expect(register.getByRole('columnheader', { name: /UTC/ })).toBeVisible();
+            expect(await instant.evaluate((time) => time.getClientRects().length)).toBe(1);
+            const units = instant.locator('span');
+            await expect(units).toHaveCount(2);
+            const tops = await units.evaluateAll((parts) =>
+              parts.map((part) => part.getBoundingClientRect().top),
+            );
+            expect(tops[0]).toBe(tops[1]);
+          } else if (width === 390) {
+            const units = instant.locator('span');
+            await expect(units).toHaveCount(2);
+            expect(
+              await units.evaluateAll((parts) =>
+                parts.every((part) => part.getClientRects().length === 1),
+              ),
+            ).toBe(true);
+          }
+        }
         const metrics = await page.evaluate(() => ({
           width: document.documentElement.clientWidth,
           scroll: document.documentElement.scrollWidth,
