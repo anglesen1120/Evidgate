@@ -145,9 +145,7 @@ public static partial class ApiHost
         // The catalog's typed GitHub App client: the repository verification of a binding runs in this host, between
         // the binding command's two units. The same extension is composed by the Worker; it sends nothing at start-up.
         builder.Services.AddCatalogGitHub(builder.Configuration);
-        // The authoring module — the feature tree's EF write model, the one version writer, the code allocator
-        // and the steps validator. Api only: the Worker authors no content (its intake extraction composes NFC
-        // text but registers only AddAuthoringIntakeJobs, never this module).
+        // Both hosts compose the Authoring services because Mediator registers their handlers in each host.
         builder.Services.AddAuthoringModule();
         builder.Services.AddOrchestratorModule();
         // 06.1.1-T1: the evidence module — the artifact and kind-policy write model.

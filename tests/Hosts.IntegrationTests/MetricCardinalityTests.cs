@@ -67,6 +67,9 @@ public sealed class MetricCardinalityTests
         "trigger_event",
         "is_fork",
         "unverified_ref",
+        "state",
+        "failure_code",
+        "operation",
     };
 
     /// <summary>Id-shaped key names that must never become a label (they would be one series per row).</summary>
