@@ -113,24 +113,27 @@ EVIDGATE__SESSION__PEPPER=$(rv_random_base64 32)"
 }
 
 # An env file made before a key existed lacks it, and compose refuses to start
-# on a missing key. Appends only the absent ones, once; a key that is already
-# there (even with an unexpected value) is never touched, so a pepper that
-# signed live invites is never rotated by a redeploy. The value travels on
-# stdin, never in argv.
+# on a missing key. The host adds only the absent keys, once, in one locked
+# step that re-checks presence: a key that is already declared (any dotenv
+# spelling, even with an empty value) is never touched, so a pepper that signed
+# live invites is never rotated and two deploys cannot append two peppers. The
+# values travel on stdin, never in argv, and the file is replaced by one rename.
 rv_env_add_missing() {
-  local key line add=""
+  local key value add="" file
   for key in EVIDGATE__INVITE__PEPPER EVIDGATE__INVITE__PEPPERVERSION; do
-    rv_run "grep -q '^$key=' $(rv_quote "$RV_ENV_FILE")" && continue
     case "$key" in
-      *PEPPERVERSION) line="$key=1" ;;
-      *) line="$key=$(rv_random_base64 32)" ;;
+      *PEPPERVERSION) value=1 ;;
+      *)
+        value="$(rv_random_base64 32)" || rv_die "cannot generate the invite pepper"
+        [ "${#value}" -eq 44 ] || rv_die "the generated invite pepper is not 32 base64 bytes"
+        ;;
     esac
-    add="${add}${line}"$'\n'
+    add="${add}${key}=${value}"$'\n'
   done
-  [ -n "$add" ] || return 0
-  # The leading newline guards a file whose last line has none.
-  printf '\n%s' "$add" | rv_mutate "set -eu; cat >> $(rv_quote "$RV_ENV_FILE")"
-  rv_info "$RV_ENV_FILE gained the missing invite keys (existing values untouched)"
+  file="$(rv_quote "$RV_ENV_FILE")"
+  printf '%s' "$add" | rv_mutate "set -eu; f=$file; l=\"\$f.lock\"; n=0; until mkdir \"\$l\" 2>/dev/null; do n=\$((n+1)); [ \"\$n\" -le 30 ] || { echo \"$RV_ENV_FILE is locked by another deploy\" >&2; exit 1; }; sleep 1; done; trap 'rmdir \"\$l\"' EXIT; umask 077; t=\"\$f.up.\$\$\"; cp -p \"\$f\" \"\$t\"; chg=0; while IFS= read -r line; do k=\${line%%=*}; if grep -Eq \"^[[:space:]]*(export[[:space:]]+)?\$k[[:space:]]*[=:]\" \"\$f\"; then continue; else rc=\$?; [ \"\$rc\" -eq 1 ] || exit \"\$rc\"; fi; [ -z \"\$(tail -c1 \"\$t\")\" ] || printf '\\n' >>\"\$t\"; printf '%s\\n' \"\$line\" >>\"\$t\"; chg=1; done; if [ \"\$chg\" = 1 ]; then chmod 600 \"\$t\"; mv \"\$t\" \"\$f\"; else rm -f \"\$t\"; fi" \
+    || rv_die "cannot add the invite keys to $RV_ENV_FILE"
+  rv_info "$RV_ENV_FILE has the invite keys (an existing declaration is never replaced)"
 }
 
 # Creates the secrets file on the first deploy and never rewrites its content

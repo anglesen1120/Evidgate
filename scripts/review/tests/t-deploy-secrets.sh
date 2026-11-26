@@ -14,6 +14,7 @@ deploy="$FX_REPO/scripts/review/deploy.sh"
 if ! out="$(bash "$deploy" review-host --no-dogfood 2>&1)"; then
   fx_fail "the first deploy failed: $out"
 fi
+first_out="$out"
 fx_assert_file "$env_file"
 fx_assert_eq "$(fx_mode "$env_file")" "600" "the secrets file is mode 600"
 
@@ -57,7 +58,8 @@ fx_assert_contains "$content" 'EVIDGATE__INVITE__PEPPERVERSION=1' "the invite pe
 invite_pepper="$(grep '^EVIDGATE__INVITE__PEPPER=' "$env_file" | cut -d= -f2-)"
 grep -Eq '^[A-Za-z0-9+/]{43}=$' <<<"$invite_pepper" || fx_fail "the invite pepper is not 32 base64 bytes"
 fx_ok "the invite pepper has the shape its consumer validates"
-fx_assert_not_contains "$out" "$invite_pepper" "the invite pepper never reaches the output"
+fx_assert_not_contains "$out" "$invite_pepper" "the invite pepper never reaches a later deploy's output"
+fx_assert_not_contains "$first_out" "$invite_pepper" "the invite pepper never reaches the first deploy's output"
 [ "$invite_pepper" != "$(grep '^EVIDGATE__CI__PEPPER=' "$env_file" | cut -d= -f2-)" ] \
   || fx_fail "the invite pepper repeats the CI pepper"
 fx_ok "the invite pepper is its own secret"
