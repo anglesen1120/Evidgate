@@ -781,11 +781,14 @@ export type ReleaseComponentDecision = {
 };
 
 /**
- * Body of `GET /releases/{id}/decision`: one shape for an aggregated and a pending release. Every member is required; a pending release has `status: pending`, `decision: pending` and null in every other member except `release_id`. Aggregated members are copied from one immutable `release_decision` row.
+ * Body of `GET /releases/{id}/decision`: one shape for an aggregated and a pending release. Every member is required; a pending release has `status: pending` and null in every other member except `release_id`. Aggregated members are copied from one immutable `release_decision` row.
  */
 export type ReleaseDecision = {
     status: 'pending' | 'aggregated';
-    decision: 'PASS' | 'FAIL' | 'INCONCLUSIVE' | 'pending';
+    /**
+     * null while pending, never a default; UPPER per 00 §7
+     */
+    decision: 'PASS' | 'FAIL' | 'INCONCLUSIVE' | null;
     release_id: string;
     id: string | null;
     policy_revision_id: string | null;

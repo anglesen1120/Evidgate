@@ -56,7 +56,7 @@ public sealed class ReleaseDecisionApiTests : IClassFixture<TenancyHostPool>
 
         answer.Status.ShouldBe(HttpStatusCode.OK, answer.ErrorMessage);
         answer.Text("status").ShouldBe("pending");
-        answer.Text("decision").ShouldBe("pending");
+        answer.Body.GetProperty("decision").ValueKind.ShouldBe(System.Text.Json.JsonValueKind.Null);
         answer.Id("release_id").ShouldBe(release);
         (await WriteCountsAsync(world)).ShouldBe(before, "the read stores no row, enqueues no task and writes no outbox row");
     }

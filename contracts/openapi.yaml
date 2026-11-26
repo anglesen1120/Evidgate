@@ -11877,7 +11877,7 @@ components:
       type: object
       description: >-
         Body of `GET /releases/{id}/decision`: one shape for an aggregated and a pending release. Every member is
-        required; a pending release has `status: pending`, `decision: pending` and null in every other member except
+        required; a pending release has `status: pending` and null in every other member except
         `release_id`. Aggregated members are copied from one immutable `release_decision` row.
       required:
         [
@@ -11897,8 +11897,9 @@ components:
           type: string
           enum: [pending, aggregated]
         decision:
-          type: string
-          enum: [PASS, FAIL, INCONCLUSIVE, pending]
+          type: [string, 'null']
+          enum: [PASS, FAIL, INCONCLUSIVE, null]
+          description: null while pending, never a default; UPPER per 00 §7
         release_id:
           type: string
           format: uuid

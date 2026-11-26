@@ -19,11 +19,11 @@ public sealed record ReleaseComponentDecision(
 
 /// <summary>
 /// The one body of <c>GET /v1/releases/{id}/decision</c>. A release that has no stored aggregate yet answers
-/// <c>pending</c> with every other member null: no verdict is invented, and "pending" is a read projection, never a
+/// <c>status: pending</c> with every other member null: no verdict is invented, and "pending" is a read projection, never a
 /// stored state.
 /// </summary>
 /// <param name="Status"><see cref="ReleaseDecisionStatus.Pending"/> or <see cref="ReleaseDecisionStatus.Aggregated"/>.</param>
-/// <param name="DecisionValue"><c>PASS</c>, <c>FAIL</c>, <c>INCONCLUSIVE</c>, or <c>pending</c> without a stored row.</param>
+/// <param name="DecisionValue"><c>PASS</c>, <c>FAIL</c> or <c>INCONCLUSIVE</c>; null without a stored row (00 §7 keeps decisions UPPER_CASE, so pending is the <c>status</c>).</param>
 /// <param name="ReleaseId">The release asked about.</param>
 /// <param name="Id">The stored <c>release_decision</c> row every other member was copied from; null while pending.</param>
 /// <param name="PolicyRevisionId">The policy revision the aggregate is stored under; null while pending.</param>
@@ -34,7 +34,7 @@ public sealed record ReleaseComponentDecision(
 /// <param name="CreatedAt">When the row was stored; null while pending.</param>
 public sealed record ReleaseDecision(
     string Status,
-    [property: JsonPropertyName("decision")] string DecisionValue,
+    [property: JsonPropertyName("decision")] string? DecisionValue,
     Guid ReleaseId,
     Guid? Id,
     Guid? PolicyRevisionId,
@@ -47,7 +47,7 @@ public sealed record ReleaseDecision(
     /// <summary>A release with no stored aggregate.</summary>
     /// <param name="releaseId">The release asked about.</param>
     public static ReleaseDecision Pending(Guid releaseId) =>
-        new(ReleaseDecisionStatus.Pending, ReleaseDecisionStatus.Pending, releaseId, null, null, null, null, null, null, null);
+        new(ReleaseDecisionStatus.Pending, null, releaseId, null, null, null, null, null, null, null);
 }
 
 /// <summary>The two values of <see cref="ReleaseDecision.Status"/>.</summary>
