@@ -1324,6 +1324,12 @@ target)` and `session_revoke_audit_append(org, actor, object_type, object_id, me
 - `release_run_release_created_idx (org_id, release_id, created_at, id)` on `release_run` serves the aggregation's capped, ordered binding read without a sort. It is a plain `CREATE INDEX` in the migration transaction (SHARE lock on `release_run` for the build); `release_run` is append-only and small at pilot volume, so a concurrent out-of-band build is not planned.
 - `reasons` also admits `aggregation_bound_exceeded`: a release holding more bindings than one aggregation reads (2000) stores an incomplete `INCONCLUSIVE` aggregate with every component missing, under the revision of its last aggregate, instead of keeping an older `PASS` current.
 
+## Notes on deploy targets (`0130`)
+
+- `0130` adds `public.deploy_target` (a named, ordered release destination per project, optional pinned policy revision) and `unique (org_id, project_id, id)` on `policy_revision` so the pin's composite FK names the target's own project. The unique name index is on `lower(name)`, across `active` and `disabled`.
+- A target is never deleted: the guard trigger refuses `DELETE` for every role and allows only `active` <-> `disabled`; identity columns are immutable. `evidgate_app` may insert six columns and update four; `version` and `updated_at` belong to the shared trigger.
+- Locks: the added unique constraint builds its index under `ACCESS EXCLUSIVE` on `policy_revision` until the migration commits (an append-only table, small, but treat it as a blocking migration); the rest creates new objects. The constraint is added only when absent, so re-running is a no-op. Number `0129` belongs to a sibling change; `0131` follows.
+
 ## Notes on outbound webhooks (`0131`)
 
 - `0131` adds `public.webhook_endpoint` (URL, encrypted secret and its last-four hint, event-type list, soft-delete state) and `public.webhook_outbound_delivery` (one row per endpoint and event: `unique (org_id, endpoint_id, event_id)`). The inbound CI table `public.webhook_delivery` of `0106` is unchanged. Both tables have `unique (org_id, id)`, FORCE RLS with `TO evidgate_app` and `TO evidgate_owner` policies, and the `set_updated_at_and_version` trigger.

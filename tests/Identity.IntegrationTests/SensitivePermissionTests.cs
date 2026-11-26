@@ -59,6 +59,10 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
         "/v1/artifacts/{a}",
         "/v1/artifacts/{a}/download-url",
 
+        // A deploy target row is created by its POST route; this scan has no id to read, and the route answers the same
+        // fields the list above does. Its 403/404 cases are in the deploy-target tests.
+        "/v1/projects/{p}/deploy-targets/{t}",
+
         // 13.1.1-T2's manual case detail: it only answers for a case this suite does not create
         // (authoring rows are Tenancy.IntegrationTests' subject, and a seeded case here would
         // assert a state the writer never produced). The three authoring lists are scanned.
@@ -534,6 +538,7 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
             // read above — kind names, the effective switch and rule type/name pairs, no secret among them.
             ["/v1/projects/{p}/artifact-kind-policy"] = $"/v1/projects/{project}/artifact-kind-policy",
             ["/v1/projects/{p}/quarantine"] = $"/v1/projects/{project}/quarantine",
+            ["/v1/projects/{p}/deploy-targets"] = $"/v1/projects/{project}/deploy-targets",
             ["/v1/projects/{p}/runs"] = $"/v1/projects/{project}/runs",
             ["/v1/projects/{p}/runs/decision-counts"] = $"/v1/projects/{project}/runs/decision-counts",
             // 13.1.1-T2's three authoring lists: one page each, empty for a project with no authoring rows, so the

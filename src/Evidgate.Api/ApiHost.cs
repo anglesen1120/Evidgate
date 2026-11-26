@@ -289,6 +289,8 @@ public static partial class ApiHost
         app.MapWebhookEndpoints().AddEndpointFilter<TenantResolutionFilter>().AddEndpointFilter<ResultEndpointFilter>();
         // 07.3.1-T2: the quarantine routes of 07.3.1 §5, same filters.
         app.MapQuarantineEndpoints().AddEndpointFilter<TenantResolutionFilter>().AddEndpointFilter<ResultEndpointFilter>();
+        // 07.8.1-T1: the deploy-target routes, same filters.
+        app.MapDeployTargetEndpoints().AddEndpointFilter<TenantResolutionFilter>().AddEndpointFilter<ResultEndpointFilter>();
         // 02.7.1-T3.1: the audit list and export, same filters.
         app.MapAuditEndpoints().AddEndpointFilter<TenantResolutionFilter>().AddEndpointFilter<ResultEndpointFilter>();
         // 11.5.1-T5.2 (00 §5.5 C8): the security-events read of AC3, same two filters.
