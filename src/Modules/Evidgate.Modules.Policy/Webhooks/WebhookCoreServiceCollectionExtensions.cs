@@ -1,3 +1,4 @@
+using Evidgate.BuildingBlocks.Persistence.Tasks;
 using Evidgate.Modules.Policy.Webhooks.Application;
 using Evidgate.Modules.Policy.Webhooks.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
@@ -9,7 +10,7 @@ namespace Evidgate.Modules.Policy.Webhooks;
 /// <summary>Registers the shared pieces every webhook slice uses.</summary>
 internal static class WebhookCoreServiceCollectionExtensions
 {
-    /// <summary>Adds the URL guard with its resolver and options, and the secret protector.</summary>
+    /// <summary>Adds the URL guard, the secret protector, and the task writer shared by fan-out and replay.</summary>
     /// <param name="services">The service collection.</param>
     public static IServiceCollection AddWebhookCore(this IServiceCollection services)
     {
@@ -24,6 +25,7 @@ internal static class WebhookCoreServiceCollectionExtensions
         services.TryAddSingleton<IWebhookHostResolver, DnsWebhookHostResolver>();
         services.TryAddSingleton<WebhookUrlGuard>();
         services.TryAddSingleton<WebhookSecretProtector>();
+        services.TryAddSingleton<ITaskQueueWriter, TaskQueueWriter>();
 
         return services;
     }
