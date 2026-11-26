@@ -55,9 +55,7 @@ public sealed class MyPermissionsTests(DatabaseFixture fixture) : CatalogueTestB
 
         // The expectation is the catalogue file, not the evaluator: a member role holds its file
         // permissions minus the codes a member may never hold.
-        var assignable = Catalogue.Document.Permissions.Where(entry => entry.TenantAssignable).Select(entry => entry.Code);
-        var expected = Catalogue.PermissionsOf(role).Intersect(assignable, StringComparer.Ordinal)
-            .Order(StringComparer.Ordinal).ToArray();
+        var expected = CataloguedMemberPermissions(role);
         expected.ShouldNotBeEmpty();
         var actual = Strings(body, "permissions");
         actual.ShouldBe(expected);
@@ -233,10 +231,115 @@ public sealed class MyPermissionsTests(DatabaseFixture fixture) : CatalogueTestB
         }
     }
 
-    private IdentityApiFactory MemberHost(Guid org, Guid user) =>
+    [Fact]
+    public async Task Read_ActiveMemberWithoutRoles_Returns200AndEmptySets()
+    {
+        var org = await Fixture.SeedOrgAsync(cancellationToken: Token);
+        var otherOrg = await Fixture.SeedOrgAsync(cancellationToken: Token);
+        var user = await IdentityTestData.SeedActiveMemberAsync(Fixture, otherOrg, "viewer", cancellationToken: Token);
+        await AddMembershipWithoutRolesAsync(org, user);
+        await using var host = MemberHost(org, user);
+        using var client = host.CreateClient();
+
+        using var response = await GetAsync(client, org);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(Token);
+        body.GetProperty("org_id").GetGuid().ShouldBe(org);
+        Strings(body, "roles").ShouldBeEmpty();
+        Strings(body, "permissions").ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task Read_RemovedMembership_Is403NoMembership()
+    {
+        var org = await Fixture.SeedOrgAsync(cancellationToken: Token);
+        var user = await IdentityTestData.SeedActiveMemberAsync(Fixture, org, "viewer", cancellationToken: Token);
+        // Publish the tenant so the edge's membership lookup cannot mask a faulty grant resolver.
+        await using var host = MemberHost(org, user, resolveTenant: false);
+        using var client = host.CreateClient();
+        using var active = await GetAsync(client, org);
+        active.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var changed = await Fixture.SeedAsync(
+            "update public.membership set status = 'removed' where org_id = @org and user_id = @user and status = 'active'",
+            [("org", org), ("user", user)],
+            Token);
+        changed.ShouldBe(1);
+        using var removed = await GetAsync(client, org);
+
+        removed.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        var error = (await removed.Content.ReadFromJsonAsync<JsonElement>(Token)).GetProperty("error");
+        error.GetProperty("code").GetString().ShouldBe(ApiErrorCode.NoMembership);
+    }
+
+    [Fact]
+    public async Task Read_Operator_Is403EvenWithMalformedProject()
+    {
+        var org = await Fixture.SeedOrgAsync(cancellationToken: Token);
+        var user = await IdentityTestData.SeedActiveMemberAsync(Fixture, org, "viewer", cancellationToken: Token);
+        await using var control = MemberHost(org, user, resolveTenant: false);
+        using var controlClient = control.CreateClient();
+        using var allowed = await GetAsync(controlClient, org);
+        allowed.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        await using var host = IdentityApiFactory.Start(Fixture, new IdentityHostSetup(org, Principal: RequestPrincipal.Operator()));
+        using var client = host.CreateClient();
+        foreach (var query in new[] { "", "?project=bad" })
+        {
+            using var refused = await GetAsync(client, org, query);
+            refused.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+            var error = (await refused.Content.ReadFromJsonAsync<JsonElement>(Token)).GetProperty("error");
+            error.GetProperty("code").GetString().ShouldBe(ApiErrorCode.Forbidden);
+        }
+    }
+
+    [Fact]
+    public async Task Read_UserInTwoOrgsWithDifferentRoles_GetsOnlyTheNamedOrgsGrants()
+    {
+        var viewerOrg = await Fixture.SeedOrgAsync(cancellationToken: Token);
+        var adminOrg = await Fixture.SeedOrgAsync(cancellationToken: Token);
+        var user = await IdentityTestData.SeedActiveMemberAsync(Fixture, viewerOrg, "viewer", cancellationToken: Token);
+        await AddMembershipWithoutRolesAsync(adminOrg, user);
+        var adminRole = await IdentityTestData.RoleIdAsync(Fixture, adminOrg, "tenant_admin", Token);
+        (await IdentityTestData.GrantRoleToMemberAsync(Fixture, adminOrg, user, adminRole, Token)).ShouldBe(1);
+        await using var host = MemberHost(viewerOrg, user);
+        using var client = host.CreateClient();
+
+        foreach (var (org, role) in new[] { (viewerOrg, "viewer"), (adminOrg, "tenant_admin") })
+        {
+            using var response = await GetAsync(client, org);
+
+            response.StatusCode.ShouldBe(HttpStatusCode.OK);
+            var body = await response.Content.ReadFromJsonAsync<JsonElement>(Token);
+            body.GetProperty("org_id").GetGuid().ShouldBe(org);
+            Strings(body, "roles").ShouldBe([role]);
+            Strings(body, "permissions").ShouldBe(CataloguedMemberPermissions(role));
+        }
+    }
+
+    private async Task AddMembershipWithoutRolesAsync(Guid org, Guid user)
+    {
+        var inserted = await Fixture.SeedAsync(
+            """
+            insert into public.membership (id, org_id, user_id, invited_email, status, created_at, updated_at, version)
+            select @id, @org, id, email, 'active', now(), now(), 1 from public."user" where id = @user
+            """,
+            [("id", Guid.CreateVersion7()), ("org", org), ("user", user)],
+            Token);
+        inserted.ShouldBe(1);
+    }
+
+    private string[] CataloguedMemberPermissions(string role)
+    {
+        var assignable = Catalogue.Document.Permissions.Where(entry => entry.TenantAssignable).Select(entry => entry.Code);
+        return Catalogue.PermissionsOf(role).Intersect(assignable, StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+    }
+
+    private IdentityApiFactory MemberHost(Guid org, Guid user, bool resolveTenant = true) =>
         IdentityApiFactory.Start(
             Fixture,
-            new IdentityHostSetup(org, Principal: RequestPrincipal.Member(user), ResolveTenant: true));
+            new IdentityHostSetup(org, Principal: RequestPrincipal.Member(user), ResolveTenant: resolveTenant));
 
     private static string[] Strings(JsonElement body, string name) =>
         [.. body.GetProperty(name).EnumerateArray().Select(item => item.GetString()!)];

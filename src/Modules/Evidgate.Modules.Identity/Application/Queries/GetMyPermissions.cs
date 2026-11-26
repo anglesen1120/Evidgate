@@ -68,7 +68,7 @@ internal sealed class GetMyPermissionsQueryHandler(
         return Result.Success(new MyPermissionsResponse(
             orgId,
             query.ProjectId,
-            [.. roles?.Codes ?? []],
+            roles?.Codes ?? [],
             [.. access.Codes.Order(StringComparer.Ordinal)]));
     }
 
