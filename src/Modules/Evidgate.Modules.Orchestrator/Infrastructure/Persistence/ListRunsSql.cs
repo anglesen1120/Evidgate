@@ -4,16 +4,12 @@ using Evidgate.Modules.Orchestrator.Application.Queries;
 namespace Evidgate.Modules.Orchestrator.Infrastructure.Persistence;
 
 /// <summary>
-/// The Dapper statements of the run list (00 §5.5 C5): one parameterised statement per page shape, keyset-paged on
-/// <c>(created_at, id)</c> over <c>run_project_ref_idx</c> when <c>ref_name</c> is filtered, and built from fixed
-/// fragments chosen by the filter shape and the order — a filter value is always a parameter, never concatenated
-/// into the text. Descending is <c>created_at desc, id</c>, which is exactly the key order of
-/// <c>run_project_created_idx (org_id, project_id, created_at desc, id)</c>, so the project list reads that index
-/// forward with no sort; its cursor bound is a <c>created_at &lt;=</c> range (the index condition) plus the
-/// tie-break filter. With <c>ref_name</c> the planner reads <c>run_project_ref_idx</c> backward and settles equal
-/// <c>created_at</c> groups with an incremental sort, never a full one. The page shapes and the fragments are
-/// <c>internal</c> so <c>ListRunsIndexPlanTests</c> can run <c>EXPLAIN</c> over the exact statement the handler
-/// executes (AC6, §8 P2).
+/// The run-list statements: one parameterised statement per page shape, keyset-paged on <c>(created_at, id)</c>
+/// from fixed fragments chosen by filter shape and order; a filter value is always a parameter, never text.
+/// No shape needs a full Sort. Descending project-wide reads <c>run_project_created_idx</c> forward in page order
+/// and uses no sort. Ascending project-wide reads it backward, and <c>ref_name</c> with descending reads
+/// <c>run_project_ref_idx</c> backward; both can settle <c>created_at</c> ties with an Incremental Sort.
+/// The page shapes are <c>internal</c> so the plan tests can <c>EXPLAIN</c> the exact statements the handler runs.
 /// </summary>
 internal static class ListRunsSql
 {
@@ -100,7 +96,21 @@ internal static class ListRunsSql
         var parameters = new DynamicParameters();
         parameters.Add("org_id", orgId);
         parameters.Add("project_id", projectId);
+        AddFilterParameters(parameters, filters);
 
+        if (cursorCreatedAt is not null)
+        {
+            parameters.Add("cursor_created_at", cursorCreatedAt.Value);
+            parameters.Add("cursor_id", cursorId);
+        }
+
+        parameters.Add("limit", limit);
+
+        return parameters;
+    }
+
+    private static void AddFilterParameters(DynamicParameters parameters, RunListFilters filters)
+    {
         if (filters.RefName is not null)
         {
             parameters.Add("ref_name", filters.RefName);
@@ -147,16 +157,6 @@ internal static class ListRunsSql
         {
             parameters.Add("completeness", filters.Completeness);
         }
-
-        if (cursorCreatedAt is not null)
-        {
-            parameters.Add("cursor_created_at", cursorCreatedAt.Value);
-            parameters.Add("cursor_id", cursorId);
-        }
-
-        parameters.Add("limit", limit);
-
-        return parameters;
     }
 
     /// <summary>

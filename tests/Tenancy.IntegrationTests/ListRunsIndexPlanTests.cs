@@ -9,15 +9,9 @@ using Xunit;
 namespace Tenancy.IntegrationTests;
 
 /// <summary>
-/// 05.2.2-T2.2 AC6 (and 05.2.2 §8 "Performance P2"): every shape of the run list is served by an index and never by
-/// a full sort. Ascending with <c>ref_name</c> is a forward range scan of
-/// <c>run_project_ref_idx (project_id, ref_name, created_at, id)</c>; descending without it is a forward scan of
-/// <c>run_project_created_idx (org_id, project_id, created_at desc, id)</c>, whose key order is the page order.
-/// Descending with <c>ref_name</c> reads the ref index backward and settles each <c>created_at</c> tie group with an
-/// incremental sort, because the ref index holds <c>id</c> ascending where the page wants it after a descending
-/// <c>created_at</c>. The plan is asserted by running <c>EXPLAIN (FORMAT JSON)</c> over
-/// the handler's own statements (<see cref="ListRunsSql"/>, reached through <c>InternalsVisibleTo</c>) with the
-/// handler's parameters bound, so the assertion follows the served query and not a copy of it.
+/// Every run-list shape must use an index and no full Sort. Descending project-wide and ascending with
+/// <c>ref_name</c> need no sort; ascending project-wide and descending with <c>ref_name</c> may use an
+/// Incremental Sort on <c>created_at</c> ties, which this test deliberately allows.
 /// </summary>
 [Trait("Category", "Docker")]
 public sealed class ListRunsIndexPlanTests
@@ -27,12 +21,8 @@ public sealed class ListRunsIndexPlanTests
     public ListRunsIndexPlanTests(PostgresTenancyFixture fixture) => _fixture = fixture;
 
     /// <summary>
-    /// The target project is seeded sparsely for the filtered ref (<c>main</c>: 200 of 40 000 runs, the rest one row
-    /// each under 39 800 distinct ref names) with a distinct <c>created_at</c> per row and <c>ANALYZE</c>d, so the
-    /// planner prefers the index without <c>enable_seqscan = off</c> (which the 07.1.1-T3 contract forbids). The
-    /// <c>ref_name</c>-and-<c>pr_number</c> shape, the <c>ref_name</c>-only shape and the project-wide shape are
-    /// explained in both orders, first page and cursor page each. Deterministic: it asserts node types and index
-    /// names only, never timing.
+    /// Sparse ref names and up-to-date statistics let the planner choose the index without disabling table scans.
+    /// Both first and cursor pages are checked by plan shape rather than timing.
     /// </summary>
     [Fact]
     public async Task ListRuns_EveryOrderAndFilterShape_UsesAnIndexWithoutAFullSort()
@@ -40,28 +30,7 @@ public sealed class ListRunsIndexPlanTests
         // The case seeds 40 000 runs and ANALYZEs public.run, so the planner's statistics are database-wide.
         await using var database = await _fixture.CreateDedicatedDatabaseAsync();
         await using var world = await RunCreationTests.StartAsync(_fixture, database: database.Name);
-
-        await _fixture.ExecuteAsync(
-            world.Database,
-            $"""
-            insert into public.run
-              (id, org_id, project_id, manifest_id, suite_revision_id, environment_revision_id,
-               created_at, collection_deadline_at, late_window_minutes, ref_kind, ref_name, pr_number)
-            select gen_random_uuid(), '{world.Org:D}', '{world.Project:D}', '{world.ManifestId:D}',
-                   '{world.SuiteRevision:D}', '{world.EnvironmentRevision:D}',
-                   timestamptz '2026-01-01T00:00:00Z' + g * interval '1 second',
-                   now() + interval '1 hour' + g * interval '1 second', 1440, 'branch', 'ref-' || g, null
-              from generate_series(1, 39800) g;
-            insert into public.run
-              (id, org_id, project_id, manifest_id, suite_revision_id, environment_revision_id,
-               created_at, collection_deadline_at, late_window_minutes, ref_kind, ref_name, pr_number)
-            select gen_random_uuid(), '{world.Org:D}', '{world.Project:D}', '{world.ManifestId:D}',
-                   '{world.SuiteRevision:D}', '{world.EnvironmentRevision:D}',
-                   timestamptz '2026-01-01T00:00:00Z' + g * interval '1 second',
-                   now() + interval '1 hour' + g * interval '1 second', 1440, 'branch', 'main', 7
-              from generate_series(1, 200) g;
-            analyze public.run;
-            """);
+        await SeedRunsAsync(world);
 
         var refAndPr = new RunListFilters("main", 7, null, null, null);
         var refOnly = new RunListFilters("main", null, null, null, null);
@@ -100,6 +69,31 @@ public sealed class ListRunsIndexPlanTests
         await AssertUsesIndexAsync(connection, transaction, ListRunsSql.NextPage(project), world, project, midRange, CreatedIndex);
         await AssertUsesIndexAsync(connection, transaction, ListRunsSql.FirstPage(project, Desc), world, project, null, CreatedIndex);
         await AssertUsesIndexAsync(connection, transaction, ListRunsSql.NextPage(project, Desc), world, project, midRange, CreatedIndex);
+    }
+
+    private async Task SeedRunsAsync(RunCreationTests.World world)
+    {
+        await _fixture.ExecuteAsync(
+            world.Database,
+            $"""
+            insert into public.run
+              (id, org_id, project_id, manifest_id, suite_revision_id, environment_revision_id,
+               created_at, collection_deadline_at, late_window_minutes, ref_kind, ref_name, pr_number)
+            select gen_random_uuid(), '{world.Org:D}', '{world.Project:D}', '{world.ManifestId:D}',
+                   '{world.SuiteRevision:D}', '{world.EnvironmentRevision:D}',
+                   timestamptz '2026-01-01T00:00:00Z' + g * interval '1 second',
+                   now() + interval '1 hour' + g * interval '1 second', 1440, 'branch', 'ref-' || g, null
+              from generate_series(1, 39800) g;
+            insert into public.run
+              (id, org_id, project_id, manifest_id, suite_revision_id, environment_revision_id,
+               created_at, collection_deadline_at, late_window_minutes, ref_kind, ref_name, pr_number)
+            select gen_random_uuid(), '{world.Org:D}', '{world.Project:D}', '{world.ManifestId:D}',
+                   '{world.SuiteRevision:D}', '{world.EnvironmentRevision:D}',
+                   timestamptz '2026-01-01T00:00:00Z' + g * interval '1 second',
+                   now() + interval '1 hour' + g * interval '1 second', 1440, 'branch', 'main', 7
+              from generate_series(1, 200) g;
+            analyze public.run;
+            """);
     }
 
     /// <summary>Explains one handler statement with its real parameters; the named index is used, with no full sort and no table scan.</summary>

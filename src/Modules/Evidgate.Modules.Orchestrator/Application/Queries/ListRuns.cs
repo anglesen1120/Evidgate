@@ -17,10 +17,8 @@ using Mediator;
 namespace Evidgate.Modules.Orchestrator.Application.Queries;
 
 /// <summary>
-/// Cursor page of a project's runs (<c>GET /v1/projects/{p}/runs</c>, 05.2.2 §5, AC6): the project's runs ordered by
-/// <c>(created_at, id)</c> ascending, or newest first (<c>created_at</c> descending, <c>id</c> ascending) when
-/// <paramref name="Order"/> says so, narrowed by the run's stored identity and — since F43/S143 — by its
-/// <c>state</c>, <c>decision</c>, <c>rerun_scope</c>, <c>parent_run_id</c> and current-revision <c>completeness</c>.
+/// A cursor page of the project's matching runs. The default is oldest first; newest first reverses the
+/// timestamp order but keeps <c>id</c> ascending for ties.
 /// </summary>
 /// <param name="ProjectId">The project from the route.</param>
 /// <param name="Filters">The validated filters, AND-combined and applied before the page is cut.</param>
@@ -47,18 +45,9 @@ internal sealed record ListRunsQuery(
 /// <c>evidence_revision.completeness</c> of the run's current revision and stays null while the run has none (never a
 /// fabricated <c>incomplete</c>); <c>parent_run_id</c> and <c>rerun_scope</c> are the run's own columns.
 /// <para>
-/// Order is <c>(created_at, id)</c> ascending, or <c>created_at</c> descending then <c>id</c> ascending, and the
-/// cursor is the opaque <c>KeysetCursor</c> over the last row of the page, so the row comparison past the cursor
-/// is stable under concurrent inserts: a row created between two pages sorts on the far side of the cursor (or of
-/// the rows already read) and is neither repeated nor skipped. A cursor records its order and is refused under the
-/// other one. The cursor is
-/// not signed and carries no tenant: it is bound to the caller's own rows by the query itself, because the
-/// <c>org_id</c> predicate, the project scope and the <c>FORCE</c>d RLS policy are always applied — a well-formed
-/// cursor can only move the page position inside the caller's own project, never read another project's or tenant's
-/// rows. A <c>decision</c>-filtered scan that ends on its row budget answers the last <em>scanned</em> row as the
-/// cursor rather than the last returned one, so a short page still advances past everything it read; every returned
-/// row sorts before that position. A cursor this codec did not produce is <c>422 request_invalid</c>
-/// (<c>cursor</c>, <c>malformed</c>) rather than a guessed page position.
+/// Each page continues strictly past the cursor in the requested order. The cursor is unsigned: project and tenant
+/// isolation come from the query predicates and RLS, not from the encoded position. A budget-limited decision scan
+/// resumes after the last scanned row. An unparseable position or wrong order marker is <c>422 request_invalid</c>.
 /// </para>
 /// <para>
 /// The project must exist and be live, exactly like the module's other project-scoped reads: an unknown id and
@@ -107,9 +96,7 @@ internal sealed class ListRunsQueryHandler(
     {
         using var activity = EvidgateTelemetry.StartModuleActivity(ModuleName.Orchestrator, nameof(ListRunsQuery));
 
-        // The F43 vocabularies are re-checked here, before the project check, because the handler owns the contract
-        // it serves: a `decision` outside `pending` plus the three verdict tokens must be a 422, never a page. The
-        // endpoint refuses the same values first, so this only fires for a caller that did not come through it.
+        // Non-HTTP callers must receive the same validation errors rather than a page narrowed by an unknown value.
         if (RunListFilterRules.Validate(query.Filters) is { Count: > 0 } filterErrors)
         {
             return Result.Failure<RunPage>(Error.Invalid(

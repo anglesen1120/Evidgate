@@ -10,9 +10,8 @@ namespace Evidgate.BuildingBlocks.SharedKernel.Api;
 /// meaning is promised beyond "hand it back verbatim" — and it decodes to typed
 /// values so the SQL never compares a client string against a timestamp.
 /// <para>
-/// A list that can also be read newest-first issues <see cref="EncodeDescending"/> cursors: the same pair behind a
-/// <c>d.</c> marker, which <see cref="TryDecode"/> never accepts (the <c>.</c> is no part of the hex ticks) and
-/// <see cref="TryDecodeDescending"/> requires, so a cursor is only ever valid under the order that issued it.
+/// The <c>d.</c> marker distinguishes issued newest-first cursors from ascending cursors. It is required by
+/// <see cref="TryDecodeDescending"/> and is not a hexadecimal tick value accepted by <see cref="TryDecode"/>.
 /// </para>
 /// </summary>
 public static class KeysetCursor
@@ -30,8 +29,7 @@ public static class KeysetCursor
         DescendingMarker + Encode(createdAt, id);
 
     /// <summary>
-    /// Decodes a cursor issued by <see cref="EncodeDescending"/>; false for an ascending cursor or anything this
-    /// codec did not produce.
+    /// Requires the descending marker, then parses the remaining position with <see cref="TryDecode"/>.
     /// </summary>
     public static bool TryDecodeDescending(string? cursor, out DateTimeOffset createdAt, out Guid id)
     {
@@ -46,8 +44,8 @@ public static class KeysetCursor
     }
 
     /// <summary>
-    /// Decodes a cursor. False for anything this codec did not produce — the caller
-    /// answers 422 <c>request_invalid</c> rather than guessing a page position.
+    /// Parses hexadecimal UTC ticks in the timestamp range and a GUID, separated by the first hyphen.
+    /// The parsed values need not have the exact spelling emitted by <see cref="Encode"/>.
     /// </summary>
     public static bool TryDecode(string? cursor, out DateTimeOffset createdAt, out Guid id)
     {
