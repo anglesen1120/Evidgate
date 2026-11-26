@@ -900,6 +900,17 @@ internal static class RouteRequests
         Add("DELETE", "/v1/quarantine/{q}", ctx => new(HttpMethod.Delete, $"/v1/quarantine/{ctx.QuarantineId}", IdempotencyKey: Key()));
         Add("GET", "/v1/projects/{p}/quarantine", ctx => new(HttpMethod.Get, $"/v1/projects/{ctx.ProjectId}/quarantine"));
 
+        // ---- Deploy targets ----------------------------------------------------------------------------------
+        // A denied caller never reaches a lookup, so the target id is a fresh one and the PATCH body names one field.
+        Add("GET", "/v1/projects/{p}/deploy-targets", ctx => new(HttpMethod.Get, $"/v1/projects/{ctx.ProjectId}/deploy-targets"));
+        Add("POST", "/v1/projects/{p}/deploy-targets", ctx => new(HttpMethod.Post, $"/v1/projects/{ctx.ProjectId}/deploy-targets",
+            new JsonObject { ["name"] = "probe" }, IdempotencyKey: Key()));
+        Add("GET", "/v1/projects/{p}/deploy-targets/{t}", ctx => new(HttpMethod.Get, $"/v1/projects/{ctx.ProjectId}/deploy-targets/{Guid.CreateVersion7()}"));
+        Add("PATCH", "/v1/projects/{p}/deploy-targets/{t}", ctx => new(HttpMethod.Patch, $"/v1/projects/{ctx.ProjectId}/deploy-targets/{Guid.CreateVersion7()}",
+            new JsonObject { ["order"] = 1 }, IfMatch: "\"1\"", IdempotencyKey: Key()));
+        Add("DELETE", "/v1/projects/{p}/deploy-targets/{t}", ctx => new(HttpMethod.Delete, $"/v1/projects/{ctx.ProjectId}/deploy-targets/{Guid.CreateVersion7()}",
+            IfMatch: "\"1\"", IdempotencyKey: Key()));
+
         // ---- Healing (08.6.3-T1) -----------------------------------------------------------------------------
         // The switch routes carry no path id: the read answers the three scope rows of the caller's org, and the
         // write sets the org row (a shape-valid body of the closed `healing-switch-set.v1` schema, with the
