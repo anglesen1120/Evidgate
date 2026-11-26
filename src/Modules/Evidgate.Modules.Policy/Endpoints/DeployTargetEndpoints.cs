@@ -149,7 +149,7 @@ public static class DeployTargetEndpoints
                 case "policy_revision_id" when value.ValueKind == JsonValueKind.Null:
                     pinGiven = true;
                     break;
-                case "policy_revision_id" when value.ValueKind == JsonValueKind.String && Guid.TryParseExact(value.GetString(), "D", out var id):
+                case "policy_revision_id" when value.ValueKind == JsonValueKind.String && value.GetString() is { Length: 36 } text && Guid.TryParseExact(text, "D", out var id):
                     pinGiven = true;
                     pin = id;
                     break;
