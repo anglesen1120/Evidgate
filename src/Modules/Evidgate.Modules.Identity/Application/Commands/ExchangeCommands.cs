@@ -158,7 +158,8 @@ internal sealed class ExchangeGitHubTokenCommandHandler(
         audit.Describe(new AuditObject(
             "ci_binding",
             binding.Id.ToString("D"),
-            Metadata: renamedFrom is null ? null : new Dictionary<string, string> { ["reason"] = "repository_renamed" }));
+            Metadata: renamedFrom is null ? null : new Dictionary<string, string> { ["reason"] = "repository_renamed" },
+            ProjectId: binding.ProjectId));
 
         return Result.Success(new CiTokenResponse(minted.Token, minted.ExpiresAt, binding.ProjectId, CiProducerPermissions.Set));
     }
@@ -254,7 +255,7 @@ internal sealed class ExchangeIngestTokenCommandHandler(
             await db.ExecuteAsync(TouchSql, new { id = token.Id }, cancellationToken).ConfigureAwait(false);
         }
 
-        audit.Describe(new AuditObject("ingest_token", token.Id.ToString("D")));
+        audit.Describe(new AuditObject("ingest_token", token.Id.ToString("D"), ProjectId: token.ProjectId));
 
         return Result.Success(new CiTokenResponse(minted.Token, minted.ExpiresAt, token.ProjectId, [.. token.Scopes]));
     }

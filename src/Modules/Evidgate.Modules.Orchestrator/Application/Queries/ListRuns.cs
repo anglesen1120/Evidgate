@@ -104,31 +104,19 @@ internal sealed class ListRunsQueryHandler(
                 filterErrors));
         }
 
-        if (OrchestratorScope.Project(query.ProjectId, principals, tenant) is not null)
+        if (await RunReadAccess.CheckProjectAsync(query.ProjectId, db, principals, tenant, cancellationToken)
+                .ConfigureAwait(false) is { } projectError)
         {
-            return Result.Failure<RunPage>(OrchestratorErrors.ProjectNotFound);
-        }
-
-        var live = await db.ScalarAsync<int?>(
-                ListRunsSql.ProjectExists,
-                new { project_id = query.ProjectId },
-                cancellationToken)
-            .ConfigureAwait(false);
-        if (live is null)
-        {
-            return Result.Failure<RunPage>(OrchestratorErrors.ProjectNotFound);
+            return Result.Failure<RunPage>(projectError);
         }
 
         // A verdict is decision:read data (00 §9.3) while this page answers under run:read only, so the two are
         // gated apart here: without decision:read no verdict is read at all (every item's decision stays null and
         // Policy is never asked) and a `decision` filter is refused — an empty page would still disclose which runs
         // match a verdict. The project boundary above runs first, so a foreign project keeps its 404.
-        var context = tenant.Require();
-        var verdictsVisible = principals.Current is { } principal
-            && (await permissions
-                .EvaluateAsync(Permissions.Decision.Read, principal, context, cancellationToken)
-                .ConfigureAwait(false))
-                .IsGranted;
+        var verdictsVisible = await RunReadAccess
+            .CanReadDecisionsAsync(principals, tenant, permissions, cancellationToken)
+            .ConfigureAwait(false);
 
         if (query.Filters.Decision is not null && !verdictsVisible)
         {

@@ -192,7 +192,7 @@ internal sealed class UpdateProjectCommandHandler(
             ?? throw new InvalidOperationException(
                 $"the project {command.ProjectId} was updated in this transaction yet cannot be read back");
 
-        audit.Describe(new AuditObject("project", command.ProjectId.ToString("D")));
+        audit.Describe(new AuditObject("project", command.ProjectId.ToString("D"), ProjectId: command.ProjectId));
 
         return Result.Success(view);
     }

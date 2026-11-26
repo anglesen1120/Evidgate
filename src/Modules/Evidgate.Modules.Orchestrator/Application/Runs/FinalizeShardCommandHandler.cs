@@ -252,7 +252,7 @@ internal sealed partial class FinalizeShardCommandHandler(
 
         // (7) Our own audit description goes AFTER the transitions: they share the unit's single pending slot and
         // their Record consumes it, so a Describe made earlier would be swallowed.
-        audit.Describe(new AuditObject("run", command.RunId.ToString("D")));
+        audit.Describe(new AuditObject("run", command.RunId.ToString("D"), ProjectId: run.ProjectId));
 
         activity?.SetTag("evidgate.run_id", command.RunId.ToString("D"));
         activity?.SetTag("evidgate.producer_id", request.ProducerId);

@@ -142,7 +142,7 @@ internal sealed class CreateQuarantineEntryCommandHandler(
             return Result.Failure<QuarantineEntry>(QuarantineErrors.Conflict);
         }
 
-        audit.Describe(new AuditObject("quarantine", id.ToString("D")));
+        audit.Describe(new AuditObject("quarantine", id.ToString("D"), ProjectId: row.ProjectId));
 
         return Result.Success(row, 201);
     }
@@ -243,7 +243,7 @@ internal sealed class RemoveQuarantineEntryCommandHandler(
             return Result.Failure<QuarantineEntry>(QuarantineErrors.NotFound);
         }
 
-        audit.Describe(new AuditObject("quarantine", command.QuarantineId.ToString("D")));
+        audit.Describe(new AuditObject("quarantine", command.QuarantineId.ToString("D"), ProjectId: removed.ProjectId));
 
         return Result.Success(removed);
     }

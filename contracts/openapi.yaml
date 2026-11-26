@@ -1511,6 +1511,50 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '503':
           $ref: '#/components/responses/Unavailable'
+  /projects/{p}/runs/decision-counts:
+    get:
+      operationId: getRunDecisionCounts
+      tags: [runs]
+      summary: Counts of a project's runs by newest live decision
+      description: >-
+        Dashboard counts: how many of the project's runs created at or after
+        `since` (default now minus 30 days, inclusive `created_at >= since`) have
+        a newest `live` evaluation of `PASS`, `FAIL` or `INCONCLUSIVE`, and how
+        many have none (`no_decision`). A run with evaluations at several
+        evidence revisions counts once, under its latest; a `shadow` evaluation
+        never counts. The read scans at most 5000 runs, newest first; when more
+        match, `truncated` is `true` and the counts cover the newest `scanned`
+        runs. The verdict is `decision:read` data while the route answers under
+        `run:read`: a caller without `decision:read` gets 403 `forbidden` rather
+        than counts that would disclose it. An unknown project (or another
+        tenant's) is 404 `not_found`, checked before the permission.
+      x-permission: run:read
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/RunDecisionCountsSince'
+      responses:
+        '200':
+          description: Counts by decision
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RunDecisionCounts'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
   /runs/{r}:
     get:
       operationId: getRun
@@ -4863,7 +4907,14 @@ paths:
       description: >-
         One statement per page, keyset-ordered on `(created_at, id)` descending and served by
         `audit_log_org_created_id_idx`. Rows carry the per-org hash chain (`seq`, `prev_hash`,
-        `entry_hash`) so a client can re-verify it. Another org's id is 404.
+        `entry_hash`) so a client can re-verify it. Another org's id is 404. `project_id` narrows the page to
+        the actions recorded with that project tag; it covers only project-tagged actions recorded since the tag
+        was introduced, so earlier rows and organization-level actions are never matched by it. Not every
+        project action carries the tag yet: the filter returns the tagged actions only, so an empty or short
+        result does not prove nothing happened in the project. The tag is not
+        part of `entry_hash`: the chain proves the action, not which project it was tagged with. An unknown id or
+        another org's project answers an empty page, not 404. A present `project_id` that is empty or not a uuid
+        is 422 `request_invalid`; an absent one applies no filter.
       x-permission: audit:read
       x-version: v1
       parameters:
@@ -4873,6 +4924,7 @@ paths:
         - $ref: '#/components/parameters/AuditActorType'
         - $ref: '#/components/parameters/AuditAction'
         - $ref: '#/components/parameters/AuditObjectType'
+        - $ref: '#/components/parameters/AuditProjectId'
         - $ref: '#/components/parameters/AuditFrom'
         - $ref: '#/components/parameters/AuditTo'
       responses:
@@ -4906,7 +4958,8 @@ paths:
         The range defaults to the last 30 days and may span at most 92 days, otherwise 422
         `export_range_too_large`; so does a range holding more than 100 000 events. The export
         writes an `audit.export` audit row in the same transaction. CSV cells that start with a
-        formula character are prefixed with a quote.
+        formula character are prefixed with a quote. The export ignores `project_id` and exports the whole
+        org range.
       x-permission: audit:read
       x-version: v1
       parameters:
@@ -9349,6 +9402,19 @@ components:
       schema:
         type: string
         maxLength: 64
+    AuditProjectId:
+      name: project_id
+      in: query
+      required: false
+      description: >-
+        Exact project tag of the audit row. Only project-tagged actions recorded since the tag was introduced
+        match; earlier rows and organization-level actions never do, and not every project action carries the
+        tag yet, so an empty or short result does not prove nothing happened. An id that is unknown or belongs
+        to another org answers an empty page, not 404; a present value that is empty or not a uuid is 422
+        `request_invalid` with `details[].path` = `project_id`; an absent one applies no filter.
+      schema:
+        type: string
+        format: uuid
     AuditFrom:
       name: from
       in: query
@@ -9550,6 +9616,21 @@ components:
         `request_invalid` with `details[].path` = `is_fork`.
       schema:
         type: boolean
+    RunDecisionCountsSince:
+      name: since
+      in: query
+      required: false
+      description: >-
+        Inclusive lower bound on `run.created_at` as an RFC 3339 date-time with seconds and an explicit
+        offset (`Z` or `±hh:mm`, at most seven fraction digits): a run created exactly at `since` is counted,
+        one created a tick earlier is not. The bound is compared at PostgreSQL's microsecond precision, rounded
+        up to the next whole microsecond, so a `since` between two stored instants excludes the earlier run; the
+        response echoes the requested value. Absent means now minus 30 days. A present value that is blank, a
+        bare date, a time alone, without an offset or not a date-time is 422 `request_invalid` with
+        `details[].path` = `since`.
+      schema:
+        type: string
+        format: date-time
     RunState:
       name: state
       in: query
@@ -10907,6 +10988,53 @@ components:
           type: array
           items: { $ref: '#/components/schemas/RunSummary' }
         next_cursor: { type: [string, 'null'] }
+    RunDecisionCounts:
+      type: object
+      additionalProperties: false
+      description: >-
+        Runs of one project created at or after `since`, counted by the verdict
+        of their newest `live` evaluation. A run is counted once, under its
+        latest evidence revision only (an older revision's verdict is
+        superseded), and a `shadow` evaluation never counts. Invariant:
+        `scanned = pass + fail + inconclusive + no_decision`.
+      required: [since, pass, fail, inconclusive, no_decision, scanned, truncated]
+      properties:
+        since:
+          type: string
+          format: date-time
+          description: >-
+            The inclusive lower bound on the run's `created_at` that was applied: the request's `since` as
+            sent (the scan compares it rounded up to the next whole microsecond), or now minus 30 days when it
+            was absent.
+        pass:
+          type: integer
+          minimum: 0
+          description: Runs whose newest live verdict is `PASS`.
+        fail:
+          type: integer
+          minimum: 0
+          description: Runs whose newest live verdict is `FAIL`.
+        inconclusive:
+          type: integer
+          minimum: 0
+          description: Runs whose newest live verdict is `INCONCLUSIVE`.
+        no_decision:
+          type: integer
+          minimum: 0
+          description: >-
+            Scanned runs with no live evaluation (not yet evaluated, or only a
+            `shadow` one).
+        scanned:
+          type: integer
+          minimum: 0
+          description: Runs read, the sum of the four counts above.
+        truncated:
+          type: boolean
+          description: >-
+            `true` when more runs matched than one request scans (5000, newest
+            first), so the counts cover the newest `scanned` runs only and an
+            older window must be asked for with a later `since`. A project
+            with exactly 5000 matching runs is not truncated.
     RunEnvironmentRef:
       type: object
       additionalProperties: false

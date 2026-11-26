@@ -65,7 +65,7 @@ internal sealed class RevokeApiTokenCommandHandler(
             return Result.Failure(Error.PreconditionFailed("the token changed; retry"));
         }
 
-        audit.Describe(new AuditObject("api_token", token.Id.ToString("D")));
+        audit.Describe(new AuditObject("api_token", token.Id.ToString("D"), ProjectId: token.ProjectId));
 
         return Result.Success(StatusCodes.Status204NoContent);
     }

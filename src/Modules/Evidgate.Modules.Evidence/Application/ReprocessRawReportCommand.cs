@@ -191,7 +191,7 @@ internal sealed class ReprocessRawReportHandler(
 
         await EnqueueAsync(command, parsingId, cancellationToken).ConfigureAwait(false);
 
-        return Answered(parsingId, changed: true);
+        return Answered(parsingId, changed: true, source.ProjectId);
     }
 
     /// <summary>Inserts the request row under the natural key; null when a concurrent request won the key.</summary>
@@ -243,11 +243,11 @@ internal sealed class ReprocessRawReportHandler(
     /// The 202 answer: the id the report row will be written under, whether it exists yet or not. An answer that
     /// wrote nothing describes no change to the trail, so the audit entry of the command is dropped instead.
     /// </summary>
-    private Result<ReprocessResponse> Answered(Guid parsingId, bool changed)
+    private Result<ReprocessResponse> Answered(Guid parsingId, bool changed, Guid? projectId = null)
     {
         if (changed)
         {
-            audit.Describe(new AuditObject(AuditObjectType, parsingId.ToString("D")));
+            audit.Describe(new AuditObject(AuditObjectType, parsingId.ToString("D"), ProjectId: projectId));
         }
         else
         {

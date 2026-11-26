@@ -39,6 +39,7 @@ internal static class PolicyModule
         services.TryAddScoped<GetRequiredArtifactKindsQuery>();
         services.TryAddScoped<GetLiveEvaluationsQuery>();
         services.TryAddScoped<GetLatestLiveDecisionsQuery>();
+        services.TryAddScoped<CountLatestLiveDecisionsQuery>();
         services.TryAddScoped<IPolicyContracts, PolicyContracts>();
 
         // The existence read another module's ordering needs: whether a run already holds a stored live verdict. Scoped
