@@ -720,6 +720,8 @@ export const bindReleaseRun = <ThrowOnError extends boolean = false>(options: Op
 
 /**
  * Per-component status + release aggregate (never PASS with a missing component)
+ *
+ * The newest stored aggregate of the release's per-component decisions, or `200` with `decision: pending` and `status: pending` while none exists. A pure read: it writes no row, enqueues no task and never triggers an aggregation; the aggregate is written off the outbox when a live evaluation of a bound run is stored or a run is bound. A component is matched only to a non-replay run bound to it whose recorded digest equals the release's declared digest: an unbound component is `missing` with `component_run_unbound`, a digest that does not match is `missing` with `component_digest_mismatch`, and a component never falls back to the newest run. A missing component is never `PASS`, a `FAIL` on any component is `FAIL`, and components judged under more than one policy revision add `mixed_policy_revisions` and are never `PASS`. An unknown id, another tenant's id, and a release of a project other than the caller's scoped project are the one `404 not_found`.
  */
 export const getReleaseDecision = <ThrowOnError extends boolean = false>(options: Options<GetReleaseDecisionData, ThrowOnError>): RequestResult<GetReleaseDecisionResponses, GetReleaseDecisionErrors, ThrowOnError> => (options.client ?? client).get<GetReleaseDecisionResponses, GetReleaseDecisionErrors, ThrowOnError>({
     security: [{

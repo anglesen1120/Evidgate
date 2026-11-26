@@ -76,6 +76,12 @@ public static class PolicyEndpoints
             .Produces<Decision>(StatusCodes.Status200OK)
             .WithSummary("The run's newest live evaluation, or a pending body while it has none (07.5.2)");
 
+        // The release's stored aggregate: the release is resolved through the Orchestrator contract, the row is this
+        // module's. A pure read; the aggregation itself runs off the outbox, never from this route.
+        group.MapGet("/releases/{id}/decision", GetReleaseDecisionAsync)
+            .Produces<ReleaseDecision>(StatusCodes.Status200OK)
+            .WithSummary("The release's newest aggregated decision, or a pending body while it has none (07.5.3)");
+
         return group;
     }
 
@@ -213,6 +219,12 @@ public static class PolicyEndpoints
         // handler's answers, not this edge's.
         return await mediator.Send(new GetRunDecisionQuery(r), cancellationToken).ConfigureAwait(false);
     }
+
+    private static async Task<Result<ReleaseDecision>> GetReleaseDecisionAsync(
+        Guid id,
+        IMediator mediator,
+        CancellationToken cancellationToken) =>
+        await mediator.Send(new GetReleaseDecisionQuery(id), cancellationToken).ConfigureAwait(false);
 
     private static Error Unauthenticated => new(ApiErrorCode.Unauthenticated, "authentication is required", StatusCodes.Status401Unauthorized);
 

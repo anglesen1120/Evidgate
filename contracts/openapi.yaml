@@ -3078,6 +3078,16 @@ paths:
       operationId: getReleaseDecision
       tags: [decisions]
       summary: Per-component status + release aggregate (never PASS with a missing component)
+      description: >-
+        The newest stored aggregate of the release's per-component decisions, or `200` with `decision: pending` and
+        `status: pending` while none exists. A pure read: it writes no row, enqueues no task and never triggers an
+        aggregation; the aggregate is written off the outbox when a live evaluation of a bound run is stored or a run
+        is bound. A component is matched only to a non-replay run bound to it whose recorded digest equals the
+        release's declared digest: an unbound component is `missing` with `component_run_unbound`, a digest that does
+        not match is `missing` with `component_digest_mismatch`, and a component never falls back to the newest run.
+        A missing component is never `PASS`, a `FAIL` on any component is `FAIL`, and components judged under more than
+        one policy revision add `mixed_policy_revisions` and are never `PASS`. An unknown id, another tenant's id, and a
+        release of a project other than the caller's scoped project are the one `404 not_found`.
       x-permission: decision:read
       x-version: v1
       parameters:
@@ -12051,22 +12061,103 @@ components:
         environment_revision_id:
           type: string
           format: uuid
-    ReleaseDecision:
+    ReleaseComponentDecision:
       type: object
-      description: >-
-        Release decision body of `GET /releases/{id}/decision` (00 §8.5/§9.3). Not reconciled
-        with the run body `Decision`; the release story owns its shape.
+      description: One declared component of a release and what the aggregation found for it.
+      required: [component_id, run_id, evidence_revision, status, decision, reasons]
       properties:
+        component_id:
+          type: string
+          description: The release component's key.
+        run_id:
+          type: [string, 'null']
+          format: uuid
+          description: The run the verdict came from; null when no run matched the component.
+        evidence_revision:
+          type: [integer, 'null']
+          description: '`revision_no` of the frozen evidence revision the run verdict judged; null while missing.'
+        status:
+          type: string
+          enum: [evaluated, missing]
         decision:
           type: [string, 'null']
           enum: [PASS, FAIL, INCONCLUSIVE, null]
-          description: null while pending (00 §9.3); UPPER per 00 §7
-        evaluation_revision:
-          type: string
+          description: Null while the component is missing.
         reasons:
           type: array
           items:
             type: string
+            enum:
+              [
+                component_digest_mismatch,
+                component_run_unbound,
+                component_not_evaluated,
+                component_failed,
+                component_inconclusive,
+                aggregation_bound_exceeded,
+              ]
+    ReleaseDecision:
+      type: object
+      description: >-
+        Body of `GET /releases/{id}/decision`: one shape for an aggregated and a pending release. Every member is
+        required; a pending release has `status: pending` and null in every other member except
+        `release_id`. Aggregated members are copied from one immutable `release_decision` row.
+      required:
+        [
+          status,
+          decision,
+          release_id,
+          id,
+          policy_revision_id,
+          completeness,
+          reasons,
+          components,
+          inputs_hash,
+          created_at,
+        ]
+      properties:
+        status:
+          type: string
+          enum: [pending, aggregated]
+        decision:
+          type: [string, 'null']
+          enum: [PASS, FAIL, INCONCLUSIVE, null]
+          description: null while pending, never a default; UPPER per 00 §7
+        release_id:
+          type: string
+          format: uuid
+        id:
+          type: [string, 'null']
+          format: uuid
+        policy_revision_id:
+          type: [string, 'null']
+          format: uuid
+        completeness:
+          type: [string, 'null']
+          enum: [complete, incomplete, null]
+        reasons:
+          type: [array, 'null']
+          items:
+            type: string
+            enum:
+              [
+                component_digest_mismatch,
+                component_run_unbound,
+                component_not_evaluated,
+                component_failed,
+                component_inconclusive,
+                mixed_policy_revisions,
+                aggregation_bound_exceeded,
+              ]
+        components:
+          type: [array, 'null']
+          items:
+            $ref: '#/components/schemas/ReleaseComponentDecision'
+        inputs_hash:
+          type: [string, 'null']
+        created_at:
+          type: [string, 'null']
+          format: date-time
     Decision:
       type: object
       description: >-

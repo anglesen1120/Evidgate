@@ -32,6 +32,7 @@ internal static class OrchestratorModule
         // The digest-match surface the evaluation path reads (build_mismatch): the stored bindings of a release/run
         // pair and the release components the run does not match, derived on read from the two rows, never stored.
         services.TryAddScoped<IReleaseBindingReader, ReleaseBindingReader>();
+        services.TryAddScoped<IReleaseAggregationReader, ReleaseAggregationReader>();
 
         // The release read's binding section: insertion order over the binding key, so no query here can become a
         // "latest run" join.

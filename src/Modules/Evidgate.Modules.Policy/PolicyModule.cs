@@ -1,4 +1,5 @@
 using Evidgate.BuildingBlocks.Contracts.Validation;
+using Evidgate.BuildingBlocks.Persistence.Outbox;
 using Evidgate.BuildingBlocks.Persistence.Tasks;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.Evaluation;
@@ -7,6 +8,7 @@ using Evidgate.Modules.Policy.Application;
 using Evidgate.Modules.Policy.Application.Evaluation;
 using Evidgate.Modules.Policy.Application.Expiry;
 using Evidgate.Modules.Policy.Application.Queries;
+using Evidgate.Modules.Policy.Application.Releases;
 using Evidgate.Modules.Policy.Contracts;
 using Evidgate.Modules.Policy.Infrastructure.Persistence;
 using Microsoft.Extensions.DependencyInjection;
@@ -71,6 +73,13 @@ internal static class PolicyModule
         services.TryAddScoped<ExceptionsSnapshotResolver>();
         services.TryAddScoped<EvaluateRunCommandHandler>();
         services.AddTaskHandler<EvidenceRevisionFrozenPayload, EvidenceRevisionFrozenTaskHandler>();
+
+        // The release aggregate: a live evaluation (outbox row written with it) and a release bind (this module's own
+        // delivery of the Orchestrator event) both end in one idempotent command. No route resolves the handler.
+        services.TryAddScoped<AggregateReleaseDecisionCommandHandler>();
+        services.AddTaskHandler<EvaluationCreatedPayload, ReleaseAggregateOnEvaluationTaskHandler>();
+        services.AddOutboxSubscription(ReleaseBoundContract.OutboxTaskType, ReleaseAggregateContract.BoundTaskType);
+        services.AddTaskHandler<ReleaseBoundPayload, ReleaseAggregateOnBindTaskHandler>();
 
         // The hourly expiry sweep: a platform task (the scan spans tenants) whose per-org writes run in tenant scopes.
         // Every Worker fires the schedule and the unique fire key elects one row; the Api composes the same module and
