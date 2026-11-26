@@ -138,6 +138,80 @@ public sealed partial class ListRunsTests : IClassFixture<TenancyHostPool>
         OrderedIds(pageOne).Concat(OrderedIds(pageTwo)).Distinct().Count().ShouldBe(3);
     }
 
+    [Fact]
+    public async Task ListRuns_Descending_InsertBetweenTiedPagesKeepsEveryUnseenRow()
+    {
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
+        var tied = await SeedOrderedDecisionRunsAsync(world, 3, tied: true);
+        var newest = await CreateBranchAsync(world, "newest", ShaOne);
+        var first = await ListAsync(world, "order=desc&limit=2");
+        first.Status.ShouldBe(HttpStatusCode.OK, first.ErrorMessage);
+        OrderedIds(first).ShouldBe(new[] { newest, tied[0] }, ignoreOrder: false);
+        var cursor = DecisionCursor(first).ShouldNotBeNull();
+
+        var older = await CreateBranchAsync(world, "older", ShaOne);
+        await _fixture.ExecuteAsync(world.Database,
+            $"update public.run set created_at = timestamptz '2025-12-31T00:00:00Z' where id = '{older:D}'");
+        var second = await ListAsync(world, $"order=desc&limit=2&cursor={Uri.EscapeDataString(cursor)}");
+        second.Status.ShouldBe(HttpStatusCode.OK, second.ErrorMessage);
+        OrderedIds(second).ShouldBe(tied[1..], ignoreOrder: false);
+        var next = DecisionCursor(second).ShouldNotBeNull();
+        var last = await ListAsync(world, $"order=desc&limit=2&cursor={Uri.EscapeDataString(next)}");
+        last.Status.ShouldBe(HttpStatusCode.OK, last.ErrorMessage);
+        OrderedIds(last).ShouldBe(new[] { older });
+        DecisionCursor(last).ShouldBeNull();
+    }
+
+    [Theory]
+    [InlineData("asc", "desc")]
+    [InlineData("desc", "asc")]
+    public async Task ListRuns_CursorFromOppositeOrder_422(string issuedOrder, string otherOrder)
+    {
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
+        await SeedOrderedDecisionRunsAsync(world, 2);
+        var first = await ListAsync(world, $"order={issuedOrder}&limit=1");
+        first.Status.ShouldBe(HttpStatusCode.OK, first.ErrorMessage);
+        var cursor = Uri.EscapeDataString(DecisionCursor(first).ShouldNotBeNull());
+        var next = await ListAsync(world, $"order={issuedOrder}&cursor={cursor}");
+        next.Status.ShouldBe(HttpStatusCode.OK, next.ErrorMessage);
+        OrderedIds(next).ShouldHaveSingleItem();
+        var wrong = await ListAsync(world, $"order={otherOrder}&cursor={cursor}");
+        wrong.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        wrong.ErrorCode.ShouldBe("request_invalid");
+        Details(wrong).ShouldContain(detail =>
+            detail.GetProperty("path").GetString() == "cursor" && detail.GetProperty("reason").GetString() == "malformed");
+        if (issuedOrder == "asc")
+        {
+            DecisionCursor(await ListAsync(world, "limit=1")).ShouldBe(DecisionCursor(first));
+        }
+    }
+
+    [Fact]
+    public async Task ListRuns_Descending_PagesNewestFirstAndIgnoresRowsInsertedAheadOfTheCursor()
+    {
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
+        var newestFirst = (await SeedOrderedDecisionRunsAsync(world, 5)).Reverse().ToArray();
+
+        var first = await ListAsync(world, "order=desc&limit=2");
+        first.Status.ShouldBe(HttpStatusCode.OK, first.ErrorMessage);
+        OrderedIds(first).ShouldBe(newestFirst[..2], ignoreOrder: false);
+        var cursor = DecisionCursor(first).ShouldNotBeNull();
+
+        // A run created after page one is newer than the cursor, so it belongs before it and is not served after it.
+        var ahead = await CreateBranchAsync(world, "ahead", ShaOne);
+        var second = await ListAsync(world, $"order=desc&limit=2&cursor={Uri.EscapeDataString(cursor)}");
+        second.Status.ShouldBe(HttpStatusCode.OK, second.ErrorMessage);
+        OrderedIds(second).ShouldBe(newestFirst[2..4], ignoreOrder: false);
+        var last = await ListAsync(world, $"order=desc&limit=2&cursor={Uri.EscapeDataString(DecisionCursor(second)!)}");
+        OrderedIds(last).ShouldBe(newestFirst[4..], ignoreOrder: false);
+        DecisionCursor(last).ShouldBeNull();
+
+        // Control: a fresh read starts with it, and the default order still starts with the oldest run.
+        OrderedIds(await ListAsync(world, "order=desc&limit=1")).ShouldBe(new[] { ahead });
+        OrderedIds(await ListAsync(world, "order=asc&limit=1")).ShouldBe(new[] { newestFirst[^1] });
+        OrderedIds(await ListAsync(world, "limit=1")).ShouldBe(new[] { newestFirst[^1] });
+    }
+
     /// <summary>AC6: a cursor this endpoint did not issue is 422 <c>request_invalid</c> (<c>cursor</c>, <c>malformed</c>), never a guessed page.</summary>
     [Fact]
     public async Task ListRuns_TamperedCursor_422()
@@ -208,6 +282,10 @@ public sealed partial class ListRunsTests : IClassFixture<TenancyHostPool>
             ("trigger_event", "deploy"),
             ("is_fork", "TRUE"),
             ("is_fork", "1"),
+            ("order", "DESC"),
+            ("order", string.Empty),
+            ("completeness", "pending"),
+            ("completeness", string.Empty),
         ];
 
         foreach (var (parameter, value) in cases)
@@ -223,6 +301,14 @@ public sealed partial class ListRunsTests : IClassFixture<TenancyHostPool>
         (await ListAsync(world, "ref_name=main")).Status.ShouldBe(HttpStatusCode.OK);
         (await ListAsync(world, "head_sha=" + ShaOne)).Status.ShouldBe(HttpStatusCode.OK);
         (await ListAsync(world, "is_fork=false")).Status.ShouldBe(HttpStatusCode.OK);
+        foreach (var query in new[] { "order=desc&order=asc", "completeness=complete&completeness=complete" })
+        {
+            var answer = await ListAsync(world, query);
+            answer.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
+            answer.ErrorCode.ShouldBe("request_invalid");
+            Details(answer).ShouldContain(detail => detail.GetProperty("path").GetString() == query.Split('=')[0]
+                && detail.GetProperty("reason").GetString() == "invalid_value");
+        }
     }
 
     /// <summary>00 §5.2: an unknown project id is 404 <c>not_found</c> (a project that is not visible to this tenant).</summary>
@@ -343,9 +429,12 @@ public sealed partial class ListRunsTests : IClassFixture<TenancyHostPool>
     private static List<JsonElement> Details(ApiAnswer answer) =>
         [.. answer.Body.GetProperty("error").GetProperty("details").EnumerateArray()];
 
-    /// <summary>The project's run ids in the database's own <c>(created_at, id)</c> order.</summary>
-    private async Task<string[]> OrderedIdsAsync(RunCreationTests.World world) =>
-        (await _fixture.ScalarAsync<string>(
+    /// <summary>The project's run ids in the database's own order: <c>(created_at, id)</c>, or newest first with <c>id</c> still ascending.</summary>
+    private async Task<string[]> OrderedIdsAsync(RunCreationTests.World world, bool descending = false)
+    {
+        var direction = descending ? " desc" : string.Empty;
+        return (await _fixture.ScalarAsync<string>(
             world.Database,
-            $"select string_agg(id::text, ',' order by created_at, id) from public.run where project_id = '{world.Project:D}'")).Split(',');
+            $"select string_agg(id::text, ',' order by created_at{direction}, id) from public.run where project_id = '{world.Project:D}'")).Split(',');
+    }
 }

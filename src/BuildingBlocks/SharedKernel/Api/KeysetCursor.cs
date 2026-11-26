@@ -9,14 +9,41 @@ namespace Evidgate.BuildingBlocks.SharedKernel.Api;
 /// <c>&lt;utc ticks in hex&gt;-&lt;uuid&gt;</c>. It is opaque to clients — no
 /// meaning is promised beyond "hand it back verbatim" — and it decodes to typed
 /// values so the SQL never compares a client string against a timestamp.
+/// <para>
+/// A list that can also be read newest-first issues <see cref="EncodeDescending"/> cursors: the same pair behind a
+/// <c>d.</c> marker, which <see cref="TryDecode"/> never accepts (the <c>.</c> is no part of the hex ticks) and
+/// <see cref="TryDecodeDescending"/> requires, so a cursor is only ever valid under the order that issued it.
+/// </para>
 /// </summary>
 public static class KeysetCursor
 {
+    private const string DescendingMarker = "d.";
+
     /// <summary>Encodes one row's keyset position.</summary>
     public static string Encode(DateTimeOffset createdAt, Guid id) =>
         string.Create(
             CultureInfo.InvariantCulture,
             $"{createdAt.UtcTicks:x16}-{id:D}");
+
+    /// <summary>Encodes one row's keyset position for a list read in descending order.</summary>
+    public static string EncodeDescending(DateTimeOffset createdAt, Guid id) =>
+        DescendingMarker + Encode(createdAt, id);
+
+    /// <summary>
+    /// Decodes a cursor issued by <see cref="EncodeDescending"/>; false for an ascending cursor or anything this
+    /// codec did not produce.
+    /// </summary>
+    public static bool TryDecodeDescending(string? cursor, out DateTimeOffset createdAt, out Guid id)
+    {
+        if (cursor is not null && cursor.StartsWith(DescendingMarker, StringComparison.Ordinal))
+        {
+            return TryDecode(cursor[DescendingMarker.Length..], out createdAt, out id);
+        }
+
+        createdAt = default;
+        id = default;
+        return false;
+    }
 
     /// <summary>
     /// Decodes a cursor. False for anything this codec did not produce — the caller

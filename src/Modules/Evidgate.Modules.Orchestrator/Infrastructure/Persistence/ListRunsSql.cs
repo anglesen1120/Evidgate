@@ -6,9 +6,14 @@ namespace Evidgate.Modules.Orchestrator.Infrastructure.Persistence;
 /// <summary>
 /// The Dapper statements of the run list (00 §5.5 C5): one parameterised statement per page shape, keyset-paged on
 /// <c>(created_at, id)</c> over <c>run_project_ref_idx</c> when <c>ref_name</c> is filtered, and built from fixed
-/// fragments chosen by the filter shape — a filter value is always a parameter, never concatenated into the text.
-/// The two page shapes and the fragments are <c>internal</c> so <c>ListRunsIndexPlanTests</c> can run
-/// <c>EXPLAIN</c> over the exact statement the handler executes (AC6, §8 P2).
+/// fragments chosen by the filter shape and the order — a filter value is always a parameter, never concatenated
+/// into the text. Descending is <c>created_at desc, id</c>, which is exactly the key order of
+/// <c>run_project_created_idx (org_id, project_id, created_at desc, id)</c>, so the project list reads that index
+/// forward with no sort; its cursor bound is a <c>created_at &lt;=</c> range (the index condition) plus the
+/// tie-break filter. With <c>ref_name</c> the planner reads <c>run_project_ref_idx</c> backward and settles equal
+/// <c>created_at</c> groups with an incremental sort, never a full one. The page shapes and the fragments are
+/// <c>internal</c> so <c>ListRunsIndexPlanTests</c> can run <c>EXPLAIN</c> over the exact statement the handler
+/// executes (AC6, §8 P2).
 /// </summary>
 internal static class ListRunsSql
 {
@@ -45,28 +50,40 @@ internal static class ListRunsSql
     /// <summary>The project's liveness, for the project-existence check (unknown, other tenant, soft-deleted → 404).</summary>
     internal const string ProjectExists = "select 1 from public.project where id = @project_id and status <> 'deleted'";
 
-    /// <summary>First page of a project's runs, oldest first.</summary>
-    internal static string FirstPage(RunListFilters filters) => $"""
+    /// <summary>First page of a project's runs in the chosen order (oldest first by default).</summary>
+    internal static string FirstPage(RunListFilters filters, RunListOrder order = RunListOrder.Ascending) => $"""
         select {Columns}
           from public.run r{EvidenceJoin}
          where r.org_id = @org_id
            and r.project_id = @project_id{Where(filters)}
-         order by r.created_at,
-                  r.id
+         order by {OrderBy(order)}
          limit @limit
         """;
 
     /// <summary>The next page: the same projection and order with the row-comparison cursor (00 §9.1).</summary>
-    internal static string NextPage(RunListFilters filters) => $"""
+    internal static string NextPage(RunListFilters filters, RunListOrder order = RunListOrder.Ascending) => $"""
         select {Columns}
           from public.run r{EvidenceJoin}
          where r.org_id = @org_id
            and r.project_id = @project_id{Where(filters)}
-           and (r.created_at, r.id) > (@cursor_created_at::timestamptz, @cursor_id::uuid)
-         order by r.created_at,
-                  r.id
+           {CursorPredicate(order)}
+         order by {OrderBy(order)}
          limit @limit
         """;
+
+    private static string OrderBy(RunListOrder order) => order == RunListOrder.Descending
+        ? "r.created_at desc,\n                  r.id"
+        : "r.created_at,\n                  r.id";
+
+    /// <summary>
+    /// The position past the cursor in the page's order. The descending form states the leading <c>created_at &lt;=</c>
+    /// bound separately because a row comparison cannot mix directions, and a bare <c>or</c> would not be an index
+    /// condition; the second line then only decides the rows tied on <c>created_at</c>.
+    /// </summary>
+    private static string CursorPredicate(RunListOrder order) => order == RunListOrder.Descending
+        ? "and r.created_at <= @cursor_created_at::timestamptz"
+          + "\n           and (r.created_at < @cursor_created_at::timestamptz or r.id > @cursor_id::uuid)"
+        : "and (r.created_at, r.id) > (@cursor_created_at::timestamptz, @cursor_id::uuid)";
 
     /// <summary>
     /// The parameters the chosen statement declares, one per filter that is present — never an extra one, because
@@ -126,6 +143,11 @@ internal static class ListRunsSql
             parameters.Add("parent_run_id", filters.ParentRunId.Value);
         }
 
+        if (filters.Completeness is not null)
+        {
+            parameters.Add("completeness", filters.Completeness);
+        }
+
         if (cursorCreatedAt is not null)
         {
             parameters.Add("cursor_created_at", cursorCreatedAt.Value);
@@ -142,11 +164,12 @@ internal static class ListRunsSql
     /// column is qualified with the <c>r</c> alias because <see cref="EvidenceJoin"/> brings a second relation into
     /// scope. <c>decision</c> is deliberately absent — it is Policy data, filtered by the handler's chunked scan.
     /// The fragments are predicates of the statement that carries them, so they narrow the rows the page is cut
-    /// from, never a page already read.
+    /// from, never a page already read. <c>completeness</c> is the one predicate on the joined revision: a run
+    /// with no current revision has a null there and matches neither value.
     /// </summary>
     private static string Where(RunListFilters filters)
     {
-        var fragments = new List<string>(8);
+        var fragments = new List<string>(9);
         if (filters.RefName is not null)
         {
             fragments.Add("and r.ref_name = @ref_name");
@@ -185,6 +208,11 @@ internal static class ListRunsSql
         if (filters.ParentRunId is not null)
         {
             fragments.Add("and r.parent_run_id = @parent_run_id");
+        }
+
+        if (filters.Completeness is not null)
+        {
+            fragments.Add("and er.completeness = @completeness");
         }
 
         return fragments.Count == 0 ? string.Empty : "\n   " + string.Join("\n   ", fragments);

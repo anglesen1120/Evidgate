@@ -455,7 +455,8 @@ public static class OrchestratorEndpoints
 
     /// <summary>
     /// <c>GET /v1/projects/{p}/runs</c> (05.2.2 §5, AC6; F43 filters S143): the project's runs in <c>(created_at, id)</c>
-    /// order, narrowed by the run's recorded identity and its state/decision/rerun labels. The delegate only binds and
+    /// order — or newest first with <c>order=desc</c> — narrowed by the run's recorded identity, its state/decision/rerun
+    /// labels and its current revision's <c>completeness</c>. The delegate only binds and
     /// validates the 00 §9.1 query parameters — <c>limit</c> (1–200), an opaque <c>cursor</c>, and the five identity
     /// filters <c>ref_name</c>, <c>pr_number</c>, <c>head_sha</c>, <c>trigger_event</c>, <c>is_fork</c> plus the four
     /// F43 filters <c>state</c>, <c>decision</c>, <c>rerun_scope</c>, <c>parent_run_id</c>; the handler owns
@@ -581,12 +582,19 @@ public static class OrchestratorEndpoints
             parentRunId = parsedParentRunId;
         }
 
+        if (RunListQueryBinding.Bind(query, out var order, out var completeness) is { } bindError)
+        {
+            return Result.Failure<RunPage>(bindError);
+        }
+
         return await mediator.Send(
             new ListRunsQuery(
                 p,
-                new RunListFilters(refName, prNumber, headSha, triggerEvent, isFork, state, decision, rerunScope, parentRunId),
+                new RunListFilters(
+                    refName, prNumber, headSha, triggerEvent, isFork, state, decision, rerunScope, parentRunId, completeness),
                 Blank(query["cursor"]),
-                limit),
+                limit,
+                order),
             cancellationToken).ConfigureAwait(false);
     }
 
