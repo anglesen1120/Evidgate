@@ -904,6 +904,18 @@ public sealed partial class TenantGucTests
             ("org_id", orgId),
             ("project_id", projectId));
 
+        // The provider-call redaction report (migration 0136): one row, so the zero-rows check has data to hide.
+        await scope.ExecuteAsync(
+            """
+            insert into public.healing_redaction_report
+                (id, org_id, project_id, purpose, rule_version, report, report_hash)
+            values (@id, @org_id, @project_id, 'authoring_generation', 'probe-v1', '{}'::jsonb, @hash)
+            """,
+            ("id", Guid.CreateVersion7()),
+            ("org_id", orgId),
+            ("project_id", projectId),
+            ("hash", "sha256:" + new string('a', 64)));
+
         // The release tables (migration 0072): one draft release with one component bound to the
         // environment revision seeded above, and one release_run bound to the run seeded above. The draft
         // state is what lets the component INSERT through the trigger; the release is created by the

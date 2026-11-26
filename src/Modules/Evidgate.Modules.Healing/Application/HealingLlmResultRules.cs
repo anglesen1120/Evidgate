@@ -19,7 +19,10 @@ internal static class HealingLlmResultRules
     /// <param name="result">What the adapter reported for one attempt.</param>
     /// <returns>The result the gateway records and counts.</returns>
     internal static HealingLlmResult Recordable(HealingLlmResult result) =>
-        HealingLlmStatuses.IsKnown(result.Status) && result.Tokens >= 0 && IsRecordableCost(result.Cost)
+        HealingLlmStatuses.IsKnown(result.Status)
+        && result.Status != HealingLlmStatuses.BlockedLeak
+        && result.Tokens >= 0
+        && IsRecordableCost(result.Cost)
             ? result
             : new HealingLlmResult(HealingLlmStatuses.Error, null, 0, 0m);
 
