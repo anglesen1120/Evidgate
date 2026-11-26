@@ -69,6 +69,10 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
         // member. Its shape, redaction and permission are asserted in Tenancy.IntegrationTests' HealingSwitchEndpointTests.
         "/v1/healing/switch",
 
+        // The scan caller lacks healing:triage. The isolation API suite reads the real objects as a QA engineer.
+        "/v1/projects/{p}/incidents",
+        "/v1/incidents/{i}",
+
         // 13.1.1-T3's authoring version detail: it only answers for a version id this suite does not have (a version
         // exists only after an authoring write, and authoring rows are Tenancy.IntegrationTests' subject). The timeline
         // list is scanned.

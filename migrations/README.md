@@ -1271,3 +1271,8 @@ target)` and `session_revoke_audit_append(org, actor, object_type, object_id, me
 - Grants: `evidgate_app` holds SELECT + INSERT and a column-scoped `UPDATE (state, context_state, version, updated_at)` on `incident`, SELECT + INSERT on `incident_attempt`; no worker or operator role holds a standing grant. Both tables have RLS forced with `TO evidgate_app` and `TO evidgate_owner` policies.
 - Accepted residuals: the triggers are normal row triggers, so a superuser using `session_replication_role = replica`, or the table owner disabling or dropping a trigger, bypasses them; the app role cannot. `healing_llm_call.incident_id` stays unconstrained until a later migration adds its composite FK to `public.incident`.
 - Deploy: the migration before the recorder ships. Rollback: drop `incident_attempt`, then `incident`, then the four functions; no other table changes.
+
+## Notes on the incident read view (`0123`)
+
+- `public.incident_list` uses `security_invoker` to preserve the caller's RLS on incidents and retries. Only the app role gets a standing `SELECT` grant. The attempt count includes the first failure stored on `incident`; the page uses `0122`'s `(org_id, project_id, created_at DESC, id ASC)` index.
+- Deploy before enabling incident reads. To roll back, stop serving those reads and drop the view; no base rows or indexes change.

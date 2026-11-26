@@ -270,6 +270,8 @@ public static partial class IsolationRouteCases
         {
             var bp = b.Projects[i];
             var ap = a.Projects[i];
+            walks.Add(new(Get("/v1/projects/{p}/incidents"), $"org B project {bp.Slug} incidents", HealingTriageCaller(world),
+                $"/v1/projects/{bp.Id}/incidents?limit=1", "id", Fixed(bp.IncidentIds), TriageCallerOf(a, "A"), $"/v1/projects/{ap.Id}/incidents?limit=1"));
             walks.Add(new(Get("/v1/projects/{p}/ci-bindings"), $"org B project {bp.Slug} bindings", bAdmin, $"/v1/projects/{bp.Id}/ci-bindings?limit=1", "id",
                 Fixed(bp.BindingIds), aAdmin, $"/v1/projects/{ap.Id}/ci-bindings?limit=1"));
             walks.Add(new(Get("/v1/projects/{p}/ingest-tokens"), $"org B project {bp.Slug} ingest tokens", bAdmin, $"/v1/projects/{bp.Id}/ingest-tokens?limit=1", "id",
@@ -1020,6 +1022,7 @@ public static partial class IsolationRouteCases
         QuarantineRemoveCase(),
         ProjectCase("GET", "/v1/projects/{p}/quarantine", p => new(HttpMethod.Get, $"/v1/projects/{p}/quarantine"), list: true),
 
+        .. IncidentCases(),
         // ---- Healing switch (HealingEndpoints.cs; 08.6.3-T1) ----------------------------------------------------
         HealingSwitchReadCase(),
         HealingSwitchSetCase(),
