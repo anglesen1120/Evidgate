@@ -25,13 +25,10 @@
 // A direct page or a feature-specific table takes precedence over the area's placeholder table.
 // The source registry remains the owner of every entry's URL, phase and permission.
 //
-// The entry's own guards are NOT changed by that override: `phaseGuard` and
-// `permissionGuard(entry.permission)` run before the shell table exactly as they do for every other
-// entry. Which code the `settings` sidebar row demands is the registry's decision (today
-// `organization:read`), so a session that lacks it is refused on the entry with `/forbidden` before
-// any tab route is attempted; the per-tab decision of plan 09.7.1 §5 starts from a caller who may
-// open Settings at all. Replacing the entry gate with the tab gates would be a navigation-registry
-// change (the sidebar shows the entry under the same code), not a change to this table.
+// The entry's own guards run before the shell table exactly as they do for every other entry, with
+// one addition: Settings also opens for a caller that holds any tab's own code (`entryAlternative`),
+// so a role with `membership:read` but no `organization:read` reaches its Members tab. A caller with
+// neither is still refused on the entry with `/forbidden`.
 
 import type { Type } from '@angular/core';
 import type { Route, Routes } from '@angular/router';
@@ -49,6 +46,7 @@ import {
 } from './core/guards';
 import type { NavEntry } from './shell/nav/nav.models';
 import { NAV_ENTRIES } from './shell/nav/nav-registry';
+import { availableSettingsTabs } from './features/settings/settings-tabs';
 
 /**
  * The lazy route table of each `features/<area>` folder. A registry row whose `area` is not named
@@ -116,6 +114,16 @@ function areaRoutesOf(entry: NavEntry): () => Promise<Routes> {
 }
 
 /**
+ * Settings holds tabs with their own grants, so a caller with one tab (and no `organization:read`)
+ * still opens it; the tab guards decide what renders inside.
+ */
+function entryAlternative(
+  entry: NavEntry,
+): ((has: (code: string) => boolean) => boolean) | undefined {
+  return entry.id === 'settings' ? (has) => availableSettingsTabs(has).length > 0 : undefined;
+}
+
+/**
  * One navigation entry as a route: the registry's segment, the phase gate and then the permission
  * gate (both `CanMatchFn`, so a refusal never instantiates the page), and the entry id the page
  * reads its label from. The page comes from `ENTRY_PAGES` when the entry has a real screen, else
@@ -126,7 +134,7 @@ function entryRoute(entry: NavEntry): Route {
   const table = ENTRY_ROUTES[entry.id];
   const common = {
     path: entry.segment,
-    canMatch: [phaseGuard(entry), permissionGuard(entry.permission)],
+    canMatch: [phaseGuard(entry), permissionGuard(entry.permission, entryAlternative(entry))],
     data: { entryId: entry.id },
   };
   if (page !== undefined) {

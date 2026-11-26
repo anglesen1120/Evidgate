@@ -25,6 +25,9 @@ import {
 } from './support';
 
 /** Every G1 entry of the registry: URL below `/orgs/:orgId` and the code its route requires. */
+/** The G1 Settings tabs' own read codes (`settings-tabs.ts`). */
+const SETTINGS_TAB_CODES = ['membership:read', 'usage:read', 'audit:read'] as const;
+
 const G1_ENTRIES = [
   { segment: 'authoring', scope: 'project', permission: 'authoring:read' },
   { segment: 'generation', scope: 'project', permission: 'authoring:generate' },
@@ -144,12 +147,18 @@ test.describe('AC4 — every guarded G1 route against both corpus grant sets', (
         );
 
         const rendered = await outcome(page);
-        const granted = (codes as readonly string[]).includes(entry.permission);
+        // Settings also opens for a caller holding a G1 tab's own read and then lands on that
+        // tab, so only a set with neither organization:read nor a tab code is refused.
+        const tabOpens =
+          entry.segment === 'settings' &&
+          SETTINGS_TAB_CODES.some((code) => (codes as readonly string[]).includes(code));
+        const granted = (codes as readonly string[]).includes(entry.permission) || tabOpens;
         if (granted) {
           // Reached: the address is unchanged and neither pattern rendered.
-          expect(rendered.pathname, `${entry.segment} (${entry.permission}) should match`).toBe(
-            `/en${path}`,
-          );
+          const reached = tabOpens
+            ? rendered.pathname.startsWith(`/en${path}/`)
+            : rendered.pathname === `/en${path}`;
+          expect(reached, `${entry.segment} (${entry.permission}) should match`).toBe(true);
           expect(rendered.forbidden, `${entry.segment} rendered 403`).toBe(0);
           expect(rendered.notFound, `${entry.segment} rendered 404`).toBe(0);
           expect(rendered.heading.length, `${entry.segment} has no heading`).toBeGreaterThan(0);
@@ -419,8 +428,13 @@ test.describe('history after a guard redirect', () => {
       'Storefront web',
     );
 
-    // `settings` needs `organization:read`, which the limited set lacks.
-    await page.goto(withVariant(localePath('en', `/orgs/${ORG_ACME}/settings`), LIMITED_GRANTS));
+    // `settings` needs `organization:read` or one tab's own read; this set holds neither.
+    await page.goto(
+      withVariant(
+        localePath('en', `/orgs/${ORG_ACME}/settings`),
+        '?fixture.variant.listPermissions=onboarding-no-writes',
+      ),
+    );
     await expect.poll(() => new URL(page.url()).pathname).toBe('/en/forbidden');
 
     await page.goBack();
