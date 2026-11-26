@@ -116,7 +116,7 @@ Plus: a **per-project shadow window** of 2–4 weeks (proposals labelled, measur
 ### 6.5 One developer, growing scope
 
 - Phase gates (§5) are hard stops.
-- One engine (Playwright), one CI (GitHub Actions), one model provider behind the gateway (08.5.1, 08.5.5).
+- One engine (Playwright), customer CI (any provider, project ingest token), one model provider behind the gateway (08.5.1, 08.5.5).
 - G1 reuses Tenancy, Identity and Catalog; G2 reuses the CLI, `adapter-playwright` and Evidence.
 - Deferred work (§3) stays frozen until G4, except the data-protection items named in §3.
 

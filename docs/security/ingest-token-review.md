@@ -1,5 +1,8 @@
 # Ingest-token and CI producer token security design review
 
+> **Scope (owner 2026-11-27):** GitHub login, repository bindings, provider OIDC exchange and inbound repository webhooks described in the dated evidence below are historical; removed by D-NO-GITHUB. Their findings and event sources do not specify new integration work. Project ingest-token and session controls still apply.
+
+
 Owner: 11.2.1-T3.1 and 11.2.1-T3.2 (task [11.2.1](../../plans/features/11-security-compliance/11.2.1-a-fork-pull-request-cannot-reach.md), AC6). This page reviews what the code on `develop` at `96e0f17` actually does for the two CI credentials: the tenant **ingest token** (`egt_<prefix>_<secret>`) and the minted **`ci_producer` JWT**. It records the controls that exist, dispositions every abuse case against them, and files only the gaps that are not already recorded elsewhere.
 
 Legend: ✅ verified with a file:line · ⚠️ unverified · `[INFERENCE]` · `[DECISION]` · `[OPEN]`. Every line number below was read in this worktree at `96e0f17` (`git rev-parse --short HEAD`) and re-read on 2026-11-09 at `fac4c9a1`, when the CI event allowlist replaced the deny list; the `GitHubOidc.cs`, `CiAuthOptions.cs`, `CiSecrets.cs`, `CiAuthTests.cs` and `infra/config-matrix.json` cites are current as of `fac4c9a1`; paths are repository-relative. "Verified" is a statement about the code at that line in this session, not about a test run: no build, test, lint or formatter was executed for this page.

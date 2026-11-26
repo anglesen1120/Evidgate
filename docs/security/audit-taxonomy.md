@@ -77,6 +77,9 @@ Legend: ✅ verified with a file:line or link · ⚠️ unverified · `[INFERENC
 
 ## 3. V1 action catalogue
 
+> **Scope (owner 2026-11-27):** GitHub login, repository bindings, provider OIDC exchange and inbound repository webhooks described in the dated evidence below are historical; removed by D-NO-GITHUB. Their findings and event sources do not specify new integration work. Project ingest-token and session controls still apply.
+
+
 Current source inventory (measured 2026-11-21 with `rg -o '\[AuditedAction\(' -g '*.cs' -g '!**/bin/**' -g '!**/obj/**'`): **88 attribute occurrences under `src/`, 89 repository-wide** (the extra one is the test fixture), covering **85 distinct quoted literals (87 distinct actions once the two constant-valued attributes, `run.cancel` and `run.finalize`, are resolved)**. An attribute occurrence is not an emit site: one action can carry two attributes, and the direct SQL paths below carry none. The snapshot this catalogue was built from, develop `4d1a7aa`, held **64 actions / 65 emit sites** (`artifact.mint` has two sites). The per-module totals and the first table of this section record that snapshot; later actions are in "Additions after the `4d1a7aa` snapshot", whose row numbers repeat two numbers of the snapshot table (a pre-existing quirk kept so no cite above shifts). Not every current literal has a row here yet: the catalogue is extended as actions land, so an absent row is a known gap, not evidence that the code does not audit it. One row per emitted action; the emit site is the line that decides the action (`[AuditedAction]`, or the `Record`/`WriteAsync` call on a direct path). An object cite written as `:NNN` is a line in the same file as the emit site. Rows 30–31 are the post-snapshot exception: `0101` moved their emit site into `evidgate_resolve.login_link_identity_audited` (see "Additions after the `4d1a7aa` snapshot").
 
 The module totals below are the `4d1a7aa` snapshot and do not cover the later additions.

@@ -52,7 +52,7 @@
 | D7 | Soft stop then kill, with a durable cancel request row | Agents and CI shards cannot be trusted to stop instantly (source §5) | Mark the run canceled and drop the workers |
 | D8 | Releases are bound by digest match, never by recency | The source explicitly forbids joining the "latest" run (source §5) | Pick the newest run per component |
 | D9 | Android device lease is exclusive, V2 and **conditional** on a paying need | Device reset/port limits are not isolatable otherwise (source §4); 00 §1.3 keeps it out of V1; the mobile producer (`adapter-mobile`, mobilewright / mobile-mcp) ships at G4 only after the 13.7.1 go / no-go memo | Shared devices with app reset only |
-| D10 | iOS stays a placeholder with rough sizes; hosted browser runs are G2 (13.11) | No macOS pool decision yet; hosted execution is decided by 05.9.2-T1 and built by 13.11 (A5) | Design them now |
+| D10 | iOS stays a placeholder with rough sizes; hosted browser runs are G2 (13.11) | No macOS pool decision yet. 05.9.2-T1 confirms the accepted hosted-runner defaults; 13.11 builds the executor (A5). | Design them now |
 
 ## 4. Design
 
@@ -187,11 +187,11 @@
 #### Story 05.2.2 Branch, PR and commit identity of a run — acceptance: a run records the branch or PR, head and base commit, trigger event and fork flag it was created for; the run list filters by them; a fork run is labelled, advisory-only and never bound to a release; none of these fields can change after creation. [PROPOSAL review 2026-10-02 D1]
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 05.2.2-T1 | `run` columns `ref_kind` (`branch`/`tag`/`pull_request`), `ref_name`, `pr_number`, `head_sha`, `base_sha`, `trigger_event` (`push`/`pull_request`/`schedule`/`manual`/`dispatch`), `is_fork`; taken from CLI-supplied, producer-declared values and recorded with `ref_provenance = declared`; immutable after run creation; `[OPEN]` whether a declared default-branch ref may gate (OI-02-35 vs D-A11: `unverified_ref = true` never gates, so today it cannot); OpenAPI + 00 §7 change first | M | V1 | G2 | 05.2.1-T1 |
+| 05.2.2-T1 | `run` columns `ref_kind` (`branch`/`tag`/`pull_request`), `ref_name`, `pr_number`, `head_sha`, `base_sha`, `trigger_event` (`push`/`pull_request`/`schedule`/`manual`/`dispatch`), `is_fork`; producer-declared, never verified and immutable after creation. A non-fork run on the declared default branch may gate with provenance `declared` recorded on the decision; `unverified_ref` is a provenance flag only (OI-02-39; D-A10/D-A11). Missing required evidence never yields PASS; OpenAPI + 00 §7 change first | M | V1 | G2 | 05.2.1-T1 |
 | 05.2.2-T2 | Run list and read model: filter by `ref_name`, `pr_number`, `trigger_event`, `is_fork`; keyset index `(project_id, ref_name, created_at, id)` | S | V1 | G2 | 05.2.2-T1 |
 | 05.2.2-T3 | Fork-PR behaviour: `is_fork = true` runs are labelled, advisory-only, never bound to a release (05.6.1) and never satisfy a gating policy; the token path for forks is documented as unsupported or advisory-only (02.4.2) | M | V1 | G2 | 05.2.2-T1, 02.4.1-T3 |
 
-**Story 05.2.2 total: 2.5** — branch-scoped policy mode decided (DECISIONS §8.1 D-A10, D-A11: `gating_refs`; unverified and fork runs advisory); 07 implements it, this story supplies the inputs.
+**Story 05.2.2 total: 2.5** — branch-scoped policy mode decided (DECISIONS §8.1 D-A10, D-A11: `gating_refs`; declared default-branch runs may gate; forks are advisory-only); 07 implements it, this story supplies the inputs.
 
 ### Epic 05.3 Lifecycle, finalize and reconcile
 #### Story 05.3.1 Run state machine — acceptance: only the transitions of 00 §8.1 are accepted, each writes audit + outbox, and a stale `version` write fails 412.
@@ -293,9 +293,9 @@
 #### Story 05.9.2 Hosted runner spike — acceptance: a written options note (isolation, inbound networking, cost) with a decision proposal. (rough)
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 05.9.2-T1 | Spike: hosted-runner options and the security implications of inbound execution (rough) | M | V3 | G2 | 11.2.1-T5 |
+| 05.9.2-T1 | Confirm the accepted hosted-runner defaults with isolation, egress, teardown and image evidence; measure startup, runtime and cost per runner-minute to inform monthly plan allowances (OI-13-806/811–813) | M | V3 | G2 | 11.2.1-T5 |
 
-05.9.2-T1 is the decision input for 13.11 (executor isolation, cost).
+05.9.2-T1 supplies the isolation and cost evidence required before 13.11.1-T5. It validates the accepted defaults; only the per-plan minute limits await the cost measurements.
 
 ### Epic 05.10 Periodic consistency jobs
 #### Story 05.10.1 Detect and repair drift — each sweeper is a Cronos schedule with a unique `(schedule_name, fire_at)` fire key in the `task` table (00 §5.3); acceptance: a stuck run and an expired lease are each detected within one sweep interval, repaired idempotently, and audited; no business logic is re-run by a repair.

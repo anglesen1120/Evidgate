@@ -1,5 +1,8 @@
 # ASVS L2 mapping v1
 
+> **Scope (owner 2026-11-27):** GitHub login, repository bindings, provider OIDC exchange and inbound repository webhooks described in the dated evidence below are historical; removed by D-NO-GITHUB. Their findings and event sources do not specify new integration work. Project ingest-token and session controls still apply.
+
+
 Version: v1. Status: published by 11.1.1-T3 at chapter level; requirement-level evidence and re-verification belong to 11.7.1-T5. Date: 2026-10-27. Owner: the solo founder (Tech Lead = QA/PO, O2 — [`plans/00-overview.md:531`](../../plans/00-overview.md)). Code state reviewed: develop `bdbad81` (this worktree); the one exception is ASVS-GAP-14, whose S102 evidence was read on the 02.3.2-T2 branch and is now merged in develop (#228, 787f592), and whose 7.4.5 closure was added from the 02.3.2-T3 worktree (migration `0085`); task [11.1.1-T3 and T4](../../plans/features/11-security-compliance/11.1.1-a-living-threat-model-acceptance-v1.md).
 
 Legend: ✅ verified with a file:line or link · ⚠️ unverified · `[INFERENCE]` · `[DECISION]` · `[OPEN]`. Every file:line below was read on the reviewed commit; a line number that no longer matches the file voids the claim above it.

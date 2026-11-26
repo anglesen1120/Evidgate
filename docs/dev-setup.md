@@ -307,8 +307,7 @@ manifest line up.
 
 Without `--with-token`, no token is seeded: the seed writes the tenant, the
 catalog suite and the environment revision only, and a token has to come from
-`POST /v1/projects/{p}/ingest-tokens` once a session exists (02.3.x) or from the
-seeded CI binding with a GitHub OIDC token.
+`POST /v1/projects/{p}/ingest-tokens` once an authorized session exists (02.3.x).
 
 ## The dev tenant (`seed-dev`)
 
@@ -317,9 +316,9 @@ after the application-role grants, because the seed writes through that role
 (skip it with `EVIDGATE_DB_INIT_SEED=0`). It writes, idempotently and in one
 transaction as the owner role, a synthetic tenant: org `dev-org`, project
 `dev-project`, a dev user (`0198a000-0000-7000-8000-00000000d003`, signed in through
-the development sign-in below) holding `tenant_admin` and `release_approver`, and one
-**active** CI binding for
-the synthetic repository id `9000000000001` (`evidgate-dev/sample`). It refuses, writing
+the development sign-in below) holding `tenant_admin` and `release_approver`.
+The pre-cutover seed also creates a synthetic repository binding. That fixture is removed by
+D-NO-GITHUB (02.11.1); it is not a supported authentication method. The seed refuses, writing
 nothing, unless `DOTNET_ENVIRONMENT=Development` and both database hosts are local or
 bare compose service names. The data is fully synthetic.
 

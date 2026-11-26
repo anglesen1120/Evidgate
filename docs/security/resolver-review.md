@@ -1,5 +1,8 @@
 # `SECURITY DEFINER` review of every schema
 
+> **Scope (owner 2026-11-27):** GitHub login, repository bindings, provider OIDC exchange and inbound repository webhooks described in the dated evidence below are historical; removed by D-NO-GITHUB. Their findings and event sources do not specify new integration work. Project ingest-token and session controls still apply.
+
+
 Owner: 11.2.1-T7 / T7.1 (task [11.2.1](../../plans/features/11-security-compliance/11.2.1-a-fork-pull-request-cannot-reach.md), AC5; plan 11 row `plans/11-security-compliance.md:216`). This page reviews every `SECURITY DEFINER` function that exists after the last migration on `develop` at `dc261514`, plus the one `0085` definer added later by 02.3.2-T3 (read in its own migration): pinned `search_path`, return shape, `EXECUTE` grants, audit per call, and an abuse-case matrix with the test that proves each case or a named gap. Format follows [`ingest-token-review.md`](ingest-token-review.md) (11.2.1-T3, #225).
 
 Legend: ✅ verified with a file:line · ⚠️ unverified · `[INFERENCE]` · `[DECISION]` · `[OPEN]`. Every line number was read in the review worktree at `dc261514` (`git rev-parse --short HEAD`); paths are repository-relative. "Verified" is a statement about the migration or test text at that line: nothing here was run against a database, no timing was measured, and no code, migration or test was changed (plan §3: a gap is a change request, not an edit).

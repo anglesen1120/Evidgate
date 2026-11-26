@@ -2,7 +2,7 @@
 
 > Contracts: `00-overview.md` §3 (glossary: case, test revision, suite revision, variant, capability), §5.4 (tenancy), §7 (identifiers, hashes), §8 (states), §9 (API). Facts: `../DECISIONS.md` §3 A2/A4, §4 (stack, engines), §5 (safe-healing rules), §6 F1/F9, §9 R3. Source: design §4 (Test creation and management), §6 (Data model), §8 (Security and permission boundaries).
 > Level: high-level plan; each story gets a detailed plan in `plans/features/` (00 §12) before build.
-> **Phases (CR-D-2):** the Milestone column holds the CR-D-2 phase (G1–G4) from [13 §4.4](13-product-phases.md); M0–M5 in this plan's prose refers to the pre-CR-D-2 sequence. Phase totals (raw): G1 11 · G2 5 · G3 4.5 · G4 12.5 person-days.
+> **Phases (CR-D-2):** the Milestone column holds the CR-D-2 phase (G1–G4) from [13 §4.4](13-product-phases.md); M0–M5 in this plan's prose refers to the pre-CR-D-2 sequence. Phase totals (raw): G1 11 · G2 6 · G3 4.5 · G4 12.5 person-days.
 ## 1. Purpose and scope
 
 **Goal.** Keep test identity stable across renames and imports; pin immutable revisions and the suite plan for each run. Customer-owned tests are registered from CI. Generated scripts and published drafts live as revisions in Evidgate, without repository access.
@@ -25,7 +25,7 @@
 - **FR-03-5** A variant is the hash of normalised, **secret-free** parameters (browser, device, locale, data set). A parameter set whose key looks like a secret or whose value matches a secret pattern is rejected.
 - **FR-03-6** The dependency graph must be acyclic; a cycle is rejected with the offending path. Setup failure of a dependency marks dependants `blocked`, never `passed` (00 §8.3, enforced downstream by 05/07).
 - **FR-03-7** Fixtures are versioned revisions referenced by a suite revision; secrets are referenced by name only. Data namespaces are `(tenant, project, run)` scoped and cleaned by TTL after the run terminates, including orphan cleanup for runs that died.
-- **FR-03-8** Customer CI runs `evidgate catalog push` with a project token. It discovers annotations and sidecars locally, registers cases and suites through the existing API, and appends revisions idempotently.
+- **FR-03-8** Customer CI runs `evidgate catalog push` with a project ingest token explicitly granted catalog-write scopes. It discovers annotations and sidecars locally, registers cases and suites through the project-scoped registration route, and appends revisions idempotently.
 - **FR-03-9** V1 authoring = templates + Git flow: web template (role/name or test id), API template built from an OpenAPI skeleton **without inferring business assertions**, unit tests stay in the repo's own framework (evidence-only), mobile capability is separate with its own fixtures and locators.
 - **FR-03-10** V2 draft workflow: drafts use `ETag`/`If-Match` (stale → 412), a sandbox dry run (no tenant secrets, ephemeral namespace, one-shot identity), and publish as Evidgate revisions without repository access.
 - **FR-03-11** V2 AI drafts accept only **approved** requirements and allowed context, record provenance and the decision trail, and never run with sensitive permissions while unapproved.
@@ -94,7 +94,7 @@ Additive endpoints accepted while detailing (TL T56; enter `contracts/openapi.ya
 
 ### 4.3 Flows
 
-**Catalog registration (V1).** CI scans its own working tree for `evidgate.id` annotations and sidecar manifests. `evidgate catalog push` uses the project token and the existing case/suite APIs to register identities, append changed revisions, report renames and reject duplicate IDs. A duplicate push changes nothing.
+**Catalog registration (V1).** CI scans its own working tree for `evidgate.id` annotations and sidecar manifests. `evidgate catalog push` uses an explicitly scoped project ingest token and the case/suite registration route to register identities, append changed revisions, report renames and reject duplicate IDs. A duplicate push changes nothing.
 
 **Import identity (V1).** A run's producer reports a test with no annotation → `case_import_identity` row in `unmapped` (key = `producer+suite+name`). If exactly one new annotation with the same classified name appears in the same commit-range and no other candidate matches, the sync proposes a mapping; anything else stays `conflicted`/`unmapped` for the UI to resolve (D2). Mapped rows keep the original key for future imports.
 
@@ -237,13 +237,14 @@ Sizes: XS 0.25 · S 0.5 · M 1 · L 2 · XL 3 (person-days, one senior full-stac
 | 03.3.1-T3 | Secret-reference rule + lint that rejects secret values in fixtures/suites/variants | S | V1 | G2 | 03.2.1-T2, 11.3.1-T1 |
 **Epic 03.3 total: 2.5**
 ### Epic 03.4 Customer-owned test registration
-#### Story 03.4.3 Register customer-owned tests from CI — acceptance: `evidgate catalog push`, run in the customer’s CI with a project token, registers case and suite identities and appends revisions from annotations idempotently through the cases/suites API once the write path in 03.4.3-T1 `[OPEN]` exists; a duplicate push changes nothing; Evidgate never reads the repository.
+#### Story 03.4.3 Register customer-owned tests from CI — acceptance: `evidgate catalog push` discovers locally and registers cases and suites through the project registration route with explicitly granted ingest-token scopes. Duplicate pushes append no revisions, results-only tokens cannot write, and Evidgate never reads the repository.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 03.4.3-T1 | `evidgate catalog push` (annotation/sidecar discovery in the working tree, case upsert, revision append, rename and conflict report). `[OPEN]` the cases API has only GET and metadata PATCH (no case upsert or revision append), and a `ci_producer` token holds neither `case:write` nor `suite:write` (02 FR-02-7): needs a contract-first write operation and a scoped catalog-write API token; ingest-token grants are not broadened implicitly. Size M covers the CLI only | M | V1 | G2 | 03.1.1-T2, 03.2.1-T1, 02.4.2-T1 |
-**Story 03.4.3 total: 1.0**
+| 03.4.3-T1 | `evidgate catalog push`: local annotation, sidecar and suite discovery, dry run, registration upload, rename and conflict report; identical pushes are no-ops | M | V1 | G2 | 03.4.3-T2 |
+| 03.4.3-T2 | Contract-first project-scoped case/suite registration over the existing discovery and suite revision services: OpenAPI and `contracts/permissions.json`, then a migration widening the ingest-token scope check for opt-in `case:write` and `suite:write` (both off by default). Enforce scope and project before writes; retry must not append duplicate revisions | M | V1 | G2 | 03.1.1-T2, 03.2.1-T1, 02.4.2-T1 |
+**Story 03.4.3 total: 2.0**
 
-**Epic 03.4 total: 1.0**
+**Epic 03.4 total: 2.0**
 ### Epic 03.5 Templates
 #### Story 03.5.1 Template library and Git flow — acceptance: each template produces a test that registers a case id and passes conformance checks; the API template never invents business assertions; unit and mobile templates stay in their own frameworks.
 | ID | Task | Size | Version | Milestone | Depends on |
@@ -328,15 +329,15 @@ Sizes: XS 0.25 · S 0.5 · M 1 · L 2 · XL 3 (person-days, one senior full-stac
 | 03.1 Test identity and revisions | 7.0 | 0 | 0 | 7.0 |
 | 03.2 Suite revisions | 4.0 | 0 | 0 | 4.0 |
 | 03.3 Fixtures and data namespaces | 2.5 | 0 | 0 | 2.5 |
-| 03.4 Customer-owned test registration | 1.0 | 0 | 0 | 1.0 |
+| 03.4 Customer-owned test registration | 2.0 | 0 | 0 | 2.0 |
 | 03.5 Templates | 3.0 | 0.5 | 0 | 3.5 |
 | 03.6 Draft editor | 0 | 4.0 | 0 | 4.0 |
 | 03.7 AI drafts | 0 | 3.5 | 0 | 3.5 |
 | 03.8 Bug → regression candidate | 0 | 3.0 | 0 | 3.0 |
 | 03.9 History and baseline | 4.5 | 0 | 0 | 4.5 |
-| **Total** | **22.0** | **11.0** | **0** | **33.0** |
+| **Total** | **23.0** | **11.0** | **0** | **34.0** |
 
-→ with 20 % buffer **39.6** person-days
+→ with 20 % buffer **40.8** person-days
 ## 13. Contract change requests
 
 > **Status:** Applied 2026-09-24: CR-1 → 00 §7 (conflict rule; filename in 03.1.1-T1); CR-2 → 00 §8.10; CR-3 → 00 §3; CR-4 → 00 §9.3; CR-5 → 00 §2 (mapping owned by 03 §4); CR-6 confirmed after the 09 renumbering.
@@ -344,7 +345,7 @@ Sizes: XS 0.25 · S 0.5 · M 1 · L 2 · XL 3 (person-days, one senior full-stac
 > For the integrator; 00/`DECISIONS.md` are not edited by this plan.
 > 2026-09-25 CR-D-1 + TL review applied: migrated to the .NET 10 stack (`task` queue + Cronos schedules instead of pg-boss; xUnit v3 + Testcontainers.PostgreSQL instead of Vitest/Testcontainers 12 on server code) and rulings T1 (`evidgate_resolve` webhook pre-tenant resolution, 03.4.1-T2), T3 (`unique (org_id, id)` on every owned table), T46 (`suite_member` surrogate `id` so `case_dependency` FKs are implementable, `allow_unverified` typo fixed, suite/fixture revision states now in 00 §8.10, built-in `template` catalogue RLS pattern + lint exception, the former repository integration, since retired by D-NO-GITHUB).
 >
-> 2026-11-27 D-NO-GITHUB + D-REALIGN: removed 03.4.1-T1..T3, 03.4.2-T1 and 03.6.1-T4 (see `plans/removed-scope.md`); Epic 03.4 is now Customer-owned test registration (Story 03.4.3, `evidgate catalog push`, 1.0 d); 03.6.1-T3 publishes a draft as an Evidgate revision (dep 13.5.1-T5). Totals recomputed from the rows.
+> 2026-11-27 D-NO-GITHUB + D-REALIGN: removed 03.4.1-T1..T3, 03.4.2-T1 and 03.6.1-T4 (see `plans/removed-scope.md`); Epic 03.4 is now Customer-owned test registration (Story 03.4.3, `evidgate catalog push` and the OI-03-17 registration route, 2.0 d); 03.6.1-T3 publishes a draft as an Evidgate revision (dep 13.5.1-T5). Totals recomputed from the rows.
 
 | # | Request | Why |
 |---|---|---|

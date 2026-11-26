@@ -28,7 +28,7 @@
 | FR-13-10 | A manual result counts in a release decision only through a closed manual run bound to that release: closing writes an immutable manual evidence revision, a result after close is refused (409), and no manual result changes an evaluation or a consumed release decision (07.5.5). |
 | FR-13-11 | A test case report is an immutable snapshot; every format (PDF, DOCX, XLSX, web) renders the same snapshot; a share link exposes only that snapshot. |
 | FR-13-12 | Tracker connections read stories, AC, epics and bugs; the only write is creating one issue from a failed manual result or failed case attempt on an explicit user action with tracker:create_issue, idempotent per (connection, source result), audited, never automatic; OAuth tokens go only to the provider's authorization and API hosts and never reach a browser, a log or an audit record. |
-| FR-13-13 | A hosted run executes only an approved script revision, pinned by hash; the hosted executor never fetches from a repository. The VM/microVM-isolated executor limits egress to the project's declared staging origins and the artifact upload host; private, loopback, link-local and metadata addresses are refused at connect time, including after redirects and DNS re-resolution. |
+| FR-13-13 | Hosted execution uses only an approved script revision pinned by hash; no repository fetch. The starting boundary is one disposable microVM per job. Guest egress is HTTPS only to at most 10 declared staging origins per project; only the trusted worker may reach the artifact-upload host. Refuse private, loopback, link-local and metadata addresses at connect time, including redirects and DNS changes. Hosted minutes count against the included monthly subscription quota; refuse new hosted runs at exhaustion, with no overage billing (FR-12-10). |
 
 ## 3. Key decisions
 
@@ -312,25 +312,25 @@ Notes (S92): the generation flow screens of 13.4.1-T4 carry the role-profile sel
 Notes (D-REALIGN): requirements, reports and tracker import are P1; manual execution, release decisions, the automated report section and explicit create-bug are P2. A frozen, release-bound manual revision feeds 07.5.5; tracker imports never trigger writes. No project requires a repository (D-NO-GITHUB).
 
 ### Epic 13.11 Hosted runs (G2)
-#### Story 13.11.1 Hosted runs — acceptance: a user with hosted_run:create runs an approved script revision on the Evidgate-hosted runner against a declared staging origin; results arrive as normal run evidence and reach the evaluation and release decision; the executor is VM/microVM-isolated with egress limited to declared origins; app credentials are secret references never visible in logs or artifacts; runner minutes are metered and capped per tenant; a kill switch stops all hosted runs.
+#### Story 13.11.1 Hosted runs — acceptance: a user with hosted_run:create runs an approved script revision on the Evidgate-hosted runner against a declared staging origin; results arrive as normal run evidence and reach the evaluation and release decision; the executor is VM/microVM-isolated with egress limited to declared origins; app credentials are secret references never visible in logs or artifacts; hosted minutes are included in each plan’s monthly quota, with new hosted runs refused on exhaustion and no overage billing; a kill switch stops all hosted runs.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
 | 13.11.1-T1 | Decision record and threat-model rows `TH-hosted-*` (claim/finalize routes, egress, credential, tenant isolation) + egress/SSRF spec | M | V2 | G2 | 05.9.2-T1, 11.2.1-T4 |
 | 13.11.1-T2 | Hosted run request API (`hosted_run_request`, `Idempotency-Key`, creates the run through 05.2.1 with `mode=hosted`), permission `hosted_run:create` | M | V2 | G2 | 05.2.1-T2, 13.5.1-T5 |
 | 13.11.1-T3 | Hosted worker service identity and claim through `job` / `job_lease` | L | V2 | G2 | 05.7.1-T1, 05.7.2-T1, 05.7.4-T1 |
-| 13.11.1-T5 | Hosted executor in the VM/microVM boundary chosen by 05.9.2-T1 / 11.2.1-T5, disposable per job | XL | V2 | G2 | 11.2.1-T5, 13.11.1-T3 |
+| 13.11.1-T5 | Hosted executor in one disposable microVM per job; build only after 05.9.2-T1 and 11.2.1-T5 supply boundary evidence recorded in 13.11.1-T1 | XL | V2 | G2 | 11.2.1-T5, 13.11.1-T1, 13.11.1-T3 |
 | 13.11.1-T6 | Egress allow-list (`hosted_egress_origin`) and connect-time SSRF guard (private, loopback, link-local and metadata refused; redirects and DNS re-resolution re-checked) | M | V2 | G2 | 13.11.1-T5, 13.11.1-T1 |
 | 13.11.1-T7 | App-under-test secret references: tenant secret store, injection inside the executor only, redaction | M | V2 | G2 | 13.11.1-T3 |
 | 13.11.1-T8 | Browser image build, digest pin, scan, licence check | S | V2 | G2 | 05.7.1-T1 |
 | 13.11.1-T9 | Artifacts through the 06 upload path | S | V2 | G2 | 13.11.1-T5, 06.1.3-T1 |
 | 13.11.1-T10 | Hosted generation for projects without their own tests (`evidgate generate` inside the executor, output to the script store) | M | V2 | G2 | 13.11.1-T5, 13.5.1-T5 |
-| 13.11.1-T11 | `runner_minutes` metering into the usage ledger and quota gate | M | V2 | G2 | 12.3.1-T4, 13.11.1-T5 |
+| 13.11.1-T11 | Meter hosted `runner_minutes` against the included monthly subscription quota using the existing gate (12.3.1 / 04.8.1); refuse new hosted runs at exhaustion, no overage billing. Set per-plan allowances after 05.9.2-T1 measures cost | M | V2 | G2 | 12.3.1-T4, 13.11.1-T5 |
 | 13.11.1-T12 | Kill switch, per-tenant concurrency caps, fair scheduling | M | V2 | G2 | 05.7.3-T2, 12.3.1-T4 |
 | 13.11.1-T13 | UI via `design-ui` first: Run button, staging origin picker, progress, result link; vi + en, WCAG 2.2 AA | M | V2 | G2 | 13.11.1-T2, 13.5.1-T7 |
 | 13.11.1-T14 | Negative tests (egress, SSRF, credential leak, cross-tenant) + hosted e2e on the fixture app | M | V2 | G2 | 13.11.1-T6, 13.11.1-T7, 13.11.1-T9 |
 | 13.11.1-T15 | Hosted runbook (cancel, kill, incident) | S | V2 | G2 | 13.11.1-T12 |
 **Epic 13.11 total: 15.5** (13.11.1, 14 tasks).
-Notes (owner 2026-11-26, D-HOSTED-RUN): P4. The feature plan records spike-dependent choices as open; executor implementation waits for the isolation and cost decision in 05.9.2-T1.
+Notes (owner 2026-11-27, D-HOSTED-RUN): P4. The starting defaults are one microVM per job, HTTPS only, at most 10 declared staging origins per project, two concurrent jobs per tenant, a 15-minute timeout and a minimal digest-pinned, scanned image. 05.9.2-T1 confirms them with evidence before the executor build and supplies cost data for the monthly minute allowances.
 
 ## 10. Dependencies
 

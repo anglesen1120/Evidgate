@@ -1,5 +1,8 @@
 # Security alert rules (V1)
 
+> **Scope (owner 2026-11-27):** GitHub login, repository bindings, provider OIDC exchange and inbound repository webhooks described in the dated evidence below are historical; removed by D-NO-GITHUB. Their findings and event sources do not specify new integration work. Project ingest-token and session controls still apply.
+
+
 Owner: 11.5.1-T3.1 (task [11.5.1](../../plans/features/11-security-compliance/11.5.1-who-saw-what-provably-acceptance-audit.md) §10, AC5). One rule row per type of the closed V1 `security_event` set fixed in [security-event-baseline](security-event-baseline.md) §2. This page decides signal source, threshold or pattern, severity and the on-call routing decision; [10.3.1](../../plans/features/10-operations/10.3.1-telemetry-and-alerting.md)-T5 turns each row into a rule under `infra/alerts/<env>/` (numeric threshold, severity and owner: T5.1; runbook link: T5.2; channel routing and grouping: T5.3; synthetic drill: T5.4).
 
 Version: v1 · Last review: 2026-11-05 (S247, develop `446beee`); §6 reviewed 2026-11-21 against `442f1fd1` (S518), §1-§5 not re-reviewed

@@ -65,8 +65,8 @@ Stage A order from `plans/features/SOLO-PATH.md` §2. "Type" tells you what clos
 | 24 | OI-06-03 per-kind artifact size caps | 06.1.2-T3 | owner decision | **Closed (D-A9)** screenshot 10 MiB, log 20 MiB, trace 100 MiB, html_report 100 MiB, video 200 MiB, raw_report 256 MiB |
 | 25 | OI-07-02 07 dependency-id note | 07.1.1-T1 | paperwork | **Closed 2026-10-02** (sentence replaced in 07 §10) |
 | 26 | OI-07-15 reserve `promotion.inconclusive_as` | 07.1.1-T1 | contract edit | Reserve the optional field, default `blocked`, in 00 §8.6 |
-| 27 | OI-05-01 branch-scoped policy mode | 07.1.1-T1 | owner decision | **Closed (D-A10)** One policy per project with a `gating_refs` rule: default branch (and an optional release-branch glob) gate; other refs are evaluated as advisory |
-| 28 | OI-05-02 `unverified_ref`/fork runs advisory only | 07.2.1-T1 | owner decision | **Closed (D-A11)** Yes: `unverified_ref` or fork ⇒ decision recorded `advisory = true`, never gating, no override in V1 |
+| 27 | OI-05-01 branch-scoped policy mode | 07.1.1-T1 | owner decision | **Closed (D-A10, amended 2026-11-27):** a non-fork run on the declared default branch or optional release-branch glob may gate; other refs are advisory |
+| 28 | OI-05-02 provenance and fork runs | 07.2.1-T1 | owner decision | **Closed (D-A11, amended 2026-11-27):** `unverified_ref` labels declared provenance, not a gating veto. Fork runs remain advisory-only |
 
 Exact wording, sources and the information needed for each row are in the area files. Sizes and numbers in the defaults are `[INFERENCE]`.
 
