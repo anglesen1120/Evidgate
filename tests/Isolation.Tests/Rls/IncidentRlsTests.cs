@@ -148,7 +148,7 @@ public sealed class IncidentRlsTests(DatabaseFixture fixture) : HarnessTest(fixt
         {
             "project" => Link(attempt, project: await SiblingAsync(factory, "public.project", org)),
             "case" => Link(attempt, caseId: await SiblingAsync(factory, "public.test_case", org)),
-            "revision" => Link(attempt, revision: await SiblingAsync(factory, "public.test_revision", org)),
+            "revision" => Link(attempt, revision: await SiblingRevisionAsync(scope, attempt)),
             _ => Link(attempt, execution: new string('c', 64)),
         };
         await scope.ExecuteAsync("savepoint bad_link");
@@ -297,4 +297,16 @@ public sealed class IncidentRlsTests(DatabaseFixture fixture) : HarnessTest(fixt
 
     private static async Task<Guid> SiblingAsync(TenantRowFactory factory, string table, Guid org) =>
         (Guid)(await factory.CreateBesideAsync(table, org, Token)).Values["id"];
+
+    // The factory writes one fixed hash per column, so a second revision of the attempt's case from it would repeat
+    // (org_id, case_id, revision_hash); this one is the same case with other hashes, so only the revision id differs.
+    private static Task<Guid> SiblingRevisionAsync(TenantScope scope, object attempt) =>
+        scope.ScalarAsync<Guid>("""
+            insert into public.test_revision
+                (id, org_id, case_id, revision_hash, commit_sha, file_path, framework, content_sha256, assertion_hash)
+            select gen_random_uuid(), org_id, case_id, 'sha256:' || repeat('b', 64), 'bbbbbbb',
+                   'sibling.spec.ts', 'playwright', 'sha256:' || repeat('c', 64), 'sha256:' || repeat('a', 64)
+              from public.case_attempt where id = @attempt
+            returning id
+            """, ("attempt", attempt));
 }
