@@ -23,6 +23,9 @@ internal sealed class PromptContextBuilder : IPromptContextBuilder
     /// <summary>Most UTF-16 characters of all segments together; more is refused rather than silently cut.</summary>
     internal const int MaxTotalChars = 256 * 1024;
 
+    /// <summary>Most characters of the escaped body: escaping can expand text up to eight-fold, so the input caps alone do not bound it.</summary>
+    internal const int MaxBodyChars = 1024 * 1024;
+
     private const int MaxSourceIdLength = 128;
 
     /// <summary>
@@ -70,6 +73,11 @@ internal sealed class PromptContextBuilder : IPromptContextBuilder
             }
 
             Append(body, segment);
+            if (body.Length > MaxBodyChars)
+            {
+                throw new ArgumentException($"The wrapped body exceeds {MaxBodyChars} characters.", nameof(segments));
+            }
+
             ids.Add(segment.SourceId);
         }
 
@@ -120,6 +128,7 @@ internal sealed class PromptContextBuilder : IPromptContextBuilder
     {
         using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         Feed(hash, FormatVersion);
+        Feed(hash, Preamble);
         foreach (var id in ids)
         {
             Feed(hash, id);

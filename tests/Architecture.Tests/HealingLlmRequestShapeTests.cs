@@ -36,7 +36,7 @@ public sealed class HealingLlmRequestShapeTests
     {
         Properties(typeof(HealingLlmRequest)).Select(Describe).Order(StringComparer.Ordinal).ShouldBe(AllowedMembers);
         typeof(HealingLlmRequest).GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
-            .Where(f => !f.Name.EndsWith("BackingField", StringComparison.Ordinal)).ShouldBeEmpty();
+            .Where(f => f.GetCustomAttribute<System.Runtime.CompilerServices.CompilerGeneratedAttribute>() is null).ShouldBeEmpty();
     }
 
     [Fact]

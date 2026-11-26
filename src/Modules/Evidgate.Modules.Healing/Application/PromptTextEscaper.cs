@@ -12,10 +12,15 @@ namespace Evidgate.Modules.Healing.Application;
 internal static class PromptTextEscaper
 {
     /// <summary>
-    /// BMP code points whose NFKC form contains <c>&lt;</c>, <c>&gt;</c> or <c>&amp;</c> (full-width and small forms,
-    /// "not less than" and the like), found once from the platform's own tables instead of a hand-kept list.
+    /// Code points that read as, or normalise (NFKC) to, <c>&lt;</c>, <c>&gt;</c> or <c>&amp;</c>: full-width and small
+    /// forms, "not less/greater than", and angle-bracket lookalikes. A fixed list, not derived from
+    /// <c>Normalize</c>, because the Worker runs with invariant globalization where normalisation is a no-op.
     /// </summary>
-    private static readonly FrozenSet<int> LookalikeMarkup = FindLookalikes();
+    private static readonly FrozenSet<int> LookalikeMarkup = new int[]
+    {
+        0x2039, 0x203A, 0x226E, 0x226F, 0x2329, 0x232A, 0x276E, 0x276F, 0x27E8, 0x27E9, 0x3008, 0x3009,
+        0xFE60, 0xFE64, 0xFE65, 0xFF06, 0xFF1C, 0xFF1E,
+    }.ToFrozenSet();
 
     /// <summary>Appends <paramref name="text"/> to <paramref name="builder"/> in escaped, sanitised form.</summary>
     /// <param name="builder">The prompt body being built.</param>
@@ -75,17 +80,4 @@ internal static class PromptTextEscaper
     private static bool IsInvisible(int codePoint) =>
         CharUnicodeInfo.GetUnicodeCategory(codePoint) is UnicodeCategory.Control or UnicodeCategory.Format
             or UnicodeCategory.LineSeparator or UnicodeCategory.ParagraphSeparator or UnicodeCategory.OtherNotAssigned;
-
-    private static FrozenSet<int> FindLookalikes()
-    {
-        var found = new List<int>();
-        for (var cp = 0x80; cp <= 0xFFFF; cp++)
-        {
-            if (cp is >= 0xD800 and <= 0xDFFF) { continue; }
-            var form = ((char)cp).ToString().Normalize(NormalizationForm.FormKC);
-            if (form.AsSpan().IndexOfAny('<', '>', '&') >= 0) { found.Add(cp); }
-        }
-
-        return found.ToFrozenSet();
-    }
 }

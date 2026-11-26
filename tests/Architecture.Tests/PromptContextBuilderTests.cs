@@ -77,6 +77,29 @@ public sealed class PromptContextBuilderTests
         context.Body.ShouldNotContain("\r");
     }
 
+    [Theory]
+    [InlineData("\uFF1C", "&#xFF1C;")]
+    [InlineData("\uFF1E", "&#xFF1E;")]
+    [InlineData("\uFE64", "&#xFE64;")]
+    [InlineData("\uFF06", "&#xFF06;")]
+    [InlineData("\u226E", "&#x226E;")]
+    [InlineData("\u2028", "")]
+    [InlineData("\u0085", "")]
+    [InlineData("\u000B", "")]
+    [InlineData("\U0001F600", "\U0001F600")]
+    public void PromptContextBuilder_LookalikesAreEscapedAndLineSeparatorsDropped(string content, string expected) =>
+        Wrap(content).Body.Split('\n')[1].ShouldBe(expected);
+
+    [Fact]
+    public void PromptContextBuilder_TruncationNeverLeavesASplitSurrogate()
+    {
+        var content = new string('a', PromptContextBuilder.MaxSegmentChars - 1) + "\U0001F600";
+
+        var body = Wrap(content).Body;
+
+        body.ShouldContain("\uFFFD\n[truncated: 1 characters omitted]");
+    }
+
     [Fact]
     public void PromptContextBuilder_NestedWrapperIsEscapedAsData()
     {
@@ -113,16 +136,14 @@ public sealed class PromptContextBuilderTests
     [Fact]
     public void PromptContext_NeverContainsMaskedValues()
     {
-        // The capture step wrote the mask; the secret itself is not an input here, so it cannot reach the prompt, and the
-        // mask is passed on exactly as written (no re-hydration, no rewriting).
-        const string secret = "s3cr3t-token-value";
+        // The capture step wrote the mask and the builder has no secret input, so the mask is passed on exactly as
+        // written: no re-hydration, no rewriting. (Keeping a secret out of the text is the capture/redaction step's job.)
         var context = Builder.Build(
         [
             new PromptSegment(PromptSegmentKind.Error, "inc-1", "Authorization: ***\npassword=***\ntoken=***"),
             new PromptSegment(PromptSegmentKind.Dom, "dom-1", "<input type=\"password\" value=\"***\">"),
         ]);
 
-        context.Payload.ShouldNotContain(secret);
         context.Body.ShouldContain("Authorization: ***\npassword=***\ntoken=***");
         context.Body.ShouldContain("value=\"***\"");
     }
@@ -170,6 +191,37 @@ public sealed class PromptContextBuilderTests
             .ToList();
 
         Should.Throw<ArgumentException>(() => Builder.Build(segments));
+    }
+
+    [Fact]
+    public void PromptContextBuilder_EscapeExpansionOverTheBodyCapIsRefused()
+    {
+        var segments = Enumerable.Range(0, 8)
+            .Select(i => new PromptSegment(PromptSegmentKind.Log, "s" + i, new string('\uFF1C', PromptContextBuilder.MaxSegmentChars)))
+            .ToList();
+
+        Should.Throw<ArgumentException>(() => Builder.Build(segments));
+    }
+
+    [Fact]
+    public void PromptContextBuilder_LimitsAreInclusive()
+    {
+        var atLimit = Enumerable.Range(0, PromptContextBuilder.MaxSegments)
+            .Select(i => new PromptSegment(PromptSegmentKind.Record, "s" + i, "x")).ToList();
+
+        Builder.Build(atLimit).SourceIds.Count.ShouldBe(PromptContextBuilder.MaxSegments);
+        Wrap("x", id: new string('a', 128)).SourceIds.ShouldBe([new string('a', 128)]);
+    }
+
+    [Fact]
+    public void ContextHash_CoversAllSourceRecordIds()
+    {
+        PromptContext Of(params string[] ids) =>
+            Builder.Build(ids.Select(i => new PromptSegment(PromptSegmentKind.Record, i, "same")).ToList());
+
+        Of("a", "b", "c").ContextHash.ShouldNotBe(Of("a", "b", "d").ContextHash);
+        Of("a", "b", "c").ContextHash.ShouldNotBe(Of("c", "b", "a").ContextHash);
+        Of("a", "b", "c").SourceIds.ShouldBe(["a", "b", "c"]);
     }
 
     [Fact]
