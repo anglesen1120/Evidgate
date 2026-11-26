@@ -43,6 +43,9 @@ internal static class AuthoringModule
         services.TryAddScoped<AuthoringVersionWriter>();
         services.TryAddScoped<IAuthoringVersionWriter, AuthoringVersionWriterContract>();
 
+        // The requirement head writer and its scoped reads (migration 0132); routes consume it with later tasks.
+        services.TryAddScoped<RequirementWriter>();
+
         // 13.1.1-T1.3: the per-project manual case code allocator (§4, AC4).
         services.TryAddScoped<AuthoringCodeAllocator>();
 
