@@ -1,12 +1,12 @@
--- 0131_policy_deploy_target.sql
+-- 0130_policy_deploy_target.sql
 --
 -- `deploy_target`: a named, ordered release destination of one project (`staging`, `prod`)
 -- that the promotion gate will evaluate a release against. A target may pin one policy revision of its
 -- own project; without a pin the project's active revision applies at check time.
 --
 -- Soft delete: a target is never removed. `DELETE` on the API moves `active -> disabled`, `PATCH` may move it back.
--- The app role holds no DELETE grant and the guard trigger refuses any DELETE, so the name stays reserved and
--- later rows that reference a target can always reach it. The unique name index spans both states.
+-- The app role holds no DELETE grant and the guard trigger refuses any DELETE, so later rows that reference a target
+-- can always reach it. The unique name index spans both states, so a disabled target keeps its name until it is renamed.
 --
 -- Pin integrity: `policy_revision` only had `unique (org_id, id)`. The composite key `(org_id, project_id, id)` added
 -- below lets the pin's FK name the target's own project, so a revision of another project (or tenant) cannot be
@@ -17,10 +17,17 @@
 --
 -- Idempotent like 0025/0030: re-running is a no-op.
 
-alter table public.policy_revision
-  drop constraint if exists policy_revision_org_project_id_key;
-alter table public.policy_revision
-  add constraint policy_revision_org_project_id_key unique (org_id, project_id, id);
+-- Not dropped first: on a re-run the FK below already depends on this key.
+-- The unique index build holds ACCESS EXCLUSIVE on policy_revision until this migration commits; the table is
+-- append-only and small, so the pause is short, but deploy it like any other blocking migration.
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'policy_revision_org_project_id_key' and conrelid = 'public.policy_revision'::regclass) then
+    alter table public.policy_revision
+      add constraint policy_revision_org_project_id_key unique (org_id, project_id, id);
+  end if;
+end
+$$;
 
 create table if not exists public.deploy_target (
   id uuid not null,
@@ -111,5 +118,6 @@ grant select on public.deploy_target to evidgate_app;
 grant insert (id, org_id, project_id, name, position, policy_revision_id) on public.deploy_target to evidgate_app;
 grant update (name, position, policy_revision_id, state) on public.deploy_target to evidgate_app;
 revoke delete on public.deploy_target from evidgate_app;
+-- No TO evidgate_operator policy on purpose: with FORCE RLS the operator reads no tenant rows (same posture as 0030).
 grant select on public.deploy_target to evidgate_operator;
 revoke all on public.deploy_target from evidgate_worker_sched;

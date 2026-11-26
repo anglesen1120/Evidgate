@@ -66,6 +66,7 @@ public sealed partial class DeployTargetTests
     [InlineData("has space")]
     [InlineData("-leading")]
     [InlineData("slash/name")]
+    [InlineData("prod\n")]
     public async Task ABadName_Is422_AndWritesNothing(string name)
     {
         await using var world = await StartAsync();

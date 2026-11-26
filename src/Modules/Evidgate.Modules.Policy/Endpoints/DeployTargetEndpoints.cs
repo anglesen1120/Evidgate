@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text.Json;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
+using Evidgate.BuildingBlocks.SharedKernel.Serialization;
 using Evidgate.Modules.Policy.Application.DeployTargets;
 using Mediator;
 using Microsoft.AspNetCore.Builder;
@@ -120,9 +121,20 @@ public static class DeployTargetEndpoints
             return Bad(string.Empty, "invalid_type");
         }
 
+        if (UnstorableJsonText.HasUnstorableText(body))
+        {
+            return Bad(string.Empty, "unstorable_text");
+        }
+
+        var seen = new HashSet<string>(StringComparer.Ordinal);
         foreach (var member in body.EnumerateObject())
         {
             var value = member.Value;
+            if (!seen.Add(member.Name))
+            {
+                return Bad(member.Name, "duplicate_field");
+            }
+
             switch (member.Name)
             {
                 case "name" when value.ValueKind == JsonValueKind.String:
@@ -137,7 +149,7 @@ public static class DeployTargetEndpoints
                 case "policy_revision_id" when value.ValueKind == JsonValueKind.Null:
                     pinGiven = true;
                     break;
-                case "policy_revision_id" when value.ValueKind == JsonValueKind.String && Guid.TryParse(value.GetString(), out var id):
+                case "policy_revision_id" when value.ValueKind == JsonValueKind.String && Guid.TryParseExact(value.GetString(), "D", out var id):
                     pinGiven = true;
                     pin = id;
                     break;

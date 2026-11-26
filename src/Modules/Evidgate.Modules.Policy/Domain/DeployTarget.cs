@@ -27,6 +27,6 @@ internal static partial class DeployTargetRules
     /// <summary>A slug: letters, digits, dot, underscore, hyphen; starts with a letter or digit; 1-63 characters.</summary>
     public static bool IsValidName(string? name) => name is not null && NameShape().IsMatch(name);
 
-    [GeneratedRegex("^[A-Za-z0-9][A-Za-z0-9._-]{0,62}$", RegexOptions.CultureInvariant, matchTimeoutMilliseconds: 100)]
+    [GeneratedRegex(@"\A[A-Za-z0-9][A-Za-z0-9._-]{0,62}\z", RegexOptions.CultureInvariant, matchTimeoutMilliseconds: 100)]
     private static partial Regex NameShape();
 }

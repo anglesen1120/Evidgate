@@ -185,6 +185,7 @@ internal static class DeployTargetSql
          where org_id = @org_id
            and project_id = @project_id
            and id = @id
+           and exists (select 1 from public.project where id = @project_id and status <> 'deleted')
         """;
 
     internal const string List = $"""
@@ -212,6 +213,7 @@ internal static class DeployTargetSql
            and project_id = @project_id
            and id = @id
            and version = @version
+           and exists (select 1 from public.project where id = @project_id and status <> 'deleted')
         returning {Columns}
         """;
 }
