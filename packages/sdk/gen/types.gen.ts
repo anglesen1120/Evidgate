@@ -3974,6 +3974,16 @@ export type RunRerunScope = 'full' | 'failed_subset';
 export type RunParentRunId = string;
 
 /**
+ * `asc` (default) orders runs by `(created_at, id)` ascending, the oldest first. `desc` lists the newest `created_at` first; runs with an identical `created_at` stay ordered by `id` ascending. A cursor must be reused with the order that issued it; a cursor from the opposite order is 422 `request_invalid` (`details[].path` = `cursor`). An invalid order is 422 `request_invalid` (`details[].path` = `order`).
+ */
+export type RunListOrder = 'asc' | 'desc';
+
+/**
+ * Exact completeness of the run's current evidence revision: only the exact stored value matches. A run without a current revision, or with any other stored value, matches neither `complete` nor `incomplete`. AND-combined with every other present filter. An invalid value is 422 `request_invalid` (`details[].path` = `completeness`).
+ */
+export type RunCompleteness = 'complete' | 'incomplete';
+
+/**
  * Opaque cursor from `next_cursor` of `GET /v1/runs/{r}/attempts`; ordering `(execution_key, attempt_no)` (00 §9.1, F52/S143). A value this endpoint did not issue is 422 `request_invalid`.
  */
 export type RunAttemptCursor = string;
@@ -5142,6 +5152,14 @@ export type ListRunsData = {
          * Exact `run.parent_run_id` (0031; F43, S143) — the run a rerun was created from. A present but non-UUID value is 422 `request_invalid` (`details[].path` = `parent_run_id`).
          */
         parent_run_id?: string;
+        /**
+         * `asc` (default) orders runs by `(created_at, id)` ascending, the oldest first. `desc` lists the newest `created_at` first; runs with an identical `created_at` stay ordered by `id` ascending. A cursor must be reused with the order that issued it; a cursor from the opposite order is 422 `request_invalid` (`details[].path` = `cursor`). An invalid order is 422 `request_invalid` (`details[].path` = `order`).
+         */
+        order?: 'asc' | 'desc';
+        /**
+         * Exact completeness of the run's current evidence revision: only the exact stored value matches. A run without a current revision, or with any other stored value, matches neither `complete` nor `incomplete`. AND-combined with every other present filter. An invalid value is 422 `request_invalid` (`details[].path` = `completeness`).
+         */
+        completeness?: 'complete' | 'incomplete';
     };
     url: '/projects/{p}/runs';
 };

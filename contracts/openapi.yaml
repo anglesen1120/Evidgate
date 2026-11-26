@@ -1341,20 +1341,21 @@ paths:
       summary: Cursor list of runs with state, decision and rerun/reprocess labels
       description: >-
         Cursor list (00 §9.1) of a project's runs, ordered by `(created_at, id)`
-        ascending, with state, decision and rerun/reprocess labels (09). Since
-        05.2.2 it is narrowed by the run's recorded identity: `ref_name`,
+        ascending by default or newest `created_at` first with `order=desc`
+        (ties by `id` ascending), with state, decision
+        and rerun/reprocess labels (09). Since 05.2.2 it is narrowed by the run's recorded identity: `ref_name`,
         `pr_number`, `head_sha`, `trigger_event` and `is_fork`, all optional and
         AND-combined exact matches, and every row carries `created_at`, `ref` and
-        `unverified_ref`. The opaque `cursor` is the last row's `(created_at, id)`
-        of the previous page and is not signed — it is bound to the caller's own
-        project and tenant by the query, so a well-formed cursor only moves the
-        page position inside those rows; a cursor this endpoint did not issue is
-        422 `request_invalid`. An unknown project (or another tenant's) is 404
-        `not_found`, the same body as an unknown one. Since F43 (S143) the four
-        further optional, AND-combined, exact-match filters `state`, `decision`,
-        `rerun_scope` and `parent_run_id` narrow the same page, and every item
-        carries `completeness` (from the run's current evidence revision),
-        `parent_run_id`, `rerun_scope` and `decision`. `decision` is the verdict
+        `unverified_ref`. The opaque `cursor` identifies the previous page's last
+        position in the requested order. The query restricts that position to
+        the caller's project and tenant. A malformed cursor or one issued for
+        the opposite order is 422 `request_invalid`. An unknown project (or
+        another tenant's) is 404 `not_found`, the same body as an unknown one.
+        The optional exact-match filters `state`, `decision`, `rerun_scope`,
+        `parent_run_id` and `completeness` also narrow the page and are
+        AND-combined. Every item carries `completeness` (from the run's current
+        evidence revision), `parent_run_id`, `rerun_scope` and `decision`.
+        `decision` is the verdict
         of the run's newest `live` evaluation — `PASS`, `FAIL` or
         `INCONCLUSIVE`, `null` while the run has none; a `shadow` evaluation is
         a second opinion and never the verdict. The verdict is
@@ -1388,6 +1389,8 @@ paths:
         - $ref: '#/components/parameters/RunDecision'
         - $ref: '#/components/parameters/RunRerunScope'
         - $ref: '#/components/parameters/RunParentRunId'
+        - $ref: '#/components/parameters/RunListOrder'
+        - $ref: '#/components/parameters/RunCompleteness'
       responses:
         '200':
           description: Page of runs
@@ -9597,6 +9600,34 @@ components:
       schema:
         type: string
         format: uuid
+    RunListOrder:
+      name: order
+      in: query
+      required: false
+      description: >-
+        `asc` (default) orders runs by `(created_at, id)` ascending, the oldest
+        first. `desc` lists the newest `created_at` first; runs with an
+        identical `created_at` stay ordered by `id` ascending. A cursor must be
+        reused with the order that issued it; a cursor from the opposite order
+        is 422 `request_invalid` (`details[].path` = `cursor`). An invalid
+        order is 422 `request_invalid` (`details[].path` = `order`).
+      schema:
+        type: string
+        enum: [asc, desc]
+        default: asc
+    RunCompleteness:
+      name: completeness
+      in: query
+      required: false
+      description: >-
+        Exact completeness of the run's current evidence revision: only the
+        exact stored value matches. A run without a current revision, or with
+        any other stored value, matches neither `complete` nor `incomplete`.
+        AND-combined with every other present filter. An invalid value is 422
+        `request_invalid` (`details[].path` = `completeness`).
+      schema:
+        type: string
+        enum: [complete, incomplete]
     RunAttemptCursor:
       name: cursor
       in: query
