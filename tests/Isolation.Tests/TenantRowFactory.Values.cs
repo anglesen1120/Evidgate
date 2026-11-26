@@ -168,6 +168,9 @@ internal sealed partial class TenantRowFactory
             // purposes) together with the authoring CHECK that wants both attribution columns null.
             ("public.healing_llm_call", "purpose") => "authoring_generation",
             ("public.healing_llm_call", "status") => "ok",
+            // healing_redaction_report (0136) closes `purpose` like the call ledger and wants a sha256 content address.
+            ("public.healing_redaction_report", "purpose") => "authoring_generation",
+            ("public.healing_redaction_report", "report_hash") => "sha256:" + new string('a', 64),
             ("public.healing_llm_budget", "period") => "daily",
             // planned_execution's execution_key is the 00 §7 sha256 hex and its unique key is
             // (org_id, run_id, execution_key), so a constant would collide with the valid row the

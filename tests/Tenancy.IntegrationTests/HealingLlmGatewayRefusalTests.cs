@@ -110,6 +110,7 @@ public sealed class HealingLlmGatewayRefusalTests
 
         provider.Calls.ShouldBe(0);
         await db.DidNotReceive().ExecuteAsync(HealingLlmCallSql.Insert, Arg.Any<object?>(), Arg.Any<CancellationToken>());
+        await db.DidNotReceive().ExecuteAsync(HealingLlmCallSql.InsertWithReport, Arg.Any<object?>(), Arg.Any<CancellationToken>());
         await db.Received(1).ExecuteAsync(
             HealingLlmBudgetSql.Settle,
             Arg.Any<object?>(),
@@ -146,6 +147,7 @@ public sealed class HealingLlmGatewayRefusalTests
             new HealingLlmTransactions((ITenantScopeFactory)scopes),
             Options.Create(new HealingProviderOptions { Kind = kind, Provider = kind.ToString().ToLowerInvariant() }),
             Options.Create(new HealingLlmOptions()),
+            new RedactionPipeline(),
             NullLogger<HealingLlmGateway>.Instance);
 
     private static (ITenantDb Db, ITenantScopeAccessor Scopes) Database()

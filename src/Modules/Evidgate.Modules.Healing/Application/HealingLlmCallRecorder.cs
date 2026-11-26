@@ -4,14 +4,16 @@ using Evidgate.Modules.Healing.Contracts;
 namespace Evidgate.Modules.Healing.Application;
 
 /// <summary>
-/// 08.5.1-T1: the one statement that attributes an attempt (AC4, AC7). One row per attempt — a schema violation that is
+/// The one statement that attributes an attempt (AC4, AC7). One row per attempt — a schema violation that is
 /// retried leaves two rows, so the spend of the refused answer is not lost — written inside the caller's tenant
 /// transaction through the module's Dapper path (<see cref="ITenantDb"/> over the ambient scope, the
 /// <see cref="HealingSwitchStore"/> shape), so RLS scopes it to the caller's org and a rollback takes the rows with it.
 /// </summary>
 /// <remarks>
 /// The statement names its columns explicitly and never a wildcard: the table has no prompt, response, secret or key
-/// column (AC6), and this is the only writer, so there is no path by which a payload body could reach a row.
+/// column (AC6), and this is the only writer, so there is no path by which a payload body could reach a row. The first
+/// attempt of a call also writes the call's redaction report, in the same statement, so a call row never names a report
+/// hash that has no report behind it; later attempts of the same call carry the same hash.
 /// </remarks>
 internal sealed class HealingLlmCallRecorder(ITenantDb db, ITenantScopeAccessor scopes)
 {
@@ -21,6 +23,7 @@ internal sealed class HealingLlmCallRecorder(ITenantDb db, ITenantScopeAccessor 
     /// <param name="status">One of <see cref="HealingLlmStatuses"/>.</param>
     /// <param name="tokens">Tokens this attempt spent.</param>
     /// <param name="cost">Cost this attempt incurred.</param>
+    /// <param name="redaction">What the redaction pipeline did to this call's payload.</param>
     /// <param name="cancellationToken">Cancellation.</param>
     internal async Task<Guid> RecordAsync(
         HealingLlmRequest request,
@@ -28,16 +31,20 @@ internal sealed class HealingLlmCallRecorder(ITenantDb db, ITenantScopeAccessor 
         string status,
         int tokens,
         decimal cost,
+        RedactionReport redaction,
         CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(redaction);
         var id = Guid.CreateVersion7();
+        var orgId = scopes.Require().OrgId;
+        var reportJson = redaction.ToJson();
 
         await db.ExecuteAsync(
-                HealingLlmCallSql.Insert,
+                attempt == 1 ? HealingLlmCallSql.InsertWithReport : HealingLlmCallSql.Insert,
                 new
                 {
                     id,
-                    org_id = scopes.Require().OrgId,
+                    org_id = orgId,
                     project_id = request.ProjectId,
                     incident_id = request.IncidentId,
                     candidate_id = request.CandidateId,
@@ -48,6 +55,10 @@ internal sealed class HealingLlmCallRecorder(ITenantDb db, ITenantScopeAccessor 
                     cost,
                     status,
                     attempt,
+                    report_id = Guid.CreateVersion7(),
+                    rule_version = redaction.RuleVersion,
+                    report = reportJson,
+                    report_hash = RedactionReport.HashOf(reportJson),
                 },
                 cancellationToken)
             .ConfigureAwait(false);
@@ -56,17 +67,34 @@ internal sealed class HealingLlmCallRecorder(ITenantDb db, ITenantScopeAccessor 
     }
 }
 
-/// <summary>The statements of <see cref="HealingLlmCallRecorder"/> (migration 0054).</summary>
+/// <summary>The statements of <see cref="HealingLlmCallRecorder"/> (migrations 0054 and 0136).</summary>
 internal static class HealingLlmCallSql
 {
-    /// <summary>
-    /// The append-only insert. <c>redaction_report_hash</c> is left to its default: the hash of the redaction report is
-    /// 08.5.3's, which wraps this seam rather than being assumed by it.
-    /// </summary>
+    /// <summary>The append-only attempt insert for an attempt that follows the first of its call.</summary>
     internal const string Insert = """
         insert into public.healing_llm_call
-          (id, org_id, project_id, incident_id, candidate_id, purpose, model, prompt_version, tokens, cost, status, attempt)
+          (id, org_id, project_id, incident_id, candidate_id, purpose, model, prompt_version, tokens, cost, status, attempt,
+           redaction_report_hash)
         values
-          (@id, @org_id, @project_id, @incident_id, @candidate_id, @purpose, @model, @prompt_version, @tokens, @cost, @status, @attempt)
+          (@id, @org_id, @project_id, @incident_id, @candidate_id, @purpose, @model, @prompt_version, @tokens, @cost, @status,
+           @attempt, @report_hash)
+        """;
+
+    /// <summary>
+    /// The first attempt: the call's redaction report and the attempt row in one statement, so both commit or neither does.
+    /// </summary>
+    internal const string InsertWithReport = """
+        with report as (
+          insert into public.healing_redaction_report
+            (id, org_id, project_id, incident_id, candidate_id, purpose, rule_version, report, report_hash)
+          values
+            (@report_id, @org_id, @project_id, @incident_id, @candidate_id, @purpose, @rule_version, @report::jsonb, @report_hash)
+        )
+        insert into public.healing_llm_call
+          (id, org_id, project_id, incident_id, candidate_id, purpose, model, prompt_version, tokens, cost, status, attempt,
+           redaction_report_hash)
+        values
+          (@id, @org_id, @project_id, @incident_id, @candidate_id, @purpose, @model, @prompt_version, @tokens, @cost, @status,
+           @attempt, @report_hash)
         """;
 }

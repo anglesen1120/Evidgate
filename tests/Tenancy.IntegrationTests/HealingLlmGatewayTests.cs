@@ -393,6 +393,31 @@ public sealed partial class HealingLlmGatewayTests
         await using var world = await StartAsync();
         var incident = Guid.CreateVersion7();
         var candidate = Guid.CreateVersion7();
+        var database = await _fixture.SharedDatabaseAsync();
+        var plan = await PlannedExecutionSeeder.SeedPlanAsync(_fixture, database, world.Org, 1);
+        var execution = plan.Executions[0];
+        await using (var seed = await TenantScope.BeginAsync(_fixture.OwnerConnectionString(database)))
+        {
+            var attempt = Guid.CreateVersion7();
+            await seed.ExecuteAsync(
+                """
+                insert into public.case_attempt
+                    (id, org_id, run_id, execution_key, case_id, attempt_no, raw_status, normalized_status)
+                values (@id, @org_id, @run_id, @execution_key, @case_id, 1, 'failed', 'failed')
+                """,
+                ("id", attempt), ("org_id", world.Org), ("run_id", plan.RunId),
+                ("execution_key", execution.ExecutionKey), ("case_id", execution.CaseId));
+            await seed.ExecuteAsync(
+                """
+                insert into public.incident
+                    (id, org_id, project_id, run_id, attempt_id, case_id, case_revision_id, execution_key, engine)
+                values (@id, @org_id, @project_id, @run_id, @attempt_id, @case_id, @case_revision_id, @execution_key, 'playwright')
+                """,
+                ("id", incident), ("org_id", world.Org), ("project_id", world.Project), ("run_id", plan.RunId),
+                ("attempt_id", attempt), ("execution_key", execution.ExecutionKey),
+                ("case_id", execution.CaseId), ("case_revision_id", execution.CaseRevisionId));
+            await seed.CommitAsync();
+        }
 
         var request = new HealingLlmRequest(
             world.Project,
