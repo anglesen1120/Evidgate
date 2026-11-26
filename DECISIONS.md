@@ -217,6 +217,12 @@ The owner delegated the pending decisions to the coordinator in chat on 2026-11-
 | Admin revoke-all hierarchy | **Decided 2026-11-09.** An admin may end another member's sessions only when the target's rank in the acting org is not above the caller's. Rank is derived: built-in `tenant_admin` = 2, a custom role holding `membership:write` = 1, otherwise 0. Only rank 2 may end a rank-2 member's sessions; self is refused on the admin path; the audit row stays in the acting org's chain. | in flight, migration 0091 (S342); its carried row is closed by that lane |
 | D-S335-Q1 | **Confirmed 2026-11-09.** A blocked control stays focusable through `aria-disabled` plus a described-by note. | web lanes |
 
+### 8.4 Projects without a repository [DECISION] (owner, 2026-11-26)
+
+| # | Decision | Receiver / follow-up |
+|---|---|---|
+| D-SPEC-ONLY | **Decided 2026-11-26 (projects without a repository).** (1) Manual execution results move to G2 and are advisory only: they never feed a release decision. (2) Requirements, user stories and acceptance criteria become a stored, versioned entity linked to checklist items and manual test cases, with coverage per requirement. (3) A project without a repository gets a test case report (test plan, test cases, traceability matrix with gaps, manual execution and advisory readiness; PDF, DOCX, XLSX, read-only web link) instead of generated scripts; projects with a repository keep script generation through PRs (13.5). (4) GitHub is one optional connection; Jira Cloud and Linear are added as read-only OAuth import (Atlassian OAuth 2.0 3LO scope `read:jira-work` ✅ https://developer.atlassian.com/cloud/jira/platform/scopes-for-oauth-2-3LO-and-forge-apps/; Linear OAuth 2.0 scope `read`, access token 24 h, refresh token 30 d ✅ https://linear.app/developers/oauth-2-0-authentication), manual and scheduled sync, no write-back. (5) Import uses the REST (Jira) and GraphQL (Linear) APIs now; the vendors' remote MCP servers (✅ https://linear.app/docs/mcp; Atlassian `https://mcp.atlassian.com/v2/mcp` ✅ https://support.atlassian.com/atlassian-ai-gateway/docs/how-to-upgrade-from-atlassian-mcp-v1-to-atlassian-mcp-v2/) are a later option for the AI step only, no task now. Build order: after area 07, before area 08. | Epic 13.10 in `plans/13-product-phases.md`; `plans/00-overview.md` line 43, §2, §3, §8.12, §15; OI-13-601 to OI-13-704 |
+
 ## 9. Delta from the source design (review findings)
 
 | # | Source says | This plan set says | Why |
