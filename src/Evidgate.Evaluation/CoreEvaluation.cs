@@ -14,12 +14,12 @@ internal static class CoreEvaluation
     /// (what a waiver may annotate). A quarantined non-critical case's failure leaves the gate but stays in the outcome,
     /// in <see cref="EvaluationResult.QuarantinedCases"/> and as a reason, whatever the decision.
     /// </summary>
-    public static (EvaluationResult Result, IReadOnlyCollection<Guid> FailedCaseIds) Compute(
+    public static (EvaluationResult Result, IReadOnlySet<Guid> FailedCaseIds) Compute(
         EvidenceRevisionInput evidence,
         PolicyRevisionInput policy,
         ExceptionsSnapshotInput exceptions)
     {
-        var scope = RequiredScope.Resolve(policy, evidence.Results, exceptions.QuarantinedCaseIds);
+        var scope = RequiredScope.Resolve(policy, evidence.Results, exceptions);
         var missing = EffectiveMissing(evidence, policy, scope);
         var completeness = CompletenessOf(evidence, policy, missing);
         var outcome = OutcomeOf(scope, missing);

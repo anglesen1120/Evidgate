@@ -15,37 +15,36 @@
 -- is insertable like the others; no UPDATE or DELETE path exists for any role of the application.
 --
 -- DEFAULT: a constant default, so every existing row reads `{}` without a table rewrite. The existing rows hold only
--- tokens of the old list and no case ids, so both checks validate in place; the table is insert-only and small per run.
+-- tokens of the old list and no case ids, so both checks validate in place; the table is insert-only and grows one row
+-- per evaluation.
 --
--- LOCKS: ACCESS EXCLUSIVE on `evaluation` for the add column, the drops and the adds, one transaction, `lock_timeout`
--- 5 s so the file fails instead of queuing behind a long reader.
+-- LOCKS: ACCESS EXCLUSIVE on `evaluation` for one `alter table` statement in one transaction, `lock_timeout` 5 s so
+-- the file fails instead of queuing behind a long reader. The two drops run first, then the add column, then both
+-- checks are validated in one scan of the table under the lock instead of one scan per statement.
 --
 -- Re-run safe: `add column if not exists` and `drop constraint if exists` before each add.
 
 set local lock_timeout = '5s';
 
-alter table public.evaluation add column if not exists quarantined_cases uuid[] not null default '{}';
-
-alter table public.evaluation drop constraint if exists evaluation_quarantined_cases_check;
-
-alter table public.evaluation add constraint evaluation_quarantined_cases_check check (
-  case
-    when array_ndims(quarantined_cases) is null or array_ndims(quarantined_cases) = 1 then
-      array_position(quarantined_cases, null::uuid) is null
-    else false
-  end);
-
-alter table public.evaluation drop constraint if exists evaluation_reasons_check;
-
-alter table public.evaluation add constraint evaluation_reasons_check check (
-  case
-    when array_ndims(reasons) is null or array_ndims(reasons) = 1 then
-      reasons <@ array['scope_build_policy_pinned', 'required_assertion_failed', 'missing_shard',
-                      'count_mismatch', 'artifact_missing', 'build_mismatch', 'unknown_status',
-                      'setup_error', 'stale_epoch_only', 'missing_result', 'expected_count_zero',
-                      'empty_suite_allowed', 'critical_not_executed', 'unknown_required_artifact_kind',
-                      'flaky_budget_exceeded', 'advisory_only_run', 'quarantined_case_failed',
-                      'waiver_approved']::text[]
-      and array_position(reasons, null) is null
-    else false
-  end);
+alter table public.evaluation
+  drop constraint if exists evaluation_quarantined_cases_check,
+  drop constraint if exists evaluation_reasons_check,
+  add column if not exists quarantined_cases uuid[] not null default '{}',
+  add constraint evaluation_quarantined_cases_check check (
+    case
+      when array_ndims(quarantined_cases) is null or array_ndims(quarantined_cases) = 1 then
+        array_position(quarantined_cases, null::uuid) is null
+      else false
+    end),
+  add constraint evaluation_reasons_check check (
+    case
+      when array_ndims(reasons) is null or array_ndims(reasons) = 1 then
+        reasons <@ array['scope_build_policy_pinned', 'required_assertion_failed', 'missing_shard',
+                        'count_mismatch', 'artifact_missing', 'build_mismatch', 'unknown_status',
+                        'setup_error', 'stale_epoch_only', 'missing_result', 'expected_count_zero',
+                        'empty_suite_allowed', 'critical_not_executed', 'unknown_required_artifact_kind',
+                        'flaky_budget_exceeded', 'advisory_only_run', 'quarantined_case_failed',
+                        'waiver_approved']::text[]
+        and array_position(reasons, null) is null
+      else false
+    end);

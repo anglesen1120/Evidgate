@@ -43,6 +43,9 @@ public sealed partial class EvaluationTaskTests
         var stored = await ReloadAsync(world, seed, "live");
         var winner = await EvaluateAsync(world, seed, EvaluationMode.Live, token);
 
+        stored.Completeness.ShouldBe("complete");
+        stored.Missing.ShouldBeEmpty();
+        stored.Outcome.ShouldBe("has_failures");
         stored.Decision.ShouldBe(decision);
         stored.Reasons.Contains("required_assertion_failed").ShouldBe(decision == "FAIL");
         stored.Reasons.Contains("waiver_approved").ShouldBe(exceptionKind == "case");
@@ -52,6 +55,43 @@ public sealed partial class EvaluationTaskTests
         DecidingOf(inserted).ShouldBe(stored.Deciding);
         winner.Id.ShouldBe(inserted.Id);
         DecidingOf(winner).ShouldBe(stored.Deciding);
+    }
+
+    /// <summary>
+    /// A quarantine and a later-expiring case waiver hold on one failed required case. One microsecond before the
+    /// quarantine expires the case is excluded and the verdict passes; at the expiry instant the entry is out of the
+    /// snapshot, the failure gates again and the waiver annotates it.
+    /// </summary>
+    [Fact]
+    public async Task Evaluate_TargetedQuarantineAtExpiry_RevealsWaivedFailure()
+    {
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
+        var seed = await SeedMatrixAsync(world, MatrixRow("M1") with { FirstCaseStatus = "failed" });
+        var caseId = (await FirstPlannedCaseAsync(world, seed.RunId)).FirstId;
+        const string expirySql = "timestamptz '2030-01-01 00:00:00+00'";
+        var expiry = new DateTimeOffset(2030, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        var quarantine = await InsertQuarantineAsync(world, seed, "active", expirySql, caseId);
+        var waiver = await InsertWaiverAsync(world, seed, "approved", expirySql + " + interval '1 hour'", target: caseId);
+        var token = TestContext.Current.CancellationToken;
+        await using var scope = await OpenScopeAsync(world, seed, token);
+        await using var services = world.Api.Services.CreateAsyncScope();
+
+        // Separate storage slots prevent the second evaluation from reading back the first verdict.
+        var before = (await HandlerWithClock(services.ServiceProvider, new CountingClock(expiry.AddTicks(-10)))
+            .Handle(new EvaluateRunCommand(seed.RunId, 1, EvaluationMode.Live), token)).Value;
+        var atExpiry = (await HandlerWithClock(services.ServiceProvider, new CountingClock(expiry))
+            .Handle(new EvaluateRunCommand(seed.RunId, 1, EvaluationMode.Shadow), token)).Value;
+
+        before.Decision.ShouldBe("PASS");
+        before.QuarantinedCases.ShouldBe([caseId]);
+        before.Reasons.ShouldContain("quarantined_case_failed");
+        before.ExceptionsHash.ShouldBe(ExceptionsSnapshotResolver.HashOf([waiver], [quarantine]));
+        atExpiry.Decision.ShouldBe("FAIL");
+        atExpiry.Outcome.ShouldBe("has_failures");
+        atExpiry.QuarantinedCases.ShouldBeEmpty();
+        atExpiry.Reasons.ShouldBe(["required_assertion_failed", "waiver_approved"]);
+        atExpiry.ExceptionsHash.ShouldBe(ExceptionsSnapshotResolver.HashOf([waiver], []));
+        atExpiry.ExceptionsHash.ShouldNotBe(before.ExceptionsHash);
     }
 
     /// <summary>
@@ -187,20 +227,22 @@ public sealed partial class EvaluationTaskTests
 
         await using var scope = await OpenScopeAsync(world, seed, cancellationToken);
         await using var services = world.Api.Services.CreateAsyncScope();
-        var provider = services.ServiceProvider;
-        var handler = new EvaluateRunCommandHandler(
-            provider.GetRequiredService<EvaluationInputReader>(),
-            provider.GetRequiredService<ExceptionsSnapshotResolver>(),
-            provider.GetRequiredService<Evidgate.Evaluation.IPolicyEvaluator>(),
-            provider.GetRequiredService<ITenantDb>(),
-            provider.GetRequiredService<ITenantScopeAccessor>(),
-            clock);
+        var handler = HandlerWithClock(services.ServiceProvider, clock);
 
         var result = await handler.Handle(new EvaluateRunCommand(seed.RunId, 1, EvaluationMode.Live), cancellationToken);
 
         clock.Reads.ShouldBe(1);
         result.Value.ExceptionsAsOf.ShouldBe(clock.Instant);
     }
+
+    private static EvaluateRunCommandHandler HandlerWithClock(IServiceProvider provider, TimeProvider clock) =>
+        new(
+            provider.GetRequiredService<EvaluationInputReader>(),
+            provider.GetRequiredService<ExceptionsSnapshotResolver>(),
+            provider.GetRequiredService<Evidgate.Evaluation.IPolicyEvaluator>(),
+            provider.GetRequiredService<ITenantDb>(),
+            provider.GetRequiredService<ITenantScopeAccessor>(),
+            clock);
 
     private sealed class CountingClock(DateTimeOffset instant) : TimeProvider
     {

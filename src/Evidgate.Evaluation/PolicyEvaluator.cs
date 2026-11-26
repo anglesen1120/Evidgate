@@ -75,12 +75,31 @@ public sealed class PolicyEvaluator : IPolicyEvaluator
         var (decision, reasons) = ApplyLayers(evidence, policy, exceptions, core);
 
         // A waiver only annotates a failure that gates; it is applied after the layers, so it can never move the decision.
-        if (decision == EvaluationDecision.Fail && failedCaseIds.Intersect(exceptions.WaivedCaseIds).Any())
+        if (decision == EvaluationDecision.Fail && AnyWaived(failedCaseIds, exceptions.WaivedCaseIds))
         {
             reasons = ReasonSet.Normalize([.. reasons, EvaluationReason.WaiverApproved]);
         }
 
         return core with { Decision = decision, Reasons = reasons };
+    }
+
+    /// <summary>True when a still-gating failed case also holds a waiver; the empty sides short-circuit.</summary>
+    private static bool AnyWaived(IReadOnlySet<Guid> failedCaseIds, IReadOnlyList<Guid> waivedCaseIds)
+    {
+        if (failedCaseIds.Count == 0 || waivedCaseIds.Count == 0)
+        {
+            return false;
+        }
+
+        foreach (var id in waivedCaseIds)
+        {
+            if (failedCaseIds.Contains(id))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>
