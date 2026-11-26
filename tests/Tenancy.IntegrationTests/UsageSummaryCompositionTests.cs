@@ -41,8 +41,9 @@ public sealed class UsageSummaryCompositionTests
         results.Limit.ShouldBeNull();
         results.UnavailableReason.ShouldBeNull();
 
-        summary.Metrics.Count.ShouldBe(UsageLedgerMetricNames.All.Count);
-        summary.Metrics.Select(metric => metric.Metric).ShouldBe(UsageLedgerMetricNames.All);
+        var summarised = UsageLedgerMetricNames.All.Where(name => name != UsageLedgerMetricNames.AiCredit).ToList();
+        summary.Metrics.Count.ShouldBe(summarised.Count);
+        summary.Metrics.Select(metric => metric.Metric).ShouldBe(summarised);
     }
 
     [Fact]

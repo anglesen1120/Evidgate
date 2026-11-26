@@ -3,7 +3,7 @@ using Evidgate.Modules.Usage.Contracts;
 namespace Evidgate.Modules.Usage.Domain;
 
 /// <summary>
-/// The <c>metric</c> wire mapping (12.3.1 §4): the column stores the seven strings the migration's <c>check</c>
+/// The <c>metric</c> wire mapping (12.3.1 §4): the column stores the eight strings the migration's <c>check</c>
 /// constraint admits, while the module and its callers speak <see cref="UsageMetric"/>. The names live once in
 /// <see cref="UsageLedgerMetricNames"/>, so this mapping only decides which member means which name.
 /// </summary>
@@ -20,9 +20,10 @@ internal static class UsageMetricWire
         UsageMetric.SupportHours => UsageLedgerMetricNames.SupportHours,
         UsageMetric.RunnerMinutes => UsageLedgerMetricNames.RunnerMinutes,
         UsageMetric.DeviceMinutes => UsageLedgerMetricNames.DeviceMinutes,
+        UsageMetric.AiCredit => UsageLedgerMetricNames.AiCredit,
         _ => throw new ArgumentOutOfRangeException(
             nameof(metric),
             metric,
-            "the usage metric is not one of the seven the ledger stores"),
+            "the usage metric is not one of the eight the ledger stores"),
     };
 }

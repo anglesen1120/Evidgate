@@ -71,9 +71,15 @@ internal static class UsageSummaryComposition
         }
 
         var page = Page(projects.Values, limit, out var more);
-        var metrics = new List<UsageSummaryMetricDto>(UsageLedgerMetricNames.All.Count);
+        var metrics = new List<UsageSummaryMetricDto>(UsageLedgerMetricNames.All.Count - 1);
         foreach (var metric in Enum.GetValues<UsageMetric>())
         {
+            // Credit has its own balance read; the quota summary and its screen stay on the seven quota metrics.
+            if (metric == UsageMetric.AiCredit)
+            {
+                continue;
+            }
+
             metrics.Add(Metric(metric, requestedProject, tenant, projects, alerts, page, period, now));
         }
 
