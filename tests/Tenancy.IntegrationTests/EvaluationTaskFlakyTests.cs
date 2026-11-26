@@ -7,8 +7,7 @@ namespace Tenancy.IntegrationTests;
 /// <summary>
 /// In-run flaky detection through the stored evaluation: the first case fails on attempt 1 and passes on attempt 2, the
 /// frozen revision admits both, and the committed row shows what the evaluator made of the retry. The suite's retry
-/// allowance comes from the pinned suite revision, so the same attempts count as flaky under one policy and not at all
-/// under another.
+/// allowance comes from the pinned suite revision; it only flags a recovery beyond the allowance and never hides the fact.
 /// </summary>
 public sealed partial class EvaluationTaskTests
 {
