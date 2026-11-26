@@ -179,7 +179,11 @@ revision_no)`, the closed `missing[]` code CHECK of 00 §8.5 including `setup_er
   replay, terminal `done` frozen), with its list index and column-scoped app grants (notes at the end
   of this file); and `0107` is the daily healing LLM budget roll — `evidgate.roll_healing_llm_budget(date)`
   opens each project's row for the new UTC day with the earlier caps and zero usage, executable by
-  `evidgate_worker_sched` alone (notes at the end of this file);
+  `evidgate_worker_sched` alone (notes at the end of this file); and `0126` is the waiver and quarantine
+  expiry sweep — two owner-side definers, `evidgate.exception_expiry_org_ids` (the due orgs' ids, executable by
+  `evidgate_worker_sched` alone) and `evidgate.sweep_expired_exceptions` (one tenant's due rows to `expired`,
+  executable by `evidgate_app` alone and refused for any org but the caller's), backed by partial indexes
+  on `(org_id, expires_at, id)` for approved waivers and active quarantines (notes at the end of this file);
   the next free number is one above the highest file in this folder (`ls migrations/*.sql`), and this README does not
   track it; a gap means two branches invented the same sequence and neither history can be trusted.
 - One file runs in one transaction (`WithTransactionPerScript`), so PostgreSQL
@@ -1294,4 +1298,12 @@ target)` and `session_revoke_audit_append(org, actor, object_type, object_id, me
 - Threat model: `project_id` is a non-evidentiary tag. It is NOT part of `entry_hash` (the 14 canonical fields of `AuditHashing` are unchanged, so every existing chain verifies): the chain proves the action happened, not which project it was tagged with. A reader must not treat the tag as tamper-evident.
 - No foreign key: audit rows outlive the project they describe, like the text `object_id`. Append-only is unchanged: `evidgate_app` holds only `SELECT` + `INSERT` on `audit_log` (`0015` revoked `UPDATE`, `DELETE`, `TRUNCATE`), so the tag cannot be rewritten after the insert; no grant, policy or trigger changes.
 - Locks: the runner applies the file in one transaction, so the `ACCESS EXCLUSIVE` lock of `add column` is held until commit, through the index build: reads and inserts on `audit_log` wait for the whole file, under a 5 s `lock_timeout` for acquiring it. Operator note, same known limit as `0038`: on a large table, out of band and in this order, (1) `alter table public.audit_log add column project_id uuid;` and commit (the index needs the column), (2) `create index concurrently audit_log_org_project_created_id_idx on public.audit_log (org_id, project_id, created_at desc, id desc) where project_id is not null;` outside a transaction, then (3) run this migration: its two `if not exists` clauses adopt the column and the index. Deploy: the migrator before the API that writes the tag (a writer that omits it still inserts). Rollback: drop the index and the column; no other table changes.
+
 - Numbering: `0127` follows `0126` from a sibling lane; the migrator refuses a gap, so run this migration only on a tree that holds `0126`.
+## Notes on the waiver and quarantine expiry sweep (`0126`)
+
+- `0126` adds two functions and two partial indexes; it adds no table, column, policy or grant on a table. The guards of `0027` and `0030` still refuse a raw `UPDATE ... SET state = 'expired'` from `evidgate_app`; the sweep runs as the owner.
+- `evidgate.exception_expiry_org_ids(p_after uuid, p_limit integer)` returns `setof uuid`: one keyset page, in id order, of the orgs that hold an `approved` waiver or an `active` quarantine entry with `expires_at <= now()`. It answers org ids only, the limit is clamped to 1..1000, and `EXECUTE` is `evidgate_worker_sched`'s alone. Its `audit-deferred` line follows `0076`: the projection spans orgs and `audit_log.org_id` is NOT NULL.
+- `evidgate.sweep_expired_exceptions(p_org_id uuid, p_limit integer)` returns the rows it moved (`kind`, `id`, `project_id`, `expires_at`). The task handler writes one audit row per returned row in the same tenant transaction; a direct `evidgate_app` call bypasses the handler but can only expire already-due rows in its current org. `EXECUTE` is `evidgate_app`'s alone; a null or mismatched tenant raises `42501`. The cutoff is the transaction's `now()`, inclusive. A single limit (1..1000) covers both kinds, oldest due first. Locked candidates are skipped; rows locked but not selected stay locked until transaction end.
+- Indexes: `waiver_org_due_idx` (approved waivers) and `quarantine_entry_org_due_idx` (active quarantine entries) order `(org_id, expires_at, id)` without the existing indexes' project prefix. They serve both the per-org sweep and the cross-org due-org probe; the per-project indexes remain in place.
+- Locks: `create index` takes a `SHARE` lock on each small table of human-created entries, blocking writes until commit; `lock_timeout` is 5 s. Deploy the migration before enabling the Worker's `waiver_and_quarantine_expiry` schedule. For rollback, disable the schedule and drop both functions and both new indexes. Already-expired rows stay expired.
