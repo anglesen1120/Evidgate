@@ -129,7 +129,7 @@ internal sealed class CreateProjectCommandHandler(
             ?? throw new InvalidOperationException(
                 $"the project {project.Id} was inserted in this transaction yet cannot be read back");
 
-        audit.Describe(new AuditObject("project", project.Id.ToString("D")));
+        audit.Describe(new AuditObject("project", project.Id.ToString("D"), ProjectId: project.Id));
 
         return Result.Success(created, status: 201);
     }

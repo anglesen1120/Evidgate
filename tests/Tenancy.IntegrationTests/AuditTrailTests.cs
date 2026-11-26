@@ -48,6 +48,27 @@ public sealed class AuditTrailTests : IClassFixture<TenancyHostPool>
     }
 
     [Fact]
+    public async Task AuditWriter_ProjectAction_CarriesTheProjectTag_AndTheChainStillVerifies()
+    {
+        var database = await _fixture.SharedDatabaseAsync();
+        await using var api = _hosts.RealResolver(database);
+        using var client = api.CreateClient();
+        var user = Guid.CreateVersion7();
+
+        var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));
+        var project = await CreateProjectAsync(client, user, org, Unique.Slug("checkout"));
+
+        // The tag is on the project action only; the organization action belongs to no project.
+        (await _fixture.ScalarAsync<Guid>(
+            database, $"select project_id from public.audit_log where org_id = '{org}' and seq = 2")).ShouldBe(project);
+        (await _fixture.ScalarAsync<long>(
+            database, $"select count(*) from public.audit_log where org_id = '{org}' and project_id is not null")).ShouldBe(1);
+
+        // The tag is not part of entry_hash, so the verifier (which does not read it) still accepts the chain.
+        (await VerifyAsync(api, org)).ShouldBeNull();
+    }
+
+    [Fact]
     public async Task AuditWriter_BusinessRollback_LeavesNoAuditRow()
     {
         var database = await _fixture.SharedDatabaseAsync();
@@ -190,6 +211,7 @@ public sealed class AuditTrailTests : IClassFixture<TenancyHostPool>
                      "update public.audit_log set action = 'tampered'",
                      "delete from public.audit_log",
                      "truncate public.audit_log",
+                     "update public.audit_log set project_id = gen_random_uuid()",
                  })
         {
             await using var command = new NpgsqlCommand("savepoint s", connection, transaction);
@@ -301,6 +323,17 @@ public sealed class AuditTrailTests : IClassFixture<TenancyHostPool>
             "select indexdef from pg_indexes where tablename = 'audit_log' and indexname = 'audit_log_org_created_id_idx'"))
             .ShouldHaveSingleItem()
             .ShouldContain("(org_id, created_at DESC, id DESC)");
+    }
+
+    [Fact]
+    public async Task ProjectFilterQuery_HasItsOwnPartialIndex()
+    {
+        var database = await _fixture.SharedDatabaseAsync();
+        (await _fixture.ColumnAsync<string>(
+            database,
+            "select indexdef from pg_indexes where tablename = 'audit_log' and indexname = 'audit_log_org_project_created_id_idx'"))
+            .ShouldHaveSingleItem()
+            .ShouldContain("(org_id, project_id, created_at DESC, id DESC) WHERE (project_id IS NOT NULL)");
     }
 
     private async Task<List<AuditRow>> RowsAsync(string database, Guid org)

@@ -975,6 +975,10 @@ public static partial class IsolationRouteCases
                 ["raw_report_id"] = Guid.CreateVersion7().ToString(),
                 ["parser_version"] = "1.1.0",
             })),
+        // The project-scoped decision counts: a foreign or unknown project is the one 404, and the caller's own
+        // project answers 200 (zero counts on a project with no runs).
+        ProjectCase("GET", "/v1/projects/{p}/runs/decision-counts",
+            p => new(HttpMethod.Get, $"/v1/projects/{p}/runs/decision-counts"), ownControl: true),
         // 05.2.2-T2: the project-scoped run list. As a list, its positive control is the full-pagination walk
         // (Lists); the extra probes pin the ref_name filter, which must not widen tenancy.
         ProjectCase("GET", "/v1/projects/{p}/runs", p => new(HttpMethod.Get, $"/v1/projects/{p}/runs"), list: true,

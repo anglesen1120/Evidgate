@@ -100,7 +100,8 @@ internal sealed class SetRetentionPolicyCommandHandler(
                 ["range_days"] = string.Create(
                     CultureInfo.InvariantCulture,
                     $"artifact_days={row.ArtifactDays},metadata_days={row.MetadataDays}"),
-            }));
+            },
+            ProjectId: command.ProjectId));
 
         return Result.Success(new RetentionPolicy(row.ArtifactDays, row.MetadataDays));
     }

@@ -77,6 +77,91 @@ public sealed class AuditApiTests
     }
 
     [Fact]
+    public async Task GetAuditPage_ProjectFilter_KeepsOnlyThatProjectsRows_AcrossPagesWithTies()
+    {
+        var database = await _fixture.SharedDatabaseAsync();
+        await using var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
+        using var client = api.CreateClient();
+        var user = Guid.CreateVersion7();
+        var org = await SeedAsync(client, user, 0);
+        var projectA = await CreateProjectAsync(client, user, org, Unique.Slug("alpha"));
+        var projectB = await CreateProjectAsync(client, user, org, Unique.Slug("beta"));
+        var caller = TenancyApiFactory.Resolved(user: user);
+
+        // Project A: its create plus three updates = four tagged rows; project B holds one; the org create is untagged.
+        for (var version = 1; version <= 3; version++)
+        {
+            (await client.SendAsync(
+                HttpMethod.Patch, $"/v1/projects/{projectA}", TenancyApiFactory.Resolved(user: user, orgHeader: org),
+                new { name = $"Renamed {version}" }, NewKey(), $"\"{version}\""))
+                .Status.ShouldBe(HttpStatusCode.OK);
+        }
+
+        // One instant for every row of A, so the keyset has to break the ties on id.
+        await _fixture.ExecuteAsync(
+            database,
+            $"update public.audit_log set created_at = '2030-01-01T00:00:00Z' where org_id = '{org}' and project_id = '{projectA}'");
+
+        var expected = await _fixture.ColumnAsync<long>(
+            database, $"select seq from public.audit_log where org_id = '{org}' and project_id = '{projectA}' order by id desc");
+        expected.Count.ShouldBe(4);
+
+        var seen = new List<long>();
+        string? cursor = null;
+        var pages = 0;
+        do
+        {
+            var url = $"/v1/orgs/{org}/audit?limit=3&project_id={projectA}" + (cursor is null ? string.Empty : $"&cursor={cursor}");
+            var page = await client.SendAsync(HttpMethod.Get, url, caller);
+            page.Status.ShouldBe(HttpStatusCode.OK);
+            seen.AddRange(page.Body.GetProperty("items").EnumerateArray().Select(item => item.GetProperty("seq").GetInt64()));
+            cursor = page.Body.GetProperty("next_cursor").GetString();
+            pages++;
+        }
+        while (cursor is not null);
+
+        seen.ShouldBe(expected);
+        pages.ShouldBe(2);
+
+        var other = await client.SendAsync(HttpMethod.Get, $"/v1/orgs/{org}/audit?project_id={projectB}", caller);
+        other.Body.GetProperty("items").EnumerateArray().Select(item => item.GetProperty("action").GetString()).ShouldBe(["project.create"]);
+
+        // The filters compose, and the unfiltered page still holds every row.
+        var updates = await client.SendAsync(HttpMethod.Get, $"/v1/orgs/{org}/audit?project_id={projectA}&action=project.update", caller);
+        updates.Body.GetProperty("items").GetArrayLength().ShouldBe(3);
+        var all = await client.SendAsync(HttpMethod.Get, $"/v1/orgs/{org}/audit?limit=200", caller);
+        all.Body.GetProperty("items").GetArrayLength().ShouldBe(6);
+    }
+
+    [Fact]
+    public async Task GetAuditPage_ProjectFilter_ForeignOrUnknownProject_IsAnEmptyPage_AndNonUuidIs422()
+    {
+        var database = await _fixture.SharedDatabaseAsync();
+        await using var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
+        using var client = api.CreateClient();
+        var user = Guid.CreateVersion7();
+        var org = await SeedAsync(client, user, 1);
+        var foreignOrg = await SeedAsync(client, Guid.CreateVersion7(), 1, "foreign");
+        var foreignProject = await _fixture.ScalarAsync<Guid>(database, $"select id from public.project where org_id = '{foreignOrg}'");
+        var caller = TenancyApiFactory.Resolved(user: user);
+
+        foreach (var project in new[] { foreignProject, Guid.CreateVersion7() })
+        {
+            var page = await client.SendAsync(HttpMethod.Get, $"/v1/orgs/{org}/audit?project_id={project}", caller);
+            page.Status.ShouldBe(HttpStatusCode.OK);
+            page.Body.GetProperty("items").GetArrayLength().ShouldBe(0);
+            page.Body.GetProperty("next_cursor").ValueKind.ShouldBe(JsonValueKind.Null);
+        }
+
+        foreach (var invalid in new[] { "not-a-uuid", string.Empty, "%20%20" })
+        {
+            var page = await client.SendAsync(HttpMethod.Get, $"/v1/orgs/{org}/audit?project_id={invalid}", caller);
+            page.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
+            page.ErrorCode.ShouldBe("request_invalid");
+        }
+    }
+
+    [Fact]
     public async Task GetAuditPage_WithoutAuditRead_Is403_AndAnotherOrgIs403Not404Leak()
     {
         var database = await _fixture.SharedDatabaseAsync();

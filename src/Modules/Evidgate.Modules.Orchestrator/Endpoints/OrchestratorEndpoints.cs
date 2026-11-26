@@ -135,6 +135,10 @@ public static partial class OrchestratorEndpoints
             .Produces<RunPage>(StatusCodes.Status200OK)
             .WithSummary("Cursor list of a project's runs, filtered by the recorded branch/PR/commit identity plus state, decision, rerun scope and parent run (05.2.2, F43)");
 
+        group.MapGet("/projects/{p}/runs/decision-counts", ListRunDecisionCountsAsync)
+            .Produces<RunDecisionCounts>(StatusCodes.Status200OK)
+            .WithSummary("Counts of a project's runs by newest live decision since an instant, over a bounded scan");
+
         ReleaseEndpoints.Map(group);
 
         return group;

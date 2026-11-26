@@ -95,6 +95,7 @@ internal static class RunReleaseBinding
     /// <param name="cancellationToken">Cancellation.</param>
     internal static async ValueTask BindAsync(
         Guid releaseId,
+        Guid projectId,
         Guid runId,
         Guid orgId,
         JsonElement? components,
@@ -140,7 +141,7 @@ internal static class RunReleaseBinding
         await ReleaseBindWriter
             .EnqueueAsync(outbox, releaseId, runId, boundKeys, match.Mismatched.Count, cancellationToken)
             .ConfigureAwait(false);
-        ReleaseBindWriter.Describe(audit, releaseId, runId, boundKeys.Length, match.Mismatched.Count);
+        ReleaseBindWriter.Describe(audit, releaseId, projectId, runId, boundKeys.Length, match.Mismatched.Count);
         ReleaseBindWriter.Record(audit, actor);
     }
 

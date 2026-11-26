@@ -30,7 +30,7 @@ internal static class ReleaseBindWriter
     /// <param name="runId">The run the binding is for.</param>
     /// <param name="boundCount">The rows the pair holds after the write.</param>
     /// <param name="mismatchedCount">The release components the run does not match.</param>
-    internal static void Describe(IAuditTrail audit, Guid releaseId, Guid runId, int boundCount, int mismatchedCount) =>
+    internal static void Describe(IAuditTrail audit, Guid releaseId, Guid projectId, Guid runId, int boundCount, int mismatchedCount) =>
         audit.Describe(new AuditObject(
             "release",
             releaseId.ToString("D"),
@@ -39,7 +39,8 @@ internal static class ReleaseBindWriter
                 ["count"] = boundCount.ToString(CultureInfo.InvariantCulture),
                 ["outcome"] = mismatchedCount == 0 ? "complete" : "partial",
                 ["run_id"] = runId.ToString("D"),
-            }));
+            },
+            ProjectId: projectId));
 
     /// <summary>
     /// Queues the <c>release.bind</c> entry itself. Only a path whose ambient action is a different one calls this: a

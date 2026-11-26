@@ -64,6 +64,24 @@ public interface IPolicyContracts
     ValueTask<IReadOnlyList<RunLiveDecision>> GetLatestLiveDecisionsAsync(
         IReadOnlyList<Guid> runIds,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Counts the newest live verdict of each named run per decision in one aggregate statement over the ambient
+    /// tenant scope: the same latest-live rule as <see cref="GetLatestLiveDecisionsAsync"/> (highest
+    /// <c>evidence_revision</c> <c>live</c> row, a <c>shadow</c> row never counts), grouped by decision, so a chunk
+    /// costs a handful of result rows instead of one per run. A run with no live evaluation is in no count; the
+    /// caller derives "not evaluated" as the runs it passed minus the three counts. Empty input performs no query.
+    /// </summary>
+    /// <remarks>
+    /// The same caller duty as <see cref="GetLatestLiveDecisionsAsync"/>: pass only ids already scoped to the project
+    /// and to what the caller may see, and no duplicates (a repeated id is read once, so it would be counted as one
+    /// run here and as two by a caller that counts its own list).
+    /// </remarks>
+    /// <param name="runIds">At most 200 distinct run ids, one chunk of a scan.</param>
+    /// <param name="cancellationToken">Cancellation.</param>
+    ValueTask<LiveDecisionCounts> CountLatestLiveDecisionsAsync(
+        IReadOnlyList<Guid> runIds,
+        CancellationToken cancellationToken);
 }
 
 /// <summary>
@@ -80,6 +98,16 @@ public sealed record LiveEvaluation(int EvidenceRevision, Guid EvaluationId);
 /// <param name="EvidenceRevision">The evaluated evidence revision.</param>
 /// <param name="EvaluationId">The stored evaluation id.</param>
 public sealed record RunLiveDecision(Guid RunId, string Decision, int EvidenceRevision, Guid EvaluationId);
+
+/// <summary>How many of a set of runs have each newest live verdict; runs with none are in no field.</summary>
+/// <param name="Pass">Runs whose newest live verdict is PASS.</param>
+/// <param name="Fail">Runs whose newest live verdict is FAIL.</param>
+/// <param name="Inconclusive">Runs whose newest live verdict is INCONCLUSIVE.</param>
+public sealed record LiveDecisionCounts(int Pass, int Fail, int Inconclusive)
+{
+    /// <summary>The runs that have a live verdict.</summary>
+    public int Evaluated => Pass + Fail + Inconclusive;
+}
 
 /// <summary>
 /// The active policy revision of a project, as run creation needs it (05.2.1 plan §10 T1 hand-over; ruling T93).

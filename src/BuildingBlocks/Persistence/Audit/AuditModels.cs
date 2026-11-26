@@ -33,12 +33,17 @@ public sealed record AuditActor(string Type, string Id);
 /// <param name="BeforeHash">sha256 of the object's canonical content before the change, if any.</param>
 /// <param name="AfterHash">sha256 of its canonical content after the change, if any.</param>
 /// <param name="Metadata">Allowlisted, secret-free context (see <see cref="AuditMetadata"/>).</param>
+/// <param name="ProjectId">
+/// The project the action belongs to, for the project filter of the audit list. A tag on the row, not part of the
+/// hash: the chain proves the action, not its project.
+/// </param>
 public sealed record AuditObject(
     string ObjectType,
     string ObjectId,
     byte[]? BeforeHash = null,
     byte[]? AfterHash = null,
-    IReadOnlyDictionary<string, string>? Metadata = null);
+    IReadOnlyDictionary<string, string>? Metadata = null,
+    Guid? ProjectId = null);
 
 /// <summary>One entry waiting to be appended to the org's chain.</summary>
 /// <param name="Action">Action string, e.g. <c>membership.invite</c>.</param>

@@ -115,7 +115,8 @@ internal sealed class CreateReleaseCommandHandler(
             {
                 ["count"] = request.Components.Count.ToString(System.Globalization.CultureInfo.InvariantCulture),
                 ["status"] = request.State,
-            }));
+            },
+            ProjectId: command.ProjectId));
 
         return Result.Success(new ReleaseCreated(releaseId), StatusCodes.Status201Created);
     }

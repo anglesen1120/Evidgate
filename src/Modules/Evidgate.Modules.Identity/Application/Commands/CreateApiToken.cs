@@ -129,7 +129,7 @@ internal sealed class CreateApiTokenCommandHandler(
             return Result.Failure<ApiTokenCreatedResponse>(refused);
         }
 
-        audit.Describe(new AuditObject("api_token", token.Id.ToString("D")));
+        audit.Describe(new AuditObject("api_token", token.Id.ToString("D"), ProjectId: token.ProjectId));
 
         return Result.Success(ApiTokenViews.Created(token, generated.Full));
     }

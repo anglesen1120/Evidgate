@@ -139,7 +139,7 @@ internal sealed partial class CancelRunCommandHandler(
             return Result.Failure(parsed.Error!);
         }
 
-        if (!await IsRunInScopeAsync(command.RunId, cancellationToken).ConfigureAwait(false))
+        if (await ScopedProjectIdAsync(command.RunId, cancellationToken).ConfigureAwait(false) is not { } projectId)
         {
             return Result.Failure(RunNotFound);
         }
@@ -169,7 +169,7 @@ internal sealed partial class CancelRunCommandHandler(
             return Accepted(activity, "already_requested");
         }
 
-        audit.Describe(new AuditObject("run", command.RunId.ToString("D")));
+        audit.Describe(new AuditObject("run", command.RunId.ToString("D"), ProjectId: projectId));
 
         activity?.SetTag("evidgate.run_id", command.RunId.ToString("D"));
         activity?.SetTag("evidgate.run.cancel.outcome", "requested");
@@ -180,9 +180,10 @@ internal sealed partial class CancelRunCommandHandler(
     /// <summary>
     /// The project half of the scope rule, read unlocked before the guarded transition: a project-scoped credential must
     /// not cancel a sibling project's run, and a run outside the caller's tenant or project answers what an unknown id
-    /// answers, so the refusal is not an existence oracle. Nothing is written and nothing is locked here.
+    /// answers, so the refusal is not an existence oracle. Nothing is written and nothing is locked here. Answers the
+    /// run's project, which the audit entry carries as its tag.
     /// </summary>
-    private async ValueTask<bool> IsRunInScopeAsync(Guid runId, CancellationToken cancellationToken)
+    private async ValueTask<Guid?> ScopedProjectIdAsync(Guid runId, CancellationToken cancellationToken)
     {
         var runProject = await db.QuerySingleOrDefaultAsync<RunProjectRow>(
                 RunCancelSql.RunProject,
@@ -190,7 +191,9 @@ internal sealed partial class CancelRunCommandHandler(
                 cancellationToken)
             .ConfigureAwait(false);
 
-        return runProject is not null && OrchestratorScope.Project(runProject.ProjectId, principals, tenant) is null;
+        return runProject is not null && OrchestratorScope.Project(runProject.ProjectId, principals, tenant) is null
+            ? runProject.ProjectId
+            : null;
     }
 
     /// <summary>

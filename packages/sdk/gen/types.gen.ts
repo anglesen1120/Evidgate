@@ -253,6 +253,40 @@ export type RunPage = {
 };
 
 /**
+ * Runs of one project created at or after `since`, counted by the verdict of their newest `live` evaluation. A run is counted once, under its latest evidence revision only (an older revision's verdict is superseded), and a `shadow` evaluation never counts. Invariant: `scanned = pass + fail + inconclusive + no_decision`.
+ */
+export type RunDecisionCounts = {
+    /**
+     * The inclusive lower bound on the run's `created_at` that was applied: the request's `since` as sent (the scan compares it rounded up to the next whole microsecond), or now minus 30 days when it was absent.
+     */
+    since: string;
+    /**
+     * Runs whose newest live verdict is `PASS`.
+     */
+    pass: number;
+    /**
+     * Runs whose newest live verdict is `FAIL`.
+     */
+    fail: number;
+    /**
+     * Runs whose newest live verdict is `INCONCLUSIVE`.
+     */
+    inconclusive: number;
+    /**
+     * Scanned runs with no live evaluation (not yet evaluated, or only a `shadow` one).
+     */
+    no_decision: number;
+    /**
+     * Runs read, the sum of the four counts above.
+     */
+    scanned: number;
+    /**
+     * `true` when more runs matched than one request scans (5000, newest first), so the counts cover the newest `scanned` runs only and an older window must be asked for with a later `since`. A project with exactly 5000 matching runs is not truncated.
+     */
+    truncated: boolean;
+};
+
+/**
  * The run's pinned environment revision (05.1.2), read by `GET /v1/runs/{r}` since F44 (S143): `environment_revision` joined through `run.environment_revision_id` (not null, FK `run_environment_revision_fk`, 0031) plus the environment's own key. No `secret_refs`, no `base_urls`, no `dependency_versions`: the run detail names the revision, it does not re-publish its content (`GET /v1/environment-revisions/{id}` does that).
  */
 export type RunEnvironmentRef = {
@@ -3875,6 +3909,11 @@ export type AuditAction = string;
 export type AuditObjectType = string;
 
 /**
+ * Exact project tag of the audit row. Only project-tagged actions recorded since the tag was introduced match; earlier rows and organization-level actions never do, and not every project action carries the tag yet, so an empty or short result does not prove nothing happened. An id that is unknown or belongs to another org answers an empty page, not 404; a present value that is empty or not a uuid is 422 `request_invalid` with `details[].path` = `project_id`; an absent one applies no filter.
+ */
+export type AuditProjectId = string;
+
+/**
  * Inclusive lower bound on `created_at` (ISO 8601).
  */
 export type AuditFrom = string;
@@ -3980,6 +4019,11 @@ export type RunTriggerEvent = 'push' | 'pull_request' | 'schedule' | 'manual' | 
  * Exact `is_fork` of the run's recorded identity (05.2.2 §5, AC6); the literal `true` or `false`. A present but invalid value is 422 `request_invalid` with `details[].path` = `is_fork`.
  */
 export type RunIsFork = boolean;
+
+/**
+ * Inclusive lower bound on `run.created_at` as an RFC 3339 date-time with seconds and an explicit offset (`Z` or `±hh:mm`, at most seven fraction digits): a run created exactly at `since` is counted, one created a tick earlier is not. The bound is compared at PostgreSQL's microsecond precision, rounded up to the next whole microsecond, so a `since` between two stored instants excludes the earlier run; the response echoes the requested value. Absent means now minus 30 days. A present value that is blank, a bare date, a time alone, without an offset or not a date-time is 422 `request_invalid` with `details[].path` = `since`.
+ */
+export type RunDecisionCountsSince = string;
 
 /**
  * Exact `run.state` (00 §8.1) — one of the seven run states (F43, S143). AND-combined with every other present filter. A present but out-of-vocabulary value is 422 `request_invalid` with `details[].path` = `state`; the filter is not index-served, so it scans the project's rows (05.2.2 note).
@@ -5304,6 +5348,58 @@ export type CreateRunResponses = {
 };
 
 export type CreateRunResponse = CreateRunResponses[keyof CreateRunResponses];
+
+export type GetRunDecisionCountsData = {
+    body?: never;
+    path: {
+        p: string;
+    };
+    query?: {
+        /**
+         * Inclusive lower bound on `run.created_at` as an RFC 3339 date-time with seconds and an explicit offset (`Z` or `±hh:mm`, at most seven fraction digits): a run created exactly at `since` is counted, one created a tick earlier is not. The bound is compared at PostgreSQL's microsecond precision, rounded up to the next whole microsecond, so a `since` between two stored instants excludes the earlier run; the response echoes the requested value. Absent means now minus 30 days. A present value that is blank, a bare date, a time alone, without an offset or not a date-time is 422 `request_invalid` with `details[].path` = `since`.
+         */
+        since?: string;
+    };
+    url: '/projects/{p}/runs/decision-counts';
+};
+
+export type GetRunDecisionCountsErrors = {
+    /**
+     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type GetRunDecisionCountsError = GetRunDecisionCountsErrors[keyof GetRunDecisionCountsErrors];
+
+export type GetRunDecisionCountsResponses = {
+    /**
+     * Counts by decision
+     */
+    200: RunDecisionCounts;
+};
+
+export type GetRunDecisionCountsResponse = GetRunDecisionCountsResponses[keyof GetRunDecisionCountsResponses];
 
 export type GetRunData = {
     body?: never;
@@ -9008,6 +9104,10 @@ export type ListAuditData = {
         actor_type?: 'user' | 'ci_producer' | 'agent' | 'platform_operator' | 'system';
         action?: string;
         object_type?: string;
+        /**
+         * Exact project tag of the audit row. Only project-tagged actions recorded since the tag was introduced match; earlier rows and organization-level actions never do, and not every project action carries the tag yet, so an empty or short result does not prove nothing happened. An id that is unknown or belongs to another org answers an empty page, not 404; a present value that is empty or not a uuid is 422 `request_invalid` with `details[].path` = `project_id`; an absent one applies no filter.
+         */
+        project_id?: string;
         /**
          * Inclusive lower bound on `created_at` (ISO 8601).
          */

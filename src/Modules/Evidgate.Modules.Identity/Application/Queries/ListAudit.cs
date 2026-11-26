@@ -16,12 +16,16 @@ namespace Evidgate.Modules.Identity.Application.Queries;
 /// <param name="ObjectType">Exact <c>object_type</c>.</param>
 /// <param name="From">Inclusive lower bound on <c>created_at</c>.</param>
 /// <param name="To">Exclusive upper bound on <c>created_at</c>.</param>
+/// <param name="ProjectId">
+/// Exact <c>project_id</c> tag. Rows written before the tag existed, and actions of no project, are never matched.
+/// </param>
 internal sealed record AuditFilter(
     string? ActorType,
     string? Action,
     string? ObjectType,
     DateTimeOffset? From,
-    DateTimeOffset? To);
+    DateTimeOffset? To,
+    Guid? ProjectId);
 
 /// <summary><c>GET /v1/orgs/{o}/audit</c> (02.7.1 AC4): one cursor page, newest first.</summary>
 internal sealed record ListAuditQuery(Guid OrgId, string? Cursor, int Limit, AuditFilter Filter)
@@ -71,6 +75,7 @@ internal sealed class ListAuditQueryHandler(ITenantDb db, ITenantScopeAccessor s
                 actor_type = query.Filter.ActorType,
                 action = query.Filter.Action,
                 object_type = query.Filter.ObjectType,
+                project_id = query.Filter.ProjectId,
                 from = query.Filter.From,
                 to = query.Filter.To,
                 cursor_created_at = cursorCreatedAt,
