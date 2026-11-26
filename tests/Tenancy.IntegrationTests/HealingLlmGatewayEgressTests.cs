@@ -30,7 +30,7 @@ public sealed class HealingLlmGatewayEgressTests
         var gateway = Gateway(db, scopes, provider, new RedactionPipeline(), HealingAvailability.Shadow);
 
         var result = await gateway.InvokeAsync(
-            Org, Request("log: password=" + Password + " for jane.doe" + "@example.com"), TestContext.Current.CancellationToken);
+            Org, Request("log: password=" + Password + "\nfor jane.doe" + "@example.com"), TestContext.Current.CancellationToken);
 
         result.IsSuccess.ShouldBeTrue(result.Error?.Message);
         provider.Payloads.ShouldHaveSingleItem().ShouldNotContain(Password);
@@ -69,6 +69,10 @@ public sealed class HealingLlmGatewayEgressTests
         row.Value("cost").ShouldBe(0m);
         row.Value("report_hash").ShouldBeOfType<string>().ShouldStartWith("sha256:");
         row.Value("report").ShouldBeOfType<string>().ShouldNotContain(Password);
+        var settlement = Statements(db, HealingLlmBudgetSql.Settle).ShouldHaveSingleItem();
+        settlement.Value("reserved_tokens").ShouldBeOfType<int>().ShouldBeGreaterThan(0);
+        settlement.Value("actual_tokens").ShouldBe(0);
+        settlement.Value("actual_cost").ShouldBe(0m);
     }
 
     [Fact]
@@ -102,6 +106,66 @@ public sealed class HealingLlmGatewayEgressTests
 
         provider.Calls.ShouldBe(0);
         AttemptRows(db).ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task InvokeAsync_CancelledDuringRedaction_ReleasesHoldWithoutSendingOrRecording()
+    {
+        var (db, scopes) = Database();
+        using var cancel = new CancellationTokenSource();
+        var provider = new SpyProvider();
+        var pipeline = Substitute.For<IRedactionPipeline>();
+        pipeline.Redact(Arg.Any<string>()).Returns(call =>
+        {
+            cancel.Cancel();
+            return new RedactionPipeline().Redact(call.Arg<string>());
+        });
+        var gateway = Gateway(db, scopes, provider, pipeline, HealingAvailability.Shadow);
+
+        await Should.ThrowAsync<OperationCanceledException>(
+            () => gateway.InvokeAsync(Org, Request("payload"), cancel.Token));
+
+        provider.Calls.ShouldBe(0);
+        AttemptRows(db).ShouldBeEmpty();
+        var settlement = Statements(db, HealingLlmBudgetSql.Settle).ShouldHaveSingleItem();
+        settlement.Value("reserved_tokens").ShouldBeOfType<int>().ShouldBeGreaterThan(0);
+        settlement.Value("reserved_cost").ShouldBeOfType<decimal>().ShouldBeGreaterThan(0m);
+        settlement.Value("actual_tokens").ShouldBe(0);
+        settlement.Value("actual_cost").ShouldBe(0m);
+        await db.DidNotReceive().ExecuteAsync(
+            HealingLlmCallSql.InsertWithReport, Arg.Any<object?>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task InvokeAsync_SchemaRetry_RedactsOnceAndReusesReportHash()
+    {
+        var (db, scopes) = Database();
+        var provider = Substitute.For<IHealingLlmProvider>();
+        provider.InvokeAsync(Arg.Any<HealingLlmRequest>(), Arg.Any<CancellationToken>()).Returns(
+            Task.FromResult(new HealingLlmResult(HealingLlmStatuses.Ok, "{}", 5, 0.01m)),
+            Task.FromResult(new HealingLlmResult(HealingLlmStatuses.Ok, """{"answer":1}""", 6, 0.02m)));
+        var payload = "password=" + Password;
+        var outcome = new RedactionPipeline().Redact(payload);
+        var pipeline = Substitute.For<IRedactionPipeline>();
+        pipeline.Redact(payload).Returns(outcome);
+        var gateway = Gateway(db, scopes, provider, pipeline, HealingAvailability.Shadow);
+        var request = Request(payload) with { ResponseSchema = """{"type":"object","required":["answer"]}""" };
+
+        var result = await gateway.InvokeAsync(Org, request, TestContext.Current.CancellationToken);
+
+        result.IsSuccess.ShouldBeTrue(result.Error?.Message);
+        result.Value!.Result.Status.ShouldBe(HealingLlmStatuses.Ok);
+        pipeline.Received(1).Redact(Arg.Any<string>());
+        await provider.Received(2).InvokeAsync(
+            Arg.Is<HealingLlmRequest>(sent => sent.Payload == outcome.Text), Arg.Any<CancellationToken>());
+        var rows = AttemptRows(db);
+        rows.Count.ShouldBe(2);
+        rows[0].Sql.ShouldBe(HealingLlmCallSql.InsertWithReport);
+        rows[0].Value("status").ShouldBe(HealingLlmStatuses.SchemaViolation);
+        rows[1].Sql.ShouldBe(HealingLlmCallSql.Insert);
+        rows[1].Value("status").ShouldBe(HealingLlmStatuses.Ok);
+        rows[0].Value("report_hash").ShouldBe(RedactionReport.HashOf(outcome.Report.ToJson()));
+        rows[1].Value("report_hash").ShouldBe(rows[0].Value("report_hash"));
     }
 
     [Fact]
@@ -151,11 +215,13 @@ public sealed class HealingLlmGatewayEgressTests
 
     /// <summary>The attempt-row statements the substituted database received (the call ledger's two shapes).</summary>
     private static List<Statement> AttemptRows(ITenantDb db) =>
+        Statements(db, HealingLlmCallSql.Insert, HealingLlmCallSql.InsertWithReport);
+
+    private static List<Statement> Statements(ITenantDb db, params string[] statements) =>
         db.ReceivedCalls()
             .Where(call => call.GetMethodInfo().Name == nameof(ITenantDb.ExecuteAsync))
             .Select(call => call.GetArguments())
-            .Where(args => args[0] is string sql
-                && (sql == HealingLlmCallSql.Insert || sql == HealingLlmCallSql.InsertWithReport))
+            .Where(args => args[0] is string sql && statements.Contains(sql))
             .Select(args => new Statement((string)args[0]!, args[1]!))
             .ToList();
 

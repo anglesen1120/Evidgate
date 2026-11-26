@@ -74,9 +74,9 @@ public static class HealingLlmPurposes
 /// <param name="Model">The model the adapter is asked for; it is recorded on the row, never derived after the fact.</param>
 /// <param name="PromptVersion">The prompt template version, so output lineage survives a prompt edit (08.7.2).</param>
 /// <param name="Payload">
-/// The prompt body, <em>already redacted and opt-in approved</em> by the caller. 08.5.1 assumes this and never runs the
-/// redaction pipeline itself (08.5.3 owns it); the gateway, the recorder and the adapters must never log it, and no
-/// column of <c>healing_llm_call</c> can hold it (AC6).
+/// The prompt body as the caller built it, <em>not yet redacted</em>: the gateway masks it before any send and the
+/// adapter receives the masked text. The gateway, the recorder and the adapters must never log it, and no column of
+/// <c>healing_llm_call</c> can hold it (only the redaction report, which carries counts and hashes).
 /// </param>
 /// <param name="ResponseSchema">
 /// The JSON Schema the answer must satisfy, or null when the caller accepts any JSON answer. It is validated by the
@@ -133,10 +133,10 @@ public sealed record HealingLlmResult(string Status, string? Content, int Tokens
 /// behaviour; an adapter owns transport and provider-specific mapping only, and must never log or persist the payload.
 /// </summary>
 /// <remarks>
-/// Redaction seam: <see cref="HealingLlmRequest.Payload"/> is accepted already redacted and opt-in approved. The gateway
-/// does not redact, and the redaction pipeline is the caller's step before it builds the request. A later redaction
-/// stage hooks in at that call site (before <see cref="HealingLlmRequest"/> is constructed), so no adapter ever sees an
-/// unredacted prompt and no adapter changes when it lands.
+/// Redaction seam: the gateway masks <see cref="HealingLlmRequest.Payload"/> (raw prompt text from the caller) once per
+/// call, after the budget hold and before the send, and hands the adapter a request carrying the masked text; a payload
+/// that still holds a secret-shaped value is not sent at all. No adapter ever sees the raw prompt, so none needs to
+/// redact. Opt-in approval is not decided here.
 /// </remarks>
 public interface IHealingLlmProvider
 {

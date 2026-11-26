@@ -9,7 +9,7 @@ namespace Evidgate.Modules.Healing.Application;
 /// the value, so a report can be stored, hashed and shown without becoming a second copy of the secret.
 /// </summary>
 /// <param name="RuleId">A rule id of <see cref="RedactionRules"/>, or <c>residual_*</c> for a hit of the second pass.</param>
-/// <param name="FieldPath">Where in the payload: <c>preamble</c>, <c>segment:&lt;source id&gt;</c> or <c>payload</c>.</param>
+/// <param name="FieldPath">Where in the payload: <c>preamble</c>, <c>segment:&lt;ordinal&gt;</c> (1-based, never the source id) or <c>payload</c>.</param>
 /// <param name="Count">How many replacements (or residual hits) the rule made in that field; at least 1.</param>
 internal sealed record RedactionFinding(string RuleId, string FieldPath, int Count);
 

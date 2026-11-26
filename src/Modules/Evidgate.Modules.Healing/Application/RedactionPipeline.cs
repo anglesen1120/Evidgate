@@ -1,4 +1,5 @@
-using System.Diagnostics;
+using System.Globalization;
+using System.Net;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -21,16 +22,18 @@ internal interface IRedactionPipeline
 /// <summary>
 /// Two passes over the payload, window by window. Pass one is <see cref="RedactionRules.Apply"/>. Pass two applies the
 /// same rules to the result and requires that nothing changes (a changed text means a value survived pass one), and
-/// also to the percent-decoded, <c>\uXXXX</c>-decoded and base64-decoded forms of the text, so a secret that was only
-/// encoded is still caught. A payload that cannot be scanned inside its time budget is refused, never sent unscanned.
+/// also to the percent-decoded, <c>\uXXXX</c>-decoded, JSON-unescaped and base64-decoded forms of the text, and
+/// compares the HTML-entity-decoded form of the window with its masked text, so a secret that was only encoded is
+/// still caught. A payload that cannot be scanned inside its time budget, whose base64 decode budget runs out, or
+/// whose window cannot be cut where no rule spans the seam, is refused, never sent unscanned.
 /// </summary>
 /// <remarks>
 /// Limits, by construction: the rules recognise secrets by shape or by the name beside them. A bare secret that has
-/// neither, a secret split across two fields, a base64 token beyond the per-window decode budget and a rule-less
-/// obfuscation (reversed or homoglyph text) are not seen. Windows are cut at a line or word boundary, so a value
-/// that is itself longer than a window is cut in the middle.
+/// neither, a secret split across two fields, a rule-less obfuscation (reversed or homoglyph text) and a value
+/// that is itself longer than a window (its tail past the cut is not seen with its keyword) are not seen. A cut inside
+/// a whitespace run over <c>MaxSeamWhitespaceRun</c> characters is never accepted, so such a window is refused.
 /// </remarks>
-internal sealed class RedactionPipeline : IRedactionPipeline
+internal sealed class RedactionPipeline(TimeProvider clock) : IRedactionPipeline
 {
     /// <summary>The longest text one rule pass is given.</summary>
     internal const int MaxWindowChars = 64 * 1024;
@@ -40,26 +43,38 @@ internal sealed class RedactionPipeline : IRedactionPipeline
 
     private const string BlockStart = "<<<EVG-DATA ";
     private const int MaxVariantDepth = 2;
-    private const int MaxBase64TokensPerText = 256;
-    private const int MaxBase64DecodedBytesPerText = 1024 * 1024;
-    private const int MinBase64TokenChars = 24;
+    private const int MaxBase64TokensPerWindow = 256;
+    private const int SeamReach = 256;
+    private const int MaxSeamAttempts = 64;
+    private const int MaxSeamWhitespaceRun = 4096;
 
     private static readonly UTF8Encoding StrictUtf8 = new(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
 
+    // 12 characters is the base64 of the nine bytes of "password=", the shortest keyword the rules know.
     private static readonly Regex Base64Token = new(
-        @"[A-Za-z0-9+/_\-]{24,}={0,2}",
+        @"[A-Za-z0-9+/_\-]{12,}={0,2}",
         RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.NonBacktracking);
 
     private static readonly Regex UnicodeEscape = new(
         @"\\u([0-9a-fA-F]{4})",
         RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.NonBacktracking);
 
+    private static readonly Regex JsonEscape = new(
+        @"\\([""\\nt])",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.NonBacktracking);
+
+    /// <summary>A pipeline on the system clock.</summary>
+    public RedactionPipeline()
+        : this(TimeProvider.System)
+    {
+    }
+
     /// <inheritdoc />
     public RedactionOutcome Redact(string payload)
     {
         ArgumentNullException.ThrowIfNull(payload);
 
-        var clock = Stopwatch.StartNew();
+        var budget = new ScanBudget(clock);
         var findings = new Dictionary<(string Path, string Rule), int>();
         var output = new StringBuilder(payload.Length);
         var blocked = false;
@@ -68,32 +83,32 @@ internal sealed class RedactionPipeline : IRedactionPipeline
         {
             foreach (var (windowStart, windowEnd) in Windows(payload, start, end))
             {
-                if (clock.Elapsed > Budget)
+                if (windowEnd < 0 || budget.Check())
+                {
+                    Add(findings, path, windowEnd < 0 ? "residual_window_seam" : "redaction_budget_exceeded", 1);
+                    return Finish(string.Empty, findings, blocked: true);
+                }
+
+                var masked = ScanWindow(payload[windowStart..windowEnd], budget, path, findings, out var residual);
+                if (budget.Aborted)
                 {
                     Add(findings, path, "redaction_budget_exceeded", 1);
                     return Finish(string.Empty, findings, blocked: true);
                 }
 
-                var counts = new Dictionary<string, int>();
-                var masked = RedactionRules.Apply(payload[windowStart..windowEnd], counts);
-                foreach (var (rule, count) in counts)
-                {
-                    Add(findings, path, rule, count);
-                }
-
-                var residual = new Dictionary<string, int>();
-                Scan(masked, label: null, depth: 0, residual);
-                foreach (var (rule, count) in residual)
-                {
-                    Add(findings, path, rule, count);
-                    blocked = true;
-                }
-
+                blocked |= residual;
                 if (!blocked)
                 {
                     output.Append(masked);
                 }
             }
+        }
+
+        // The last window may finish after the deadline without any check having run in between.
+        if (budget.Check())
+        {
+            Add(findings, "payload", "redaction_budget_exceeded", 1);
+            return Finish(string.Empty, findings, blocked: true);
         }
 
         return Finish(blocked ? string.Empty : output.ToString(), findings, blocked);
@@ -113,11 +128,49 @@ internal sealed class RedactionPipeline : IRedactionPipeline
     private static void Add(Dictionary<(string Path, string Rule), int> findings, string path, string rule, int count) =>
         findings[(path, rule)] = findings.GetValueOrDefault((path, rule)) + count;
 
+    /// <summary>Both passes over one window; <paramref name="residual"/> is true when pass two found anything.</summary>
+    private static string ScanWindow(
+        string text,
+        ScanBudget budget,
+        string path,
+        Dictionary<(string Path, string Rule), int> findings,
+        out bool residual)
+    {
+        budget.StartWindow();
+        var counts = new Dictionary<string, int>();
+        var masked = RedactionRules.Apply(text, counts);
+        foreach (var (rule, count) in counts)
+        {
+            Add(findings, path, rule, count);
+        }
+
+        var hits = new Dictionary<string, int>();
+        Scan(masked, label: null, depth: 0, budget, hits);
+        ScanEntities(text, masked, budget, hits);
+        if (budget.Truncated)
+        {
+            AddHit(hits, "residual_scan_truncated", 1);
+        }
+
+        foreach (var (rule, count) in hits)
+        {
+            Add(findings, path, rule, count);
+        }
+
+        residual = hits.Count > 0;
+        return masked;
+    }
+
     /// <summary>
     /// Pass two on one text: the rules must find nothing to change, and neither may they on any decoded form of it.
     /// </summary>
-    private static void Scan(string text, string? label, int depth, Dictionary<string, int> hits)
+    private static void Scan(string text, string? label, int depth, ScanBudget budget, Dictionary<string, int> hits)
     {
+        if (budget.Check())
+        {
+            return;
+        }
+
         var counts = new Dictionary<string, int>();
         if (!string.Equals(RedactionRules.Apply(text, counts), text, StringComparison.Ordinal))
         {
@@ -132,12 +185,37 @@ internal sealed class RedactionPipeline : IRedactionPipeline
             return;
         }
 
+        foreach (var (decoded, variantLabel) in DecodedVariants(text))
+        {
+            Scan(decoded, variantLabel, depth + 1, budget, hits);
+            if (budget.Aborted)
+            {
+                return;
+            }
+        }
+
+        foreach (var decodedText in Base64Texts(text, budget))
+        {
+            Scan(decodedText, "residual_base64", depth + 1, budget, hits);
+            if (budget.Aborted)
+            {
+                return;
+            }
+        }
+    }
+
+    private static void AddHit(Dictionary<string, int> hits, string rule, int count) =>
+        hits[rule] = hits.GetValueOrDefault(rule) + count;
+
+    /// <summary>The forms of <paramref name="text"/> that differ from it after one decoding step.</summary>
+    private static IEnumerable<(string Text, string Label)> DecodedVariants(string text)
+    {
         if (text.Contains('%'))
         {
             var decoded = Uri.UnescapeDataString(text);
             if (!string.Equals(decoded, text, StringComparison.Ordinal))
             {
-                Scan(decoded, "residual_urlencoded", depth + 1, hits);
+                yield return (decoded, "residual_urlencoded");
             }
         }
 
@@ -146,37 +224,73 @@ internal sealed class RedactionPipeline : IRedactionPipeline
             var unescaped = UnicodeEscape.Replace(
                 text,
                 match => ((char)Convert.ToInt32(match.Groups[1].Value, 16)).ToString());
-            Scan(unescaped, "residual_unicode_escape", depth + 1, hits);
+            if (!string.Equals(unescaped, text, StringComparison.Ordinal))
+            {
+                yield return (unescaped, "residual_unicode_escape");
+            }
         }
 
-        foreach (var decodedText in Base64Texts(text))
+        if (text.Contains('\\'))
         {
-            Scan(decodedText, "residual_base64", depth + 1, hits);
+            var unescaped = JsonEscape.Replace(text, match => match.Groups[1].Value[0] switch
+            {
+                'n' => "\n",
+                't' => "\t",
+                var literal => literal.ToString(),
+            });
+            if (!string.Equals(unescaped, text, StringComparison.Ordinal))
+            {
+                yield return (unescaped, "residual_json_escape");
+            }
         }
     }
 
-    private static void AddHit(Dictionary<string, int> hits, string rule, int count) =>
-        hits[rule] = hits.GetValueOrDefault(rule) + count;
+    /// <summary>
+    /// A prompt text has its ampersands entity-escaped, and a value rule may stop at the <c>;</c> of an entity and leave
+    /// the rest of the value. The window read with entities decoded must mask the same spans as the masked window does.
+    /// </summary>
+    private static void ScanEntities(string original, string masked, ScanBudget budget, Dictionary<string, int> hits)
+    {
+        if (budget.Check() || !original.Contains('&'))
+        {
+            return;
+        }
 
-    /// <summary>The tokens of <paramref name="text"/> that decode, within a budget, to valid UTF-8 text.</summary>
-    private static List<string> Base64Texts(string text)
+        var decoded = WebUtility.HtmlDecode(original);
+        if (string.Equals(decoded, original, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        var expected = RedactionRules.Apply(decoded, new Dictionary<string, int>());
+        if (!string.Equals(expected, WebUtility.HtmlDecode(masked), StringComparison.Ordinal))
+        {
+            AddHit(hits, "residual_html_entity", 1);
+        }
+    }
+
+    /// <summary>The tokens of <paramref name="text"/> that decode to valid UTF-8 text, within the window's budget.</summary>
+    private static List<string> Base64Texts(string text, ScanBudget budget)
     {
         var texts = new List<string>();
-        var tokens = 0;
-        var decodedBytes = 0;
         foreach (var match in Base64Token.EnumerateMatches(text))
         {
-            if (tokens++ >= MaxBase64TokensPerText || decodedBytes >= MaxBase64DecodedBytesPerText)
+            if (budget.Check())
             {
                 break;
             }
 
-            if (match.Length < MinBase64TokenChars || TryDecode(text.AsSpan(match.Index, match.Length)) is not { } decoded)
+            if (TryDecode(text.AsSpan(match.Index, match.Length)) is not { } decoded)
             {
                 continue;
             }
 
-            decodedBytes += decoded.Length;
+            if (++budget.DecodedTokens > MaxBase64TokensPerWindow)
+            {
+                budget.Truncated = true;
+                break;
+            }
+
             texts.Add(decoded);
         }
 
@@ -221,7 +335,8 @@ internal sealed class RedactionPipeline : IRedactionPipeline
 
     /// <summary>
     /// The payload cut at the start of every prompt data block, each part named for the field report: the fixed
-    /// preamble, <c>segment:&lt;source id&gt;</c> per block, or the whole text as <c>payload</c> when there is no block.
+    /// preamble, <c>segment:&lt;ordinal&gt;</c> per block, or the whole text as <c>payload</c> when there is no block.
+    /// The ordinal, never the source id, because a source id is caller text and the report is stored.
     /// </summary>
     private static IEnumerable<(string Path, int Start, int End)> Sections(string payload)
     {
@@ -250,45 +365,30 @@ internal sealed class RedactionPipeline : IRedactionPipeline
         for (var i = 0; i < starts.Count; i++)
         {
             var end = i + 1 < starts.Count ? starts[i + 1] : payload.Length;
-            yield return (SegmentPath(payload, starts[i], end), starts[i], end);
+            yield return ("segment:" + (i + 1).ToString(CultureInfo.InvariantCulture), starts[i], end);
         }
     }
 
-    private static string SegmentPath(string payload, int start, int end)
-    {
-        var lineEnd = payload.IndexOf('\n', start, end - start);
-        var header = payload.AsSpan(start, (lineEnd < 0 ? end : lineEnd) - start);
-        var idStart = header.IndexOf(" id=", StringComparison.Ordinal);
-        if (idStart < 0)
-        {
-            return "segment:unknown";
-        }
-
-        var id = header[(idStart + 4)..];
-        var close = id.IndexOf(">>>", StringComparison.Ordinal);
-        id = close < 0 ? id : id[..close];
-        foreach (var c in id)
-        {
-            if (!(char.IsAsciiLetterOrDigit(c) || c is '.' or '_' or ':' or '-') || id.Length > 128)
-            {
-                return "segment:unknown";
-            }
-        }
-
-        return "segment:" + id.ToString();
-    }
-
-    /// <summary>A section cut into windows of at most <see cref="MaxWindowChars"/>, at a line break or a space when one exists.</summary>
+    /// <summary>A section cut into windows of at most <see cref="MaxWindowChars"/>; an end of -1 means no safe cut exists.</summary>
     private static IEnumerable<(int Start, int End)> Windows(string payload, int start, int end)
     {
         for (var position = start; position < end;)
         {
             var limit = WindowEnd(payload, position, end);
             yield return (position, limit);
+            if (limit < 0)
+            {
+                yield break;
+            }
+
             position = limit;
         }
     }
 
+    /// <summary>
+    /// The latest cut, after whitespace when one exists, where no rule joins the text on both sides. Tries are bounded;
+    /// a window with no such cut is refused instead of cut where a keyword and its value would be parted.
+    /// </summary>
     private static int WindowEnd(string payload, int position, int end)
     {
         var limit = Math.Min(position + MaxWindowChars, end);
@@ -297,13 +397,92 @@ internal sealed class RedactionPipeline : IRedactionPipeline
             return end;
         }
 
-        var span = payload.AsSpan(position, limit - position);
-        var cut = span.LastIndexOf('\n');
-        if (cut < span.Length / 2)
+        var floor = position + (MaxWindowChars / 2);
+        var attempts = 0;
+        for (var cut = limit; cut >= floor && attempts < MaxSeamAttempts; cut--)
         {
-            cut = span.LastIndexOf(' ');
+            if (char.IsWhiteSpace(payload[cut - 1]))
+            {
+                attempts++;
+                if (SeamIsClosed(payload, position, cut, end))
+                {
+                    return cut;
+                }
+            }
         }
 
-        return cut >= span.Length / 2 ? position + cut + 1 : limit;
+        attempts = 0;
+        for (var cut = limit; cut >= floor && attempts < MaxSeamAttempts; cut--)
+        {
+            if (char.IsLowSurrogate(payload[cut]))
+            {
+                continue;
+            }
+
+            attempts++;
+            if (SeamIsClosed(payload, position, cut, end))
+            {
+                return cut;
+            }
+        }
+
+        return -1;
+    }
+
+    private static bool SeamIsClosed(string payload, int position, int cut, int end)
+    {
+        // A rule joins its keyword and value across any run of whitespace, so the context reaches past the whole run.
+        var runStart = cut;
+        while (runStart > position && char.IsWhiteSpace(payload[runStart - 1]))
+        {
+            runStart--;
+        }
+
+        var runEnd = cut;
+        while (runEnd < end && char.IsWhiteSpace(payload[runEnd]))
+        {
+            runEnd++;
+        }
+
+        if (runEnd - runStart > MaxSeamWhitespaceRun)
+        {
+            return false;
+        }
+
+        var left = payload[Math.Max(position, runStart - SeamReach)..cut];
+        var right = payload[cut..Math.Min(end, runEnd + SeamReach)];
+        var joined = RedactionRules.Apply(left + right, new Dictionary<string, int>());
+        var apart = RedactionRules.Apply(left, new Dictionary<string, int>())
+            + RedactionRules.Apply(right, new Dictionary<string, int>());
+        return string.Equals(joined, apart, StringComparison.Ordinal);
+    }
+
+    /// <summary>The deadline of one payload and the decode budget of the window being scanned.</summary>
+    private sealed class ScanBudget(TimeProvider clock)
+    {
+        private readonly long _start = clock.GetTimestamp();
+
+        internal bool Aborted { get; private set; }
+
+        internal int DecodedTokens { get; set; }
+
+        internal bool Truncated { get; set; }
+
+        internal void StartWindow()
+        {
+            DecodedTokens = 0;
+            Truncated = false;
+        }
+
+        /// <summary>True once the payload's time is spent; stays true afterwards.</summary>
+        internal bool Check()
+        {
+            if (!Aborted && clock.GetElapsedTime(_start) > Budget)
+            {
+                Aborted = true;
+            }
+
+            return Aborted;
+        }
     }
 }

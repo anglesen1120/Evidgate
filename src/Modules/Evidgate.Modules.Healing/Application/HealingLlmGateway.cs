@@ -49,7 +49,7 @@ internal static class HealingLlmRequestRules
         if (request.Payload is null)
         {
             throw new ArgumentException(
-                "a healing LLM call must carry the redacted payload (08.5.3 redacts before this seam)",
+                "a healing LLM call must carry its prompt text (the gateway masks it before any send)",
                 nameof(request));
         }
 
@@ -263,12 +263,8 @@ internal sealed partial class HealingLlmGateway(
         RedactedPayload redacted,
         CancellationToken cancellationToken)
     {
-        if (cancellationToken.IsCancellationRequested)
-        {
-            // Nothing has left the process yet, so nothing can have been billed: the hold goes back whole.
-            await ReleaseAsync(orgId, request.ProjectId, reservation).ConfigureAwait(false);
-            cancellationToken.ThrowIfCancellationRequested();
-        }
+        // Nothing has left the process yet, so nothing can have been billed: a cancel here gives the hold back whole.
+        await ReleaseIfCancelledAsync(orgId, request.ProjectId, reservation, cancellationToken).ConfigureAwait(false);
 
         // After every admission guard and the budget hold, before the first byte can leave: the one place the payload
         // is masked (once per call; a retry sends the same masked text), outside any transaction.
@@ -290,6 +286,9 @@ internal sealed partial class HealingLlmGateway(
             LogLeakBlocked(request.ProjectId, outcome.Report.Findings.Count);
             return (new HealingLlmResult(HealingLlmStatuses.BlockedLeak, null, 0, 0m), outcome, true);
         }
+
+        // The mask runs synchronously and can outlive the caller's patience: a cancel seen now still sends nothing.
+        await ReleaseIfCancelledAsync(orgId, request.ProjectId, reservation, cancellationToken).ConfigureAwait(false);
 
         try
         {
@@ -405,38 +404,6 @@ internal sealed partial class HealingLlmGateway(
         result.Status != HealingLlmStatuses.Timeout
         && result.Status != HealingLlmStatuses.Error
         && (result.Tokens > 0 || result.Cost > 0m);
-
-    /// <summary>
-    /// Gives the hold back in a fresh scope, whatever the caller's token says. A release that itself fails is logged and
-    /// not thrown, so it cannot mask the failure that made the release necessary; the leak is the bounded over-count
-    /// described on the class.
-    /// </summary>
-    private async Task ReleaseAsync(Guid orgId, Guid projectId, HealingLlmReservation? reservation)
-    {
-        if (reservation is null)
-        {
-            return;
-        }
-
-        try
-        {
-            await transactions
-                .RunAsync(
-                    orgId,
-                    projectId,
-                    async ct =>
-                    {
-                        await ledger.SettleAsync(projectId, reservation, 0, 0m, ct).ConfigureAwait(false);
-                        return true;
-                    },
-                    CancellationToken.None)
-                .ConfigureAwait(false);
-        }
-        catch (Exception exception) when (exception is DbException or InvalidOperationException)
-        {
-            LogReleaseFailed(exception, projectId);
-        }
-    }
 
     /// <summary>The tokens to hold for one attempt: the prompt and schema estimate plus the output ceiling.</summary>
     /// <param name="request">The call about to be placed.</param>

@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text;
+using Evidgate.BuildingBlocks.Observability.Redaction;
 using Evidgate.Modules.Healing.Application;
 using Shouldly;
 using Xunit;
@@ -89,7 +90,7 @@ public sealed class RedactionPipelineTests
 
         var outcome = Pipeline.Redact(payload);
 
-        outcome.Report.Findings.ShouldHaveSingleItem().ShouldBe(new RedactionFinding("email", "segment:rec-1", 2));
+        outcome.Report.Findings.ShouldHaveSingleItem().ShouldBe(new RedactionFinding("email", "segment:1", 2));
         var json = outcome.Report.ToJson();
         json.ShouldNotContain("jane");
         json.ShouldNotContain("example");
@@ -158,6 +159,63 @@ public sealed class RedactionPipelineTests
 
         outcome.Blocked.ShouldBeFalse();
         outcome.Text.ShouldNotContain(Password);
+    }
+
+    [Theory]
+    [InlineData("\\n", true)]
+    [InlineData("\\r\\n", true)]
+    [InlineData("\n", true)]
+    [InlineData("\r\n", true)]
+    [InlineData("\\n", false)]
+    [InlineData("\\r\\n", false)]
+    public void Redact_PrivateKeyBody_MasksEscapedAndActualLineBreaks(string lineBreak, bool includeEnd)
+    {
+        var body = string.Concat("MIIEvQIBADANBg", "kqhkiG9w0BAQEFAASC");
+        var end = includeEnd ? lineBreak + "-----END RSA PRIVATE KEY-----" : string.Empty;
+        var payload = "before \"-----BEGIN RSA PRIVATE KEY-----" + lineBreak + body + end + "\" after";
+        var control = Pipeline.Redact("before \"" + body + "\" after");
+        control.Blocked.ShouldBeFalse();
+        control.Text.ShouldContain(body);
+
+        var outcome = Pipeline.Redact(payload);
+
+        outcome.Blocked.ShouldBeFalse();
+        outcome.Text.ShouldBe("before \"[redacted:private_key]\" after");
+        outcome.Report.Findings.ShouldContain(finding => finding.RuleId == "private_key");
+    }
+
+    [Theory]
+    [InlineData("\"")]
+    [InlineData("'")]
+    public void Redact_QuotedAuthorizationName_MasksBasicCredentials(string quote)
+    {
+        var credential = string.Concat("plain", "-basic-credential");
+        var payload = "{" + quote + "Authorization" + quote + ": " + quote + "Basic " + credential + quote + "}";
+        var redactor = new SecretRedactor();
+        redactor.RedactText("{\"Header\": \"Basic " + credential + "\"}").ShouldContain(credential);
+
+        var logText = redactor.RedactText(payload);
+        var outcome = Pipeline.Redact(payload);
+
+        logText.ShouldNotContain(credential);
+        logText.ShouldContain(SecretRedactor.Mask);
+        outcome.Blocked.ShouldBeFalse();
+        outcome.Text.ShouldNotContain(credential);
+        outcome.Report.Findings.ShouldContain(finding => finding.RuleId == "authorization_header");
+    }
+
+    [Theory]
+    [InlineData("Authorization", "Basic")]
+    [InlineData("Authorization", "Bearer")]
+    [InlineData("authorization", "Basic")]
+    public void RedactText_ExistingAuthorizationHeader_KeepsItsMaskedLogOutput(string header, string scheme)
+    {
+        var credential = string.Concat("plain", "-header-credential");
+        var redactor = new SecretRedactor();
+
+        var result = redactor.RedactText(header + ": " + scheme + " " + credential + "\nnext line");
+
+        result.ShouldBe(header + ": " + SecretRedactor.Mask + "\nnext line");
     }
 
     [Fact]

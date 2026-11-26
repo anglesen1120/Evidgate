@@ -217,9 +217,12 @@ public sealed class SecretRedactor
         RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant,
         MatchTimeout);
 
-    /// <summary>Masks <c>Authorization: Bearer …</c> style header text.</summary>
+    /// <summary>
+    /// Masks <c>Authorization: Bearer …</c> style header text. A quoted name (<c>"Authorization": "Basic …"</c>, the
+    /// JSON and object-literal form) masks the quoted value only, so the rest of a one-line body stays readable.
+    /// </summary>
     private readonly Regex _authorizationHeader = new(
-        @"(?<key>authorization)\s*:\s*(?<value>[^\r\n]+)",
+        @"(?<key>[""']authorization[""'])\s*:\s*(?<value>""(?:\\.|[^""\\])*""|'(?:\\.|[^'\\])*'|[^\r\n]+)|(?<key>authorization)\s*:\s*(?<value>[^\r\n]+)",
         RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant,
         MatchTimeout);
 
