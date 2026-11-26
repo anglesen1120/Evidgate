@@ -30,8 +30,8 @@ internal interface IRedactionPipeline
 /// <remarks>
 /// Limits, by construction: the rules recognise secrets by shape or by the name beside them. A bare secret that has
 /// neither, a secret split across two fields, a rule-less obfuscation (reversed or homoglyph text) and a value
-/// that is itself longer than a window (its tail past the cut is not seen with its keyword) are not seen. A cut inside
-/// a whitespace run over <c>MaxSeamWhitespaceRun</c> characters is never accepted, so such a window is refused.
+/// that is itself longer than a window (a quoted value or key body that closes more than one window past the cut) are
+/// not seen. A window with no cut where the rules mask the same text joined and apart is refused.
 /// </remarks>
 internal sealed class RedactionPipeline(TimeProvider clock) : IRedactionPipeline
 {
@@ -45,8 +45,7 @@ internal sealed class RedactionPipeline(TimeProvider clock) : IRedactionPipeline
     private const int MaxVariantDepth = 2;
     private const int MaxBase64TokensPerWindow = 256;
     private const int SeamReach = 256;
-    private const int MaxSeamAttempts = 64;
-    private const int MaxSeamWhitespaceRun = 4096;
+    private const int MaxSeamAttempts = 16;
 
     private static readonly UTF8Encoding StrictUtf8 = new(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
 
@@ -81,11 +80,12 @@ internal sealed class RedactionPipeline(TimeProvider clock) : IRedactionPipeline
 
         foreach (var (path, start, end) in Sections(payload))
         {
-            foreach (var (windowStart, windowEnd) in Windows(payload, start, end))
+            foreach (var (windowStart, windowEnd) in Windows(payload, start, end, budget))
             {
                 if (windowEnd < 0 || budget.Check())
                 {
-                    Add(findings, path, windowEnd < 0 ? "residual_window_seam" : "redaction_budget_exceeded", 1);
+                    var rule = budget.Aborted ? "redaction_budget_exceeded" : "residual_window_seam";
+                    Add(findings, path, rule, 1);
                     return Finish(string.Empty, findings, blocked: true);
                 }
 
@@ -370,11 +370,11 @@ internal sealed class RedactionPipeline(TimeProvider clock) : IRedactionPipeline
     }
 
     /// <summary>A section cut into windows of at most <see cref="MaxWindowChars"/>; an end of -1 means no safe cut exists.</summary>
-    private static IEnumerable<(int Start, int End)> Windows(string payload, int start, int end)
+    private static IEnumerable<(int Start, int End)> Windows(string payload, int start, int end, ScanBudget budget)
     {
         for (var position = start; position < end;)
         {
-            var limit = WindowEnd(payload, position, end);
+            var limit = WindowEnd(payload, position, end, budget);
             yield return (position, limit);
             if (limit < 0)
             {
@@ -386,10 +386,10 @@ internal sealed class RedactionPipeline(TimeProvider clock) : IRedactionPipeline
     }
 
     /// <summary>
-    /// The latest cut, after whitespace when one exists, where no rule joins the text on both sides. Tries are bounded;
-    /// a window with no such cut is refused instead of cut where a keyword and its value would be parted.
+    /// The latest cut, after whitespace when one exists, where no rule joins the text on both sides. A window with no
+    /// such cut is refused instead of cut where a keyword and its value would be parted.
     /// </summary>
-    private static int WindowEnd(string payload, int position, int end)
+    private static int WindowEnd(string payload, int position, int end, ScanBudget budget)
     {
         var limit = Math.Min(position + MaxWindowChars, end);
         if (limit >= end)
@@ -397,60 +397,56 @@ internal sealed class RedactionPipeline(TimeProvider clock) : IRedactionPipeline
             return end;
         }
 
-        var floor = position + (MaxWindowChars / 2);
-        var attempts = 0;
-        for (var cut = limit; cut >= floor && attempts < MaxSeamAttempts; cut--)
-        {
-            if (char.IsWhiteSpace(payload[cut - 1]))
-            {
-                attempts++;
-                if (SeamIsClosed(payload, position, cut, end))
-                {
-                    return cut;
-                }
-            }
-        }
+        var cut = FindCut(payload, position, limit, end, whitespaceOnly: true, budget);
+        return cut >= 0 ? cut : FindCut(payload, position, limit, end, whitespaceOnly: false, budget);
+    }
 
-        attempts = 0;
-        for (var cut = limit; cut >= floor && attempts < MaxSeamAttempts; cut--)
+    private static int FindCut(string payload, int position, int limit, int end, bool whitespaceOnly, ScanBudget budget)
+    {
+        var floor = position + (MaxWindowChars / 2);
+        var failures = 0;
+        for (var cut = limit; cut >= floor && failures < MaxSeamAttempts;)
         {
-            if (char.IsLowSurrogate(payload[cut]))
+            var candidate = whitespaceOnly ? char.IsWhiteSpace(payload[cut - 1]) : !char.IsLowSurrogate(payload[cut]);
+            if (!candidate)
             {
+                cut--;
                 continue;
             }
 
-            attempts++;
+            if (budget.Check())
+            {
+                return -1;
+            }
+
             if (SeamIsClosed(payload, position, cut, end))
             {
                 return cut;
             }
+
+            // The step doubles after every failure so 16 tries reach the far half of the window, not only the
+            // characters beside the first unsafe cut.
+            cut -= 1 << failures++;
         }
 
         return -1;
     }
 
+    /// <summary>
+    /// True when the rules mask the window so far and the text after the cut exactly as they mask the two joined. The
+    /// left side is the whole window, so a quoted value or key body that opened anywhere in it counts, and the right
+    /// side reaches a window length (or past a whitespace run) so the match can close. A value longer than that is not seen.
+    /// </summary>
     private static bool SeamIsClosed(string payload, int position, int cut, int end)
     {
-        // A rule joins its keyword and value across any run of whitespace, so the context reaches past the whole run.
-        var runStart = cut;
-        while (runStart > position && char.IsWhiteSpace(payload[runStart - 1]))
-        {
-            runStart--;
-        }
-
         var runEnd = cut;
         while (runEnd < end && char.IsWhiteSpace(payload[runEnd]))
         {
             runEnd++;
         }
 
-        if (runEnd - runStart > MaxSeamWhitespaceRun)
-        {
-            return false;
-        }
-
-        var left = payload[Math.Max(position, runStart - SeamReach)..cut];
-        var right = payload[cut..Math.Min(end, runEnd + SeamReach)];
+        var left = payload[position..cut];
+        var right = payload[cut..Math.Min(end, Math.Max(cut + MaxWindowChars, runEnd + SeamReach))];
         var joined = RedactionRules.Apply(left + right, new Dictionary<string, int>());
         var apart = RedactionRules.Apply(left, new Dictionary<string, int>())
             + RedactionRules.Apply(right, new Dictionary<string, int>());

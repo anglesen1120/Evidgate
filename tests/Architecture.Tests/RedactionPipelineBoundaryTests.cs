@@ -302,20 +302,28 @@ public sealed class RedactionPipelineBoundaryTests
     }
 
     [Theory]
-    [InlineData("Bearer", true)]
-    [InlineData("Beaver", false)]
-    public void Redact_KeywordAndValueJoinedAtEveryCandidateCut_RefusesTheWindow(string keyword, bool refused)
+    [InlineData(106, "", ' ', 200, "Bearer", true)]
+    [InlineData(106, "", ' ', 200, "Beaver", false)]
+    [InlineData(400, " ", '\n', 600, "Bearer", true)]
+    [InlineData(400, " ", '\n', 600, "Beaver", false)]
+    public void Redact_KeywordAndValueSeparatedAcrossTheWindowEnd_MasksTheValue(
+        int fillerShortfall,
+        string lead,
+        char gap,
+        int gapLength,
+        string keyword,
+        bool masked)
     {
-        var filler = new string('.', RedactionPipeline.MaxWindowChars - 106);
-        var payload = filler + keyword + new string(' ', 200) + BearerToken + "\npublic step";
+        var filler = new string('.', RedactionPipeline.MaxWindowChars - fillerShortfall);
+        var payload = filler + lead + keyword + new string(gap, gapLength) + BearerToken + "\npublic step";
 
         var outcome = Pipeline.Redact(payload);
 
-        outcome.Blocked.ShouldBe(refused);
-        if (refused)
+        outcome.Blocked.ShouldBeFalse();
+        if (masked)
         {
-            outcome.Text.ShouldBeEmpty();
-            outcome.Report.Findings.ShouldContain(finding => finding.RuleId == "residual_window_seam");
+            outcome.Text.ShouldNotContain(BearerToken);
+            outcome.Report.Findings.ShouldContain(finding => finding.RuleId == "bearer_token");
         }
         else
         {
@@ -325,12 +333,35 @@ public sealed class RedactionPipelineBoundaryTests
     }
 
     [Theory]
-    [InlineData("Bearer", true)]
-    [InlineData("Beaver", false)]
-    public void Redact_KeywordAndValueSeparatedByWhitespaceBeyondSeamReach_RefusesTheWindow(string keyword, bool refused)
+    [InlineData("password", true)]
+    [InlineData("passwore", false)]
+    public void Redact_QuotedMultilineValueOpenedBeforeTheWindowEnd_IsMaskedToItsClosingQuote(string keyword, bool masked)
     {
+        var tail = string.Concat("private", "-tail");
         var filler = new string('.', RedactionPipeline.MaxWindowChars - 400);
-        var payload = filler + " " + keyword + new string('\n', 600) + BearerToken + "\npublic step";
+        var payload = filler + " " + keyword + "=\"" + string.Concat(Enumerable.Repeat("q\n", 210)) + tail + "\"";
+
+        var outcome = Pipeline.Redact(payload);
+
+        outcome.Blocked.ShouldBeFalse();
+        if (masked)
+        {
+            outcome.Text.ShouldNotContain(tail);
+            outcome.Report.Findings.ShouldContain(finding => finding.RuleId == "credential_assignment");
+        }
+        else
+        {
+            outcome.Text.ShouldBe(payload);
+            outcome.Report.Findings.ShouldBeEmpty();
+        }
+    }
+
+    [Theory]
+    [InlineData("password", true)]
+    [InlineData("passwore", false)]
+    public void Redact_QuotedValueSpanningEveryCandidateCut_RefusesTheWindow(string keyword, bool refused)
+    {
+        var payload = keyword + "=\"" + string.Concat(Enumerable.Repeat("q\n", 45000)) + "tail\"";
 
         var outcome = Pipeline.Redact(payload);
 
