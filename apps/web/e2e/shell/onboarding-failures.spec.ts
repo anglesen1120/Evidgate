@@ -13,6 +13,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
 import { danglingDescriptions } from './dangling-descriptions';
+import { openConnectStep } from './onboarding-connection-support';
 import {
   activationReadToggle,
   CREATED_PROJECT,
@@ -187,41 +188,30 @@ test.describe('form refusals announce once and keep the visitor’s place', () =
     expect(await danglingDescriptions(page)).toEqual([]);
   });
 
-  test('connect CI: the repository refusal is one labelled alert and focus is on its heading', async ({
+  test('connect CI: a duplicate token name raises one labelled alert and focuses its heading', async ({
     page,
   }) => {
     await page.goto(
       withVariant(
         onboardingPath('en'),
-        seedQueryWith('onboarding-project', ['fixture.variant.createCiBinding=validation']),
+        seedQueryWith('onboarding-project', ['fixture.variant.createIngestToken=name-invalid']),
       ),
     );
     await expect(shell(page)).toBeVisible();
-    await expectCurrentStep(page, 2);
-    await page.locator('#connect-oidc-repo-id').fill('5012345');
-    await page.locator('#connect-oidc-repo-name').fill('acme/storefront-web');
-    await page.locator('#connect-oidc-refs').fill('refs/heads/main');
-    await page
-      .locator('#connect-oidc-workflows')
-      .fill('acme/storefront-web/.github/workflows/evidgate.yml@refs/heads/main');
-    await page.locator('[data-testid="connect-oidc-submit"]').press('Enter');
+    await openConnectStep(page);
+    await page.getByTestId('connect-token-name').fill('CI upload');
+    await page.getByTestId('connect-token-submit').press('Enter');
 
     await expect(page.locator('#connect-failure-heading')).toBeFocused();
     const details = page.getByTestId('connect-ci-details');
     await expect(details).toHaveAttribute('role', 'alert');
     await expect(details).toHaveAccessibleName(/the server refused these values/i);
-    await expect(details).toContainText('the GitHub App cannot read this repository');
-    await expect(
-      page.getByRole('alert').filter({ hasText: 'cannot read this repository' }),
-    ).toHaveCount(1);
-    await expect(page.locator('#connect-oidc-repo-name')).toHaveAttribute('aria-invalid', 'true');
-    await expect(page.locator('#connect-oidc-repo-name')).toHaveAccessibleDescription(
-      /the GitHub App cannot read this repository/,
-    );
-    await expect(page.locator('#connect-oidc-repo-name-error')).not.toHaveAttribute(
-      'aria-live',
-      /.*/,
-    );
+    await expect(details).toContainText('a token with this name already exists');
+    await expect(page.getByRole('alert').filter({ hasText: 'already exists' })).toHaveCount(1);
+    const tokenName = page.getByTestId('connect-token-name');
+    await expect(tokenName).toHaveAttribute('aria-invalid', 'true');
+    await expect(tokenName).toHaveAccessibleDescription(/a token with this name already exists/);
+    await expect(page.locator('#connect-token-name-error')).not.toHaveAttribute('aria-live', /.*/);
     expect(await danglingDescriptions(page)).toEqual([]);
   });
 

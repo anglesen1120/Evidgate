@@ -348,17 +348,13 @@ describe('OnboardingShellComponent over the real store', () => {
     done: { 1: false, 2: false, 3: false, 4: false, 5: false },
     activation: { kind: 'none' },
     sampleRun: null,
-    bindings: [],
-    tokens: [],
-    bindingsTruncated: false,
-    tokensTruncated: false,
     currentStep: 1,
   };
   const CREATED: OnboardingProgress = {
     ...NO_PROJECT,
     project: PROJECT,
     done: { 1: true, 2: false, 3: false, 4: false, 5: false },
-    currentStep: 2,
+    currentStep: 3,
   };
 
   /** A shell over the real store, with the progress read spied and the route params driven here. */
@@ -448,7 +444,9 @@ describe('OnboardingShellComponent over the real store', () => {
     await fixture.whenStable();
     expect(progressLoad).toHaveBeenCalledTimes(2);
     const rendered = fixture.nativeElement as HTMLElement;
-    expect(rendered.querySelector('[data-testid="onboarding-step-2"]')).not.toBeNull();
+    expect(
+      rendered.querySelector('[data-testid="onboarding-step-3"][data-current="true"]'),
+    ).not.toBeNull();
     // The create's step change still moves focus on the activation it caused.
     expect(document.activeElement?.id).toBe('onboarding-step-title');
 

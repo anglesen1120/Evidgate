@@ -26,10 +26,6 @@ const PROGRESS: OnboardingProgress = {
   done: { 1: true, 2: true, 3: true, 4: true, 5: false },
   activation: { kind: 'none' },
   sampleRun: null,
-  bindings: [],
-  tokens: [],
-  bindingsTruncated: false,
-  tokensTruncated: false,
   currentStep: 5,
 };
 const ACTIVATION: PolicyActivationStateDto = {
@@ -81,24 +77,6 @@ describe('OnboardingStore confirmed activations', () => {
       expect(store.done()[5]).toBe(true);
     },
   );
-
-  it('does not let a refresh started before confirmation erase the newer answer', async () => {
-    const store = TestBed.inject(OnboardingStore);
-    await store.load('org-1', 'project-1');
-    let resolveRefresh: (value: OnboardingProgress) => void = () => {
-      throw new Error('Refresh has not started');
-    };
-    load.mockReturnValueOnce(
-      new Promise((resolve) => {
-        resolveRefresh = resolve;
-      }),
-    );
-    const refresh = store.refresh('org-1', 'project-1');
-    store.recordActivation('org-1', ACTIVATION);
-    resolveRefresh(PROGRESS);
-    await refresh;
-    expect(store.progress()?.activation).toEqual({ kind: 'active', state: ACTIVATION });
-  });
 
   it('drops the old activation when a different organization is loaded', async () => {
     const store = TestBed.inject(OnboardingStore);

@@ -16,6 +16,7 @@ import usageGrants from '../../../../fixtures/web-api/permissions-list-usage-rea
 import runFixture from '../../../../fixtures/web-api/run-detail/input.json';
 import suiteFixture from '../../../../fixtures/web-api/suite-revision/input.json';
 
+import { openConnectStep } from './onboarding-connection-support';
 import { seedQuery, type OnboardingSeed } from './onboarding-support';
 import { fillParams, surfacesInRouteTable, type Surface } from './route-surfaces';
 import { HEAD_ID } from './settings-policy.support';
@@ -337,6 +338,8 @@ for (const locale of LOCALES) {
       ]);
       await page.goto(path);
       await expect(page.locator(WIZARD), path).toBeVisible();
+      // The token seed resumes on the first run; its credential page is one Back away.
+      if (seed === 'onboarding-token') await openConnectStep(page);
       await assertClean(page, errors, path);
     });
   }

@@ -24,8 +24,8 @@ import {
 const SEEDS: readonly OnboardingSeed[] = [
   'onboarding-empty',
   'onboarding-project',
-  // 09.2.1-T2: step 2 is satisfied by an ingest token alone, the second connect path. Its rows and
-  // one-time value are `onboarding-connect-ci.spec.ts`'s subject; here it proves the derivation.
+  // A project with or without an ingest token resumes on the first run: the token is an optional
+  // setup step, not a gate. Its rows and one-time value belong to `onboarding-connect-ci.spec.ts`.
   'onboarding-token',
   'onboarding-connected',
   'onboarding-run-complete',
@@ -42,8 +42,9 @@ test.describe('each corpus seed resolves the documented step (AC1)', () => {
       await expectCurrentStep(page, step);
       await expectStepperShape(page);
 
+      // Step 2 (credentials) is optional and never derived done.
       for (let done = 1; done < step; done += 1) {
-        await expectStepDone(page, done as StepNumber, true);
+        await expectStepDone(page, done as StepNumber, done !== 2);
       }
       for (let open = step; open <= 5; open += 1) {
         await expectStepDone(page, open, false);
@@ -82,5 +83,19 @@ test.describe('Next and Back are gated by the viewed step (AC1, plan §10 T1.3)'
     await expectCurrentStep(page, 1);
     await expect(backButton(page)).toBeDisabled();
     await expect(nextButton(page)).toBeDisabled();
+  });
+
+  test('a project with no credential resumes at the first run and Back opens the optional step', async ({
+    page,
+  }) => {
+    await page.goto(onboardingUrl('en', 'onboarding-project'));
+    await expect(shell(page)).toBeVisible();
+    await expectCurrentStep(page, 3);
+    await expectStepDone(page, 2, false);
+    await expect(nextButton(page)).toBeDisabled();
+
+    await backButton(page).click();
+    await expectCurrentStep(page, 2);
+    await expect(nextButton(page)).toBeEnabled();
   });
 });

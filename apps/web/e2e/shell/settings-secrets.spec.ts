@@ -6,20 +6,17 @@
 // or assert its headers. These cases observe the real consumer, SDK error mapping and UI only.
 // The static list remains unchanged after a rotate, so focus returns to the still-connected opener;
 // successor/fallback focus after a changed list and stale-response guards are Vitest's subject.
-// The token corpus is one terminal page. CI bindings exercise a two-page cursor walk.
+// The token corpus is one terminal page.
 // Reminder dates are pinned with a browser clock, not compared to the machine's changing calendar.
 // No source-text assertions or mock UI.
 // Project changes during an overlay use the Helm picker's public DOM events: the focus trap
 // prevents reaching the background picker, but a scope change must still clear the reveal.
 // All selectors use component/data hooks, IDs or roles; localized text is asserted, never selected.
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 
 import conflict from '../../../../fixtures/web-api/ingest-token-rotate-conflict/input.json';
 import rateLimited from '../../../../fixtures/web-api/ingest-token-rotate-rate-limited/input.json';
 import references from '../../../../fixtures/web-api/ingest-tokens-list-settings/input.json';
-import ciBindings from '../../../../fixtures/web-api/ci-bindings-list-settings/input.json';
-import ciBindingsPageOne from '../../../../fixtures/web-api/ci-bindings-list-settings-page-1/input.json';
-import ciBindingsPageTwo from '../../../../fixtures/web-api/ci-bindings-list-settings-page-2/input.json';
 import { expectNoA11yViolations } from '../a11y/axe-scan';
 import {
   LOCALES,
@@ -292,179 +289,3 @@ for (const locale of LOCALES) {
     });
   }
 }
-
-// 09.7.1-F15: the independent CI-binding track is list-only and metadata-only.
-const CI_SECTION = `${PAGE} app-ci-binding-list`;
-const CI_ROWS = `${CI_SECTION} [data-ci-binding]`;
-const CI_STATUS = {
-  en: { active: 'Active', pending_verification: 'Pending verification', disabled: 'Disabled' },
-  vi: {
-    active: 'Đang hoạt động',
-    pending_verification: 'Chờ xác minh',
-    disabled: 'Đã vô hiệu hóa',
-  },
-} as const;
-
-async function expectNoBindingChallenge(page: Page): Promise<void> {
-  await expectNoPlaintext(page);
-  const sinks = await page.evaluate(() => [
-    document.documentElement.innerHTML,
-    ...Array.from(document.querySelectorAll('input, textarea')).map(
-      (element) => (element as HTMLInputElement | HTMLTextAreaElement).value,
-    ),
-    location.href,
-    JSON.stringify(Object.entries(localStorage)),
-    JSON.stringify(Object.entries(sessionStorage)),
-  ]);
-  for (const sink of sinks) {
-    expect(sink).not.toContain('binding_challenge');
-    expect(sink).not.toContain('DO_NOT_RENDER_BINDING_CHALLENGE_DECOY');
-  }
-}
-
-for (const locale of LOCALES) {
-  for (const theme of THEMES) {
-    for (const variant of ['settings', 'settings-empty', 'settings-forbidden'] as const) {
-      test(`CI bindings ${variant} axe (${locale}, ${theme})`, async ({ page }) => {
-        await seedStoredTheme(page, theme);
-        await visit(page, locale, SETTINGS_ADMIN_GRANTS, [
-          `?fixture.variant.listCiBindings=${variant}`,
-        ]);
-        const section = page.locator(CI_SECTION);
-        await expect(section).toBeVisible();
-        await expect(section.locator('header')).toHaveAttribute('aria-busy', 'false');
-        await expect(section.getByRole('progressbar')).toHaveCount(0);
-        await expect(page.locator('html')).toHaveAttribute('lang', locale);
-        await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
-        if (variant === 'settings') {
-          await expect(section.getByRole('table')).toHaveAttribute('aria-busy', 'false');
-          await expect(page.locator(CI_ROWS)).toHaveCount(ciBindings.body.items.length);
-          const cells = page.locator(CI_ROWS).first().getByRole('cell');
-          await expect(cells).toHaveCount(4);
-          for (const cell of await cells.all()) {
-            await expect(cell).toHaveCSS('vertical-align', 'middle');
-          }
-          for (const [index, binding] of ciBindings.body.items.entries()) {
-            const row = page.locator(CI_ROWS).nth(index);
-            await expect(row.getByRole('heading')).toHaveText(binding.repository_full_name);
-            await expect(row.getByRole('heading')).toHaveAttribute(
-              'title',
-              binding.repository_full_name,
-            );
-            await expect(row.locator('.status-pill__label')).toHaveText(
-              CI_STATUS[locale][binding.status as keyof (typeof CI_STATUS)['en']],
-            );
-          }
-        } else {
-          await expect(
-            section.locator(
-              variant === 'settings-empty' ? '[data-ci-empty]' : '[data-ci-forbidden]',
-            ),
-          ).toBeVisible();
-          await expect(page.locator(CI_ROWS)).toHaveCount(0);
-          const pager = section.locator('app-data-table-pager');
-          if (variant === 'settings-empty') {
-            await expect(section.locator('button')).toHaveCount(0);
-            await expect(pager.locator('.page-range')).toContainText('0–0');
-            await expect(pager.getByRole('navigation')).toHaveCount(0);
-          } else {
-            await expect(pager).toHaveCount(0);
-            await expect(section.locator('button')).toHaveCount(0);
-          }
-        }
-        if (variant === 'settings') {
-          await expect(section.locator('app-data-table-pager button')).toHaveCount(0);
-        }
-        await expectNoBindingChallenge(page);
-        await expectNoA11yViolations(page, `CI bindings ${variant} ${locale} ${theme}`);
-      });
-    }
-  }
-
-  test(`CI bindings 360px keyboard allowlists and no horizontal overflow (${locale})`, async ({
-    page,
-  }) => {
-    await page.setViewportSize({ width: 360, height: 800 });
-    await visit(page, locale, SETTINGS_ADMIN_GRANTS, ['?fixture.variant.listCiBindings=settings']);
-    const section = page.locator(CI_SECTION);
-    const row = page.locator(CI_ROWS).first();
-    await expect(row).toHaveCSS('display', 'grid');
-    const cells = row.getByRole('cell');
-    await expect(cells).toHaveCount(4);
-    for (const cell of await cells.all()) {
-      await expect(cell).toHaveCSS('display', 'block');
-    }
-    const toggles = section.locator('[data-ci-show-all]');
-    await expect(toggles).toHaveCount(2);
-    // The reference directory has its own filter/inspection stops. The CI section's first
-    // keyboard boundary remains one Tab from its heading to the first allowlist control.
-    await section.locator('#ci-bindings-heading').focus();
-    await page.keyboard.press('Tab');
-    await expect(toggles.nth(0)).toBeFocused();
-    await page.keyboard.press('Enter');
-    await expect(toggles.nth(0)).toHaveAttribute('aria-expanded', 'true');
-    const refsId = await toggles.nth(0).getAttribute('aria-controls');
-    await expect(section.locator(`[id=\"${refsId}\"] > li`)).toHaveCount(8);
-    await page.keyboard.press('Space');
-    await expect(toggles.nth(0)).toHaveAttribute('aria-expanded', 'false');
-    await page.keyboard.press('Tab');
-    await expect(toggles.nth(1)).toBeFocused();
-    await page.keyboard.press('Enter');
-    await expect(toggles.nth(1)).toHaveAttribute('aria-expanded', 'true');
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
-      true,
-    );
-    await expectNoBindingChallenge(page);
-    await expectNoA11yViolations(page, `CI bindings expanded ${locale} 360px`);
-  });
-}
-
-test('CI bindings shared pager replaces pages, returns by cursor and resets page size (en)', async ({
-  page,
-}) => {
-  const firstPageRows = ciBindingsPageOne.body.items;
-  const secondPageRows = ciBindingsPageTwo.body.items;
-  expect(ciBindingsPageOne.body.next_cursor).toBeTruthy();
-  expect(ciBindingsPageTwo.body.next_cursor).toBeNull();
-  await visit(page, 'en', SETTINGS_ADMIN_GRANTS, [
-    '?fixture.variant.listCiBindings=settings-page-1',
-  ]);
-  const section = page.locator(CI_SECTION);
-  const pager = section.locator('app-data-table-pager');
-  const next = pager.locator('[data-page="next"]');
-  const previous = pager.locator('[data-page="previous"]');
-  await expect(page.locator(CI_ROWS)).toHaveCount(firstPageRows.length);
-  await expect(pager.getByRole('status')).toHaveText('Page 1');
-  await expect(previous).toHaveAttribute('aria-disabled', 'true');
-  await next.focus();
-  await page.keyboard.press('Enter');
-  await expect(page.locator(CI_ROWS)).toHaveCount(secondPageRows.length);
-  await expect(page.locator(`${CI_ROWS} h3`)).toHaveText(
-    secondPageRows.map((binding) => binding.repository_full_name),
-  );
-  await expect(pager.getByRole('status')).toHaveText('Page 2');
-  await expect(next).toHaveAttribute('aria-disabled', 'true');
-  await expect(next).toBeFocused();
-  for (const binding of firstPageRows) {
-    await expect(section.locator(`#ci-label-${binding.id}-refs`)).toHaveCount(0);
-  }
-  await previous.click();
-  await expect(pager.getByRole('status')).toHaveText('Page 1');
-  await expect(page.locator(`${CI_ROWS} h3`)).toHaveText(
-    firstPageRows.map((binding) => binding.repository_full_name),
-  );
-  await next.click();
-  await expect(pager.getByRole('status')).toHaveText('Page 2');
-  await pager.getByRole('combobox').click();
-  await page.getByRole('option', { name: '50', exact: true }).click();
-  await expect(pager.getByRole('status')).toHaveText('Page 1');
-  await expect(pager.getByRole('combobox')).toContainText('50');
-  await expect(section.locator('header')).toHaveAttribute('aria-busy', 'false');
-  await expect(section.getByRole('table')).toHaveAttribute('aria-busy', 'false');
-  await expect(section.getByRole('progressbar')).toHaveCount(0);
-  await expect(page.locator(`${CI_ROWS} h3`)).toHaveText(
-    firstPageRows.map((binding) => binding.repository_full_name),
-  );
-  await expectNoBindingChallenge(page);
-  await expectNoA11yViolations(page, 'CI binding cursor pager en');
-});

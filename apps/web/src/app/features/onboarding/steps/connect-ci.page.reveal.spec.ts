@@ -3,13 +3,11 @@ import type { IngestTokenCreatedResponse, IngestTokenView } from '@evidgate/sdk'
 
 import { ApiRequestError } from '../../../core/http/api-error';
 import type { RevealSlot } from '../../../shared/ui/reveal/one-time-reveal.slot';
-import { CONNECT_LIST_LIMIT } from '../data/onboarding-progress.service';
+import { TOKEN_LIST_LIMIT } from '../onboarding-token.store';
 import { OnboardingRecordDialogComponent } from '../onboarding-record-view.component';
 import type { ConnectCiPage } from './connect-ci.page';
 import {
-  BINDING,
   TOKEN,
-  CHALLENGE,
   SECRET,
   ROTATED,
   createConnectionPageContext,
@@ -21,18 +19,13 @@ describe('ConnectCiPage reveal, rotation and metadata boundaries', () => {
   const context = createConnectionPageContext();
   const {
     permitted,
-    bindings,
     tokens,
-    bindingsTruncated,
     tokensTruncated,
     refreshFailure,
-    canGoNext,
-    createCiBinding,
     createIngestToken,
     rotateIngestToken,
     refresh,
     fill,
-    fillOidc,
     submit,
   } = context;
   let fixture: ComponentFixture<ConnectCiPage>;
@@ -47,7 +40,7 @@ describe('ConnectCiPage reveal, rotation and metadata boundaries', () => {
   });
   it('dismisses the reveal without keeping a copy in metadata', async () => {
     await fill({ 'connect-token-name': 'Build upload' });
-    await submit('token');
+    await submit();
     root.querySelector<HTMLButtonElement>('[data-testid="reveal-dismiss"]')!.click();
     await fixture.whenStable();
     expect(slot.current()).toBeNull();
@@ -60,7 +53,7 @@ describe('ConnectCiPage reveal, rotation and metadata boundaries', () => {
 
   it('UNMOUNT clears the page-scoped slot and never serializes the secret into DOM markup', async () => {
     await fill({ 'connect-token-name': 'Build upload' });
-    await submit('token');
+    await submit();
     expect(slot.current()?.value).toBe(SECRET);
     expect(root.outerHTML).not.toContain(SECRET);
     expect(root.textContent).not.toContain(SECRET);
@@ -71,7 +64,7 @@ describe('ConnectCiPage reveal, rotation and metadata boundaries', () => {
 
   it.each(['projectId', 'orgId'])('clears the reveal on a changed %s input', async (input) => {
     await fill({ 'connect-token-name': 'Build upload' });
-    await submit('token');
+    await submit();
     fixture.componentRef.setInput(input, 'different-scope');
     await fixture.whenStable();
     expect(slot.current()).toBeNull();
@@ -87,7 +80,7 @@ describe('ConnectCiPage reveal, rotation and metadata boundaries', () => {
         }),
     );
     await fill({ 'connect-token-name': 'Build upload' });
-    await submit('token');
+    await submit();
     fixture.componentRef.setInput('projectId', 'project-2');
     await fixture.whenStable();
     fixture.destroy();
@@ -99,12 +92,8 @@ describe('ConnectCiPage reveal, rotation and metadata boundaries', () => {
   });
 
   it('redisplays metadata only on resume without issuing anything', async () => {
-    bindings.set([BINDING]);
     tokens.set([TOKEN]);
     await fixture.whenStable();
-    expect(requiredElement(root, '[data-testid="connect-binding-row"]').textContent).toContain(
-      BINDING.repository_full_name,
-    );
     const row = requiredElement<HTMLTableRowElement>(root, '[data-testid="connect-token-row"]');
     expect(row.textContent).toContain(TOKEN.name);
     expect(row.textContent).toContain(TOKEN.prefix);
@@ -126,34 +115,26 @@ describe('ConnectCiPage reveal, rotation and metadata boundaries', () => {
     expect(modal.textContent).toContain('Expires (UTC)');
     expect(modal.textContent).toContain('Last used (UTC)');
     expect(modal.outerHTML).not.toContain(SECRET);
-    expect(modal.outerHTML).not.toContain(CHALLENGE);
     expect(refresh).not.toHaveBeenCalled();
     expect(slot.current()).toBeNull();
     expect(root.outerHTML).not.toContain(SECRET);
-    expect(root.outerHTML).not.toContain(CHALLENGE);
-    expect(createCiBinding).not.toHaveBeenCalled();
     expect(createIngestToken).not.toHaveBeenCalled();
     expect(rotateIngestToken).not.toHaveBeenCalled();
   });
 
   it('keeps mutation controls visible but disabled with linked permission reasons', async () => {
     tokens.set([TOKEN]);
-    bindings.set([BINDING]);
     permitted.set(false);
     await fixture.whenStable();
-    for (const id of ['connect-oidc-submit', 'connect-token-submit', 'connect-token-rotate']) {
+    for (const id of ['connect-token-submit', 'connect-token-rotate']) {
       const button = root.querySelector<HTMLButtonElement>(`[data-testid="${id}"]`)!;
       expect(button.disabled).toBe(true);
       const descriptionIds = button.getAttribute('aria-describedby')!.split(' ');
-      const permissionId =
-        id === 'connect-oidc-submit' ? 'connect-binding-permission' : 'connect-token-permission';
+      const permissionId = 'connect-token-permission';
       expect(descriptionIds).toContain(permissionId);
       expect(root.querySelector(`#${permissionId}`)?.textContent?.trim()).not.toBe('');
     }
-    await fillOidc();
-    await submit('oidc');
-    await submit('token');
-    expect(createCiBinding).not.toHaveBeenCalled();
+    await submit();
     expect(createIngestToken).not.toHaveBeenCalled();
     expect(root.querySelector('[data-testid="connect-token-row"]')).not.toBeNull();
   });
@@ -184,23 +165,26 @@ describe('ConnectCiPage reveal, rotation and metadata boundaries', () => {
     expect(root.querySelector('[data-testid="connect-token-rotate"]')).toBeNull();
   });
 
-  it('retains the reveal when progress refresh fails and retries only metadata', async () => {
+  it('retains the reveal when token inventory refresh fails and retries only metadata', async () => {
     refresh.mockImplementationOnce(() => {
       refreshFailure.set('unavailable');
       return Promise.resolve();
     });
     await fill({ 'connect-token-name': 'Build upload' });
-    await submit('token');
+    await submit();
     expect(slot.current()?.value).toBe(SECRET);
-    expect(canGoNext()).toBe(false);
-    root
-      .querySelector<HTMLButtonElement>('[data-testid="connect-ci-refresh-failed"] button')!
-      .click();
+    const retry = requiredElement<HTMLButtonElement>(
+      root,
+      '[data-testid="connect-ci-refresh-failed"] button',
+    );
+    requiredElement<HTMLButtonElement>(root, '[data-testid="reveal-dismiss"]').click();
+    await fixture.whenStable();
+    expect(document.activeElement).toBe(retry);
+    retry.click();
     await fixture.whenStable();
     expect(refresh).toHaveBeenCalledTimes(2);
     expect(createIngestToken).toHaveBeenCalledTimes(1);
     expect(root.querySelector('[data-testid="connect-ci-refresh-failed"]')).toBeNull();
-    expect(canGoNext()).toBe(true);
   });
 
   it('keeps the first reveal copyable when a second create fails with 409', async () => {
@@ -212,9 +196,9 @@ describe('ConnectCiPage reveal, rotation and metadata boundaries', () => {
     });
     try {
       await fill({ 'connect-token-name': 'Build upload' });
-      await submit('token');
+      await submit();
       createIngestToken.mockRejectedValueOnce(failure('conflict', 409));
-      await submit('token');
+      await submit();
       expect(slot.current()).toEqual({ source: 'ingest-token', value: SECRET });
       expect(root.querySelector<HTMLInputElement>('[data-testid="reveal-value"]')?.value).toBe(
         SECRET,
@@ -230,39 +214,34 @@ describe('ConnectCiPage reveal, rotation and metadata boundaries', () => {
     }
   });
 
-  it.each(['oidc', 'token'] as const)(
-    'focuses the %s reveal heading, announces no value, and restores the panel heading on Dismiss',
-    async (panel) => {
-      const idleAnnouncement = root.querySelector('[data-testid="connect-reveal-status"]');
-      expect(idleAnnouncement?.classList.contains('sr-only')).toBe(true);
-      if (panel === 'oidc') await fillOidc();
-      else await fill({ 'connect-token-name': 'Build upload' });
-      await submit(panel);
-      const value = root.querySelector<HTMLInputElement>('[data-testid="reveal-value"]')!;
-      const heading = root.querySelector(`#${value.getAttribute('aria-labelledby')}`)!;
-      expect(document.activeElement).toBe(heading);
-      expect(heading.getAttribute('tabindex')).toBe('-1');
-      const announcement = root.querySelector('[data-testid="connect-reveal-status"]')!;
-      expect(announcement.getAttribute('aria-live')).toBe('polite');
-      expect(announcement.textContent?.trim()).not.toBe('');
-      expect(announcement.textContent).not.toContain(value.value);
-      expect(announcement).toBe(idleAnnouncement);
-      expect(announcement.classList.contains('sr-only')).toBe(false);
-      root.querySelector<HTMLButtonElement>('[data-testid="reveal-dismiss"]')!.click();
-      await fixture.whenStable();
-      expect(document.activeElement).toBe(root.querySelector(`#connect-${panel}-heading`));
-      expect(announcement.textContent?.trim()).toBe('');
-      expect(root.querySelector('[data-testid="connect-reveal-status"]')).toBe(announcement);
-      expect(announcement.classList.contains('sr-only')).toBe(true);
-    },
-  );
+  it('focuses the token reveal heading, announces no value, and restores the panel heading on Dismiss', async () => {
+    const idleAnnouncement = root.querySelector('[data-testid="connect-reveal-status"]');
+    expect(idleAnnouncement?.classList.contains('sr-only')).toBe(true);
+    await fill({ 'connect-token-name': 'Build upload' });
+    await submit();
+    const value = root.querySelector<HTMLInputElement>('[data-testid="reveal-value"]')!;
+    const heading = root.querySelector(`#${value.getAttribute('aria-labelledby')}`)!;
+    expect(document.activeElement).toBe(heading);
+    expect(heading.getAttribute('tabindex')).toBe('-1');
+    const announcement = root.querySelector('[data-testid="connect-reveal-status"]')!;
+    expect(announcement.getAttribute('aria-live')).toBe('polite');
+    expect(announcement.textContent?.trim()).not.toBe('');
+    expect(announcement.textContent).not.toContain(value.value);
+    expect(announcement).toBe(idleAnnouncement);
+    expect(announcement.classList.contains('sr-only')).toBe(false);
+    root.querySelector<HTMLButtonElement>('[data-testid="reveal-dismiss"]')!.click();
+    await fixture.whenStable();
+    expect(document.activeElement).toBe(root.querySelector('#connect-token-heading'));
+    expect(announcement.textContent?.trim()).toBe('');
+    expect(root.querySelector('[data-testid="connect-reveal-status"]')).toBe(announcement);
+    expect(announcement.classList.contains('sr-only')).toBe(true);
+  });
 
   it.each(['timeout', 'network'] as const)(
     'reconciles metadata once after a %s on create/rotate without replaying the command',
     async (kind) => {
-      for (const action of ['oidc', 'token', 'rotate'] as const) {
+      for (const action of ['token', 'rotate'] as const) {
         refresh.mockClear();
-        createCiBinding.mockClear();
         createIngestToken.mockClear();
         rotateIngestToken.mockClear();
         const error = failure(kind, 0);
@@ -272,14 +251,10 @@ describe('ConnectCiPage reveal, rotation and metadata boundaries', () => {
           tokens.set([TOKEN]);
           return Promise.resolve();
         });
-        if (action === 'oidc') {
-          createCiBinding.mockRejectedValueOnce(uncertain);
-          await fillOidc();
-          await submit('oidc');
-        } else if (action === 'token') {
+        if (action === 'token') {
           createIngestToken.mockRejectedValueOnce(uncertain);
           await fill({ 'connect-token-name': 'Build upload' });
-          await submit('token');
+          await submit();
         } else {
           rotateIngestToken.mockRejectedValueOnce(uncertain);
           root.querySelector<HTMLButtonElement>('[data-testid="connect-token-rotate"]')!.click();
@@ -299,7 +274,6 @@ describe('ConnectCiPage reveal, rotation and metadata boundaries', () => {
         expect(hint?.textContent?.trim()).not.toBe('');
         expect(root.querySelector('[data-testid="connect-ci-error"] button')).toBeNull();
         expect(slot.current()).toBeNull();
-        expect(createCiBinding).toHaveBeenCalledTimes(action === 'oidc' ? 1 : 0);
         expect(createIngestToken).toHaveBeenCalledTimes(action === 'token' ? 1 : 0);
         expect(rotateIngestToken).toHaveBeenCalledTimes(action === 'rotate' ? 1 : 0);
       }
@@ -326,7 +300,7 @@ describe('ConnectCiPage reveal, rotation and metadata boundaries', () => {
             }),
         );
       await fill({ 'connect-token-name': 'Build upload' });
-      await submit('token');
+      await submit();
       fixture.componentRef.setInput(input, 'scope-2');
       await fixture.whenStable();
       const button = root.querySelector<HTMLButtonElement>('[data-testid="connect-token-submit"]')!;
@@ -335,7 +309,7 @@ describe('ConnectCiPage reveal, rotation and metadata boundaries', () => {
         root.querySelector<HTMLInputElement>('[data-testid="connect-token-name"]')?.value,
       ).toBe('');
       await fill({ 'connect-token-name': 'Build upload in the new scope' });
-      await submit('token');
+      await submit();
       expect(createIngestToken).toHaveBeenCalledTimes(2);
       resolveOld({ token: TOKEN, secret: SECRET });
       await fixture.whenStable();
@@ -356,24 +330,39 @@ describe('ConnectCiPage reveal, rotation and metadata boundaries', () => {
     },
   );
 
-  it('does not reconcile a stale timeout after the project changes', async () => {
-    let rejectOld!: (error: ApiRequestError) => void;
-    createIngestToken.mockImplementationOnce(
-      () =>
-        new Promise((_, reject) => {
-          rejectOld = reject;
-        }),
-    );
-    await fill({ 'connect-token-name': 'Build upload' });
-    await submit('token');
-    fixture.componentRef.setInput('projectId', 'project-2');
-    await fixture.whenStable();
-    rejectOld(failure('timeout', 0));
-    await fixture.whenStable();
-    expect(refresh).not.toHaveBeenCalled();
-    expect(root.querySelector('[data-testid="connect-ci-error"]')).toBeNull();
-    expect(root.querySelector('[data-testid="connect-ci-response-uncertain"]')).toBeNull();
-  });
+  it.each(['other project', 're-entered project'] as const)(
+    'reconciles a stale timeout only when the issuing project is active: %s',
+    async (destination) => {
+      let rejectOld!: (error: ApiRequestError) => void;
+      createIngestToken.mockImplementationOnce(
+        () =>
+          new Promise((_, reject) => {
+            rejectOld = reject;
+          }),
+      );
+      await fill({ 'connect-token-name': 'Build upload' });
+      await submit();
+      if (destination === 'other project') {
+        fixture.componentRef.setInput('projectId', 'project-2');
+      } else {
+        fixture.componentRef.setInput('active', false);
+        await fixture.whenStable();
+        fixture.componentRef.setInput('active', true);
+      }
+      await fixture.whenStable();
+      rejectOld(failure('timeout', 0));
+      await fixture.whenStable();
+      if (destination === 'other project') expect(refresh).not.toHaveBeenCalled();
+      else
+        await vi.waitFor(() =>
+          expect(refresh).toHaveBeenCalledExactlyOnceWith('org-1', 'project-1'),
+        );
+      expect(createIngestToken).toHaveBeenCalledTimes(1);
+      expect(slot.current()).toBeNull();
+      expect(root.querySelector('[data-testid="connect-ci-error"]')).toBeNull();
+      expect(root.querySelector('[data-testid="connect-ci-response-uncertain"]')).toBeNull();
+    },
+  );
 
   it('describes each Rotate button with its own token name', async () => {
     tokens.set([TOKEN, { ...TOKEN, id: 'token-2', name: 'Other workflow' }]);
@@ -398,26 +387,13 @@ describe('ConnectCiPage reveal, rotation and metadata boundaries', () => {
   });
 
   it('shows a truncation notice only under each truncated metadata list', async () => {
-    expect(root.querySelector('[data-testid="connect-bindings-truncated"]')).toBeNull();
     expect(root.querySelector('[data-testid="connect-tokens-truncated"]')).toBeNull();
-    bindingsTruncated.set(true);
-    await fixture.whenStable();
-    const bindingNotice = root.querySelector(
-      '[data-testid="connect-oidc-panel"] [data-testid="connect-bindings-truncated"]',
-    );
-    expect(bindingNotice).not.toBeNull();
-    // The page size the service reads is the one the notice names; no second literal.
-    expect(bindingNotice?.textContent).toContain(String(CONNECT_LIST_LIMIT));
-    expect(bindingNotice?.textContent).not.toContain('first 10');
-    expect(root.querySelector('[data-testid="connect-tokens-truncated"]')).toBeNull();
-    bindingsTruncated.set(false);
     tokensTruncated.set(true);
     await fixture.whenStable();
-    expect(root.querySelector('[data-testid="connect-bindings-truncated"]')).toBeNull();
     const tokenNotice = root.querySelector(
       '[data-testid="connect-token-panel"] [data-testid="connect-tokens-truncated"]',
     );
     expect(tokenNotice).not.toBeNull();
-    expect(tokenNotice?.textContent).toContain(String(CONNECT_LIST_LIMIT));
+    expect(tokenNotice?.textContent).toContain(String(TOKEN_LIST_LIMIT));
   });
 });

@@ -51,7 +51,6 @@ export const ProjectDashboardStore = signalStore(
       quarantine: widgetRead(projectScope('policy:read'), (id, signal) =>
         data.quarantine(id, signal),
       ),
-      bindings: widgetRead(projectScope('project:read'), (id, signal) => data.bindings(id, signal)),
       tree: widgetRead(projectScope('authoring:read'), (id, signal) => data.tree(id, signal)),
       cases: widgetRead(projectScope('authoring:read'), (id, signal) => data.cases(id, signal)),
       changes: widgetRead(projectScope('authoring:read'), (id, signal) => data.changes(id, signal)),

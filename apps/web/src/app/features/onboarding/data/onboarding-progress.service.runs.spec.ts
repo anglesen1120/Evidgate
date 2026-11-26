@@ -1,9 +1,7 @@
 import { OnboardingProgressService } from './onboarding-progress.service';
 import {
-  BINDING,
   FakeOnboardingDataService,
   PROJECT,
-  bindingPage,
   runPage,
   runState,
   runSummary,
@@ -20,7 +18,6 @@ describe('OnboardingProgressService (09.2.1-T1.2)', () => {
 
   it('takes the oldest run of the page, not the first row it was handed', async () => {
     data.projectsById.set('p-1', PROJECT);
-    data.bindings = bindingPage([BINDING]);
     data.runs = runPage([
       runSummary('r-new', '2026-10-22T09:00:00Z', 'complete'),
       runSummary('r-old', '2026-10-21T09:00:00Z', 'complete'),
@@ -35,7 +32,6 @@ describe('OnboardingProgressService (09.2.1-T1.2)', () => {
 
   it('completes step 3 for an incomplete run (terminal collection state)', async () => {
     data.projectsById.set('p-1', PROJECT);
-    data.bindings = bindingPage([BINDING]);
     data.runs = runPage([runSummary('r-1', '2026-10-21T09:00:00Z', 'incomplete')]);
     data.runStates.set('r-1', runState('r-1', 'incomplete'));
 
@@ -48,7 +44,6 @@ describe('OnboardingProgressService (09.2.1-T1.2)', () => {
 
   it('leaves step 4 open for a complete run without an evidence revision', async () => {
     data.projectsById.set('p-1', PROJECT);
-    data.bindings = bindingPage([BINDING]);
     data.runs = runPage([runSummary('r-1', '2026-10-21T09:00:00Z', 'complete')]);
     data.runStates.set('r-1', runState('r-1', 'complete'));
 
@@ -61,7 +56,6 @@ describe('OnboardingProgressService (09.2.1-T1.2)', () => {
 
   it('does not complete step 3 for a canceled run', async () => {
     data.projectsById.set('p-1', PROJECT);
-    data.bindings = bindingPage([BINDING]);
     data.runs = runPage([runSummary('r-1', '2026-10-21T09:00:00Z', 'canceled')]);
     data.runStates.set('r-1', runState('r-1', 'canceled'));
 

@@ -11,7 +11,6 @@ const ROUTES: readonly [string, RegExp][] = [
   ['listRuns', /^\/projects\/[^/]+\/runs$/],
   ['listProjectWaivers', /^\/projects\/[^/]+\/waivers$/],
   ['listQuarantineEntries', /^\/projects\/[^/]+\/quarantine$/],
-  ['listCiBindings', /^\/projects\/[^/]+\/ci-bindings$/],
   ['listAuthoringTree', /^\/projects\/[^/]+\/authoring\/tree$/],
   ['listManualCases', /^\/projects\/[^/]+\/authoring\/manual-cases$/],
   ['listAuthoringChanges', /^\/projects\/[^/]+\/authoring\/changes$/],
@@ -137,8 +136,6 @@ function bodyFor(operation: string, path: string, grantsVariant: string): unknow
       return findFixtureEntry('listMemberships', 'ok')?.document.body;
     case 'listAudit':
       return findFixtureEntry('listAudit', 'ok')?.document.body;
-    case 'listCiBindings':
-      return findFixtureEntry('listCiBindings', 'onboarding-connected')?.document.body;
     case 'listAuthoringTree':
       return roots.body;
     case 'listManualCases':

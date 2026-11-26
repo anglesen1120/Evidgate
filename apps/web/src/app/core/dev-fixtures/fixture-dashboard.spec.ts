@@ -6,6 +6,7 @@ describe('Dashboard browser fixture scenario', () => {
     expect(dashboardFixture('GET', '/projects/p/runs', () => 'ok')).toBeUndefined();
     expect(dashboardFixture('POST', '/projects/p/runs', variant)).toBeUndefined();
     expect(dashboardFixture('GET', '/projects/p/retention', variant)).toBeUndefined();
+    expect(dashboardFixture('GET', '/projects/p/ci-bindings', variant)).toBeUndefined();
   });
   it('does not manufacture a successful response for the unbuilt incidents endpoint', () => {
     expect(dashboardFixture('GET', '/projects/p/incidents', variant)).toBeUndefined();
@@ -15,7 +16,6 @@ describe('Dashboard browser fixture scenario', () => {
     '/projects/p/runs',
     '/projects/p/waivers',
     '/projects/p/quarantine',
-    '/projects/p/ci-bindings',
     '/projects/p/authoring/tree',
     '/projects/p/authoring/manual-cases',
     '/projects/p/authoring/changes',

@@ -2,26 +2,13 @@ import { registerLocaleData } from '@angular/common';
 import localeVi from '@angular/common/locales/vi';
 import { LOCALE_ID, provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import type { CiBindingView, IngestTokenView } from '@evidgate/sdk';
+import type { IngestTokenView } from '@evidgate/sdk';
 
 import { deriveConnectionHealth } from './connection-health';
 import { ConnectionHealthComponent } from './connection-health.component';
 
 registerLocaleData(localeVi);
 
-const BINDING: CiBindingView = {
-  id: 'binding-1',
-  project_id: 'project-1',
-  provider: 'github_actions',
-  repository_id: 123,
-  repository_full_name: 'acme/storefront',
-  allowed_ref_patterns: ['refs/heads/main'],
-  allowed_workflow_refs: [],
-  status: 'active',
-  activated_at: null,
-  created_at: '2026-10-25T00:00:00Z',
-  version: 1,
-};
 const TOKEN: IngestTokenView = {
   id: 'token-1',
   project_id: 'project-1',
@@ -49,7 +36,7 @@ describe.each(['en-US', 'vi'])('ConnectionHealthComponent (%s)', (locale) => {
       'health',
       deriveConnectionHealth({ ...metadata, now: new Date('2026-10-25T12:00:00Z') }),
     );
-    if (name !== 'bindings') fixture.componentRef.setInput(name, value);
+    fixture.componentRef.setInput(name, value);
   }
 
   beforeEach(async () => {
@@ -58,7 +45,7 @@ describe.each(['en-US', 'vi'])('ConnectionHealthComponent (%s)', (locale) => {
       providers: [provideZonelessChangeDetection(), { provide: LOCALE_ID, useValue: locale }],
     }).compileComponents();
     fixture = TestBed.createComponent(ConnectionHealthComponent);
-    metadata = { bindings: [], tokens: [], bindingsTruncated: false, tokensTruncated: false };
+    metadata = { tokens: [], tokensTruncated: false };
     setMetadata('tokens', []);
     root = fixture.nativeElement as HTMLElement;
     await fixture.whenStable();
@@ -87,15 +74,15 @@ describe.each(['en-US', 'vi'])('ConnectionHealthComponent (%s)', (locale) => {
     expect(root.querySelector('[role="progressbar"]')).toBeNull();
   });
 
-  it('renders a healthy state with the shared pill, repository and usable explanation', async () => {
-    setMetadata('bindings', [BINDING]);
+  it('renders a healthy state with the shared pill, token metadata and usable explanation', async () => {
+    setMetadata('tokens', [TOKEN]);
     await fixture.whenStable();
     expect(root.getAttribute('data-testid')).toBe('connection-health');
     expect(root.getAttribute('data-health-state')).toBe('healthy');
     expect(root.querySelector('header app-status-pill')?.textContent).toContain('Healthy');
     expect(root.textContent).toContain('At least one listed credential is usable.');
     const row = root.querySelector('[data-testid="connection-health-credential"]')!;
-    expect(row.textContent).toContain('acme/storefront');
+    expect(row.textContent).toContain(TOKEN.name);
     expect(row.textContent).toContain('Active');
     expect(row.textContent).toContain('Usable.');
   });
@@ -120,29 +107,25 @@ describe.each(['en-US', 'vi'])('ConnectionHealthComponent (%s)', (locale) => {
     expect(root.querySelector('h1, h2, h4')).toBeNull();
   });
 
-  it('says not recorded without claiming no ingest occurred, including OIDC-only projects', async () => {
-    setMetadata('bindings', [BINDING]);
+  it('says not recorded without claiming no ingest occurred', async () => {
+    setMetadata('tokens', [TOKEN]);
     await fixture.whenStable();
     expect(root.querySelector('[data-testid="connection-health-last-use"]')?.textContent).toContain(
       'Not recorded',
     );
     expect(root.textContent).toContain('Last successful token use (UTC)');
-    expect(root.textContent).toContain('OIDC-only activity is not shown');
     expect(root.textContent).toContain('at most once every 60 seconds');
     expect(root.textContent).not.toMatch(/nothing was ingested|no successful ingest/i);
   });
 
-  it.each(['bindingsTruncated', 'tokensTruncated'] as const)(
-    'shows the truncation caveat for %s and unknown health when nothing usable is shown',
-    async (flag) => {
-      setMetadata(flag, true);
-      await fixture.whenStable();
-      expect(root.getAttribute('data-health-state')).toBe('unknown');
-      expect(root.textContent).toContain('Only part of the credential list is shown.');
-      expect(root.textContent).toContain('an unlisted credential may still be usable');
-      expect(root.textContent).toContain('Connection health cannot be determined from this list.');
-    },
-  );
+  it('shows the truncation caveat and unknown health when nothing usable is shown', async () => {
+    setMetadata('tokensTruncated', true);
+    await fixture.whenStable();
+    expect(root.getAttribute('data-health-state')).toBe('unknown');
+    expect(root.textContent).toContain('Only part of the credential list is shown.');
+    expect(root.textContent).toContain('an unlisted credential may still be usable');
+    expect(root.textContent).toContain('Connection health cannot be determined from this list.');
+  });
 
   it('keeps healthy precedence with truncated lists and qualifies the last-use lower bound', async () => {
     setMetadata('tokens', [{ ...TOKEN, last_used_at: '2026-10-25T13:30:00+02:00' }]);
@@ -154,10 +137,9 @@ describe.each(['en-US', 'vi'])('ConnectionHealthComponent (%s)', (locale) => {
       locale === 'vi' ? '11:30:00 25/10/2026' : '10/25/2026, 11:30:00',
     );
     setMetadata('tokensTruncated', false);
-    setMetadata('bindingsTruncated', true);
     await fixture.whenStable();
     expect(root.textContent).not.toContain('may be older than the newest use');
-    expect(root.textContent).toContain('Only part of the credential list is shown.');
+    expect(root.textContent).not.toContain('Only part of the credential list is shown.');
   });
 
   it('keeps the last-use clock and provenance when UTC changes the calendar year', async () => {
@@ -169,16 +151,6 @@ describe.each(['en-US', 'vi'])('ConnectionHealthComponent (%s)', (locale) => {
       locale === 'vi' ? '17:15:04 31/12/2025' : '12/31/2025, 17:15:04',
     );
     expect(time?.getAttribute('datetime')).toBe(supplied);
-  });
-
-  it('renders pending bindings as awaiting verification rather than healthy', async () => {
-    setMetadata('bindings', [{ ...BINDING, status: 'pending_verification' }]);
-    await fixture.whenStable();
-    expect(root.getAttribute('data-health-state')).toBe('pending');
-    expect(root.textContent).toContain('Awaiting CI');
-    expect(root.textContent).toContain(
-      'Not usable until the first CI exchange verifies this binding.',
-    );
   });
 
   it('shows expiry and rotation-overlap times in UTC with an explicit usability explanation', async () => {
@@ -219,12 +191,9 @@ describe.each(['en-US', 'vi'])('ConnectionHealthComponent (%s)', (locale) => {
 
   it('renders server labels as text and never renders secret-shaped payload fields', async () => {
     const secret = `egt_${'z'.repeat(48)}`;
-    const challenge = 'private-binding-challenge';
     const jwt = ['eyJhbGciOiJIUzI1NiJ9', 'eyJzdWIiOiJwcml2YXRlIn0', 'signature'].join('.');
     const tokenWithExtraFields = { ...TOKEN, name: '<img src=x onerror=alert(1)>', secret, jwt };
-    const bindingWithExtraFields = { ...BINDING, binding_challenge: challenge };
     setMetadata('tokens', [tokenWithExtraFields]);
-    setMetadata('bindings', [bindingWithExtraFields]);
     await fixture.whenStable();
     expect(root.textContent).toContain('<img src=x onerror=alert(1)> (public-prefix)');
     expect(root.querySelector('img, script')).toBeNull();
@@ -233,7 +202,6 @@ describe.each(['en-US', 'vi'])('ConnectionHealthComponent (%s)', (locale) => {
         /egt_[A-Za-z0-9_-]{32,}|eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/,
       );
       expect(element.outerHTML).not.toContain(secret);
-      expect(element.outerHTML).not.toContain(challenge);
       expect(element.outerHTML).not.toContain(jwt);
     }
   });

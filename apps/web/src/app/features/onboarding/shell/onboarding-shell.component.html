@@ -70,38 +70,26 @@
               role="progressbar"
               [attr.aria-label]="progressLabel"
               [attr.aria-valuemin]="0"
-              [attr.aria-valuemax]="steps.length"
+              [attr.aria-valuemax]="requiredTotal"
               [attr.aria-valuenow]="completedCount()"
               [attr.aria-valuetext]="progressText()"
             >
               <div
                 class="h-full bg-primary"
-                [style.width.%]="(completedCount() / steps.length) * 100"
+                [style.width.%]="(completedCount() / requiredTotal) * 100"
               ></div>
             </div>
             <p class="m-0 text-xs text-muted-foreground">{{ description }}</p>
           </div>
-          @if (store.progress(); as data) {
+          @if (store.progress()) {
             <dl
-              class="m-0 grid grid-cols-3 divide-x divide-border [&>div]:grid [&>div]:content-center [&>div]:px-(--eg-space-3) [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:m-0 [&_dd]:text-base [&_dd]:font-semibold [&_dd]:tabular-nums"
+              class="m-0 grid grid-cols-1 [&>div]:grid [&>div]:content-center [&>div]:px-(--eg-space-3) [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:m-0 [&_dd]:text-base [&_dd]:font-semibold [&_dd]:tabular-nums"
             >
               <div>
                 <dt class="flex items-center gap-(--eg-space-2)">
                   <hlm-icon name="lucideCircleCheck" />{{ completedLabel }}
                 </dt>
-                <dd>{{ completedCount() }}/{{ steps.length }}</dd>
-              </div>
-              <div>
-                <dt class="flex items-center gap-(--eg-space-2)">
-                  <app-shell-icon name="plug" />{{ bindingsMetric }}
-                </dt>
-                <dd>{{ data.bindings.length }}{{ data.bindingsTruncated ? '+' : '' }}</dd>
-              </div>
-              <div>
-                <dt class="flex items-center gap-(--eg-space-2)">
-                  <app-shell-icon name="key" />{{ tokensMetric }}
-                </dt>
-                <dd>{{ data.tokens.length }}{{ data.tokensTruncated ? '+' : '' }}</dd>
+                <dd>{{ completedCount() }}/{{ requiredTotal }}</dd>
               </div>
             </dl>
           }
@@ -349,12 +337,10 @@
         </footer>
       </section>
       <app-onboarding-evidence-panel
-        [fetching]="store.refreshing()"
         #resourcesLedger
         id="onboarding-resources"
         tabindex="-1"
         [progress]="store.progress()"
-        [refreshFailed]="store.refreshFailure() !== null"
         (viewRecord)="recordDialog.open($event)"
       />
       <app-onboarding-record-dialog
