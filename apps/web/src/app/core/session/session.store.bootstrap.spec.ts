@@ -1,6 +1,3 @@
-import { TestBed } from '@angular/core/testing';
-import { provideRouter } from '@angular/router';
-import { IdentityDataService } from '../data/identity-data.service';
 import { apiError } from '../../shared/testing/http-data.testing';
 import { SessionStore } from './session.store';
 import type { TenantStore } from './tenant.store';
@@ -236,20 +233,6 @@ describe('SessionStore (bootstrap)', () => {
       expect(store.currentOrg()).toBeNull();
       expect(store.currentProject()).toBeNull();
       expect(store.projects()).toEqual([]);
-    });
-
-    it('falls back to the catalogue source when no replacement is bound', async () => {
-      // With no `EffectivePermissionsSource` provider the store must reach the catalogue default;
-      // the fake's `listPermissions` throws, so `unavailable` is the proof that it did.
-      TestBed.resetTestingModule();
-      TestBed.configureTestingModule({
-        providers: [provideRouter([]), { provide: IdentityDataService, useValue: identity }],
-      });
-      const catalogueStore = TestBed.inject(SessionStore);
-
-      await catalogueStore.bootstrap();
-
-      expect(catalogueStore.sessionState()).toBe('unavailable');
     });
   });
 });

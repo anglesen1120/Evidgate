@@ -1,100 +1,78 @@
-// 09.1.1-T4.1 (plan 09.1.1 §10 T4.1; D-S68-Q1): the catalogue-backed permission source. The spec
-// pins the one rule the seam owns — the set is exactly the server's catalogue codes that a member
-// principal may hold, with no role mapping and no client-side derivation — and that a failed read
-// rejects instead of answering an empty set (an empty set would silently hide the whole app).
+// The source binds the shell's grants to `GET /v1/me/permissions`: the set is exactly the server's
+// permission strings for the tenant the session published, a missing tenant asks nothing, and a
+// failed read rejects instead of answering an empty set (which would silently hide the whole app).
 
 import { TestBed } from '@angular/core/testing';
-import type { PermissionView } from '@evidgate/sdk';
+import type { MyPermissionsResponse } from '@evidgate/sdk';
 
 import { IdentityDataService } from '../data/identity-data.service';
-import {
-  CataloguePermissionsSource,
-  EffectivePermissionsSource,
-} from './effective-permissions.source';
+import { ApiPermissionsSource, EffectivePermissionsSource } from './effective-permissions.source';
+import { TenantStore } from './tenant.store';
 
-function permission(code: string, tenantAssignable: boolean): PermissionView {
-  const [resource = code, action = 'read'] = code.split(':');
-  return {
-    code,
-    resource,
-    action,
-    description: `${code} (test)`,
-    sensitive: false,
-    reserved: false,
-    tenant_assignable: tenantAssignable,
-  };
-}
-
-/** The catalogue the fake service answers, and the calls it observed. */
 class FakeIdentityDataService {
-  catalogue: readonly PermissionView[] = [];
+  answer: MyPermissionsResponse = { org_id: 'o-1', roles: [], permissions: [] };
   failure: Error | null = null;
-  calls = 0;
+  readonly orgs: string[] = [];
 
-  listPermissions(): Promise<readonly PermissionView[]> {
-    this.calls += 1;
-    return this.failure === null ? Promise.resolve(this.catalogue) : Promise.reject(this.failure);
+  getMyPermissions(orgId: string): Promise<MyPermissionsResponse> {
+    this.orgs.push(orgId);
+    return this.failure === null ? Promise.resolve(this.answer) : Promise.reject(this.failure);
   }
 }
 
-describe('CataloguePermissionsSource (09.1.1-T4.1)', () => {
+describe('ApiPermissionsSource', () => {
   let identity: FakeIdentityDataService;
-  let source: CataloguePermissionsSource;
+  let tenant: InstanceType<typeof TenantStore>;
+  let source: ApiPermissionsSource;
 
   beforeEach(() => {
     identity = new FakeIdentityDataService();
     TestBed.configureTestingModule({
       providers: [{ provide: IdentityDataService, useValue: identity }],
     });
-    source = TestBed.inject(CataloguePermissionsSource);
+    tenant = TestBed.inject(TenantStore);
+    source = TestBed.inject(ApiPermissionsSource);
   });
 
-  it('keeps only the codes a member principal may hold', async () => {
-    identity.catalogue = [
-      permission('audit:read', true),
-      permission('billing:read', false),
-      permission('ingest_token:write', true),
-      permission('job:claim', false),
-    ];
+  it('grants exactly the codes the server returned for the current tenant', async () => {
+    tenant.setOrg('o-1');
+    identity.answer = {
+      org_id: 'o-1',
+      roles: ['viewer'],
+      permissions: ['audit:read', 'run:read'],
+    };
 
     const granted = await source.load();
 
-    expect([...granted]).toEqual(['audit:read', 'ingest_token:write']);
+    expect([...granted]).toEqual(['audit:read', 'run:read']);
+    expect(identity.orgs).toEqual(['o-1']);
   });
 
-  it('answers an empty set for an empty catalogue, not a role default', async () => {
-    identity.catalogue = [];
+  it('reads the grants of the tenant current at call time, org by org', async () => {
+    tenant.setOrg('o-1');
+    await source.load();
+    tenant.setOrg('o-2');
+    await source.load();
 
+    expect(identity.orgs).toEqual(['o-1', 'o-2']);
+  });
+
+  it('grants nothing and asks nothing when there is no tenant', async () => {
     const granted = await source.load();
 
     expect(granted.size).toBe(0);
+    expect(identity.orgs).toEqual([]);
   });
 
-  it('reads the catalogue once per load and asks no other operation', async () => {
-    identity.catalogue = [permission('run:read', true)];
-
-    await source.load();
-    await source.load();
-
-    expect(identity.calls).toBe(2);
-  });
-
-  it('rejects when the catalogue cannot be read, never answering an empty set', async () => {
-    const failure = new Error('catalogue unavailable');
+  it('rejects when the grants cannot be read, never answering an empty set', async () => {
+    tenant.setOrg('o-1');
+    const failure = new Error('grants unavailable');
     identity.failure = failure;
 
     await expect(source.load()).rejects.toBe(failure);
   });
 
-  it('is a valid value for the EffectivePermissionsSource token, so a story can replace it', () => {
-    TestBed.resetTestingModule();
-    TestBed.configureTestingModule({
-      providers: [
-        { provide: IdentityDataService, useValue: identity },
-        { provide: EffectivePermissionsSource, useExisting: CataloguePermissionsSource },
-      ],
-    });
-
-    expect(TestBed.inject(EffectivePermissionsSource)).toBeInstanceOf(CataloguePermissionsSource);
+  it('is the root default of the EffectivePermissionsSource token', () => {
+    expect(TestBed.inject(EffectivePermissionsSource)).toBeInstanceOf(ApiPermissionsSource);
   });
 });

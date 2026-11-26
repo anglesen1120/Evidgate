@@ -39,10 +39,7 @@ import type { ProjectDto } from '@evidgate/sdk';
 
 import { IdentityDataService } from '../data/identity-data.service';
 import { UnauthenticatedRelay } from '../http/unauthenticated-relay';
-import {
-  CataloguePermissionsSource,
-  EffectivePermissionsSource,
-} from './effective-permissions.source';
+import { EffectivePermissionsSource } from './effective-permissions.source';
 import { createScopeResolver } from './scope-resolution';
 import { createScopeState } from './scope-state';
 import { createSessionBoundary } from './session-boundary';
@@ -63,9 +60,8 @@ export type { ScopeResolution, SessionState } from './session.types';
 type SessionDependencies = {
   readonly identity: IdentityDataService;
   /**
-   * The effective-grant seam. The token is optional so the app boots with no binding: until the API
-   * offers the caller's own grants, the catalogue default answers. A replacement registered anywhere
-   * in the injector wins, and this store stays unchanged.
+   * The effective-grant seam: by default the caller's own grants from the API. A replacement
+   * registered anywhere in the injector wins, and this store stays unchanged.
    */
   readonly permissionsSource: EffectivePermissionsSource;
   /** The tenant the requests are scoped by; this store is its only writer. */
@@ -98,8 +94,7 @@ type SessionMethods = {
 function injectSessionDependencies(): SessionDependencies {
   return {
     identity: inject(IdentityDataService),
-    permissionsSource:
-      inject(EffectivePermissionsSource, { optional: true }) ?? inject(CataloguePermissionsSource),
+    permissionsSource: inject(EffectivePermissionsSource),
     tenant: inject(TenantStore),
     router: inject(Router),
     sessionEnder: inject(SESSION_ENDER),
