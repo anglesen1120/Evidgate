@@ -193,7 +193,7 @@ public sealed partial class ProducerSlotTests
             read.ProducerId.ShouldBe("shard-1");
             read.Version.ShouldBe(1);
             read.LastSequence.ShouldBe(0);
-            read.BoundOwnerId.ShouldBeNull();
+            read.BoundTokenJti.ShouldBeNull();
             read.ClosedAt.ShouldBeNull();
             read.CreatedAt.ShouldNotBe(default);
 

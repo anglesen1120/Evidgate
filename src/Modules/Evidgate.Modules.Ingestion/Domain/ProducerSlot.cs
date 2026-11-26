@@ -7,7 +7,7 @@ namespace Evidgate.Modules.Ingestion.Domain;
 /// be mutated after construction; EF Core binds the row through this constructor and the
 /// compiler-generated backing fields.
 /// <para>
-/// The owner column (<see cref="BoundOwnerId"/>, stored in the historical <c>bound_token_jti</c> column) is
+/// The owner column (<see cref="BoundTokenJti"/>, which now holds the ingest-token id despite its historical name) is
 /// written by <c>IProducerRegistry.BindOrCheckAsync</c> as one conditional <c>UPDATE</c> (T9), not through
 /// this entity: the app role holds a column-level UPDATE grant on it (migration 0029), and a single
 /// statement is what makes two racing first writers safe. The entity is the module's mapping of the table.
@@ -22,7 +22,7 @@ internal sealed class ProducerSlot
         Guid runId,
         int shardIndex,
         string producerId,
-        string? boundOwnerId = null,
+        string? boundTokenJti = null,
         long lastSequence = 0,
         DateTimeOffset? closedAt = null,
         long? declaredLastSequence = null,
@@ -36,7 +36,7 @@ internal sealed class ProducerSlot
         RunId = runId;
         ShardIndex = shardIndex;
         ProducerId = producerId;
-        BoundOwnerId = boundOwnerId;
+        BoundTokenJti = boundTokenJti;
         LastSequence = lastSequence;
         ClosedAt = closedAt;
         DeclaredLastSequence = declaredLastSequence;
@@ -62,7 +62,7 @@ internal sealed class ProducerSlot
     public string ProducerId { get; }
 
     /// <summary>The authenticated credential id the first accepted write bound the slot to (T9); null while unbound.</summary>
-    public string? BoundOwnerId { get; }
+    public string? BoundTokenJti { get; }
 
     /// <summary>The highest sequence the slot has stored; 0 before the first write.</summary>
     public long LastSequence { get; }
