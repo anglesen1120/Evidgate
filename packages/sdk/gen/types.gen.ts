@@ -2826,6 +2826,22 @@ export type RevokeAllSessionsRequest = {
     keep_current?: boolean;
 };
 
+export type MyPermissionsResponse = {
+    org_id: string;
+    /**
+     * Present only when the request supplied a project.
+     */
+    project_id?: string;
+    /**
+     * The caller's active member-role codes in this organization, sorted ordinally.
+     */
+    roles: Array<string>;
+    /**
+     * Effective catalogue permission codes, sorted ordinally.
+     */
+    permissions: Array<string>;
+};
+
 /**
  * The signed-in account's own profile (02.3.1-T3), as `GET /v1/me` and both answers of `PATCH /v1/me` carry it. Only the account's own values are ever in it: the row is resolved from the session, so no field here can describe another user. The row's `version` is NOT a member — it travels as the response's `ETag` and comes back as `If-Match`, so a client cannot believe it wrote with a version it never read.
  */
@@ -3776,6 +3792,16 @@ export type SessionId = string;
  * The `user.id` whose live sessions an org admin ends (02.3.2-T3). Every value that cannot be acted on — not a uuid, an unknown account, an account with no active membership in the org named by `X-Evidgate-Org`, or the caller's own id — answers the same 404 `not_found` the single revoke answers for an unknown session, after the request was authenticated; the route never answers the binding 400.
  */
 export type UserId = string;
+
+/**
+ * Selects the organization in which the caller must have an active membership.
+ */
+export type TenantOrgHeader = string;
+
+/**
+ * Project ID to echo. Member grants are organization-wide in V1.
+ */
+export type EffectiveGrantsProject = string;
 
 /**
  * Names the org in which the caller claims `membership:write` (02.3.2-T2.1). Absent, only the session's owner may be revoked; present, the caller must hold an active membership in this org with `membership:write` AND the target session's user an active membership in the same org, otherwise the answer is the same 404 an unknown id gets. The org is never taken from the path or the body of a pre-tenant route.
@@ -4742,6 +4768,54 @@ export type UpdateMyProfileResponses = {
 };
 
 export type UpdateMyProfileResponse = UpdateMyProfileResponses[keyof UpdateMyProfileResponses];
+
+export type GetMyPermissionsData = {
+    body?: never;
+    headers: {
+        /**
+         * Selects the organization in which the caller must have an active membership.
+         */
+        'X-Evidgate-Org': string;
+    };
+    path?: never;
+    query?: {
+        /**
+         * Project ID to echo. Member grants are organization-wide in V1.
+         */
+        project?: string;
+    };
+    url: '/me/permissions';
+};
+
+export type GetMyPermissionsErrors = {
+    /**
+     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
+     */
+    403: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
+     */
+    422: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type GetMyPermissionsError = GetMyPermissionsErrors[keyof GetMyPermissionsErrors];
+
+export type GetMyPermissionsResponses = {
+    /**
+     * The caller's active member roles and effective permission codes in the selected organization.
+     */
+    200: MyPermissionsResponse;
+};
+
+export type GetMyPermissionsResponse = GetMyPermissionsResponses[keyof GetMyPermissionsResponses];
 
 export type ListSessionsData = {
     body?: never;

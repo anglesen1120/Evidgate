@@ -87,10 +87,11 @@ Every operation declares:
   tenant, so they are `none` with `x-auth: user_session` and
   `security: - sessionCookie: []` — which is also why the viewer and
   `ci_producer` deny matrices derive them as unpermissioned. The literal
-  `authenticated` is reserved for `POST /v1/orgs` (02.1.1 §5): any signed-in
-  user may create an org, because no tenant permission can exist before the
-  tenant does; it sets `x-auth: user_session`. The server side is the
-  allowlisted `[AuthenticatedMember]` handler gate (`Architecture.Tests`).
+  `authenticated` is for signed-in members acting without a catalogue permission
+  (`x-auth: user_session`). `GET` and `POST /v1/orgs` list the caller's organizations or
+  create one before a tenant is selected. `GET /v1/me/permissions` is tenant-scoped:
+  active membership is required, but it reads only the caller's own effective grants.
+  The server side is the allowlisted `[AuthenticatedMember]` handler gate (`Architecture.Tests`).
 - `x-version` — `v1` or `v2`, matching the 00 §9.3 V2 tag.
 
 Shared `components/parameters` carry the 00 §9.1 conventions: `cursor` and

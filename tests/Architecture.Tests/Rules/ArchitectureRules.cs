@@ -237,12 +237,14 @@ public static class ArchitectureRules
     }
 
     /// <summary>
-    /// The only handlers allowed to carry <see cref="AuthenticatedMemberAttribute"/>:
-    /// the ones that create the tenant the caller will then be a member of (02.1.1 §5).
+    /// The only handlers allowed to carry <see cref="AuthenticatedMemberAttribute"/>: the one that creates
+    /// the tenant the caller will then be a member of (02.1.1 §5), and the read of the caller's own grants,
+    /// whose only requirement is membership.
     /// </summary>
     public static readonly IReadOnlySet<string> AuthenticatedMemberAllowlist = new HashSet<string>(StringComparer.Ordinal)
     {
         "Evidgate.Modules.Tenancy.Application.Commands.CreateOrganizationCommandHandler",
+        "Evidgate.Modules.Identity.Application.Queries.GetMyPermissionsQueryHandler",
     };
 
     /// <summary>
