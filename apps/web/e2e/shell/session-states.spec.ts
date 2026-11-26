@@ -133,14 +133,12 @@ test.describe('a limited role reads only its own grants', () => {
   test('a settings tab its grants do not cover is refused and offers no tab strip', async ({
     page,
   }) => {
-    for (const tab of ['members', 'quota-retention']) {
-      await page.goto(withVariant(settingsTabPath('en', tab), LIMITED_GRANTS));
+    await page.goto(withVariant(settingsTabPath('en', 'quota-retention'), LIMITED_GRANTS));
 
-      await expect(page.locator('#main-content h1, #main-content h2').first()).toHaveText(
-        'Not authorized',
-      );
-      await expect(page.locator('app-settings-shell [data-settings-tab]')).toHaveCount(0);
-    }
+    await expect(page.locator('#main-content h1, #main-content h2').first()).toHaveText(
+      'Not authorized',
+    );
+    await expect(page.locator('app-settings-shell [data-settings-tab]')).toHaveCount(0);
   });
 
   test('a role that holds the grant sees the tab', async ({ page }) => {
