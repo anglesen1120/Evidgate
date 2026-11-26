@@ -24,10 +24,10 @@ import {
   withVariants,
 } from './support';
 
-/** Every G1 entry of the registry: URL below `/orgs/:orgId` and the code its route requires. */
 /** The G1 Settings tabs' own read codes (`settings-tabs.ts`). */
 const SETTINGS_TAB_CODES = ['membership:read', 'usage:read', 'audit:read'] as const;
 
+/** Every G1 entry of the registry: URL below `/orgs/:orgId` and the code its route requires. */
 const G1_ENTRIES = [
   { segment: 'authoring', scope: 'project', permission: 'authoring:read' },
   { segment: 'generation', scope: 'project', permission: 'authoring:generate' },
