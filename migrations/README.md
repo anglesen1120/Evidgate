@@ -1358,3 +1358,12 @@ target)` and `session_revoke_audit_append(org, actor, object_type, object_id, me
 - Grants: `evidgate_app` holds SELECT and INSERT on both tables and column-scoped UPDATE on `requirement` only; no DELETE (removal is the `deleted_at` stamp). The operator and sweep roles hold nothing (no policy admits them).
 - Purge order (owner erasure): delete `requirement_version` rows first, then `requirement` rows. Deleting the identity first fails with `23503`.
 - Locks: new tables only; `lock_timeout` is 5 s. Numbering: the migrator refuses a gap, so apply only on a tree that holds `0131`. Rollback: stop the writer, then drop `requirement_version`, then `requirement`.
+
+## Notes on healing redaction reports (`0136`)
+
+- `0136` adds `public.healing_redaction_report` (one row per provider call: `purpose`, `rule_version`, the `report` jsonb of rule ids, field paths and counts, and its `report_hash`) and widens `healing_llm_call`: the status check gains `blocked_leak`, `redaction_report_hash` must be a `sha256:` digest, and a `blocked_leak` row must name its report. The report never holds a value; the hash is the RFC 8785 digest of the report JSON.
+- Keys: `(org_id, project_id)` to `project` and `(org_id, incident_id)` to `incident` (nullable, so an authoring generation names none); `unique (org_id, id)`. `candidate_id` has no key because `healing_candidate` does not exist yet.
+- Guard (SQLSTATE `23514`): `healing_redaction_report_immutable` refuses every UPDATE and any DELETE except by `evidgate_owner`. RLS is FORCE with `TO evidgate_app` and `TO evidgate_owner` policies.
+- Grants: `evidgate_app` holds SELECT and column-scoped INSERT only (`created_at`, `updated_at`, `version` stay at their defaults); the operator and sweep roles hold nothing.
+- Purge order (owner erasure): `healing_redaction_report` rows before the incident rows they name (`23503` otherwise).
+- Locks: the three constraints on `healing_llm_call` are added `NOT VALID` then validated, and take ACCESS EXCLUSIVE until the migrator's single transaction commits; `lock_timeout` is 5 s. Numbering: the migrator refuses a gap, so apply only on a tree that holds `0135`. Deploy: the migrator before any Api or Worker that calls the gateway, because the first attempt of every call inserts a report row. Rollback: stop the gateway, delete or recode `blocked_leak` rows, drop the three constraints, restore the old status check, then drop the table.
