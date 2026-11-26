@@ -28,6 +28,7 @@ public sealed partial class AuthoringGuardFirstBoundaryTests
         "AuthoringChangeEndpoints.ListAsync",
         "AuthoringChecklistEndpoints.ListAsync",
         "AuthoringImportEndpoints.ExportAsync",
+        "AuthoringIntakeEndpoints.GetAsync",
         "AuthoringManualCaseEndpoints.GetAsync",
         "AuthoringManualCaseEndpoints.ListAsync",
         "AuthoringNodeEndpoints.GetTreeAsync",

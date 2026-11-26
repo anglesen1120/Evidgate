@@ -65,7 +65,7 @@ internal sealed partial class TenantRowFactory
             ("public.artifact", "state") => "pending_upload",
             ("public.artifact_kind_policy", "kind") => "trace",
             ("public.artifact_kind_policy", "default_sensitivity") => "normal",
-            // redaction_rule (0071) closes `kind` to the eight contract kinds and `rule_type` to the four-type
+            // redaction_rule (0071) closes `kind` to the contract kinds and `rule_type` to the four-type
             // allowlist, so the generic text candidate is rejected by both CHECKs; `name_pattern` stays generic on
             // purpose — 13 lowercase alphanumerics satisfy the 1..128 bounded-charset CHECK, and a value unique per
             // generated row keeps the (org_id, project_id, kind, rule_type, name_pattern) key from colliding with the
@@ -96,6 +96,11 @@ internal sealed partial class TenantRowFactory
             ("public.authoring_change", "payload") => "{\"body\":\"probe\"}",
             ("public.authoring_change", "affected_versions") =>
                 "{\"" + Guid.CreateVersion7().ToString("D", CultureInfo.InvariantCulture) + "\":1}",
+            // authoring_intake (0133) ties kind to media type and to inline text or an artifact; the text shape is
+            // the default and the resolver switches to the artifact shape when the artifact key is under test.
+            ("public.authoring_intake", "kind") => "text",
+            ("public.authoring_intake", "media_type") => "text/plain",
+            ("public.authoring_intake_slot", "slot") => Interlocked.Increment(ref _intakeSlot) % 64,
             ("public.project", "case_prefix") =>
                 "P" + Interlocked.Increment(ref _casePrefix).ToString("D4", CultureInfo.InvariantCulture),
             ("public.producer_slot", "producer_id") => "shard-1",

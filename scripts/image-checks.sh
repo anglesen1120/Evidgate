@@ -50,15 +50,13 @@ copy_from_image() {
   docker rm -f "$container" >/dev/null
 }
 
-# 00 §5.7 P7 + 13.1.1-T2 (D-S55-Q1): every long-lived image carries Server GC, and the
-# globalization-invariant switch is per image — Worker keeps it (nothing it hosts
-# composes text), the Api must NOT have it, because the authoring module stores NFC
-# text and `string.Normalize(FormC)` is a silent no-op under invariant mode (13.1.1
+# 00 §5.7 P7: every long-lived image carries Server GC and must NOT be globalization-
+# invariant: the Api (authoring writes) and the Worker (intake extraction) store NFC
+# text, and `string.Normalize(FormC)` is a silent no-op under invariant mode (13.1.1
 # AC14). `System.Globalization.Invariant` is a runtimeconfig property, but the *base
 # image* can force it with DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=true — the plain
-# chiseled base does exactly that — and the environment wins over the file, so the
-# Api's image environment is checked too.
-invariant_of() { case "$(prefix "$1")" in api) echo 0 ;; *) echo 1 ;; esac; }
+# chiseled base does exactly that — so the image environment is checked too. Only the
+# parse child inside the Worker image is invariant (see check_parse_child).
 
 check_p7() (
   local reference="$1" name="$2" assembly scratch
@@ -67,7 +65,7 @@ check_p7() (
   trap 'rm -rf "$scratch"' EXIT
   copy_from_image "$reference" "/app/$assembly" "$scratch/$assembly"
   copy_from_image "$reference" "/app/${assembly%.dll}.runtimeconfig.json" "$scratch/runtimeconfig.json"
-  python3 - "$scratch/runtimeconfig.json" "$(invariant_of "$name")" \
+  python3 - "$scratch/runtimeconfig.json" 0 \
     "$(docker image inspect "$reference" --format '{{json .Config.Env}}')" <<'PYEOF'
 import json, sys
 
@@ -81,16 +79,16 @@ if properties.get("System.GC.Server") is not True:
 invariant_actual = properties.get("System.Globalization.Invariant") is True
 if invariant_actual is not invariant_expected:
     sys.exit("build-images: runtimeconfig.json carries System.Globalization.Invariant=%s, "
-             "expected %s for this image (00 §5.7 P7 — invariant is Worker-only; the Api "
-             "needs ICU for NFC, 13.1.1-T2 D-S55-Q1)" % (invariant_actual, invariant_expected))
+             "expected %s for this image (00 §5.7 P7 — the Api and the Worker both store NFC "
+             "text and need ICU)" % (invariant_actual, invariant_expected))
 if not invariant_expected:
     forced = [entry for entry in environment
               if entry in ("DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1",
                            "DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=true")]
     if forced:
         sys.exit("build-images: the runtime base sets %s, which overrides the runtimeconfig "
-                 "and would make NFC normalisation a no-op: the Api must run on the `-extra` "
-                 "chiseled base (13.1.1-T2 D-S55-Q1)" % forced[0])
+                 "and would make NFC normalisation a no-op: the Api and the Worker must run "
+                 "on the `-extra` chiseled base" % forced[0])
 frameworks = [entry.get("name") for entry in document.get("runtimeOptions", {}).get("frameworks", [])]
 print("   P7: runtimeconfig.json has Server GC and System.Globalization.Invariant=%s "
       "(frameworks=%s)" % (invariant_actual, ", ".join(str(name) for name in frameworks)))
@@ -107,14 +105,15 @@ PYEOF
   fi
 )
 
-# 06.3.6-T1.3: the Worker image's second entry point. The parent runner launches
+# The Worker image's second entry point. The parent runner launches
 # the child by path (`dotnet /app/parser/Evidgate.Parser.dll`), so three things
 # must hold in the image and none of them is visible from the Worker's own dll:
 # the child's assembly is there, it ships its own runtimeconfig.json and
 # deps.json (a publish that landed in /app instead of /app/parser would find the
 # Worker's files of the same name and silently bind the wrong graph), and its
-# runtime options match the group `Directory.Build.props` puts it in — the Worker's
-# InvariantGlobalization group, because this image carries no ICU (06.3.6-T1.2).
+# runtime options match what `Directory.Build.props` gives it — invariant, unlike the
+# Worker, because it parses untrusted bytes and localizes nothing. Its own
+# runtimeconfig.json declares that, so the Worker image's ICU base does not change it.
 # Server GC and a ReadyToRun header are deliberately NOT asserted: 00 §5.7 P7
 # names the long-lived Api/Worker processes for both, and the child is a
 # short-lived process (the same reasoning Dockerfile.migrator states for its
@@ -131,7 +130,7 @@ check_parse_child() (
   copy_from_image "$reference" "/app/$directory/$assembly" "$scratch/$assembly"
   copy_from_image "$reference" "/app/$directory/$stem.runtimeconfig.json" "$scratch/runtimeconfig.json"
   copy_from_image "$reference" "/app/$directory/$stem.deps.json" "$scratch/deps.json"
-  python3 - "$scratch/runtimeconfig.json" "$scratch/deps.json" "$scratch/$assembly" "$assembly" "$(invariant_of "$name")" <<'PYEOF'
+  python3 - "$scratch/runtimeconfig.json" "$scratch/deps.json" "$scratch/$assembly" "$assembly" 1 <<'PYEOF'
 import json, sys
 
 runtimeconfig, dependencies, binary = sys.argv[1], sys.argv[2], sys.argv[3]
@@ -142,8 +141,8 @@ properties = options.get("configProperties", {})
 actual = properties.get("System.Globalization.Invariant") is True
 if actual is not invariant:
     sys.exit("build-images: /app/parser/%s's runtimeconfig.json carries "
-             "System.Globalization.Invariant=%s, expected %s (06.3.6-T1.2 puts the child in the "
-             "Worker's invariant group; this chiseled base ships no ICU)" % (assembly, actual, invariant))
+             "System.Globalization.Invariant=%s, expected %s (Directory.Build.props keeps the "
+             "child invariant although the Worker image ships ICU)" % (assembly, actual, invariant))
 if not options.get("framework"):
     sys.exit("build-images: /app/parser/%s's runtimeconfig.json declares no framework: the child "
              "was published self-contained, but the runner launches it with the image's own "

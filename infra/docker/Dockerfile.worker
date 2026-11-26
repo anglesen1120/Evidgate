@@ -7,11 +7,11 @@
 #     --load -t evidgate-worker:dev .
 #
 # Same builder pin, same build strategy and the same non-root chiseled runtime as
-# Dockerfile.api except for the runtime *variant*: the Worker keeps the plain
-# `-chiseled` base because it never composes the authoring module and stays
-# globalization-invariant, while the Api needs the `-extra` variant's ICU
-# (13.1.1-T2, D-S55-Q1). Otherwise the two entry points differ only in the
-# project they publish, the exposed port and the assembly they start.
+# Dockerfile.api, including the `-extra` variant (same digest): the Worker's intake
+# extraction job stores NFC text, `string.Normalize(FormC)` is a silent no-op
+# without ICU, and the plain `-chiseled` base ships none. Otherwise the two entry
+# points differ only in the project they publish, the exposed port and the
+# assembly they start.
 #
 # 06.3.6-T1.3: this image publishes TWO processes — the Worker at /app and its
 # parse child (`Evidgate.Parser`, the only process that touches untrusted bytes)
@@ -24,9 +24,10 @@
 # process, so it is published without `PublishReadyToRun` for the reason
 # Dockerfile.migrator states: 00 §5.7 P7 names the long-lived Api/Worker
 # processes for crossgen, and a process that starts per parse only pays those
-# bytes. It stays on the same plain chiseled base, because
-# `Directory.Build.props` puts `Evidgate.Parser` in the Worker's
-# InvariantGlobalization group (06.3.6-T1.2).
+# bytes. It runs on the same `-extra` base but stays globalization-invariant:
+# `Directory.Build.props` puts `Evidgate.Parser` in the invariant group, so its own
+# runtimeconfig.json carries System.Globalization.Invariant=true and the parse
+# runner adds no environment override (ChildEnvironment).
 #
 # Carried by 08.4.1-T3.3 (ruling T36): the pinned Node runtime that
 # packages/healing-validator needs. That package does not exist yet, so this
@@ -78,7 +79,7 @@ RUN set -eux; \
       --self-contained false \
       --output /app/parser
 
-FROM mcr.microsoft.com/dotnet/aspnet:10.0.12-noble-chiseled@sha256:9651fa59abcdf177c30392cb44a820605ca5d618429ab37acbf6e7c644510b02 AS runtime
+FROM mcr.microsoft.com/dotnet/aspnet:10.0.12-noble-chiseled-extra@sha256:00e0ad6a7ef8c0c1391b87f05c7ac757a15740455688f2bfcd146a3f4b987efd AS runtime
 
 USER root
 WORKDIR /app

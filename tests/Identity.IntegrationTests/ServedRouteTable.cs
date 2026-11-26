@@ -1121,6 +1121,15 @@ internal static class RouteRequests
                 new JsonObject { ["change_ids"] = new JsonArray(Guid.NewGuid().ToString("D")) },
                 IfMatch: "\"order:" + new string('0', 64) + "\"", IdempotencyKey: Key()));
 
+        // The intake pair: a probe that carries a well-formed text body, so a denied caller is refused by the permission
+        // stage rather than by request validation, and a granted one only records an intake of the project.
+        Add("POST", "/v1/projects/{p}/authoring/intakes", ctx =>
+            new(HttpMethod.Post, $"/v1/projects/{ctx.ProjectId}/authoring/intakes",
+                new JsonObject { ["kind"] = "text", ["feature_node_id"] = ctx.NodeId.ToString(), ["text"] = "probe requirement" },
+                IdempotencyKey: Key()));
+        Add("GET", "/v1/projects/{p}/authoring/intakes/{i}", ctx =>
+            new(HttpMethod.Get, $"/v1/projects/{ctx.ProjectId}/authoring/intakes/{Guid.NewGuid():D}"));
+
         // 13.1.1-T5: route 25, the import/export pair. The import probe is a dry run of a valid one-row JSON document —
         // a body the readers refuse would answer 422 before the permission stage, so a denied probe could not observe
         // the 403 it asserts — and a dry run writes nothing even for a granted caller.

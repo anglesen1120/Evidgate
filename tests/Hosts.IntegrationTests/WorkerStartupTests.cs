@@ -55,4 +55,36 @@ public sealed class WorkerStartupTests
             occupied.Stop();
         }
     }
+
+    [Fact]
+    public async Task Boot_InvariantGlobalization_RefusesToStartWithoutNfc()
+    {
+        // The environment variable decides before the runtimeconfig, so an explicit 0 makes the control independent
+        // of whatever the test host inherited, and 1 forces the invariant mode the Worker must refuse.
+        var worker = HostLocator.AppHost("Evidgate.Worker");
+        var token = TestContext.Current.CancellationToken;
+        var port = HostLocator.FreePort();
+        var environment = WorkerChildEnvironment.Build(
+            DeadConnectionString, WorkerChildEnvironment.Unreachable, port, isolationSelfCheckDisabled: true);
+        environment["DOTNET_SYSTEM_GLOBALIZATION_INVARIANT"] = "0";
+
+        var control = await ProcessRunner.RunThenSigtermAsync(
+            worker, environment, $"http://127.0.0.1:{port}/internal/health/live", TimeSpan.FromSeconds(30), token);
+        Assert.Equal(0, control.ExitCode);
+
+        environment["DOTNET_SYSTEM_GLOBALIZATION_INVARIANT"] = "1";
+        using var process = ProcessRunner.Start(worker, environment);
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(token);
+        timeout.CancelAfter(TimeSpan.FromSeconds(30));
+        try
+        {
+            var refusal = await ProcessRunner.WaitForExitAsync(process, timeout.Token);
+            Assert.Equal(Evidgate.Worker.WorkerHost.ConfigurationExitCode, refusal.ExitCode);
+            Assert.Contains("NFC", refusal.Stderr, StringComparison.Ordinal);
+        }
+        finally
+        {
+            await ProcessRunner.StopAsync(process);
+        }
+    }
 }

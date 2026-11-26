@@ -789,6 +789,27 @@ public sealed partial class TenantGucTests
             ("project_id", projectId),
             ("manual_test_case_id", manualTestCaseId),
             ("test_case_id", caseId));
+        // The 13.3.1 intake (migration 0133): a text intake on the node above and the extraction slot holding it.
+        var intakeId = Guid.CreateVersion7();
+        await scope.ExecuteAsync(
+            """
+            insert into public.authoring_intake
+                (id, org_id, project_id, feature_node_id, kind, input_text, media_type, declared_bytes, caps)
+            values (@id, @org_id, @project_id, @feature_node_id, 'text', 'probe', 'text/plain', 5, '{}'::jsonb)
+            """,
+            ("id", intakeId),
+            ("org_id", orgId),
+            ("project_id", projectId),
+            ("feature_node_id", featureNodeId));
+        await scope.ExecuteAsync(
+            """
+            insert into public.authoring_intake_slot (id, org_id, slot, intake_id, lease_id, expires_at)
+            values (@id, @org_id, 0, @intake_id, @lease_id, now() + interval '1 minute')
+            """,
+            ("id", Guid.CreateVersion7()),
+            ("org_id", orgId),
+            ("intake_id", intakeId),
+            ("lease_id", Guid.CreateVersion7()));
         await scope.ExecuteAsync(
             "insert into public.authoring_code_counter (id, org_id, project_id) values (@id, @org_id, @project_id)",
             ("id", Guid.CreateVersion7()),

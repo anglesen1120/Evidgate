@@ -8,7 +8,7 @@ namespace Tenancy.IntegrationTests;
 
 /// <summary>
 /// 06.1.2-T3.2: <c>contracts/evidence/artifact-kind-defaults.v1.json</c> and the code carry the same table — the
-/// same four kinds with the same caps and the same media types (order-insensitive: the JSON array order is not a
+/// same kinds with the same caps and the same media types (order-insensitive: the JSON array order is not a
 /// contract), the same request-body limit, the exact <c>unmapped</c> entries, and a <c>no_default</c> list that is
 /// exactly the 00 §7 closed kind list minus the defaults. Divergence would mean the published contract and the
 /// running code disagree about what a project accepts. Pure unit test — no container and no database, so it stays
@@ -59,6 +59,26 @@ public sealed class EvidenceKindDefaultsContractTests
             .Order(StringComparer.Ordinal)
             .ShouldBe(
                 ArtifactKind.All.Except(ArtifactKindDefaults.Kinds, StringComparer.Ordinal).Order(StringComparer.Ordinal).ToList());
+    }
+
+    /// <summary>The requirement kinds' published numbers, pinned independently of the table they are read from.</summary>
+    [Fact]
+    public void RequirementKinds_HaveTheirPublishedCapsAndMediaTypes()
+    {
+        ArtifactKindDefaults.Kinds.ShouldBe(
+            ["trace", "video", "screenshot", "raw_report", "requirement_document", "requirement_image"]);
+
+        var document = ArtifactKindDefaults.All["requirement_document"];
+        document.MaxBytes.ShouldBe(25L * 1024 * 1024);
+        document.MediaTypes.ShouldBe(
+            ["application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/pdf"]);
+
+        var image = ArtifactKindDefaults.All["requirement_image"];
+        image.MaxBytes.ShouldBe(10L * 1024 * 1024);
+        image.MediaTypes.ShouldBe(["image/png", "image/jpeg", "image/webp"]);
+
+        ArtifactSensitivity.ForKind("requirement_document").ShouldBe(ArtifactSensitivity.Sensitive);
+        ArtifactSensitivity.ForKind("requirement_image").ShouldBe(ArtifactSensitivity.Sensitive);
     }
 
     /// <summary>The repository root: the directory holding <c>Evidgate.slnx</c> above the test binary (the SeaweedFS fixture's rule).</summary>

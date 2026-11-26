@@ -16,6 +16,7 @@
     <ProjectReference Include="..\Modules\Evidgate.Modules.Identity\Evidgate.Modules.Identity.csproj" />
     <ProjectReference Include="..\Modules\Evidgate.Modules.Tenancy\Evidgate.Modules.Tenancy.csproj" />
     <ProjectReference Include="..\Modules\Evidgate.Modules.Catalog\Evidgate.Modules.Catalog.csproj" />
+    <ProjectReference Include="..\Modules\Evidgate.Modules.Authoring\Evidgate.Modules.Authoring.csproj" />
     <ProjectReference Include="..\Modules\Evidgate.Modules.Orchestrator\Evidgate.Modules.Orchestrator.csproj" />
     <ProjectReference Include="..\Modules\Evidgate.Modules.Ingestion\Evidgate.Modules.Ingestion.csproj" />
     <ProjectReference Include="..\Modules\Evidgate.Modules.Evidence\Evidgate.Modules.Evidence.csproj" />

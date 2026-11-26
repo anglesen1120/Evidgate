@@ -61,6 +61,9 @@ public sealed class PolicyPermissionContractTests
         // 13.1.1-T5: route 25, the import/export pair — the import is a write on its own command, the export a read.
         ("Authoring", "importAuthoring", "ImportAuthoringCommandHandler", "authoring:write"),
         ("Authoring", "exportAuthoring", "ExportAuthoringQueryHandler", "authoring:read"),
+        // The requirement intake pair: recording one spends the generation gate, reading it is an authoring read.
+        ("Authoring", "createAuthoringIntake", "CreateIntakeCommandHandler", "authoring:generate"),
+        ("Authoring", "getAuthoringIntake", "GetIntakeQueryHandler", "authoring:read"),
     ];
 
     [Fact]

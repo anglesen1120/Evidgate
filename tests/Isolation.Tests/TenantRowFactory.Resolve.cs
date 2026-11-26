@@ -222,6 +222,19 @@ internal sealed partial class TenantRowFactory
             values[column.Name] = Value(table, column, isOwnId ? forcedId : null);
         }
 
+        if (string.Equals(table, "public.authoring_intake", StringComparison.Ordinal))
+        {
+            if (string.Equals(corruptedForeignKey, "authoring_intake_artifact_fk", StringComparison.Ordinal))
+            {
+                values["kind"] = "image";
+                values["media_type"] = "image/png";
+            }
+            else
+            {
+                values["input_text"] = "probe";
+            }
+        }
+
         // The OAuth state's primary key is its digest, and a support grant's id has a database default, so
         // neither id is generated above, yet the suite addresses every tenant row by its `id`.
         if ((string.Equals(table, "public.github_install_state", StringComparison.Ordinal)

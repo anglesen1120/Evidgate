@@ -68,6 +68,10 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
         // assert a state the writer never produced). The three authoring lists are scanned.
         "/v1/projects/{p}/authoring/manual-cases/{m}",
 
+        // The intake read answers only for a row the intake route recorded; this suite records none (the tenancy
+        // tests own the rows), so the scan would see the 404. Its 403/404 cases are in the isolation world.
+        "/v1/projects/{p}/authoring/intakes/{i}",
+
         // 08.6.3-T1's kill switch read: it needs `healing:triage`, which the member this suite signs in as does not hold
         // (403 `forbidden`), and its body is modes, timestamps and a redacted system row — no secret value or secret-named
         // member. Its shape, redaction and permission are asserted in Tenancy.IntegrationTests' HealingSwitchEndpointTests.

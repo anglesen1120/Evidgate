@@ -33,10 +33,16 @@ internal static class ArtifactKind
     /// <summary>A UI hierarchy dump.</summary>
     public const string UiHierarchy = ArtifactKinds.UiHierarchy;
 
-    /// <summary>The eight kinds of the contract, in contract order.</summary>
+    /// <summary>A requirement document (DOCX or PDF) uploaded for test generation.</summary>
+    public const string RequirementDocument = ArtifactKinds.RequirementDocument;
+
+    /// <summary>A requirement image uploaded for test generation.</summary>
+    public const string RequirementImage = ArtifactKinds.RequirementImage;
+
+    /// <summary>The ten kinds of the contract, in contract order.</summary>
     public static readonly IReadOnlyList<string> All = ArtifactKinds.All;
 
-    /// <summary>True when <paramref name="kind"/> is one of the eight contract kinds.</summary>
+    /// <summary>True when <paramref name="kind"/> is one of the ten contract kinds.</summary>
     public static bool IsKnown(string? kind) => ArtifactKinds.IsKnown(kind);
 
     /// <summary>The kind, or an <see cref="ArgumentOutOfRangeException"/> when it is outside the closed list (C6).</summary>
@@ -69,20 +75,21 @@ internal static class ArtifactSensitivity
 
     /// <summary>
     /// The static per-kind fallback a minted artifact inherits when the project has no <c>artifact_kind_policy</c>
-    /// row for its kind (06.1.1 §10 T2 Notes item 3, FR-06-5). The map is the one TL ruling T57(a) fixes
-    /// (<c>plans/features/README.md</c> §3; 06.2.1 §5/§8): <c>trace</c>, <c>dom_snapshot</c>, <c>a11y_snapshot</c> and
-    /// <c>patch</c> carry request bodies, cookies or page text and default to <see cref="Sensitive"/>;
-    /// <c>video</c>, <c>screenshot</c>, <c>raw_report</c> and <c>ui_hierarchy</c> default to <see cref="Normal"/>.
-    /// A project may lower a default-<c>sensitive</c> kind to <c>normal</c> only through the audited
-    /// <c>PUT /v1/projects/{p}/artifact-kind-policy/{kind}</c> override (06.2.1-T1), never by omission.
+    /// row for its kind. <c>trace</c>, <c>dom_snapshot</c>, <c>a11y_snapshot</c> and <c>patch</c> carry request
+    /// bodies, cookies or page text, and both requirement kinds carry customer documents that may hold personal
+    /// data, so all of those default to <see cref="Sensitive"/>; <c>video</c>, <c>screenshot</c>, <c>raw_report</c>
+    /// and <c>ui_hierarchy</c> default to <see cref="Normal"/>. A project may lower a default-<c>sensitive</c> kind
+    /// to <c>normal</c> only through the audited
+    /// <c>PUT /v1/projects/{p}/artifact-kind-policy/{kind}</c> override, never by omission.
     /// </summary>
     /// <param name="kind">One of <see cref="ArtifactKind.All"/>.</param>
     /// <returns>The kind's default sensitivity.</returns>
-    /// <exception cref="ArgumentOutOfRangeException">The kind is outside the 00 §7 closed list.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">The kind is outside the closed list.</exception>
     public static string ForKind(string kind) =>
         ArtifactKind.Ensure(kind) switch
         {
-            ArtifactKind.Trace or ArtifactKind.DomSnapshot or ArtifactKind.A11ySnapshot or ArtifactKind.Patch => Sensitive,
+            ArtifactKind.Trace or ArtifactKind.DomSnapshot or ArtifactKind.A11ySnapshot or ArtifactKind.Patch
+                or ArtifactKind.RequirementDocument or ArtifactKind.RequirementImage => Sensitive,
             _ => Normal,
         };
 }

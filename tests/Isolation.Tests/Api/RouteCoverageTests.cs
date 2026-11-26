@@ -215,6 +215,9 @@ public sealed class RouteCoverageTests
         ("GET", "/v1/projects/{p}/authoring/changes/{c}", "authoring:read"),
         ("POST", "/v1/projects/{p}/authoring/changes/{c}/discard", "authoring:write"),
         ("POST", "/v1/projects/{p}/authoring/changes:apply", "authoring:write"),
+        // The requirement intake pair: the record route is the generation gate, the read the authoring read.
+        ("POST", "/v1/projects/{p}/authoring/intakes", "authoring:generate"),
+        ("GET", "/v1/projects/{p}/authoring/intakes/{i}", "authoring:read"),
     ];
 
     /// <summary>

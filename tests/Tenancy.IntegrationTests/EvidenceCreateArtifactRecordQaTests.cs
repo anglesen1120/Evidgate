@@ -301,7 +301,7 @@ public sealed class EvidenceCreateArtifactRecordQaTests : IClassFixture<TenancyH
     // ------------------------------------------------------------------ sensitivity: static fallback per kind (T57(a))
 
     [Fact]
-    public async Task Sensitivity_WithoutAPolicyRow_IsTheStaticFallbackForEachOfTheEightKinds()
+    public async Task Sensitivity_WithoutAPolicyRow_IsTheStaticFallbackForEachOfTheTenKinds()
     {
         await using var world = await StartAsync();
 
@@ -315,9 +315,11 @@ public sealed class EvidenceCreateArtifactRecordQaTests : IClassFixture<TenancyH
             [ArtifactKind.Screenshot] = ArtifactSensitivity.Normal,
             [ArtifactKind.RawReport] = ArtifactSensitivity.Normal,
             [ArtifactKind.UiHierarchy] = ArtifactSensitivity.Normal,
+            [ArtifactKind.RequirementDocument] = ArtifactSensitivity.Sensitive,
+            [ArtifactKind.RequirementImage] = ArtifactSensitivity.Sensitive,
         };
 
-        ArtifactKind.All.Count.ShouldBe(8);
+        ArtifactKind.All.Count.ShouldBe(10);
         foreach (var kind in ArtifactKind.All)
         {
             expected.ContainsKey(kind).ShouldBeTrue($"kind {kind} has no expected fallback");
