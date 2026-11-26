@@ -564,6 +564,10 @@ public sealed class WaiverTests
             """,
             ("org_id", world.Org),
             ("project_id", world.Project));
-        due.ShouldContain("waiver_state_expiry_idx");
+        (due.Contains("waiver_state_expiry_idx", StringComparison.OrdinalIgnoreCase)
+            || due.Contains("waiver_org_due_idx", StringComparison.OrdinalIgnoreCase))
+            .ShouldBeTrue("the due rows of one project come from an expiry index, never a seq scan");
+        due.ShouldNotContain("Seq Scan", Case.Sensitive);
+        due.ShouldNotContain("\"Sort\"", Case.Sensitive);
     }
 }

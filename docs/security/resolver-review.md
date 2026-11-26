@@ -389,3 +389,12 @@ Receivers: a gap is filed on its owning story. Where the owning task has already
 | Gaps filed as `[OPEN]` on owning stories | §6 (15 rows, with receivers) | met; the close-out appends the carried rows |
 
 No gap is reachable over HTTP at this sha. What stays open is the exposure a leaked or injected `evidgate_app` credential would have through a definer that trusts a caller-asserted id (R-F6), and the ACL breadth that would let such a credential reach a platform writer or a sweep (A-F1, A-F4, A-F5); no request shape reaches a cross-tenant read.
+
+## 8. Exception expiry (migration `0126`, after the reviewed snapshot)
+
+Both functions are owner-owned, pin `search_path = ''` and revoke `PUBLIC` execute.
+
+| Function | Non-owner EXECUTE | Scope and return shape | Audit boundary |
+|---|---|---|---|
+| `evidgate.exception_expiry_org_ids(uuid, integer)` | `evidgate_worker_sched` | Read-only keyset page of org IDs with a due approved waiver or active quarantine entry; no entry or project IDs. | No single tenant owns the cross-org probe. |
+| `evidgate.sweep_expired_exceptions(uuid, integer)` | `evidgate_app` | Rejects a null or mismatched tenant with `42501`. Moves only already-due approved waivers and active quarantine entries in the current org, returning `kind`, `id`, `project_id` and `expires_at` for each transition. | The task handler appends one `waiver.expire` or `quarantine.expire` per returned row in the same tenant transaction. A direct SQL call bypasses that audit step, not the tenant or due-time checks. |

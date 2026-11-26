@@ -1,9 +1,7 @@
 using Evidgate.Testing;
 using Shouldly;
 using Xunit;
-
 namespace Isolation.Tests;
-
 /// <summary>
 /// 02.9.1-T3.2 (story 02.9.1 §8 T1, §9 "Resolver surface"; 00 §5.4.8, TL T1/T80):
 /// the pre-tenant resolver surface. A request authenticates before any tenant exists, so the
@@ -122,6 +120,8 @@ public sealed partial class ResolverTests : HarnessTest
         ["evidgate.orchestration_run_state_event_append"] = "0082_orchestration_run_state_event.sql:120",
         ["evidgate.record_sweep_audit"] = "0088_platform_sweep_audit.sql:138",
         ["evidgate.roll_healing_llm_budget"] = "0107_healing_llm_budget_roll.sql",
+        ["evidgate.exception_expiry_org_ids"] = "0126_policy_expiry_sweep.sql",
+        ["evidgate.sweep_expired_exceptions"] = "0126_policy_expiry_sweep.sql",
         ["evidgate.purge_expired_github_install_state"] = "0108_identity_github_installation.sql:160",
         ["evidgate.list_dead_letter_tasks"] = "0104_platform_worker_role.sql:291",
         ["evidgate.replay_dead_letter_task"] = "0104_platform_worker_role.sql:352",

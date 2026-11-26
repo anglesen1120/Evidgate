@@ -38,5 +38,6 @@
     <InternalsVisibleTo Include="Evidgate.Migrator" />
     <InternalsVisibleTo Include="Hosts.IntegrationTests" />
     <InternalsVisibleTo Include="Tenancy.IntegrationTests" />
+    <InternalsVisibleTo Include="Tasks.IntegrationTests" />
   </ItemGroup>
 </Project>
