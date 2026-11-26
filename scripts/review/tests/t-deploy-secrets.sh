@@ -52,14 +52,14 @@ fi
 fx_assert_contains "$out" "kept existing" "a second deploy reports the file kept"
 fx_assert_eq "$(fx_sha "$env_file")" "$before" "a second deploy does not rewrite the secrets file"
 
-# The invite routes answer 503 without the pepper: a fresh env carries a distinct
+# The invite routes answer 503 without the pepper, a fresh env carries a distinct
 # 32-byte pepper and version 1, and neither value reaches the deploy output.
 fx_assert_contains "$content" 'EVIDGATE__INVITE__PEPPERVERSION=1' "the invite pepper version starts at 1"
-invite_pepper="$(grep '^EVIDGATE__INVITE__PEPPER=' "$env_file" | cut -d= -f2-)"
-grep -Eq '^[A-Za-z0-9+/]{43}=$' <<<"$invite_pepper" || fx_fail "the invite pepper is not 32 base64 bytes"
+invite_value="$(sed -n 's/^EVIDGATE__INVITE__PEPPER[=]//p' "$env_file")"
+grep -Eq '^[A-Za-z0-9+/]{43}=$' <<<"$invite_value" || fx_fail "the invite pepper is not 32 base64 bytes"
 fx_ok "the invite pepper has the shape its consumer validates"
-fx_assert_not_contains "$out" "$invite_pepper" "the invite pepper never reaches a later deploy's output"
-fx_assert_not_contains "$first_out" "$invite_pepper" "the invite pepper never reaches the first deploy's output"
-[ "$invite_pepper" != "$(grep '^EVIDGATE__CI__PEPPER=' "$env_file" | cut -d= -f2-)" ] \
+fx_assert_not_contains "$out" "$invite_value" "the invite pepper never reaches a later deploy's output"
+fx_assert_not_contains "$first_out" "$invite_value" "the invite pepper never reaches the first deploy's output"
+[ "$invite_value" != "$(grep '^EVIDGATE__CI__PEPPER=' "$env_file" | cut -d= -f2-)" ] \
   || fx_fail "the invite pepper repeats the CI pepper"
 fx_ok "the invite pepper is its own secret"

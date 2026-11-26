@@ -131,7 +131,7 @@ rv_env_add_missing() {
     add="${add}${key}=${value}"$'\n'
   done
   file="$(rv_quote "$RV_ENV_FILE")"
-  printf '%s' "$add" | rv_mutate "set -eu; f=$file; l=\"\$f.lock\"; n=0; until mkdir \"\$l\" 2>/dev/null; do n=\$((n+1)); [ \"\$n\" -le 30 ] || { echo \"$RV_ENV_FILE is locked by another deploy\" >&2; exit 1; }; sleep 1; done; trap 'rmdir \"\$l\"' EXIT; umask 077; t=\"\$f.up.\$\$\"; cp -p \"\$f\" \"\$t\"; chg=0; while IFS= read -r line; do k=\${line%%=*}; if grep -Eq \"^[[:space:]]*(export[[:space:]]+)?\$k[[:space:]]*[=:]\" \"\$f\"; then continue; else rc=\$?; [ \"\$rc\" -eq 1 ] || exit \"\$rc\"; fi; [ -z \"\$(tail -c1 \"\$t\")\" ] || printf '\\n' >>\"\$t\"; printf '%s\\n' \"\$line\" >>\"\$t\"; chg=1; done; if [ \"\$chg\" = 1 ]; then chmod 600 \"\$t\"; mv \"\$t\" \"\$f\"; else rm -f \"\$t\"; fi" \
+  printf '%s' "$add" | rv_mutate "set -eu; f=$file; l=\"\$f.lock\"; n=0; until mkdir \"\$l\" 2>/dev/null; do n=\$((n+1)); [ \"\$n\" -le 30 ] || { echo \"the env file is locked by another deploy\" >&2; exit 1; }; sleep 1; done; trap 'rmdir \"\$l\"' EXIT; umask 077; t=\"\$f.up.\$\$\"; cp -p \"\$f\" \"\$t\"; chg=0; while IFS= read -r line; do k=\${line%%=*}; if grep -Eq \"^[[:space:]]*(export[[:space:]]+)?\$k[[:space:]]*[=:]\" \"\$f\"; then continue; else rc=\$?; [ \"\$rc\" -eq 1 ] || exit \"\$rc\"; fi; [ -z \"\$(tail -c1 \"\$t\")\" ] || printf '\\n' >>\"\$t\"; printf '%s\\n' \"\$line\" >>\"\$t\"; chg=1; done; if [ \"\$chg\" = 1 ]; then chmod 600 \"\$t\"; mv \"\$t\" \"\$f\"; else rm -f \"\$t\"; fi" \
     || rv_die "cannot add the invite keys to $RV_ENV_FILE"
   rv_info "$RV_ENV_FILE has the invite keys (an existing declaration is never replaced)"
 }
