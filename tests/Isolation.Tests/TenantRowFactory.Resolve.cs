@@ -269,6 +269,15 @@ internal sealed partial class TenantRowFactory
             values["reason"] = "generated adjustment";
         }
 
+        // A credit entry that names a call must be a call-bound kind (0135 CHECK); the corrupt row of the composite-FK
+        // suite fills call_id, so its kind travels with it or the CHECK (23514) would answer before the foreign key.
+        if (string.Equals(table, "public.ai_credit_entry", StringComparison.Ordinal)
+            && values.TryGetValue("call_id", out var creditCall)
+            && creditCall is not null)
+        {
+            values["kind"] = "reserve";
+        }
+
         // The linkage guard (0122) refuses an incident whose execution key is not its attempt's, and an
         // incident_attempt whose number or result is not its attempt's. Only a valid row can repeat them: a corrupt
         // row is refused by its foreign key first and keeps its random key, which keeps it off the valid row's

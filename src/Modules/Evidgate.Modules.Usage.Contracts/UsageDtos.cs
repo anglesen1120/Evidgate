@@ -4,8 +4,8 @@ namespace Evidgate.Modules.Usage.Contracts;
 /// The metered metrics of the ledger (12.3.1 §4). Each member is one value of
 /// <c>usage_ledger_entry.metric</c>, stored under the wire name of
 /// <see cref="UsageLedgerMetricNames"/> (<c>results</c>, <c>artifact_gb_month</c>, <c>egress_gb</c>,
-/// <c>ai_tokens</c>, <c>support_hours</c>, <c>runner_minutes</c>, <c>device_minutes</c>); the set is closed
-/// because the column carries a <c>check</c> constraint over exactly those seven strings.
+/// <c>ai_tokens</c>, <c>support_hours</c>, <c>runner_minutes</c>, <c>device_minutes</c>, <c>ai_credit</c>); the set is closed
+/// because the column carries a <c>check</c> constraint over exactly those eight strings.
 /// </summary>
 public enum UsageMetric
 {
@@ -33,6 +33,9 @@ public enum UsageMetric
 
     /// <summary><c>device_minutes</c>: device-farm minutes of a run's executions.</summary>
     DeviceMinutes,
+
+    /// <summary><c>ai_credit</c>: AI credit moved by one credit entry, in micro-units (a magnitude, never negative).</summary>
+    AiCredit,
 }
 
 /// <summary>
@@ -63,6 +66,9 @@ public static class UsageLedgerMetricNames
     /// <summary>The <c>device_minutes</c> metric.</summary>
     public const string DeviceMinutes = "device_minutes";
 
+    /// <summary>The <c>ai_credit</c> metric: one ledger row per AI credit entry.</summary>
+    public const string AiCredit = "ai_credit";
+
     /// <summary>Every wire name, in <see cref="UsageMetric"/> order.</summary>
     public static IReadOnlyList<string> All { get; } =
     [
@@ -73,6 +79,7 @@ public static class UsageLedgerMetricNames
         SupportHours,
         RunnerMinutes,
         DeviceMinutes,
+        AiCredit,
     ];
 }
 

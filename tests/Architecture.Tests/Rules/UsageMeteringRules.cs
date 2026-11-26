@@ -43,10 +43,11 @@ public static class UsageMeteringRules
         "src/Modules/Evidgate.Modules.Usage.Contracts/",
     ];
 
-    /// <summary>The one module outside Usage allowed to call the ledger: the ingest-side emitter.</summary>
+    /// <summary>The modules outside Usage allowed to call the ledger: the ingest-side emitter and the AI credit writer.</summary>
     private static readonly string[] LedgerCallers =
     [
         "src/Modules/Evidgate.Modules.Ingestion/",
+        "src/Modules/Evidgate.Modules.Healing/",
     ];
 
     /// <summary>

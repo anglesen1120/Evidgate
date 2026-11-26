@@ -39,9 +39,11 @@ internal static class UsageMetricAvailability
             "no metering point writes runner minutes yet",
         UsageMetric.DeviceMinutes =>
             "no metering point writes device-farm minutes yet",
+        UsageMetric.AiCredit =>
+            "AI credit has its own balance read; the usage summary does not report it",
         _ => throw new ArgumentOutOfRangeException(
             nameof(metric),
             metric,
-            "the usage metric is not one of the seven the ledger stores"),
+            "the usage metric is not one of the eight the ledger stores"),
     };
 }

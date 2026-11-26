@@ -92,6 +92,10 @@ internal sealed partial class TenantRowFactory
             ("public.requirement", "kind") => "epic",
             ("public.requirement_version", "source") => "manual",
             ("public.requirement_version", "content_hash") => "sha256:" + new string('e', 64),
+            // ai_credit_entry (0135) closes kind to six tokens and payload_hash to the content address; a grant
+            // is the one kind that needs no call, so the nullable call_id stays unset.
+            ("public.ai_credit_entry", "kind") => "grant",
+            ("public.ai_credit_entry", "payload_hash") => "sha256:" + new string('f', 64),
             // authoring_change (0067) closes change_type to four tokens and wants a non-empty
             // affected_versions object, so the generic text and '{}' candidates are both rejected before
             // a composite FK under test is reached. A comment payload needs its body and no other member,
