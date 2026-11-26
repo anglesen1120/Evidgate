@@ -518,6 +518,7 @@ internal sealed record RouteRequestContext(
     Guid CiBindingId,
     Guid IngestTokenId,
     Guid ApiTokenId,
+    Guid WebhookEndpointId,
     Guid RunId,
     Guid NodeId,
     Guid ItemId,
@@ -529,6 +530,7 @@ internal sealed record RouteRequestContext(
     internal static RouteRequestContext Fresh(Guid orgId, Guid projectId) => new(
         orgId,
         projectId,
+        Guid.CreateVersion7(),
         Guid.CreateVersion7(),
         Guid.CreateVersion7(),
         Guid.CreateVersion7(),
@@ -675,6 +677,15 @@ internal static class RouteRequests
             }));
         Add("GET", "/v1/projects/{p}/api-tokens", ctx => new(HttpMethod.Get, $"/v1/projects/{ctx.ProjectId}/api-tokens"));
         Add("DELETE", "/v1/api-tokens/{t}", ctx => new(HttpMethod.Delete, $"/v1/api-tokens/{ctx.ApiTokenId}"));
+
+        Add("POST", "/v1/projects/{p}/webhook-endpoints", ctx => new(HttpMethod.Post, $"/v1/projects/{ctx.ProjectId}/webhook-endpoints",
+            new JsonObject { ["url"] = $"https://93.184.216.34/{ctx.WebhookEndpointId}" }));
+        Add("GET", "/v1/projects/{p}/webhook-endpoints", ctx => new(HttpMethod.Get, $"/v1/projects/{ctx.ProjectId}/webhook-endpoints"));
+        Add("GET", "/v1/projects/{p}/webhook-endpoints/{e}", ctx => new(HttpMethod.Get, $"/v1/projects/{ctx.ProjectId}/webhook-endpoints/{ctx.WebhookEndpointId}"));
+        Add("PATCH", "/v1/projects/{p}/webhook-endpoints/{e}", ctx => new(HttpMethod.Patch, $"/v1/projects/{ctx.ProjectId}/webhook-endpoints/{ctx.WebhookEndpointId}",
+            new JsonObject { ["state"] = "disabled" }, IfMatch: "\"1\""));
+        Add("DELETE", "/v1/projects/{p}/webhook-endpoints/{e}", ctx => new(HttpMethod.Delete, $"/v1/projects/{ctx.ProjectId}/webhook-endpoints/{ctx.WebhookEndpointId}"));
+        Add("GET", "/v1/projects/{p}/webhook-deliveries", ctx => new(HttpMethod.Get, $"/v1/projects/{ctx.ProjectId}/webhook-deliveries"));
 
         // ---- Support grants (SupportGrantEndpoints.cs; 02.8.1 §5) ---------------------------------------------
         // The tenant's approve, revoke and list. The openapi /support-grants request route is the operator's and is not

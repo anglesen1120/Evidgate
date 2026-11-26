@@ -319,7 +319,13 @@ The counts above are the snapshot's. Rows added later are listed here so no cite
 | 72 | `deploy_target.create` | `src/Modules/Evidgate.Modules.Policy/Application/DeployTargets/DeployTargetCommands.cs` (`[AuditedAction]`) | Policy | `CreateDeployTargetCommand` | user | `deploy_target` / `id` (project id in `project_id`) | — |
 | 73 | `deploy_target.update` | `src/Modules/Evidgate.Modules.Policy/Application/DeployTargets/DeployTargetCommands.cs` (`[AuditedAction]`) | Policy | `UpdateDeployTargetCommand` | user | `deploy_target` / `command.TargetId` (project id in `project_id`) | — |
 | 74 | `deploy_target.disable` | `src/Modules/Evidgate.Modules.Policy/Application/DeployTargets/DeployTargetCommands.cs` (`[AuditedAction]`) | Policy | `DisableDeployTargetCommand` | user | `deploy_target` / `command.TargetId` (project id in `project_id`) | — |
+| 75 | `webhook_delivery.replay` | `migrations/0131_policy_webhooks.sql` (`evidgate.replay_webhook_delivery`) | Policy | operator dead-letter replay of one event's webhook deliveries | user (operator, passed as `p_actor`) | `webhook_delivery` / delivery ID | — |
+| 76 | `webhook_endpoint.create` | `src/Modules/Evidgate.Modules.Policy/Webhooks/Application/RegisterWebhookEndpoint.cs:36` (`[AuditedAction]`) | Policy | `RegisterWebhookEndpointCommand` (`:27`) | user (member) | `webhook_endpoint` / endpoint ID (`:142`), `project_id` set | — |
+| 77 | `webhook_endpoint.update` | `src/Modules/Evidgate.Modules.Policy/Webhooks/Application/UpdateWebhookEndpoint.cs:40` (`[AuditedAction]`) | Policy | `UpdateWebhookEndpointCommand` (`:25`) | user (member) | `webhook_endpoint` / endpoint ID (`:167`), `project_id` set | — |
+| 78 | `webhook_endpoint.delete` | `src/Modules/Evidgate.Modules.Policy/Webhooks/Application/DeleteWebhookEndpoint.cs:28` (`[AuditedAction]`) | Policy | `DeleteWebhookEndpointCommand` (`:20`) | user (member) | `webhook_endpoint` / endpoint ID (`:68`), `project_id` set | — |
 
 Rows 30–31 were re-pointed after the snapshot: `0101` moved `auth.link` and `auth.link_move` out of `LinkEndpoints.AuditAsync` and into `evidgate_resolve.login_link_identity_audited` (`migrations/0101_identity_revoke_rank_and_atomic_link_audit.sql:288-295`), which appends them in the same transaction as the identity row, one chain per active org, and writes nothing on an `already_linked` answer.
 
 Rows 70–71 are written once per row returned by the expiry sweep, in the tenant transaction that expires it. The handler writes nothing for a batch with no transitions.
+
+Rows 73–75 carry no metadata: the object names the endpoint and its project, never the URL or the signing secret. A refused or no-op change (blocked URL, stale `If-Match`, cap, unknown endpoint) returns a failure `Result` and writes no row.

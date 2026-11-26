@@ -122,6 +122,7 @@ public sealed partial class ResolverTests : HarnessTest
         ["evidgate.roll_healing_llm_budget"] = "0107_healing_llm_budget_roll.sql",
         ["evidgate.exception_expiry_org_ids"] = "0126_policy_expiry_sweep.sql",
         ["evidgate.sweep_expired_exceptions"] = "0126_policy_expiry_sweep.sql",
+        ["evidgate.replay_webhook_delivery"] = "0131_policy_webhooks.sql",
         ["evidgate.purge_expired_github_install_state"] = "0108_identity_github_installation.sql:160",
         ["evidgate.list_dead_letter_tasks"] = "0104_platform_worker_role.sql:291",
         ["evidgate.replay_dead_letter_task"] = "0104_platform_worker_role.sql:352",

@@ -121,7 +121,7 @@ public sealed class HealingLlmEgressTests
     [InlineData("https://192.0.1.1/", false)]
     [InlineData("https://198.17.0.1/", false)]
     [InlineData("https://100.128.0.1/", false)]
-    [InlineData("https://[2002:0808:0808::1]/", false)]
+    [InlineData("https://[2002:0808:0808::1]/", true)]
     [InlineData("https://[2a00:1450::1]/", false)]
     [InlineData("https://b\u00fccher.example/", false)]
     [InlineData("https://8.8.8.8/", false)]

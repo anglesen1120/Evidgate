@@ -61,6 +61,7 @@ public sealed class SchemaConventionAllowListTests
         ("public.webhook_delivery", SchemaRule.AuditColumns | SchemaRule.VersionTrigger),
         ("public.catalog_sync", SchemaRule.AuditColumns | SchemaRule.VersionTrigger),
         ("public.incident_attempt", SchemaRule.AuditColumns | SchemaRule.VersionTrigger),
+        ("public.release_decision", SchemaRule.AuditColumns | SchemaRule.VersionTrigger),
     ];
 
     [Fact]

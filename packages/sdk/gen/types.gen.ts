@@ -1852,6 +1852,100 @@ export type CreateApiTokenRequest = {
     expires_at: string;
 };
 
+/**
+ * A registered outbound webhook endpoint; never the secret, its ciphertext or any earlier secret.
+ */
+export type WebhookEndpointView = {
+    id: string;
+    project_id: string;
+    /**
+     * The https target in the normalised form the SSRF guard accepted.
+     */
+    url: string;
+    event_types: Array<'evaluation.created'>;
+    state: 'active' | 'disabled';
+    /**
+     * The last four characters of the signing secret, enough to tell two secrets apart.
+     */
+    secret_hint: string;
+    secret_version: number;
+    /**
+     * The concurrency token; the `ETag` is its quoted form and `PATCH` sends it back in `If-Match`.
+     */
+    version: number;
+    created_at: string;
+    updated_at: string;
+};
+
+/**
+ * The registration answer — the endpoint plus the signing secret, shown this once.
+ */
+export type WebhookEndpointSecretResponse = WebhookEndpointView & {
+    /**
+     * The plaintext signing secret (`HMAC-SHA256` key of the `Evidgate-Signature` header). Returned only by this answer and never readable again; store it now.
+     */
+    secret: string;
+};
+
+export type CreateWebhookEndpointRequest = {
+    /**
+     * https on port 443, no userinfo, every resolved address public; otherwise 422 `endpoint_url_blocked`.
+     */
+    url: string;
+    /**
+     * The event types to receive; omitted means every supported type.
+     */
+    event_types?: Array<'evaluation.created'>;
+};
+
+export type UpdateWebhookEndpointRequest = {
+    /**
+     * A new target, checked by the same guard as a registration.
+     */
+    url?: string;
+    event_types?: Array<'evaluation.created'>;
+    /**
+     * `deleted` is reached only by `DELETE`.
+     */
+    state?: 'active' | 'disabled';
+};
+
+export type WebhookEndpointListResponse = {
+    items: Array<WebhookEndpointView>;
+    next_cursor: string | null;
+};
+
+/**
+ * One delivery of one event to one endpoint; never the payload, the signature, a response body or an address.
+ */
+export type WebhookDeliveryView = {
+    id: string;
+    endpoint_id: string;
+    event_type: 'evaluation.created';
+    /**
+     * The evaluation id; also sent to the receiver as `Evidgate-Event-Id`.
+     */
+    event_id: string;
+    state: 'queued' | 'sending' | 'delivered' | 'retrying' | 'dead_letter';
+    attempts: number;
+    next_attempt_at: string | null;
+    /**
+     * The closed code of the last failed attempt, one of `http_error`, `timeout`, `connection_error`, `dns_rebinding_blocked`, `redirect_not_followed`, `endpoint_disabled` or `secret_unreadable`.
+     */
+    last_error: string | null;
+    /**
+     * The HTTP status of the last attempt, when the endpoint answered.
+     */
+    last_status_code: number | null;
+    created_at: string;
+    updated_at: string;
+};
+
+export type WebhookDeliveryListResponse = {
+    items: Array<WebhookDeliveryView>;
+    next_cursor: string | null;
+};
+
 export type CiTokenRequest = {
     /**
      * The `egt_…` token (the GitHub grant sends its OIDC JWT as a bearer instead).
@@ -3912,6 +4006,16 @@ export type IngestTokenId = string;
  * The API token's id. An id of another org is 404, exactly as an unknown one is (02.9.1).
  */
 export type ApiTokenId = string;
+
+/**
+ * The webhook endpoint's id. An id of another org or project, or of a deleted endpoint, is 404, exactly as an unknown one is (02.9.1).
+ */
+export type WebhookEndpointId = string;
+
+/**
+ * Only deliveries in this state (07.6.2); any other value is a 422.
+ */
+export type WebhookDeliveryState = 'queued' | 'sending' | 'delivered' | 'retrying' | 'dead_letter';
 
 /**
  * Login provider, matched exactly in lower case against the providers the deployment registers (02.3.1 §5). `google` (02.3.1-T1.2) and `github` (02.3.1-T1.3) are the two V1 providers. A route value no provider is registered under answers 404 `not_found`; a registered provider without a client credential answers 503 `unavailable`, never 404.
@@ -9164,6 +9268,342 @@ export type RevokeApiTokenResponses = {
 };
 
 export type RevokeApiTokenResponse = RevokeApiTokenResponses[keyof RevokeApiTokenResponses];
+
+export type ListWebhookEndpointsData = {
+    body?: never;
+    path: {
+        p: string;
+    };
+    query?: {
+        /**
+         * Opaque cursor from `next_cursor`; ordering `(created_at, id)` (00 §9.1).
+         */
+        cursor?: string;
+        limit?: number;
+    };
+    url: '/projects/{p}/webhook-endpoints';
+};
+
+export type ListWebhookEndpointsErrors = {
+    /**
+     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type ListWebhookEndpointsError = ListWebhookEndpointsErrors[keyof ListWebhookEndpointsErrors];
+
+export type ListWebhookEndpointsResponses = {
+    /**
+     * Page of endpoints; never the secret or its ciphertext
+     */
+    200: WebhookEndpointListResponse;
+};
+
+export type ListWebhookEndpointsResponse = ListWebhookEndpointsResponses[keyof ListWebhookEndpointsResponses];
+
+export type CreateWebhookEndpointData = {
+    body: CreateWebhookEndpointRequest;
+    headers?: {
+        /**
+         * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
+         */
+        'X-XSRF-TOKEN'?: string;
+    };
+    path: {
+        p: string;
+    };
+    query?: never;
+    url: '/projects/{p}/webhook-endpoints';
+};
+
+export type CreateWebhookEndpointErrors = {
+    /**
+     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 409 conflict — e.g. `idempotency_conflict`, `run_closed` (00 §9.1/§9.2)
+     */
+    409: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type CreateWebhookEndpointError = CreateWebhookEndpointErrors[keyof CreateWebhookEndpointErrors];
+
+export type CreateWebhookEndpointResponses = {
+    /**
+     * Endpoint registered; the signing secret is returned once and can never be read again
+     */
+    201: WebhookEndpointSecretResponse;
+};
+
+export type CreateWebhookEndpointResponse = CreateWebhookEndpointResponses[keyof CreateWebhookEndpointResponses];
+
+export type DeleteWebhookEndpointData = {
+    body?: never;
+    headers?: {
+        /**
+         * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
+         */
+        'X-XSRF-TOKEN'?: string;
+    };
+    path: {
+        p: string;
+        /**
+         * The webhook endpoint's id. An id of another org or project, or of a deleted endpoint, is 404, exactly as an unknown one is (02.9.1).
+         */
+        e: string;
+    };
+    query?: never;
+    url: '/projects/{p}/webhook-endpoints/{e}';
+};
+
+export type DeleteWebhookEndpointErrors = {
+    /**
+     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type DeleteWebhookEndpointError = DeleteWebhookEndpointErrors[keyof DeleteWebhookEndpointErrors];
+
+export type DeleteWebhookEndpointResponses = {
+    /**
+     * Endpoint deleted
+     */
+    204: void;
+};
+
+export type DeleteWebhookEndpointResponse = DeleteWebhookEndpointResponses[keyof DeleteWebhookEndpointResponses];
+
+export type GetWebhookEndpointData = {
+    body?: never;
+    path: {
+        p: string;
+        /**
+         * The webhook endpoint's id. An id of another org or project, or of a deleted endpoint, is 404, exactly as an unknown one is (02.9.1).
+         */
+        e: string;
+    };
+    query?: never;
+    url: '/projects/{p}/webhook-endpoints/{e}';
+};
+
+export type GetWebhookEndpointErrors = {
+    /**
+     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type GetWebhookEndpointError = GetWebhookEndpointErrors[keyof GetWebhookEndpointErrors];
+
+export type GetWebhookEndpointResponses = {
+    /**
+     * The endpoint
+     */
+    200: WebhookEndpointView;
+};
+
+export type GetWebhookEndpointResponse = GetWebhookEndpointResponses[keyof GetWebhookEndpointResponses];
+
+export type UpdateWebhookEndpointData = {
+    body: UpdateWebhookEndpointRequest;
+    headers: {
+        /**
+         * ETag for optimistic concurrency; stale → 412 (00 §9.1).
+         */
+        'If-Match': string;
+        /**
+         * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
+         */
+        'X-XSRF-TOKEN'?: string;
+    };
+    path: {
+        p: string;
+        /**
+         * The webhook endpoint's id. An id of another org or project, or of a deleted endpoint, is 404, exactly as an unknown one is (02.9.1).
+         */
+        e: string;
+    };
+    query?: never;
+    url: '/projects/{p}/webhook-endpoints/{e}';
+};
+
+export type UpdateWebhookEndpointErrors = {
+    /**
+     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 409 conflict — e.g. `idempotency_conflict`, `run_closed` (00 §9.1/§9.2)
+     */
+    409: ErrorEnvelope;
+    /**
+     * 412 precondition failed — stale ETag; current revision id in `error.details` (00 §9.1/§9.2)
+     */
+    412: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type UpdateWebhookEndpointError = UpdateWebhookEndpointErrors[keyof UpdateWebhookEndpointErrors];
+
+export type UpdateWebhookEndpointResponses = {
+    /**
+     * The endpoint in its new state
+     */
+    200: WebhookEndpointView;
+};
+
+export type UpdateWebhookEndpointResponse = UpdateWebhookEndpointResponses[keyof UpdateWebhookEndpointResponses];
+
+export type ListWebhookDeliveriesData = {
+    body?: never;
+    path: {
+        p: string;
+    };
+    query?: {
+        /**
+         * Only deliveries in this state (07.6.2); any other value is a 422.
+         */
+        state?: 'queued' | 'sending' | 'delivered' | 'retrying' | 'dead_letter';
+        /**
+         * Opaque cursor from `next_cursor`; ordering `(created_at, id)` (00 §9.1).
+         */
+        cursor?: string;
+        limit?: number;
+    };
+    url: '/projects/{p}/webhook-deliveries';
+};
+
+export type ListWebhookDeliveriesErrors = {
+    /**
+     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type ListWebhookDeliveriesError = ListWebhookDeliveriesErrors[keyof ListWebhookDeliveriesErrors];
+
+export type ListWebhookDeliveriesResponses = {
+    /**
+     * Page of deliveries
+     */
+    200: WebhookDeliveryListResponse;
+};
+
+export type ListWebhookDeliveriesResponse = ListWebhookDeliveriesResponses[keyof ListWebhookDeliveriesResponses];
 
 export type ListAuditData = {
     body?: never;
