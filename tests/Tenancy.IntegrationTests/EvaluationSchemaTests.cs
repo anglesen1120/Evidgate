@@ -290,7 +290,8 @@ public sealed partial class EvaluationSchemaTests(PostgresTenancyFixture fixture
             Missing = ["setup_error", "missing_result"],
             Outcome = "no_results",
             Decision = "INCONCLUSIVE",
-            Reasons = ["setup_error", "critical_not_executed", "flaky_budget_exceeded", "quarantined_case_failed", "waiver_approved"],
+            Reasons = ["setup_error", "critical_not_executed", "flaky_budget_exceeded", "quarantined_case_failed",
+                "waiver_approved", "flaky_critical_retry_pass", "flaky_within_budget"],
             QuarantinedCases = "{00000000-0000-0000-0000-000000000001,00000000-0000-0000-0000-000000000002}",
             Mode = "shadow",
         })).ShouldBe(1);

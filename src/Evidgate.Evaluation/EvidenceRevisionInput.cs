@@ -5,6 +5,7 @@ public sealed record EvidenceRevisionInput
 {
     private IReadOnlyList<MissingReasonCode> missing = [];
     private IReadOnlyList<CaseResultInput> results = [];
+    private IReadOnlyList<CaseAttemptInput> attempts = [];
 
     /// <summary>Creates a frozen evidence revision; both collections are copied.</summary>
     /// <param name="expectedExecutionCount">
@@ -57,4 +58,17 @@ public sealed record EvidenceRevisionInput
         get => results;
         init => results = InputSnapshot.Copy(value);
     }
+
+    /// <summary>The frozen attempt history of every planned execution, in any order; empty when none was recorded.</summary>
+    public IReadOnlyList<CaseAttemptInput> Attempts
+    {
+        get => attempts;
+        init => attempts = InputSnapshot.Copy(value);
+    }
+
+    /// <summary>
+    /// The suite revision's retry limit. It only labels a recovery above <c>MaxRetries + 1</c> as beyond the policy; the
+    /// flaky fact is never dropped for it. Null means unbounded.
+    /// </summary>
+    public int? MaxRetries { get; init; }
 }

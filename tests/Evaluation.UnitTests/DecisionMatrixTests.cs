@@ -24,6 +24,48 @@ public sealed class DecisionMatrixTests
         result.Reasons.ShouldBe(expected.Reasons);
     }
 
+    [Fact]
+    public void M10_CriticalRetryFailToPass_ForcesFail()
+    {
+        var policy = Scenarios.Policy(criticalCaseIds: [Scenarios.CheckoutCaseId]);
+        var evidence = Scenarios.Evidence() with { Attempts = Scenarios.Attempts(CaseStatus.Failed, CaseStatus.Passed) };
+
+        var result = new PolicyEvaluator().Evaluate(evidence, policy, Scenarios.NoExceptions);
+
+        result.Completeness.ShouldBe(EvaluationCompleteness.Complete);
+        result.Outcome.ShouldBe(EvaluationOutcome.AllPassed);
+        result.CoreDecision.ShouldBe(EvaluationDecision.Pass);
+        result.Decision.ShouldBe(EvaluationDecision.Fail);
+        result.Reasons.ShouldBe([EvaluationReason.FlakyCriticalRetryPass]);
+        result.FlakyFacts.ShouldBe([new FlakyFact(Scenarios.CheckoutKey, Scenarios.CheckoutCaseId, 1, true)]);
+    }
+
+    [Fact]
+    public void M11_NonCriticalWithinBudget_Passes()
+    {
+        var evidence = Scenarios.Evidence() with { Attempts = Scenarios.Attempts(CaseStatus.Failed, CaseStatus.Passed) };
+
+        var result = new PolicyEvaluator().Evaluate(evidence, Scenarios.Policy(flakyBudget: 1), Scenarios.NoExceptions);
+
+        result.Completeness.ShouldBe(EvaluationCompleteness.Complete);
+        result.Decision.ShouldBe(EvaluationDecision.Pass);
+        result.CoreDecision.ShouldBe(EvaluationDecision.Pass);
+        result.Reasons.ShouldBe([EvaluationReason.FlakyWithinBudget, EvaluationReason.ScopeBuildPolicyPinned]);
+    }
+
+    [Fact]
+    public void M17_FlakyBudgetExceeded_Inconclusive()
+    {
+        var evidence = Scenarios.Evidence() with { Attempts = Scenarios.Attempts(CaseStatus.Failed, CaseStatus.Passed) };
+
+        var result = new PolicyEvaluator().Evaluate(evidence, Scenarios.Policy(flakyBudget: 0), Scenarios.NoExceptions);
+
+        result.Completeness.ShouldBe(EvaluationCompleteness.Complete);
+        result.CoreDecision.ShouldBe(EvaluationDecision.Pass);
+        result.Decision.ShouldBe(EvaluationDecision.Inconclusive);
+        result.Reasons.ShouldBe([EvaluationReason.FlakyBudgetExceeded]);
+    }
+
     private static Row Scenario(string name) => name switch
     {
         "M1_All_Required_Cases_Passed" => new(

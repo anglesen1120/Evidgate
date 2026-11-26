@@ -17,6 +17,8 @@ public sealed class ReasonCatalogueTests
         "empty_suite_allowed",
         "expected_count_zero",
         "flaky_budget_exceeded",
+        "flaky_critical_retry_pass",
+        "flaky_within_budget",
         "missing_result",
         "missing_shard",
         "quarantined_case_failed",
