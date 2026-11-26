@@ -35,7 +35,7 @@ internal sealed record WebhookEndpointView(
 /// <param name="CreatedAt">Creation, UTC.</param>
 /// <param name="UpdatedAt">Last write, UTC.</param>
 /// <param name="Secret">The plaintext signing secret; never readable again.</param>
-internal sealed record WebhookEndpointCreated(
+internal sealed record WebhookEndpointSecretResponse(
     Guid Id,
     Guid ProjectId,
     string Url,
@@ -51,7 +51,7 @@ internal sealed record WebhookEndpointCreated(
     /// <summary>The registration answer for a stored endpoint and its freshly generated secret.</summary>
     /// <param name="view">The stored endpoint.</param>
     /// <param name="secret">The plaintext secret.</param>
-    public static WebhookEndpointCreated From(WebhookEndpointView view, string secret)
+    public static WebhookEndpointSecretResponse From(WebhookEndpointView view, string secret)
     {
         ArgumentNullException.ThrowIfNull(view);
 
@@ -61,24 +61,24 @@ internal sealed record WebhookEndpointCreated(
     }
 
     /// <inheritdoc />
-    public override string ToString() => nameof(WebhookEndpointCreated);
+    public override string ToString() => nameof(WebhookEndpointSecretResponse);
 }
 
 /// <summary>Body of <c>POST /v1/projects/{p}/webhook-endpoints</c>.</summary>
 /// <param name="Url">The https target.</param>
 /// <param name="EventTypes">The event types to receive; omitted means every supported type.</param>
-internal sealed record WebhookEndpointCreateRequest(string? Url, string[]? EventTypes);
+internal sealed record CreateWebhookEndpointRequest(string? Url, string[]? EventTypes);
 
 /// <summary>Body of <c>PATCH /v1/projects/{p}/webhook-endpoints/{e}</c>; an omitted field is unchanged.</summary>
 /// <param name="Url">A new https target; re-checked by the same guard as a registration.</param>
 /// <param name="EventTypes">A new event type list.</param>
 /// <param name="State"><c>active</c> or <c>disabled</c>.</param>
-internal sealed record WebhookEndpointUpdateRequest(string? Url, string[]? EventTypes, string? State);
+internal sealed record UpdateWebhookEndpointRequest(string? Url, string[]? EventTypes, string? State);
 
 /// <summary>Cursor page of a project's endpoints.</summary>
 /// <param name="Items">Endpoints in creation order.</param>
 /// <param name="NextCursor">Opaque cursor, or null on the last page.</param>
-internal sealed record WebhookEndpointPage(IReadOnlyList<WebhookEndpointView> Items, string? NextCursor);
+internal sealed record WebhookEndpointListResponse(IReadOnlyList<WebhookEndpointView> Items, string? NextCursor);
 
 /// <summary>One delivery of one event to one endpoint.</summary>
 /// <param name="Id">The delivery.</param>
@@ -108,7 +108,7 @@ internal sealed record WebhookDeliveryView(
 /// <summary>Cursor page of a project's deliveries, newest first.</summary>
 /// <param name="Items">Deliveries, newest first.</param>
 /// <param name="NextCursor">Opaque cursor, or null on the last page.</param>
-internal sealed record WebhookDeliveryPage(IReadOnlyList<WebhookDeliveryView> Items, string? NextCursor);
+internal sealed record WebhookDeliveryListResponse(IReadOnlyList<WebhookDeliveryView> Items, string? NextCursor);
 
 /// <summary>The answer of an operator replay: the deliveries that left the dead letter state.</summary>
 /// <param name="EventId">The event the operator named.</param>

@@ -592,6 +592,14 @@ public sealed partial class TenantGucTests
             ("project_id", projectId),
             ("endpoint_id", endpointId),
             ("event_id", evaluationId));
+        await scope.ExecuteAsync(
+            """
+            insert into public.deploy_target (id, org_id, project_id, name)
+            values (@id, @org_id, @project_id, 'staging')
+            """,
+            ("id", Guid.CreateVersion7()),
+            ("org_id", orgId),
+            ("project_id", projectId));
         var artifactId = Guid.CreateVersion7();
         await scope.ExecuteAsync(
             """

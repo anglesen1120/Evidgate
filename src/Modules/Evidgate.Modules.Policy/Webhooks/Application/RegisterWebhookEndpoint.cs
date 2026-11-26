@@ -25,7 +25,7 @@ namespace Evidgate.Modules.Policy.Webhooks.Application;
 /// <param name="Url">The https target.</param>
 /// <param name="EventTypes">The event types to receive; null means every supported type.</param>
 internal sealed record RegisterWebhookEndpointCommand(Guid ProjectId, string? Url, string[]? EventTypes)
-    : ICommand<Result<WebhookEndpointCreated>>;
+    : ICommand<Result<WebhookEndpointSecretResponse>>;
 
 /// <summary>
 /// Handler of <see cref="RegisterWebhookEndpointCommand"/>: scope and request checks, the SSRF guard, then the project
@@ -43,10 +43,10 @@ internal sealed class RegisterWebhookEndpointCommandHandler(
     WebhookUrlGuard guard,
     WebhookSecretProtector protector,
     IAuditTrail audit)
-    : ICommandHandler<RegisterWebhookEndpointCommand, Result<WebhookEndpointCreated>>
+    : ICommandHandler<RegisterWebhookEndpointCommand, Result<WebhookEndpointSecretResponse>>
 {
     /// <inheritdoc />
-    public async ValueTask<Result<WebhookEndpointCreated>> Handle(
+    public async ValueTask<Result<WebhookEndpointSecretResponse>> Handle(
         RegisterWebhookEndpointCommand command,
         CancellationToken cancellationToken)
     {
@@ -54,12 +54,12 @@ internal sealed class RegisterWebhookEndpointCommandHandler(
 
         if (PolicyScope.Project(command.ProjectId, principals, tenant) is { } mismatch)
         {
-            return Result.Failure<WebhookEndpointCreated>(mismatch);
+            return Result.Failure<WebhookEndpointSecretResponse>(mismatch);
         }
 
         if (WebhookEndpointRules.CheckEventTypes(command.EventTypes) is { } invalid)
         {
-            return Result.Failure<WebhookEndpointCreated>(invalid);
+            return Result.Failure<WebhookEndpointSecretResponse>(invalid);
         }
 
         // The guard resolves the host (the one network call of a registration), so it runs before any lock is taken.
@@ -68,7 +68,7 @@ internal sealed class RegisterWebhookEndpointCommandHandler(
 
         if (url is null)
         {
-            return Result.Failure<WebhookEndpointCreated>(WebhookEndpointErrors.UrlBlocked(check.Reason));
+            return Result.Failure<WebhookEndpointSecretResponse>(WebhookEndpointErrors.UrlBlocked(check.Reason));
         }
 
         var orgId = scopes.Require().OrgId;
@@ -76,7 +76,7 @@ internal sealed class RegisterWebhookEndpointCommandHandler(
 
         if (creator is null)
         {
-            return Result.Failure<WebhookEndpointCreated>(WebhookEndpointErrors.NoMembership);
+            return Result.Failure<WebhookEndpointSecretResponse>(WebhookEndpointErrors.NoMembership);
         }
 
         await db.ExecuteAsync(WebhookEndpointSql.LockTimeout, null, cancellationToken).ConfigureAwait(false);
@@ -87,15 +87,15 @@ internal sealed class RegisterWebhookEndpointCommandHandler(
         }
         catch (PostgresException exception) when (exception.SqlState == PostgresErrorCodes.LockNotAvailable)
         {
-            return Result.Failure<WebhookEndpointCreated>(WebhookEndpointErrors.Busy);
+            return Result.Failure<WebhookEndpointSecretResponse>(WebhookEndpointErrors.Busy);
         }
         catch (PostgresException exception) when (exception.SqlState == PostgresErrorCodes.UniqueViolation)
         {
-            return Result.Failure<WebhookEndpointCreated>(WebhookEndpointErrors.UrlTaken());
+            return Result.Failure<WebhookEndpointSecretResponse>(WebhookEndpointErrors.UrlTaken());
         }
     }
 
-    private async Task<Result<WebhookEndpointCreated>> InsertAsync(
+    private async Task<Result<WebhookEndpointSecretResponse>> InsertAsync(
         RegisterWebhookEndpointCommand command,
         Guid orgId,
         Guid creator,
@@ -109,7 +109,7 @@ internal sealed class RegisterWebhookEndpointCommandHandler(
 
         if (live is null)
         {
-            return Result.Failure<WebhookEndpointCreated>(WebhookEndpointErrors.ProjectNotFound);
+            return Result.Failure<WebhookEndpointSecretResponse>(WebhookEndpointErrors.ProjectNotFound);
         }
 
         var count = await db.ScalarAsync<int>(
@@ -119,7 +119,7 @@ internal sealed class RegisterWebhookEndpointCommandHandler(
 
         if (count >= WebhookEndpointLimits.MaxEndpointsPerProject)
         {
-            return Result.Failure<WebhookEndpointCreated>(WebhookEndpointErrors.LimitReached());
+            return Result.Failure<WebhookEndpointSecretResponse>(WebhookEndpointErrors.LimitReached());
         }
 
         var secret = protector.Generate();
@@ -134,14 +134,14 @@ internal sealed class RegisterWebhookEndpointCommandHandler(
                 url,
                 secret_ciphertext = secret.Ciphertext,
                 secret_hint = secret.Hint,
-                event_types = command.EventTypes ?? WebhookEndpointRules.DefaultEventTypes,
+                event_types = (command.EventTypes ?? WebhookEndpointRules.DefaultEventTypes).ToList(),
                 created_by = creator,
             },
             cancellationToken).ConfigureAwait(false);
 
         audit.Describe(new AuditObject("webhook_endpoint", id.ToString("D"), ProjectId: command.ProjectId));
 
-        return Result.Success(WebhookEndpointCreated.From(view!, secret.Plaintext), StatusCodes.Status201Created);
+        return Result.Success(WebhookEndpointSecretResponse.From(view!, secret.Plaintext), StatusCodes.Status201Created);
     }
 
     /// <summary>The caller's membership in this org, or null when the principal is not an active member.</summary>

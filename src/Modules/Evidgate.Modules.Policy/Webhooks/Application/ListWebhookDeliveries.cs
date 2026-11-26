@@ -19,7 +19,7 @@ namespace Evidgate.Modules.Policy.Webhooks.Application;
 /// <param name="Cursor">Opaque cursor, or null.</param>
 /// <param name="Limit">Page size, 1–200.</param>
 internal sealed record ListWebhookDeliveriesQuery(Guid ProjectId, string? State, string? Cursor, int Limit)
-    : IQuery<Result<WebhookDeliveryPage>>;
+    : IQuery<Result<WebhookDeliveryListResponse>>;
 
 /// <summary>
 /// Handler of <see cref="ListWebhookDeliveriesQuery"/>: one keyset statement (<c>(created_at, id)</c> descending), whose
@@ -31,7 +31,7 @@ internal sealed class ListWebhookDeliveriesQueryHandler(
     ITenantScopeAccessor scopes,
     IRequestPrincipalAccessor principals,
     IRequestTenantContextAccessor tenant)
-    : IQueryHandler<ListWebhookDeliveriesQuery, Result<WebhookDeliveryPage>>
+    : IQueryHandler<ListWebhookDeliveriesQuery, Result<WebhookDeliveryListResponse>>
 {
     private static readonly string[] States =
     [
@@ -43,18 +43,18 @@ internal sealed class ListWebhookDeliveriesQueryHandler(
     ];
 
     /// <inheritdoc />
-    public async ValueTask<Result<WebhookDeliveryPage>> Handle(ListWebhookDeliveriesQuery query, CancellationToken cancellationToken)
+    public async ValueTask<Result<WebhookDeliveryListResponse>> Handle(ListWebhookDeliveriesQuery query, CancellationToken cancellationToken)
     {
         using var activity = EvidgateTelemetry.StartModuleActivity(ModuleName.Policy, nameof(ListWebhookDeliveriesQuery));
 
         if (PolicyScope.Project(query.ProjectId, principals, tenant) is { } mismatch)
         {
-            return Result.Failure<WebhookDeliveryPage>(mismatch);
+            return Result.Failure<WebhookDeliveryListResponse>(mismatch);
         }
 
         if (query.State is not null && !States.Contains(query.State, StringComparer.Ordinal))
         {
-            return Result.Failure<WebhookDeliveryPage>(Error.Invalid(
+            return Result.Failure<WebhookDeliveryListResponse>(Error.Invalid(
                 "state is not a delivery state",
                 [new ErrorDetail("state", "unsupported")]));
         }
@@ -64,7 +64,7 @@ internal sealed class ListWebhookDeliveriesQueryHandler(
 
         if (query.Cursor is not null && !KeysetCursor.TryDecodeDescending(query.Cursor, out createdAt, out id))
         {
-            return Result.Failure<WebhookDeliveryPage>(Error.Invalid(
+            return Result.Failure<WebhookDeliveryListResponse>(Error.Invalid(
                 "the cursor is not a value this endpoint issued",
                 [new ErrorDetail("cursor", "malformed")]));
         }
@@ -74,7 +74,7 @@ internal sealed class ListWebhookDeliveriesQueryHandler(
 
         if (live is null)
         {
-            return Result.Failure<WebhookDeliveryPage>(WebhookEndpointErrors.ProjectNotFound);
+            return Result.Failure<WebhookDeliveryListResponse>(WebhookEndpointErrors.ProjectNotFound);
         }
 
         var rows = await db.QueryAsync<WebhookDeliveryView>(
@@ -93,7 +93,7 @@ internal sealed class ListWebhookDeliveriesQueryHandler(
         var hasMore = rows.Count > query.Limit;
         IReadOnlyList<WebhookDeliveryView> page = hasMore ? [.. rows.Take(query.Limit)] : rows;
 
-        return Result.Success(new WebhookDeliveryPage(
+        return Result.Success(new WebhookDeliveryListResponse(
             page,
             hasMore ? KeysetCursor.EncodeDescending(page[^1].CreatedAt, page[^1].Id) : null));
     }

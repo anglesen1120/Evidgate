@@ -159,7 +159,7 @@ internal sealed class UpdateWebhookEndpointCommandHandler(
                 project_id = command.ProjectId,
                 endpoint_id = command.EndpointId,
                 url = url ?? locked!.Url,
-                event_types = command.EventTypes ?? locked!.EventTypes,
+                event_types = (command.EventTypes ?? locked!.EventTypes).ToList(),
                 state = command.State ?? locked!.State,
             },
             cancellationToken).ConfigureAwait(false);

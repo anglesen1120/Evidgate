@@ -51,7 +51,7 @@ internal sealed class GetWebhookEndpointQueryHandler(
 /// <param name="ProjectId">The project from the route.</param>
 /// <param name="Cursor">Opaque cursor, or null.</param>
 /// <param name="Limit">Page size, 1–200.</param>
-internal sealed record ListWebhookEndpointsQuery(Guid ProjectId, string? Cursor, int Limit) : IQuery<Result<WebhookEndpointPage>>;
+internal sealed record ListWebhookEndpointsQuery(Guid ProjectId, string? Cursor, int Limit) : IQuery<Result<WebhookEndpointListResponse>>;
 
 /// <summary>Handler of <see cref="ListWebhookEndpointsQuery"/>: project check, then one keyset statement; one extra row decides the next page.</summary>
 [Permission(Permissions.Webhook.Read)]
@@ -60,16 +60,16 @@ internal sealed class ListWebhookEndpointsQueryHandler(
     ITenantScopeAccessor scopes,
     IRequestPrincipalAccessor principals,
     IRequestTenantContextAccessor tenant)
-    : IQueryHandler<ListWebhookEndpointsQuery, Result<WebhookEndpointPage>>
+    : IQueryHandler<ListWebhookEndpointsQuery, Result<WebhookEndpointListResponse>>
 {
     /// <inheritdoc />
-    public async ValueTask<Result<WebhookEndpointPage>> Handle(ListWebhookEndpointsQuery query, CancellationToken cancellationToken)
+    public async ValueTask<Result<WebhookEndpointListResponse>> Handle(ListWebhookEndpointsQuery query, CancellationToken cancellationToken)
     {
         using var activity = EvidgateTelemetry.StartModuleActivity(ModuleName.Policy, nameof(ListWebhookEndpointsQuery));
 
         if (PolicyScope.Project(query.ProjectId, principals, tenant) is { } mismatch)
         {
-            return Result.Failure<WebhookEndpointPage>(mismatch);
+            return Result.Failure<WebhookEndpointListResponse>(mismatch);
         }
 
         var live = await db.ScalarAsync<int?>(WebhookEndpointSql.ProjectExists, new { project_id = query.ProjectId }, cancellationToken)
@@ -77,7 +77,7 @@ internal sealed class ListWebhookEndpointsQueryHandler(
 
         if (live is null)
         {
-            return Result.Failure<WebhookEndpointPage>(WebhookEndpointErrors.ProjectNotFound);
+            return Result.Failure<WebhookEndpointListResponse>(WebhookEndpointErrors.ProjectNotFound);
         }
 
         var orgId = scopes.Require().OrgId;
@@ -94,7 +94,7 @@ internal sealed class ListWebhookEndpointsQueryHandler(
         {
             if (!KeysetCursor.TryDecode(query.Cursor, out var createdAt, out var id))
             {
-                return Result.Failure<WebhookEndpointPage>(Error.Invalid(
+                return Result.Failure<WebhookEndpointListResponse>(Error.Invalid(
                     "the cursor is not a value this endpoint issued",
                     [new ErrorDetail("cursor", "malformed")]));
             }
@@ -108,6 +108,6 @@ internal sealed class ListWebhookEndpointsQueryHandler(
         var hasMore = rows.Count > query.Limit;
         IReadOnlyList<WebhookEndpointView> page = hasMore ? [.. rows.Take(query.Limit)] : rows;
 
-        return Result.Success(new WebhookEndpointPage(page, hasMore ? KeysetCursor.Encode(page[^1].CreatedAt, page[^1].Id) : null));
+        return Result.Success(new WebhookEndpointListResponse(page, hasMore ? KeysetCursor.Encode(page[^1].CreatedAt, page[^1].Id) : null));
     }
 }

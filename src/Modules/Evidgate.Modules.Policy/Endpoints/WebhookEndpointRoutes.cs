@@ -25,12 +25,13 @@ public static class WebhookEndpointRoutes
         var group = routes.MapGroup("/v1").WithTags("webhook-endpoints");
 
         group.MapPost("/projects/{p}/webhook-endpoints", RegisterAsync)
-            .Accepts<WebhookEndpointCreateRequest>("application/json")
-            .Produces<WebhookEndpointCreated>(StatusCodes.Status201Created)
+            .Accepts<CreateWebhookEndpointRequest>("application/json")
+            .Produces<WebhookEndpointSecretResponse>(StatusCodes.Status201Created)
+            .Produces(StatusCodes.Status200OK)
             .WithSummary("Register an outbound webhook endpoint; the signing secret is shown once (07.6.3)");
 
         group.MapGet("/projects/{p}/webhook-endpoints", ListEndpointsAsync)
-            .Produces<WebhookEndpointPage>(StatusCodes.Status200OK)
+            .Produces<WebhookEndpointListResponse>(StatusCodes.Status200OK)
             .WithSummary("Cursor page of a project's webhook endpoints, never the secret (07.6.3)");
 
         group.MapGet("/projects/{p}/webhook-endpoints/{e}", GetEndpointAsync)
@@ -38,7 +39,7 @@ public static class WebhookEndpointRoutes
             .WithSummary("One webhook endpoint; ETag is its version (07.6.3)");
 
         group.MapPatch("/projects/{p}/webhook-endpoints/{e}", UpdateEndpointAsync)
-            .Accepts<WebhookEndpointUpdateRequest>("application/json")
+            .Accepts<UpdateWebhookEndpointRequest>("application/json")
             .Produces<WebhookEndpointView>(StatusCodes.Status200OK)
             .WithSummary("Change a webhook endpoint's URL, event types or state; If-Match is its version (07.6.3)");
 
@@ -49,15 +50,15 @@ public static class WebhookEndpointRoutes
             .WithSummary("Delete a webhook endpoint; its delivery history is kept (07.6.3)");
 
         group.MapGet("/projects/{p}/webhook-deliveries", ListDeliveriesAsync)
-            .Produces<WebhookDeliveryPage>(StatusCodes.Status200OK)
+            .Produces<WebhookDeliveryListResponse>(StatusCodes.Status200OK)
             .WithSummary("Cursor page of a project's webhook deliveries, newest first (07.6.2)");
 
         return group;
     }
 
-    private static async Task<Result<WebhookEndpointCreated>> RegisterAsync(
+    private static async Task<Result<WebhookEndpointSecretResponse>> RegisterAsync(
         Guid p,
-        WebhookEndpointCreateRequest request,
+        CreateWebhookEndpointRequest request,
         HttpContext context,
         IMediator mediator,
         CancellationToken cancellationToken)
@@ -72,7 +73,7 @@ public static class WebhookEndpointRoutes
         return WithETag(context, result, created => created.Version);
     }
 
-    private static async Task<Result<WebhookEndpointPage>> ListEndpointsAsync(
+    private static async Task<Result<WebhookEndpointListResponse>> ListEndpointsAsync(
         Guid p,
         HttpContext context,
         IMediator mediator,
@@ -80,7 +81,7 @@ public static class WebhookEndpointRoutes
     {
         if (WebhookEndpointRules.Limit(context.Request.Query["limit"], out var limit) is { } error)
         {
-            return Result.Failure<WebhookEndpointPage>(error);
+            return Result.Failure<WebhookEndpointListResponse>(error);
         }
 
         return await mediator.Send(
@@ -103,7 +104,7 @@ public static class WebhookEndpointRoutes
     private static async Task<Result<WebhookEndpointView>> UpdateEndpointAsync(
         Guid p,
         Guid e,
-        WebhookEndpointUpdateRequest request,
+        UpdateWebhookEndpointRequest request,
         HttpContext context,
         IMediator mediator,
         CancellationToken cancellationToken)
@@ -128,7 +129,7 @@ public static class WebhookEndpointRoutes
         CancellationToken cancellationToken) =>
         await mediator.Send(new DeleteWebhookEndpointCommand(p, e), cancellationToken).ConfigureAwait(false);
 
-    private static async Task<Result<WebhookDeliveryPage>> ListDeliveriesAsync(
+    private static async Task<Result<WebhookDeliveryListResponse>> ListDeliveriesAsync(
         Guid p,
         HttpContext context,
         IMediator mediator,
@@ -136,7 +137,7 @@ public static class WebhookEndpointRoutes
     {
         if (WebhookEndpointRules.Limit(context.Request.Query["limit"], out var limit) is { } error)
         {
-            return Result.Failure<WebhookDeliveryPage>(error);
+            return Result.Failure<WebhookDeliveryListResponse>(error);
         }
 
         return await mediator.Send(
