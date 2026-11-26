@@ -838,6 +838,7 @@ internal static class RouteRequests
         Add("POST", "/v1/projects/{p}/releases", ctx => new(HttpMethod.Post,
             $"/v1/projects/{ctx.ProjectId}/releases", ReleaseCreate(ctx), IdempotencyKey: Key()));
         Add("GET", "/v1/releases/{id}", _ => new(HttpMethod.Get, $"/v1/releases/{Guid.CreateVersion7()}"));
+        Add("GET", "/v1/releases/{id}/decision", _ => new(HttpMethod.Get, $"/v1/releases/{Guid.CreateVersion7()}/decision"));
         // The explicit bind addresses the release in the path and the run in the body, both fresh here, so a granted
         // caller reaches the visibility probe and answers the 404 `not_found` the matrix classifies; nothing is
         // created, and the recipe never becomes an oracle over an existing release or run.
