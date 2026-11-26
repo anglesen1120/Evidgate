@@ -264,7 +264,7 @@ create or replace function evidgate.replay_webhook_delivery(p_event_id uuid, p_a
   as $$
   declare
     v_org uuid := evidgate.current_org_id();
-    v_row record;
+    v_ids uuid[];
   begin
     if v_org is null then
       raise exception 'replay_webhook_delivery: no tenant in scope'
@@ -273,34 +273,34 @@ create or replace function evidgate.replay_webhook_delivery(p_event_id uuid, p_a
 
     set local lock_timeout = '5s';
 
-    for v_row in
-      select d.id, d.endpoint_id, d.attempts
-        from public.webhook_outbound_delivery d
-        join public.webhook_endpoint e
-          on e.org_id = d.org_id and e.project_id = d.project_id and e.id = d.endpoint_id
+    -- The update takes the row locks and names the rows; the audit rows follow in the same transaction.
+    with moved as (
+      update public.webhook_outbound_delivery d
+         set state = 'queued', next_attempt_at = now(), last_error = null, last_status_code = null
        where d.org_id = v_org
          and d.event_id = p_event_id
          and d.state = 'dead_letter'
-         and e.state = 'active'
-       order by d.id
-         for update of d
-    loop
-      update public.webhook_outbound_delivery
-         set state = 'queued', next_attempt_at = now(), last_error = null, last_status_code = null
-       where org_id = v_org and id = v_row.id;
+         and exists (
+           select 1 from public.webhook_endpoint e
+            where e.org_id = d.org_id and e.project_id = d.project_id and e.id = d.endpoint_id
+              and e.state = 'active')
+      returning d.id
+    )
+    select coalesce(pg_catalog.array_agg(m.id order by m.id), array[]::uuid[]) into v_ids from moved m;
 
-      perform evidgate.audit_append_user_event(
-        'webhook_delivery.replay', v_org, p_actor, 'webhook_delivery', v_row.id::text,
-        pg_catalog.jsonb_build_object(
-          'delivery_id', v_row.id::text,
-          'endpoint_id', v_row.endpoint_id::text,
-          'event_id', p_event_id::text,
-          'attempts', v_row.attempts::text),
-        null, null);
+    perform evidgate.audit_append_user_event(
+      'webhook_delivery.replay', v_org, p_actor, 'webhook_delivery', d.id::text,
+      pg_catalog.jsonb_build_object(
+        'delivery_id', d.id::text,
+        'endpoint_id', d.endpoint_id::text,
+        'event_id', p_event_id::text,
+        'attempts', d.attempts::text),
+      null, null)
+      from public.webhook_outbound_delivery d
+     where d.org_id = v_org and d.id = any (v_ids)
+     order by d.id;
 
-      delivery_id := v_row.id;
-      return next;
-    end loop;
+    return query select u from pg_catalog.unnest(v_ids) as u order by u;
   end
   $$;
 
