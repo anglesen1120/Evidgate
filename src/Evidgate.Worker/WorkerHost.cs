@@ -9,7 +9,6 @@ using Evidgate.BuildingBlocks.Pipeline;
 using Evidgate.Modules.Authoring;
 using Evidgate.Modules.Authoring.Infrastructure.Intake.Jobs;
 using Evidgate.Modules.Catalog;
-using Evidgate.Modules.Catalog.Infrastructure.GitHub;
 using Evidgate.Modules.Evidence;
 using Evidgate.Modules.Evidence.Infrastructure.Parsing.Runner;
 using Evidgate.Modules.Healing;
@@ -84,10 +83,6 @@ public static class WorkerHost
 
         builder.Services.AddIngestionModule();
         builder.Services.AddCatalogModule();
-        // The catalog's repository verification resolves in this host too, so the module's binding flow never depends on
-        // which composition root resolves it. The extension sends nothing at start-up and an absent App id stays
-        // unconfigured rather than failing the boot.
-        builder.Services.AddCatalogGitHub(builder.Configuration);
         // Mediator registers Authoring handlers in both hosts, so their shared writer and validators must resolve here too.
         builder.Services.AddAuthoringModule();
         builder.Services.AddOrchestratorModule();

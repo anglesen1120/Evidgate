@@ -240,10 +240,9 @@ internal sealed partial class TenantRowFactory
             }
         }
 
-        // The OAuth state's primary key is its digest, and a support grant's id has a database default, so
-        // neither id is generated above, yet the suite addresses every tenant row by its `id`.
-        if ((string.Equals(table, "public.github_install_state", StringComparison.Ordinal)
-                || string.Equals(table, "public.support_grant", StringComparison.Ordinal))
+        // A support grant's id has a database default, so it is not generated above, yet the suite addresses every
+        // tenant row by its `id`.
+        if (string.Equals(table, "public.support_grant", StringComparison.Ordinal)
             && !values.ContainsKey(TenantFkScan.TenantKeyColumn))
         {
             values[TenantFkScan.TenantKeyColumn] = forcedId ?? Guid.CreateVersion7();

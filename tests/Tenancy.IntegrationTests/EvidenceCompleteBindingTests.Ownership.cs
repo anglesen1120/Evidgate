@@ -3,6 +3,7 @@ using Evidgate.BuildingBlocks.Pipeline.Authorization;
 using Evidgate.BuildingBlocks.Pipeline.Tenancy;
 using Evidgate.BuildingBlocks.SharedKernel.Authorization;
 using Evidgate.Modules.Evidence.Application;
+using Evidgate.Modules.Evidence.Endpoints;
 using Mediator;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;

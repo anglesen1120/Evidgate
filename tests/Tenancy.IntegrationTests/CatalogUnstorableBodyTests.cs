@@ -23,8 +23,7 @@ public sealed partial class CatalogUnstorableBodyTests(
         HttpStatusCode Success,
         bool CreatesRow = true,
         string? IfMatch = null,
-        bool DryRun = false,
-        bool Recover = true);
+        bool DryRun = false);
 
     private Task<World> StartAsync() => RunCreationTests.StartAsync(fixture, cases: 1, hosts: hosts);
 
@@ -75,11 +74,6 @@ public sealed partial class CatalogUnstorableBodyTests(
         (await RecordCountAsync(world, key)).ShouldBe(0);
         (await SnapshotAsync(world)).ShouldBe(before,
             "a refusal changes no audit, outbox, task, Catalog row or case field");
-        if (!target.Recover)
-        {
-            return;
-        }
-
         var accepted = await SendAsync(world, target, target.ValidBody, key);
         accepted.Status.ShouldBe(target.Success, accepted.Body.GetRawText());
         (await RecordCountAsync(world, key)).ShouldBe(target.DryRun ? 0 : 1);
@@ -129,7 +123,6 @@ public sealed partial class CatalogUnstorableBodyTests(
             (select count(*) from public.suite_revision where org_id = '{world.Org}'),
             (select count(*) from public.fixture where org_id = '{world.Org}'),
             (select count(*) from public.fixture_revision where org_id = '{world.Org}'),
-            (select count(*) from public.git_repo_binding where org_id = '{world.Org}'),
             (select count(*) from public.test_revision where org_id = '{world.Org}'),
             (select coalesce(jsonb_agg(to_jsonb(c) order by c.id), '[]'::jsonb)
                 from public.test_case c where c.org_id = '{world.Org}')

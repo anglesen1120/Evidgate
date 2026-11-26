@@ -111,8 +111,7 @@ public static class ObservabilityExtensions
 
         otel.WithMetrics(metrics =>
         {
-            metrics.AddMeter(EvidgateTelemetry.MeterName)
-                .AddMeter(TelemetryMeters.GitHub);
+            metrics.AddMeter(EvidgateTelemetry.MeterName);
 
             if (options.LibraryMetrics)
             {

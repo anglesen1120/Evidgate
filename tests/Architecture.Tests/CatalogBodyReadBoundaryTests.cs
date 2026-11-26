@@ -23,15 +23,14 @@ public sealed class CatalogBodyReadBoundaryTests
     private const string SyntheticRouteFile = EndpointsDirectory + "/SyntheticRoute.cs";
 
     /// <summary>
-    /// The eight raw-body routes by handler, per file (suite revision with its dry run, requirement ref, case update,
-    /// fixture, fixture revision, git binding, draft create and draft update). Each reads through the shared guard; a
-    /// route added here must too. The two draft reads take no body, so they are absent.
+    /// The seven raw-body routes by handler, per file (suite revision with its dry run, requirement ref, case update,
+    /// fixture, fixture revision, draft create and draft update). Each reads through the shared guard; a route added
+    /// here must too. The two draft reads take no body, so they are absent.
     /// </summary>
     private static readonly Dictionary<string, string[]> RawBodyRoutes = new()
     {
         [EndpointsDirectory + "/CatalogEndpoints.cs"] = ["SetCaseRequirementRefAsync", "UpdateCaseAsync", "CreateSuiteRevisionAsync"],
         [EndpointsDirectory + "/FixtureEndpoints.cs"] = ["CreateFixtureAsync", "CreateFixtureRevisionAsync"],
-        [EndpointsDirectory + "/GitRepoBindingEndpoints.cs"] = ["RegisterAsync"],
         [EndpointsDirectory + "/DraftEndpoints.cs"] = ["CreateDraftAsync", "UpdateDraftAsync"],
     };
 
@@ -182,7 +181,7 @@ public sealed class CatalogBodyReadBoundaryTests
             foreach (var handler in handlers)
             {
                 HandlerParameterTypes(endpoints[path], handler)
-                    .Where(type => !RawHandlerParameterTypes.Contains(type) && type != "GitRepoBindingRegistration")
+                    .Where(type => !RawHandlerParameterTypes.Contains(type))
                     .ShouldBeEmpty($"{handler} must not bind a body parameter");
             }
         }

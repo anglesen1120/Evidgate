@@ -231,11 +231,6 @@ internal sealed partial class TenantRowFactory
             ("public.billing_statement", "period") => "2026-10",
             ("public.billing_statement", "currency") => "USD",
             ("public.billing_statement", "content_hash") => new string('a', 64),
-            // The commit-registration tables (0106) close three shapes the generic text candidate fails: the
-            // provider enumeration, the RFC 8785 payload address and the `secret:<name>` reference. Each value
-            // is inside its own CHECK and none is part of a unique key, so a constant serves every generated row.
-            ("public.webhook_delivery", "provider") => "github",
-            ("public.webhook_delivery", "payload_hash") => "sha256:" + new string('a', 64),
             // webhook_endpoint (0131) closes `url` to https, `secret_hint` to exactly four characters and holds a
             // partial unique key on (org_id, project_id, url): a fresh URL per row keeps a corrupt sibling from
             // colliding on that key before the composite FK under test is reached. The delivery's one event type
@@ -244,21 +239,10 @@ internal sealed partial class TenantRowFactory
                 "https://probe" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture)[..12] + ".example/hook",
             ("public.webhook_endpoint", "secret_hint") => "abcd",
             ("public.webhook_outbound_delivery", "event_type") => "evaluation.created",
-            ("public.git_repo_binding", "webhook_secret_ref") => "secret:probe",
-            // commit_sha is a lowercase hex run; a fresh one per row keeps the (org_id, binding_id, commit_sha)
-            // key from colliding with the valid row a corrupt sibling is generated next to.
-            ("public.catalog_sync", "commit_sha") => Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture)[..12],
-            // The installation tables (0108) carry two global keys the generic rules would collide on: GitHub's
-            // installation id is unique across every org, and the OAuth state's primary key is its 32-byte digest,
-            // so both are fresh per row and the RLS suite's two orgs never collide on them.
-            ("public.github_installation", "installation_id") =>
-                8_000_000_000L + Interlocked.Increment(ref _githubInstallationId),
             // support_grant.scopes has a shape CHECK and expires_at must fall within 72 hours of creation, so
             // the generic "probe" and the 400-day timestamp are both refused.
             ("public.support_grant", "scopes") => new[] { "case:read" },
             ("public.support_grant", "expires_at") => DateTimeOffset.UtcNow.AddHours(1),
-            ("public.github_install_state", "state_hash") =>
-                (byte[])[.. Guid.NewGuid().ToByteArray(), .. Guid.NewGuid().ToByteArray()],
             _ => (object?)null,
         };
 
