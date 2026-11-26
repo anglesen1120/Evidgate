@@ -1,9 +1,12 @@
 using System.Net;
 using System.Security.Claims;
 using Evidgate.Api.OperatorIngress;
+using Evidgate.BuildingBlocks.Persistence.Tasks;
 using Evidgate.Modules.Policy.Webhooks.Application;
+using Evidgate.Modules.Policy.Webhooks.Infrastructure;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Http;
 using Shouldly;
 using Xunit;
 using static Tenancy.IntegrationTests.RegistryApi;
@@ -12,8 +15,7 @@ namespace Tenancy.IntegrationTests;
 
 /// <summary>
 /// Outbound webhook endpoint management, the delivery log and the operator replay through the real host and a real
-/// database. DNS is a fake resolver so the SSRF guard's verdicts are deterministic; everything else (RLS, the guard
-/// triggers, the audit buffer, the task queue) is real.
+/// database. A test resolver and a local HTTPS receiver keep delivery deterministic without external network access.
 /// </summary>
 [Collection(ExclusiveTenancySuite.Name)]
 [Trait("Category", "Docker")]
@@ -129,17 +131,20 @@ public sealed class WebhookEndpointTests : IAsyncLifetime
         var (api, client, user, org, project) = await StartAsync();
         await using var host = api;
 
-        for (var i = 0; i < 20; i++)
+        (await RegisterAsync(client, user, org, project, GoodUrl)).Status.ShouldBe(HttpStatusCode.Created);
+        var duplicate = await RegisterAsync(client, user, org, project, GoodUrl);
+        duplicate.Status.ShouldBe(HttpStatusCode.Conflict);
+        duplicate.ErrorCode.ShouldBe("endpoint_url_taken");
+
+        for (var i = 1; i < 20; i++)
         {
             (await RegisterAsync(client, user, org, project, $"https://hooks.example.com/e{i}")).Status.ShouldBe(HttpStatusCode.Created);
         }
 
         var over = await RegisterAsync(client, user, org, project, "https://hooks.example.com/e20");
-        var duplicate = await RegisterAsync(client, user, org, project, "https://hooks.example.com/e3");
 
         over.Status.ShouldBe(HttpStatusCode.Conflict);
         over.ErrorCode.ShouldBe("endpoint_limit_reached");
-        duplicate.Status.ShouldBe(HttpStatusCode.Conflict);
         (await _fixture.ScalarAsync<long>(_dedicated!.Name, "select count(*) from public.webhook_endpoint")).ShouldBe(20);
     }
 
@@ -195,7 +200,10 @@ public sealed class WebhookEndpointTests : IAsyncLifetime
         EventIds(second).ShouldBe([oldest]);
         second.Body.GetProperty("next_cursor").ValueKind.ShouldBe(System.Text.Json.JsonValueKind.Null);
         EventIds(filtered).ShouldBe([oldest]);
-        first.Body.GetProperty("items")[0].GetProperty("state").GetString().ShouldBe("dead_letter");
+        var deadLetter = first.Body.GetProperty("items")[0];
+        deadLetter.GetProperty("state").GetString().ShouldBe("dead_letter");
+        deadLetter.GetProperty("attempts").GetInt32().ShouldBe(3);
+        deadLetter.GetProperty("last_error").GetString().ShouldBe("http_error");
 
         (await client.SendAsync(HttpMethod.Get, $"{path}?state=bogus", Admin(user, org))).Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
         (await client.SendAsync(HttpMethod.Get, $"{path}?cursor=not-a-cursor", Admin(user, org))).Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
@@ -241,12 +249,13 @@ public sealed class WebhookEndpointTests : IAsyncLifetime
     [Fact]
     public async Task DeadLetterReplay_ByEventId_RequeuesAndEnqueuesATask_OnlyOnce()
     {
-        var (api, client, user, org, project) = await StartAsync();
+        await using var receiver = await WebhookTestReceiver.StartAsync();
+        var (api, client, user, org, project) = await StartAsync(receiver);
         await using var host = api;
-        var endpoint = (await RegisterAsync(client, user, org, project, GoodUrl)).Id();
+        var endpoint = (await RegisterAsync(client, user, org, project, $"https://{WebhookTestReceiver.Host}/replay")).Id();
         var deadEvent = Guid.CreateVersion7();
         var deliveredEvent = Guid.CreateVersion7();
-        await SeedDeliveryAsync(org, project, endpoint, deadEvent, "dead_letter", DateTimeOffset.UtcNow.AddMinutes(-3));
+        var delivery = await SeedDeliveryAsync(org, project, endpoint, deadEvent, "dead_letter", DateTimeOffset.UtcNow.AddMinutes(-3));
         await SeedDeliveryAsync(org, project, endpoint, deliveredEvent, "delivered", DateTimeOffset.UtcNow.AddMinutes(-2));
         var tasksBefore = await _fixture.ScalarAsync<long>(_dedicated!.Name, "select count(*) from public.task where task_type = 'webhook.deliver'");
 
@@ -254,6 +263,7 @@ public sealed class WebhookEndpointTests : IAsyncLifetime
 
         replayed.Status.ShouldBe(HttpStatusCode.OK);
         replayed.Body.GetProperty("delivery_ids").GetArrayLength().ShouldBe(1);
+        replayed.Body.GetProperty("delivery_ids")[0].GetGuid().ShouldBe(delivery);
         (await _fixture.ScalarAsync<string>(_dedicated.Name, $"select state from public.webhook_outbound_delivery where event_id = '{deadEvent}'")).ShouldBe("queued");
         (await _fixture.ScalarAsync<long>(_dedicated.Name, "select count(*) from public.task where task_type = 'webhook.deliver'"))
             .ShouldBe(tasksBefore + 1, "the replayed row is never left without a delivery task");
@@ -264,6 +274,25 @@ public sealed class WebhookEndpointTests : IAsyncLifetime
         (await client.SendAsync(HttpMethod.Post, ReplayUrl(deliveredEvent, org), _ => { })).Status.ShouldBe(HttpStatusCode.Conflict);
         (await client.SendAsync(HttpMethod.Post, ReplayUrl(Guid.CreateVersion7(), org), _ => { })).Status.ShouldBe(HttpStatusCode.NotFound);
         (await client.SendAsync(HttpMethod.Post, $"/internal/operator/webhook-deliveries/{deadEvent}/replay", _ => { })).Status.ShouldBe(HttpStatusCode.BadRequest);
+
+        var payload = await _fixture.ScalarAsync<string>(
+            _dedicated.Name,
+            $"""
+            select payload::text from public.task
+             where task_type = 'webhook.deliver' and org_id = '{org}' and state = 'queued'
+               and idempotency_key like 'webhook:deliver:{delivery:D}:replay-%'
+            """);
+        var invoker = api.Services.GetServices<ITaskHandlerInvoker>().Single(h => h.TaskType == "webhook.deliver");
+        await invoker.InvokeWithoutScopeAsync(payload, org, TestContext.Current.CancellationToken);
+
+        var received = receiver.Requests.Single();
+        received.Path.ShouldBe("/replay");
+        received.Headers[WebhookSigner.EventIdHeader].ShouldBe(deadEvent.ToString("D"));
+        (await _fixture.ScalarAsync<long>(_dedicated.Name, "select count(*) from public.webhook_outbound_delivery")).ShouldBe(2);
+        (await _fixture.ScalarAsync<int>(
+            _dedicated.Name,
+            $"select attempts from public.webhook_outbound_delivery where id = '{delivery}' and event_id = '{deadEvent}' and state = 'delivered'"))
+            .ShouldBe(4, "the replay adds one attempt to the same dead-lettered row");
     }
 
     [Fact]
@@ -356,7 +385,8 @@ public sealed class WebhookEndpointTests : IAsyncLifetime
     private static Task<ApiAnswer> RegisterAsync(HttpClient client, Guid user, Guid org, Guid project, string url) =>
         client.SendAsync(HttpMethod.Post, $"/v1/projects/{project}/webhook-endpoints", Admin(user, org), new { url });
 
-    private async Task<(TenancyApiFactory Api, HttpClient Client, Guid User, Guid Org, Guid Project)> StartAsync()
+    private async Task<(TenancyApiFactory Api, HttpClient Client, Guid User, Guid Org, Guid Project)> StartAsync(
+        WebhookTestReceiver? receiver = null)
     {
         var api = TenancyApiFactory.RealResolver(
             _fixture.AppConnectionString(_dedicated!.Name),
@@ -364,6 +394,18 @@ public sealed class WebhookEndpointTests : IAsyncLifetime
             {
                 services.AddSingleton<IWebhookHostResolver>(new StaticResolver());
                 services.AddSingleton<IOperatorGate>(new PermitGate());
+                if (receiver is not null)
+                {
+                    services.AddSingleton<IWebhookConnector>(new RoutingWebhookConnector(receiver.Port));
+                    services.Configure<HttpClientFactoryOptions>(
+                        WebhookHttpSender.ClientName,
+                        options => options.HttpMessageHandlerBuilderActions.Add(builder =>
+                        {
+                            var handler = (SocketsHttpHandler)builder.PrimaryHandler;
+                            handler.SslOptions.RemoteCertificateValidationCallback =
+                                (_, certificate, _, _) => certificate?.GetCertHashString() == receiver.CertificateThumbprint;
+                        }));
+                }
             });
         var client = api.CreateClient();
         var user = Guid.CreateVersion7();
@@ -373,16 +415,45 @@ public sealed class WebhookEndpointTests : IAsyncLifetime
         return (api, client, user, org, project);
     }
 
-    private Task SeedDeliveryAsync(Guid org, Guid project, Guid endpoint, Guid eventId, string state, DateTimeOffset createdAt) =>
-        _fixture.ExecuteAsync(
-            _dedicated!.Name,
-            $"""
+    private async Task<Guid> SeedDeliveryAsync(Guid org, Guid project, Guid endpoint, Guid eventId, string state, DateTimeOffset createdAt)
+    {
+        var database = _dedicated!.Name;
+        var run = await RunRowSeeder.SeedRunAsync(_fixture, database, org);
+        var delivery = Guid.CreateVersion7();
+        await using var scope = await TenantScope.BeginAsync(_fixture.OwnerConnectionString(database));
+        await scope.ExecuteAsync(
+            """
+            insert into public.policy_revision (id, org_id, project_id, revision_no, hash, body, created_by)
+            select gen_random_uuid(), @org, @project, coalesce(max(revision_no), 0) + 1, 'sha256:' || repeat('a', 64), '{}', gen_random_uuid()
+              from public.policy_revision where org_id = @org and project_id = @project
+            on conflict (org_id, project_id, hash) do nothing
+            """, ("org", org), ("project", project));
+        // The delivery's event id is an evaluation id (a foreign key), so each seeded delivery gets a real live evaluation.
+        (await scope.ExecuteAsync(
+            """
+            insert into public.evaluation
+              (id, org_id, run_id, evidence_revision, policy_revision_id, policy_hash, manifest_hash, completeness,
+               missing, outcome, decision, reasons, evaluator_version, mode, exceptions_hash, exceptions_as_of)
+            select @event, @org, @run, 1, p.id, p.hash, m.manifest_hash, 'complete', '{}'::text[], 'all_passed',
+                   'PASS', '{}'::text[], '1.0.0', 'live', 'sha256:' || repeat('b', 64), now()
+              from public.policy_revision p
+              join public.run r on r.org_id = p.org_id and r.project_id = p.project_id
+              join public.manifest m on m.org_id = r.org_id and m.id = r.manifest_id
+             where r.id = @run and p.org_id = @org and p.hash = 'sha256:' || repeat('a', 64)
+            """, ("org", org), ("run", run), ("event", eventId))).ShouldBe(1);
+        await scope.ExecuteAsync(
+            """
             insert into public.webhook_outbound_delivery
-              (id, org_id, project_id, endpoint_id, event_type, event_id, state, attempts, created_at, updated_at)
-            values
-              (gen_random_uuid(), '{org}', '{project}', '{endpoint}', 'evaluation.created', '{eventId}', '{state}', 1,
-               '{createdAt:O}', '{createdAt:O}')
-            """);
+              (id, org_id, project_id, endpoint_id, event_type, event_id, state, attempts, last_error, created_at, updated_at)
+            values (@id, @org, @project, @endpoint, 'evaluation.created', @event, @state,
+                    case when @state = 'dead_letter' then 3 else 1 end,
+                    case when @state = 'dead_letter' then 'http_error' end, @created, @created)
+            """, ("id", delivery), ("org", org), ("project", project), ("endpoint", endpoint),
+            ("event", eventId), ("state", state), ("created", createdAt));
+        await scope.CommitAsync();
+
+        return delivery;
+    }
 
     /// <summary>Public for every host except the two names a test points at private space.</summary>
     private sealed class StaticResolver : IWebhookHostResolver

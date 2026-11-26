@@ -1,6 +1,9 @@
 using System.Net;
 using System.Net.Sockets;
+using Evidgate.Modules.Policy.Webhooks;
 using Evidgate.Modules.Policy.Webhooks.Application;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Shouldly;
 using Xunit;
@@ -110,8 +113,45 @@ public sealed class WebhookUrlGuardTests
     public async Task Resolution_EmptyOrUnavailable_FailsClosed()
     {
         (await Guard().CheckAsync(PublicUrl, Token)).Reason.ShouldBe(WebhookUrlReasons.Resolution);
-        var guard = new WebhookUrlGuard(new FailedResolver(), Options.Create(new WebhookUrlOptions()));
+        var guard = new WebhookUrlGuard(
+            new FailedResolver(new SocketException((int)SocketError.HostNotFound)),
+            Options.Create(new WebhookUrlOptions()));
         (await guard.CheckAsync(PublicUrl, Token)).Reason.ShouldBe(WebhookUrlReasons.Resolution);
+    }
+
+    [Fact]
+    public async Task Resolution_DnsRejectsHostArgument_ReturnsResolutionRefusal()
+    {
+        var guard = new WebhookUrlGuard(new FailedResolver(new ArgumentException()), Options.Create(new WebhookUrlOptions()));
+        var result = await guard.CheckAsync(PublicUrl, Token);
+        result.Allowed.ShouldBeFalse();
+        result.Reason.ShouldBe(WebhookUrlReasons.Resolution);
+        (await Guard(PublicIp).CheckAsync(PublicUrl, Token)).Allowed.ShouldBeTrue();
+    }
+
+    [Theory]
+    [InlineData("0", false)]
+    [InlineData("1", true)]
+    [InlineData("65535", true)]
+    [InlineData("65536", false)]
+    public void StartupValidation_AllowedPorts_RequiresEveryPortInRange(string port, bool valid)
+    {
+        using var configuration = new ConfigurationManager();
+        configuration["Webhooks:Url:AllowedPorts:0"] = "8443";
+        configuration["Webhooks:Url:AllowedPorts:1"] = port;
+        var services = new ServiceCollection();
+        services.AddSingleton<IConfiguration>(configuration);
+        services.AddWebhookCore();
+        using var provider = services.BuildServiceProvider();
+        var startup = provider.GetRequiredService<IStartupValidator>();
+        if (valid)
+        {
+            startup.Validate();
+        }
+        else
+        {
+            Should.Throw<OptionsValidationException>(startup.Validate).OptionsType.ShouldBe(typeof(WebhookUrlOptions));
+        }
     }
 
     private static WebhookUrlGuard Guard(params IPAddress[] addresses) =>
@@ -122,9 +162,9 @@ public sealed class WebhookUrlGuardTests
         public Task<IPAddress[]> ResolveAsync(string host, CancellationToken cancellationToken) => Task.FromResult(addresses);
     }
 
-    private sealed class FailedResolver : IWebhookHostResolver
+    private sealed class FailedResolver(Exception error) : IWebhookHostResolver
     {
         public Task<IPAddress[]> ResolveAsync(string host, CancellationToken cancellationToken) =>
-            Task.FromException<IPAddress[]>(new SocketException((int)SocketError.HostNotFound));
+            Task.FromException<IPAddress[]>(error);
     }
 }

@@ -85,8 +85,28 @@ internal sealed partial class WebhookDeliveryHandler(
             return;
         }
 
-        var attempt = await AttemptAsync(claim, endpoint, claim.Body, cancellationToken).ConfigureAwait(false);
+        var attempt = await TryAttemptAsync(claim, endpoint, claim.Body, cancellationToken).ConfigureAwait(false);
         await FinishAsync(orgId, payload.DeliveryId, claim, attempt, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// The row is already <c>sending</c>, so an unexpected failure must still reach the retry path; only the caller's
+    /// own cancellation escapes. The exception text is dropped on purpose: it can carry the target address.
+    /// </summary>
+    private async Task<WebhookAttempt> TryAttemptAsync(
+        Claim claim,
+        EndpointRow endpoint,
+        EvaluationCreatedPayload body,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await AttemptAsync(claim, endpoint, body, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception failure) when (failure is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+        {
+            return new WebhookAttempt(WebhookDeliveryErrors.ConnectionError, null);
+        }
     }
 
     /// <summary>Guards, signs and posts; every refusal is a result code, never an exception that carries a secret.</summary>

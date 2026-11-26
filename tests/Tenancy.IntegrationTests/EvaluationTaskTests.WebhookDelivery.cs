@@ -132,14 +132,12 @@ public sealed partial class EvaluationTaskTests
         row.LastStatusCode.ShouldBeNull();
     }
 
-    /// <summary>
-    /// A 200 whose body never ends is read for 4 KiB and then dropped: the row is delivered, and the server sees the
-    /// connection close long before it has written its 32 MiB.
-    /// </summary>
+    /// <summary>The reader stops at 4 KiB without waiting for the chunked reply to end.</summary>
     [Fact]
     public async Task Delivery_ResponseBodyCapped()
     {
-        await using var web = await StartWebhookWorldAsync();
+        var reads = new WebhookResponseReadCounter();
+        await using var web = await StartWebhookWorldAsync(responseObserver: reads);
         var evaluation = await SeedEvaluationAsync(web);
         var (endpoint, _) = await SeedEndpointAsync(web, "/big");
         var delivery = await SeedDeliveryAsync(web, endpoint, evaluation);
@@ -149,13 +147,8 @@ public sealed partial class EvaluationTaskTests
         var row = await ReadDeliveryAsync(web, delivery);
         row.State.ShouldBe("delivered");
         row.LastStatusCode.ShouldBe(200);
-        for (var wait = 0; wait < 200 && !web.Receiver.BigAborted; wait++)
-        {
-            await Task.Delay(50, TestContext.Current.CancellationToken);
-        }
-
-        web.Receiver.BigAborted.ShouldBeTrue("the client closed the connection after its cap");
-        web.Receiver.BigBytesWritten.ShouldBeLessThan(16L * 1024 * 1024);
+        reads.BytesRead.ShouldBe(4096);
+        await web.Receiver.BigDisconnected.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
     }
 
     /// <summary>

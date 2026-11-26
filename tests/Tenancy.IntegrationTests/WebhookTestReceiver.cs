@@ -29,8 +29,7 @@ internal sealed class WebhookTestReceiver : IAsyncDisposable
     public const string OtherHost = "other.example.com";
 
     private readonly WebApplication _app;
-    private long _bigBytes;
-    private int _bigAborted;
+    private readonly TaskCompletionSource _bigDisconnected = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     private WebhookTestReceiver(WebApplication app, int port, string thumbprint)
     {
@@ -45,11 +44,9 @@ internal sealed class WebhookTestReceiver : IAsyncDisposable
 
     public ConcurrentQueue<ReceivedWebhook> Requests { get; } = new();
 
-    /// <summary>Bytes of the endless body the server managed to write before the client went away.</summary>
-    public long BigBytesWritten => Interlocked.Read(ref _bigBytes);
-
-    /// <summary>True once the server saw the connection of the endless response close.</summary>
-    public bool BigAborted => Volatile.Read(ref _bigAborted) == 1;
+#pragma warning disable VSTHRD003 // The completion source belongs to this receiver.
+    public Task BigDisconnected => _bigDisconnected.Task;
+#pragma warning restore VSTHRD003
 
     public int HitsOn(string path) => Requests.Count(request => request.Path == path);
 
@@ -132,21 +129,14 @@ internal sealed class WebhookTestReceiver : IAsyncDisposable
     private async Task StreamEndlesslyAsync(HttpContext context)
     {
         context.Response.StatusCode = StatusCodes.Status200OK;
-        var chunk = new byte[8192];
-        Array.Fill(chunk, (byte)'x');
-        try
-        {
-            for (var i = 0; i < 4096; i++)
-            {
-                await context.Response.Body.WriteAsync(chunk, context.RequestAborted);
-                await context.Response.Body.FlushAsync(context.RequestAborted);
-                Interlocked.Add(ref _bigBytes, chunk.Length);
-            }
-        }
-        catch (Exception failure) when (failure is OperationCanceledException or IOException)
-        {
-            Volatile.Write(ref _bigAborted, 1);
-        }
+        using var disconnected = context.RequestAborted.Register(() => _bigDisconnected.TrySetResult());
+        // Flush more than the cap but withhold the terminating chunk until the client closes the response.
+        await context.Response.StartAsync(context.RequestAborted);
+        await context.Response.Body.WriteAsync(new byte[16 * 1024], context.RequestAborted);
+        await context.Response.Body.FlushAsync(context.RequestAborted);
+#pragma warning disable VSTHRD003 // The completion source belongs to this receiver.
+        await _bigDisconnected.Task;
+#pragma warning restore VSTHRD003
     }
 }
 

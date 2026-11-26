@@ -19,7 +19,8 @@ internal static class WebhookCoreServiceCollectionExtensions
             .BindConfiguration(WebhookUrlOptions.Section)
             .Validate(
                 static o => o.AllowedPorts.All(static p => p is >= 1 and <= 65535),
-                $"{WebhookUrlOptions.Section}:AllowedPorts must hold ports from 1 to 65535");
+                $"{WebhookUrlOptions.Section}:AllowedPorts must hold ports from 1 to 65535")
+            .ValidateOnStart();
         services.TryAddSingleton<IWebhookHostResolver, DnsWebhookHostResolver>();
         services.TryAddSingleton<WebhookUrlGuard>();
         services.TryAddSingleton<WebhookSecretProtector>();

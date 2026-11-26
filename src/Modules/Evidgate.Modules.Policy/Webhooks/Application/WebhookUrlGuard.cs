@@ -92,7 +92,7 @@ internal sealed class WebhookUrlGuard(IWebhookHostResolver resolver, IOptions<We
             {
                 addresses = [.. (await resolver.ResolveAsync(host, cancellationToken).ConfigureAwait(false)).Distinct()];
             }
-            catch (SocketException)
+            catch (Exception failure) when (failure is SocketException or ArgumentException)
             {
                 return Refuse(WebhookUrlReasons.Resolution);
             }

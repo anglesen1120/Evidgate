@@ -26,6 +26,8 @@ signature = hex( HMAC-SHA256( key = secret, message = timestamp + "." + rawBody 
 ```
 
 - `secret` is the UTF-8 text shown once at registration (`whsec_...`), used as-is: do not decode it.
+  A missing or empty secret is a configuration error: refuse every delivery (and refuse to start)
+  rather than signing with an empty key, which any sender could forge.
 - `timestamp` is the `Evidgate-Timestamp` header text; `rawBody` is the exact request bytes. Hash the
   bytes you received, never a re-serialised JSON value.
 - A MAC computed over the body alone (without `timestamp + "."`) is invalid.
@@ -41,11 +43,17 @@ signature = hex( HMAC-SHA256( key = secret, message = timestamp + "." + rawBody 
 3. A `v1` MAC matches. Failure is a `401`; record it and do not process the event.
 4. The event type is `evaluation.created` and `Evidgate-Event-Id` equals the signed `evaluation_id`
    (the id header is not itself signed, so this stops an attacker pairing a captured body with an id).
-5. Deduplicate on `Evidgate-Event-Id`: a second delivery with an id you already processed is acknowledged
-   with `2xx` but not processed again. Only authenticated ids are recorded.
+5. Deduplicate on `Evidgate-Event-Id`, remembering the SHA-256 of the signed body next to the id. A
+   second delivery with the same id and the same body hash is acknowledged with `2xx` but not
+   processed again. The same id with a different signed body is a `409` conflict: do not process it
+   and keep the first hash on record. Only authenticated ids are recorded.
 
-`seenEventIds` in the sample is an in-memory `Set`. In production keep it in durable storage shared by
-all instances, and record the id in the same transaction as your processing.
+`eventHashes` in the sample is an in-memory `Map` from event id to body hash. In production keep it in
+durable storage shared by all instances, and record the id and hash in the same transaction as your
+processing.
+
+The sample reads at most 1 MiB of body. A larger upload gets `413` with `Connection: close` as soon
+as the cap is crossed; the rest of the upload is discarded unread.
 
 ## Retry semantics
 
@@ -66,5 +74,5 @@ npm test -w @evidgate/webhook-receiver
 ```ts
 import { createReceiver } from './src/server.js';
 
-createReceiver({ secret: process.env.WEBHOOK_SECRET ?? '' }).listen(8080);
+createReceiver({ secret: process.env.WEBHOOK_SECRET }).listen(8080); // throws when WEBHOOK_SECRET is unset or empty
 ```

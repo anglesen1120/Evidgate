@@ -61,7 +61,9 @@ public sealed partial class EvaluationTaskTests
         DateTimeOffset NextAttemptAt,
         DateTimeOffset CreatedAt);
 
-    private async Task<WebhookWorld> StartWebhookWorldAsync(IReadOnlyDictionary<string, string?>? configuration = null)
+    private async Task<WebhookWorld> StartWebhookWorldAsync(
+        IReadOnlyDictionary<string, string?>? configuration = null,
+        DelegatingHandler? responseObserver = null)
     {
         var receiver = await WebhookTestReceiver.StartAsync();
         var resolver = new FakeWebhookHostResolver();
@@ -97,6 +99,10 @@ public sealed partial class EvaluationTaskTests
                         var handler = (SocketsHttpHandler)builder.PrimaryHandler;
                         handler.SslOptions.RemoteCertificateValidationCallback =
                             (_, certificate, _, _) => certificate?.GetCertHashString() == thumbprint;
+                        if (responseObserver is not null)
+                        {
+                            builder.AdditionalHandlers.Add(responseObserver);
+                        }
                     }));
             });
 
@@ -222,4 +228,119 @@ public sealed partial class EvaluationTaskTests
         _fixture.ScalarAsync<long>(
             web.World.Database,
             $"select count(*) from public.{table} where org_id = '{web.World.Org:D}' and {where}");
+
+    /// <summary>
+    /// Counts the response-body bytes the sender reads, and hands them back at most <see cref="ShortRead"/> at a time:
+    /// a drain that honours the remaining allowance totals exactly the cap, one that asks for a full buffer each time
+    /// overshoots it.
+    /// </summary>
+    private sealed class WebhookResponseReadCounter : DelegatingHandler
+    {
+        private const int ShortRead = 1000;
+        private long _bytesRead;
+
+        public long BytesRead => Interlocked.Read(ref _bytesRead);
+
+        protected override async Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken)
+        {
+            var response = await base.SendAsync(request, cancellationToken);
+            response.Content = new CountingContent(response.Content, this);
+
+            return response;
+        }
+
+        private sealed class CountingContent : HttpContent
+        {
+            private readonly HttpContent _inner;
+            private readonly WebhookResponseReadCounter _owner;
+
+            public CountingContent(HttpContent inner, WebhookResponseReadCounter owner)
+            {
+                _inner = inner;
+                _owner = owner;
+                foreach (var header in inner.Headers)
+                {
+                    Headers.TryAddWithoutValidation(header.Key, header.Value);
+                }
+            }
+
+            protected override Task SerializeToStreamAsync(Stream stream, System.Net.TransportContext? context) =>
+                _inner.CopyToAsync(stream);
+
+            protected override bool TryComputeLength(out long length)
+            {
+                length = 0;
+
+                return false;
+            }
+
+            protected override async Task<Stream> CreateContentReadStreamAsync(CancellationToken cancellationToken) =>
+                new CountingStream(await _inner.ReadAsStreamAsync(cancellationToken), _owner);
+
+            protected override void Dispose(bool disposing)
+            {
+                if (disposing)
+                {
+                    _inner.Dispose();
+                }
+
+                base.Dispose(disposing);
+            }
+        }
+
+        private sealed class CountingStream(Stream inner, WebhookResponseReadCounter owner) : Stream
+        {
+            public override bool CanRead => true;
+
+            public override bool CanSeek => false;
+
+            public override bool CanWrite => false;
+
+            public override long Length => throw new NotSupportedException();
+
+            public override long Position
+            {
+                get => throw new NotSupportedException();
+                set => throw new NotSupportedException();
+            }
+
+            public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+            {
+                var read = await inner.ReadAsync(buffer[..Math.Min(buffer.Length, ShortRead)], cancellationToken);
+                Interlocked.Add(ref owner._bytesRead, read);
+
+                return read;
+            }
+
+            public override int Read(byte[] buffer, int offset, int count)
+            {
+                var read = inner.Read(buffer, offset, Math.Min(count, ShortRead));
+                Interlocked.Add(ref owner._bytesRead, read);
+
+                return read;
+            }
+
+            public override void Flush()
+            {
+            }
+
+            public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+
+            public override void SetLength(long value) => throw new NotSupportedException();
+
+            public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+
+            protected override void Dispose(bool disposing)
+            {
+                if (disposing)
+                {
+                    inner.Dispose();
+                }
+
+                base.Dispose(disposing);
+            }
+        }
+    }
 }

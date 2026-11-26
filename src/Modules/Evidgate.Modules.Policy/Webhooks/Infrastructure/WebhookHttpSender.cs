@@ -1,5 +1,4 @@
 using System.Net.Http.Headers;
-using Evidgate.BuildingBlocks.Pipeline.Serialization;
 using Evidgate.Modules.Policy.Webhooks.Application;
 using Evidgate.Modules.Policy.Webhooks.Domain;
 using Microsoft.Extensions.Options;
@@ -83,13 +82,36 @@ internal sealed class WebhookHttpSender(IHttpClientFactory clients, IOptions<Web
         return request;
     }
 
-    /// <summary>Reads at most the cap and drops it; the status is already known, so a slow or broken body changes nothing.</summary>
+    /// <summary>
+    /// Reads at most the cap and drops it; the status is already known, so a slow or broken body changes nothing. Each
+    /// read asks only for the remaining allowance and the drain stops at the cap without waiting for the end of the
+    /// body, so a chunked reply cannot make the worker consume more than the cap.
+    /// </summary>
     private static async Task DrainAsync(HttpResponseMessage response, CancellationToken limit, CancellationToken caller)
     {
+        if (response.Content.Headers.ContentLength > WebhookDeliveryOptions.MaxResponseBytes)
+        {
+            return;
+        }
+
         try
         {
-            _ = await BoundedHttpBody.ReadBytesAsync(response.Content, WebhookDeliveryOptions.MaxResponseBytes, limit)
-                .ConfigureAwait(false);
+            var stream = await response.Content.ReadAsStreamAsync(limit).ConfigureAwait(false);
+            await using (stream.ConfigureAwait(false))
+            {
+                var buffer = new byte[WebhookDeliveryOptions.MaxResponseBytes];
+                var remaining = buffer.Length;
+                while (remaining > 0)
+                {
+                    var read = await stream.ReadAsync(buffer.AsMemory(0, remaining), limit).ConfigureAwait(false);
+                    if (read == 0)
+                    {
+                        return;
+                    }
+
+                    remaining -= read;
+                }
+            }
         }
         catch (OperationCanceledException) when (!caller.IsCancellationRequested)
         {

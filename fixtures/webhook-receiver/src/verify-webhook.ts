@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual } from 'node:crypto';
+import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 
 /** Deliveries signed further than this from the receiver's clock are refused (replay window). */
 export const TOLERANCE_SECONDS = 300;
@@ -12,19 +12,19 @@ export type HeaderValue = string | readonly string[] | undefined;
 
 export interface VerifyInput {
   /** The endpoint secret exactly as shown at registration (the literal `whsec_...` text). */
-  readonly secret: string;
+  readonly secret: string | undefined;
   readonly headers: Readonly<Record<string, HeaderValue>>;
   /** The raw request bytes: the MAC covers them, so never re-serialise parsed JSON. */
   readonly body: Uint8Array | string;
   /** The receiver's clock in unix seconds. */
   readonly now: number;
-  /** Event ids already processed; a real receiver keeps this in durable storage. */
-  readonly seenEventIds: Set<string>;
+  /** Event id to the SHA-256 of the signed body already processed; a real receiver keeps this in durable storage. */
+  readonly eventHashes: Map<string, string>;
 }
 
 export type VerifyResult =
   | { readonly status: 200; readonly duplicate: boolean }
-  | { readonly status: 401; readonly reason: string };
+  | { readonly status: 401 | 409; readonly reason: string };
 
 const reject = (reason: string): VerifyResult => ({ status: 401, reason });
 
@@ -59,6 +59,8 @@ function signedEvaluationId(body: Buffer): unknown {
 }
 
 export function verifyWebhook(input: VerifyInput): VerifyResult {
+  // The crypto API accepts an empty HMAC key, so a missing secret must fail closed here.
+  if (!input.secret) return reject('missing_secret');
   const eventId = header(input.headers, 'Evidgate-Event-Id');
   const eventType = header(input.headers, 'Evidgate-Event-Type');
   const timestamp = header(input.headers, 'Evidgate-Timestamp');
@@ -77,8 +79,12 @@ export function verifyWebhook(input: VerifyInput): VerifyResult {
   if (eventType !== EVENT_TYPE) return reject('unsupported_event_type');
   if (signedEvaluationId(body) !== eventId) return reject('event_id_mismatch');
 
-  // Only an authenticated id is recorded, so a forger cannot burn a real event's id.
-  const duplicate = input.seenEventIds.has(eventId);
-  input.seenEventIds.add(eventId);
-  return { status: 200, duplicate };
+  // Only an authenticated delivery is recorded, so a forger cannot burn a real event's id. The
+  // body hash is stored with the id: the same id with other signed bytes is a conflict, never a
+  // duplicate, and the first body stays on record.
+  const bodyHash = createHash('sha256').update(body).digest('hex');
+  const recorded = input.eventHashes.get(eventId);
+  if (recorded === undefined) input.eventHashes.set(eventId, bodyHash);
+  else if (recorded !== bodyHash) return { status: 409, reason: 'event_payload_conflict' };
+  return { status: 200, duplicate: recorded !== undefined };
 }

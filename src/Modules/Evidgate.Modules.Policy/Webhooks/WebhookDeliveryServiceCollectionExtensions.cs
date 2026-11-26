@@ -25,11 +25,13 @@ internal static class WebhookDeliveryServiceCollectionExtensions
             .BindConfiguration(WebhookDeliveryOptions.Section)
             .Validate(
                 static o => o.IsValid,
-                $"{WebhookDeliveryOptions.Section}: ConnectTimeout must be positive and not above TotalTimeout");
+                $"{WebhookDeliveryOptions.Section}: ConnectTimeout must be positive and not above TotalTimeout")
+            .ValidateOnStart();
         services.TryAddSingleton<IWebhookConnector, PinnedWebhookConnector>();
         services.TryAddSingleton<WebhookHttpSender>();
 
         services.AddHttpClient(WebhookHttpSender.ClientName, static client => client.Timeout = Timeout.InfiniteTimeSpan)
+            .RemoveAllLoggers()
             .ConfigurePrimaryHttpMessageHandler(static provider => CreateHandler(provider));
 
         services.AddTaskHandler<WebhookFanoutPayload, WebhookFanoutHandler>();
@@ -46,6 +48,9 @@ internal static class WebhookDeliveryServiceCollectionExtensions
         return new SocketsHttpHandler
         {
             AllowAutoRedirect = false,
+            // No diagnostics handler: no client span carries the tenant URL (url.full) and no trace headers leave the platform.
+            ActivityHeadersPropagator = null,
+            MaxResponseDrainSize = 0,
             UseProxy = false,
             UseCookies = false,
             ConnectTimeout = options.ConnectTimeout,

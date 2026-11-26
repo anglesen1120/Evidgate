@@ -8,22 +8,43 @@ const id = '018f0000-0000-7000-8000-000000000011';
 const body = Buffer.from(`{ "evaluation_id": "${id}", "reason": "café" }\n`);
 const sign = (bytes: Buffer) => createHmac('sha256', secret).update(bytes).digest('hex');
 
-function delivery(timestamp = now) {
-  const digest = sign(Buffer.concat([Buffer.from(`${timestamp}.`), body]));
+function delivery(timestamp = now, bytes = body) {
+  const digest = sign(Buffer.concat([Buffer.from(`${timestamp}.`), bytes]));
   const headers: Record<string, string> = {
     'Evidgate-Event-Id': id,
     'Evidgate-Event-Type': 'evaluation.created',
     'Evidgate-Timestamp': String(timestamp),
     'Evidgate-Signature': `v1=${digest}`,
   };
-  return { secret, headers, body, now, seenEventIds: new Set<string>() };
+  return { secret, headers, body: bytes, now, eventHashes: new Map<string, string>() };
 }
 
 describe('receiver conformance', () => {
   it('acknowledges a fresh delivery and deduplicates its replay', () => {
     const d = delivery();
     expect(verifyWebhook(d)).toEqual({ status: 200, duplicate: false });
-    expect(verifyWebhook(d)).toEqual({ status: 200, duplicate: true });
+    const replay = { ...delivery(now + 1), eventHashes: d.eventHashes };
+    expect(verifyWebhook(replay)).toEqual({ status: 200, duplicate: true });
+  });
+
+  it.each([undefined, ''])('refuses a missing or empty secret (%s)', (missing) => {
+    const d = delivery();
+    expect(verifyWebhook({ ...d, secret: missing })).toEqual({
+      status: 401,
+      reason: 'missing_secret',
+    });
+    expect(d.eventHashes.size).toBe(0);
+  });
+
+  it('keeps the original digest when a signed redelivery changes the raw bytes', () => {
+    const original = delivery();
+    const changed = delivery(now, body.subarray(0, -1));
+    expect(verifyWebhook(original)).toEqual({ status: 200, duplicate: false });
+    expect(verifyWebhook({ ...changed, eventHashes: original.eventHashes })).toEqual({
+      status: 409,
+      reason: 'event_payload_conflict',
+    });
+    expect(verifyWebhook(original)).toEqual({ status: 200, duplicate: true });
   });
 
   it.each([
@@ -46,7 +67,7 @@ describe('receiver conformance', () => {
       const d = delivery();
       d.headers['Evidgate-Signature'] = `v1=${hex}`;
       expect(verifyWebhook(d).status).toBe(401);
-      expect(d.seenEventIds.size).toBe(0);
+      expect(d.eventHashes.size).toBe(0);
     },
   );
 

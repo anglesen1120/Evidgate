@@ -261,6 +261,7 @@ create or replace function evidgate.replay_webhook_delivery(p_event_id uuid, p_a
   language plpgsql
   security definer
   set search_path = ''
+  set lock_timeout = '5s'
   as $$
   declare
     v_org uuid := evidgate.current_org_id();
@@ -271,7 +272,10 @@ create or replace function evidgate.replay_webhook_delivery(p_event_id uuid, p_a
         using errcode = '42501';
     end if;
 
-    set local lock_timeout = '5s';
+    if p_actor is null then
+      raise exception 'replay_webhook_delivery needs the acting operator: the audit row names it'
+        using errcode = '22004';
+    end if;
 
     -- The update takes the row locks and names the rows; the audit rows follow in the same transaction.
     with moved as (
