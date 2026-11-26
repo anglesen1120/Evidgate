@@ -14,6 +14,9 @@ public class HealingPersistenceSqlOwnershipTests
 {
     private static readonly HashSet<string> OwnedTables = new(StringComparer.Ordinal)
     {
+        "ai_credit_account",
+        "ai_credit_entry",
+        "healing_llm_call",
         "incident",
         "incident_attempt",
     };
@@ -58,7 +61,7 @@ public class HealingPersistenceSqlOwnershipTests
         files.Select(file => file.Path).ShouldContain("IncidentRecorder.cs");
 
         var named = files.SelectMany(file => PolicySqlTableRules.TablesNamedIn(file.Text)).Distinct(StringComparer.Ordinal);
-        named.Order(StringComparer.Ordinal).ShouldBe(["incident", "incident_attempt"]);
+        named.Order(StringComparer.Ordinal).ShouldBe(["ai_credit_account", "ai_credit_entry", "healing_llm_call", "incident", "incident_attempt"]);
         HealingSqlRules.FindViolations(files).ShouldBeEmpty();
     }
 

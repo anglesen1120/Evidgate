@@ -188,7 +188,7 @@ public sealed class UsageSummaryReadTests
             .ToList();
 
         metrics.ShouldBeUnique();
-        metrics.ShouldBe(UsageLedgerMetricNames.All);
+        metrics.ShouldBe(UsageLedgerMetricNames.All.Where(name => name != UsageLedgerMetricNames.AiCredit));
     }
 
     [Fact]

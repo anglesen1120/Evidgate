@@ -78,7 +78,7 @@ public static partial class EvidgateTelemetry
     /// </summary>
     public static void RecordUsageBillingKeyConflict() => UsageBillingKeyConflicts.Add(1);
 
-    /// <summary>Bounds the metric label to the table's seven declared values.</summary>
+    /// <summary>Bounds the metric label to the table's eight declared values.</summary>
     private static string UsageMetricToken(string? metric) => metric switch
     {
         "results" => metric,
@@ -88,6 +88,7 @@ public static partial class EvidgateTelemetry
         "support_hours" => metric,
         "runner_minutes" => metric,
         "device_minutes" => metric,
+        "ai_credit" => metric,
         _ => "other",
     };
 

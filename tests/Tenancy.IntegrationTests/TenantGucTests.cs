@@ -214,6 +214,21 @@ public sealed partial class TenantGucTests
             """,
             ("id", Guid.CreateVersion7()),
             ("org_id", orgId));
+        // One credit account and the grant entry that built its balance (migration 0135), owner-written like the rows above.
+        var creditAccountId = Guid.CreateVersion7();
+        await scope.ExecuteAsync(
+            "insert into public.ai_credit_account (id, org_id, balance_micro) values (@id, @org_id, 1000)",
+            ("id", creditAccountId),
+            ("org_id", orgId));
+        await scope.ExecuteAsync(
+            """
+            insert into public.ai_credit_entry (id, org_id, account_id, kind, amount_micro, billing_key, payload_hash, actor)
+            values (@id, @org_id, @account_id, 'grant', 1000, 'ai:grant:probe', @payload_hash, 'system')
+            """,
+            ("id", Guid.CreateVersion7()),
+            ("org_id", orgId),
+            ("account_id", creditAccountId),
+            ("payload_hash", "sha256:" + new string('b', 64)));
         await scope.ExecuteAsync(
             """
             insert into public.retention_policy (id, org_id, project_id, artifact_days, metadata_days)

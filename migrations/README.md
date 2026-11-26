@@ -1366,6 +1366,14 @@ target)` and `session_revoke_audit_append(org, actor, object_type, object_id, me
 - Locks: `ACCESS EXCLUSIVE` on both tables until commit, 5 s `lock_timeout`. Only the removed exchange wrote them: stop the previous API and Worker before applying, then deploy the release without the exchange. A blocked file rolls back whole and is not journalled.
 - Rollback: restore from backup; the tables and their rows are not recreated by a later migration. Numbering: the migrator refuses a gap, so apply only on a tree that holds `0133`.
 
+## Notes on the AI credit tables (`0135`)
+
+- `0135` adds `public.ai_credit_account` (one row per organization: `balance_micro` available and `reserved_micro` held, both `>= 0`) and `public.ai_credit_entry` (append-only log: `kind` grant|reserve|consume|refund|expire|adjust, `amount_micro` magnitude (signed only for `adjust`), optional `call_id`, `billing_key`, `payload_hash`, reason, actor). Both have `unique (org_id, id)`, FORCE RLS with `TO evidgate_app` and `TO evidgate_owner` policies. The usage `metric` checks of `usage_ledger_entry`, `usage_rollup`, `usage_price` and `quota_counter` also accept `ai_credit`.
+- Keys: `ai_credit_entry` references `ai_credit_account (org_id, id)` and `healing_llm_call (org_id, id)` (no cascade). `unique (org_id, billing_key)` is the replay guard and equals the usage ledger billing key of the entry's ledger row; a partial unique index on `(org_id, call_id, kind)` allows one entry of each kind per call.
+- Guards (SQLSTATE `23514`): `ai_credit_entry_immutable` refuses every UPDATE of an entry and any DELETE except by `evidgate_owner`. The app role holds SELECT + INSERT on entries and SELECT + INSERT + UPDATE of the two balance columns on accounts; operator and sweep roles hold nothing.
+- Purge order (owner erasure): delete `ai_credit_entry` rows before `healing_llm_call` rows or the project; the call key has no cascade and fails with `23503`.
+- Locks: new tables; the four metric checks are re-added `NOT VALID`, validated, then swapped; `lock_timeout` is 5 s. Numbering: the migrator refuses a gap, so apply only on a tree that holds `0134`. Rollback: forward-only; stop the writer and keep both tables and the widened checks, because ledger rows with metric `ai_credit` and the credit balances must survive.
+
 ## Notes on the artifact owner and the GitHub App removal (`0137`)
 
 - One file, two parts. Part 1 adds the nullable `public.artifact.owner_credential_id` (1..256 characters when set), written once at insert by the minting credential; it is not in the `evidgate_app` column-level UPDATE grant, so no transition changes it. Rows minted before the file keep a NULL owner and the earlier any-authorised-caller rule, because nothing expires a `pending_upload` row. Part 2 retires the GitHub App.
