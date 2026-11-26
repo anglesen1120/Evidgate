@@ -79,6 +79,7 @@ const EXPECTED = [
   ['/artifacts/{a}/complete', 'post', 'artifact:write', 'v1'],
   ['/runs/{r}/decision', 'get', 'decision:read', 'v1'],
   ['/projects/{p}/runs', 'get', 'run:read', 'v1'],
+  ['/projects/{p}/runs/decision-counts', 'get', 'run:read', 'v1'],
   ['/runs/{r}/rerun', 'post', 'run:create', 'v1'],
   ['/projects/{p}/environments/{e}/revisions', 'post', 'environment:write', 'v1'],
   ['/environment-revisions/{id}', 'get', 'run:read', 'v1'],
