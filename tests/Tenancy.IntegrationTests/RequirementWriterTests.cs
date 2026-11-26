@@ -117,7 +117,7 @@ public sealed class RequirementWriterTests
         overCap.IsSuccess.ShouldBeFalse();
         var stored = await _fixture.ScalarAsync<string>(world.Database, $"select body from public.requirement_version where id = '{atCap.VersionId:D}'");
         stored.ShouldBe(CodePoints("\u00e9", 20_000));
-        (await _fixture.ScalarAsync<long>(world.Database, $"select char_length(body) from public.requirement_version where id = '{atCap.VersionId:D}'")).ShouldBe(20_000);
+        (await _fixture.ScalarAsync<int>(world.Database, $"select char_length(body) from public.requirement_version where id = '{atCap.VersionId:D}'")).ShouldBe(20_000);
 
         // A decomposed and a composed body are one content hash.
         var composed = await world.CreatedAsync(world.Create(body: "caf\u00e9"));
