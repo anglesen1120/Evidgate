@@ -54,6 +54,7 @@ public sealed class SchemaConventionAllowListTests
         ("public.release_run", SchemaRule.AuditColumns | SchemaRule.VersionTrigger),
         ("public.fixture", SchemaRule.AuditColumns | SchemaRule.VersionTrigger),
         ("public.fixture_revision", SchemaRule.AuditColumns | SchemaRule.VersionTrigger),
+        ("public.requirement_version", SchemaRule.AuditColumns | SchemaRule.VersionTrigger),
         ("public.raw_report", SchemaRule.CompositeForeignKey | SchemaRule.AuditColumns | SchemaRule.VersionTrigger),
         ("public.raw_report_reprocess", SchemaRule.CompositeForeignKey | SchemaRule.AuditColumns | SchemaRule.VersionTrigger),
         ("public.run_state_event", SchemaRule.AuditColumns | SchemaRule.VersionTrigger),
