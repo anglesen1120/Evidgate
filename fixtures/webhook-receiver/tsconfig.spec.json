@@ -1,0 +1,11 @@
+{
+  // Type-checks the specs and the Vitest config without emitting (see `exclude` in
+  // tsconfig.json); eslint.config.js points the parser for them at this file.
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "types": ["node"]
+  },
+  "include": ["src/**/*.test.ts", "vitest.config.ts", "../../vitest.config.base.mts"]
+}

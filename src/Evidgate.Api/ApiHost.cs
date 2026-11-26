@@ -285,6 +285,8 @@ public static partial class ApiHost
         app.MapHealingEndpoints().AddEndpointFilter<TenantResolutionFilter>().AddEndpointFilter<ResultEndpointFilter>();
         // 07.3.1-T1: the waiver routes of 07.3.1 §5, same filters.
         app.MapWaiverEndpoints().AddEndpointFilter<TenantResolutionFilter>().AddEndpointFilter<ResultEndpointFilter>();
+        // The outbound-webhook endpoint and delivery routes (07.6.2/07.6.3), same filters.
+        app.MapWebhookEndpoints().AddEndpointFilter<TenantResolutionFilter>().AddEndpointFilter<ResultEndpointFilter>();
         // 07.3.1-T2: the quarantine routes of 07.3.1 §5, same filters.
         app.MapQuarantineEndpoints().AddEndpointFilter<TenantResolutionFilter>().AddEndpointFilter<ResultEndpointFilter>();
         // 07.8.1-T1: the deploy-target routes, same filters.

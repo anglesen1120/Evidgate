@@ -278,6 +278,8 @@ public static partial class IsolationRouteCases
                 Fixed([bp.ActiveTokenId, bp.RevokedTokenId]), aAdmin, $"/v1/projects/{ap.Id}/ingest-tokens?limit=1"));
             walks.Add(new(Get("/v1/projects/{p}/api-tokens"), $"org B project {bp.Slug} api tokens", bAdmin, $"/v1/projects/{bp.Id}/api-tokens?limit=1", "id",
                 Fixed([.. bp.ApiTokenIds]), aAdmin, $"/v1/projects/{ap.Id}/api-tokens?limit=1"));
+            walks.Add(new(Get("/v1/projects/{p}/webhook-endpoints"), $"org B project {bp.Slug} webhook endpoints", bAdmin,
+                $"/v1/projects/{bp.Id}/webhook-endpoints", "id", Fixed([bp.WebhookEndpointId])));
             walks.Add(new(Get("/v1/projects/{p}/cases"), $"org B project {bp.Slug} cases", bAdmin, $"/v1/projects/{bp.Id}/cases?limit=1", "id",
                 Fixed(bp.CaseIds), aAdmin, $"/v1/projects/{ap.Id}/cases?limit=1"));
             walks.Add(new(Get("/v1/projects/{p}/suites"), $"org B project {bp.Slug} suites", bAdmin, $"/v1/projects/{bp.Id}/suites?limit=1", "id",
@@ -704,6 +706,25 @@ public static partial class IsolationRouteCases
         ProjectCase("GET", "/v1/projects/{p}/api-tokens", p => new(HttpMethod.Get, $"/v1/projects/{p}/api-tokens"), list: true),
         ObjectCase("DELETE", "/v1/api-tokens/{t}", p => [("api token", p.ApiTokenIds[0]), ("revoked api token", p.ApiTokenIds[1])], id =>
             new(HttpMethod.Delete, $"/v1/api-tokens/{id}")),
+
+        ProjectCase("POST", "/v1/projects/{p}/webhook-endpoints", p => new(HttpMethod.Post, $"/v1/projects/{p}/webhook-endpoints",
+            new JsonObject { ["url"] = "https://93.184.216.34/probe" })),
+        ProjectCase("GET", "/v1/projects/{p}/webhook-endpoints", p => new(HttpMethod.Get, $"/v1/projects/{p}/webhook-endpoints"),
+            ownControl: true),
+        ObjectCaseWith("GET", "/v1/projects/{p}/webhook-endpoints/{e}", p => [("webhook endpoint", p.WebhookEndpointId)],
+            (id, p) => new(HttpMethod.Get, $"/v1/projects/{p.Id}/webhook-endpoints/{id}"),
+            SiblingEndpoint((project, id) => new(HttpMethod.Get, $"/v1/projects/{project}/webhook-endpoints/{id}")),
+            own: p => new(HttpMethod.Get, $"/v1/projects/{p.Id}/webhook-endpoints/{p.WebhookEndpointId}")),
+        ObjectCaseWith("PATCH", "/v1/projects/{p}/webhook-endpoints/{e}", p => [("webhook endpoint", p.WebhookEndpointId)],
+            (id, p) => new(HttpMethod.Patch, $"/v1/projects/{p.Id}/webhook-endpoints/{id}",
+                new JsonObject { ["state"] = "disabled" }, "\"1\""),
+            SiblingEndpoint((project, id) => new(HttpMethod.Patch, $"/v1/projects/{project}/webhook-endpoints/{id}",
+                new JsonObject { ["state"] = "disabled" }, "\"1\""))),
+        ObjectCaseWith("DELETE", "/v1/projects/{p}/webhook-endpoints/{e}", p => [("webhook endpoint", p.WebhookEndpointId)],
+            (id, p) => new(HttpMethod.Delete, $"/v1/projects/{p.Id}/webhook-endpoints/{id}"),
+            SiblingEndpoint((project, id) => new(HttpMethod.Delete, $"/v1/projects/{project}/webhook-endpoints/{id}"))),
+        ProjectCase("GET", "/v1/projects/{p}/webhook-deliveries", p => new(HttpMethod.Get, $"/v1/projects/{p}/webhook-deliveries?limit=1"),
+            ownControl: true),
 
         // ---- CI token exchange (CiTokenEndpoints.cs:41): pre-tenant, credential-authenticated --------------------
         Case("POST", "/v1/ci/token", (route, w) =>
@@ -2348,6 +2369,18 @@ public static partial class IsolationRouteCases
                 .. ids(w.Acme2.Projects[1]).Select(id => new RouteProbe(route, $"sibling project api's {id.Label}", runner => runner.RefusedAsync(
                     route, $"sibling project api's {id.Label}", OrgBService(w), request(id.Id, w.Acme2.Projects[1]), allowed: [403, 404]))),
             ]);
+
+    /// <summary>
+    /// Org B's own project in the path with an endpoint of org B's other project: refused exactly like a random id, so
+    /// a lookup that drops the project predicate (org isolation alone still holding) answers 200 and fails here.
+    /// </summary>
+    private static Func<ApiRoute, IsolationWorld, IEnumerable<RouteProbe>> SiblingEndpoint(Func<Guid, Guid, ProbeRequest> request) =>
+        (route, w) =>
+        [
+            Pair(route, "org B endpoint of the sibling project", ProbeExpect.NotFound, OrgBAdmin(w),
+                request(w.Acme2.Projects[0].Id, w.Acme2.Projects[1].WebhookEndpointId),
+                request(w.Acme2.Projects[0].Id, Guid.CreateVersion7())),
+        ];
 
     // ---------------------------------------------------------------------------------------------------- helpers
 

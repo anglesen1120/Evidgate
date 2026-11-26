@@ -50,6 +50,12 @@ var IDEMPOTENCY_EXEMPT = {
     'no resource is created: the route sets the session cookies of one fixed development user, so a repeat only replaces the caller own session (Development-only route)',
   'patch /me':
     'the body sets one column to one of two values, so a repeat writes the same state, and the If-Match version makes a replay of the already-applied version answer 412 precondition_failed instead of applying twice (02.3.1-T3)',
+  'post /projects/{p}/webhook-endpoints':
+    'the response carries the one-time signing secret and is never replayed, so no key can be honoured; a retried create is a second endpoint or is refused as a duplicate URL (07.6.3)',
+  'patch /projects/{p}/webhook-endpoints/{e}':
+    'the If-Match version makes a replay of the already-applied version answer 412 precondition_failed instead of applying twice (07.6.3)',
+  'delete /projects/{p}/webhook-endpoints/{e}':
+    'deletion is a row state: the first call sets state deleted and a repeat answers 404 not_found on the dead row without a second audit row, so a key could change nothing (07.6.3)',
 };
 
 module.exports = function evgIdempotency(targetVal, opts, ctx) {

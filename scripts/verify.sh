@@ -237,7 +237,7 @@ run_stage() {
     # projects are the only gate for `*.test.ts` and the Vitest configs. Add a line whenever a
     # workspace gains a tsconfig.spec.json.
     stage "tsc -p (spec and vitest config projects)"
-    for spec_tsconfig in tsconfig.spec.json apps/web/tsconfig.spec.json packages/*/tsconfig.spec.json; do
+    for spec_tsconfig in tsconfig.spec.json apps/web/tsconfig.spec.json packages/*/tsconfig.spec.json fixtures/webhook-receiver/tsconfig.spec.json; do
       echo "   $spec_tsconfig"
       npx tsc -p "$spec_tsconfig"
     done
