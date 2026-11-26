@@ -110,6 +110,20 @@ describe('permissionGuard (09.1.1-T4.1)', () => {
     }
   });
 
+  it('lets the alternative admit a caller without the code, and never refuse one with it', async () => {
+    session.granted = new Set(['membership:read']);
+    const guard = (alsoWhen: (has: (code: string) => boolean) => boolean) =>
+      TestBed.runInInjectionContext(async () =>
+        permissionGuard('organization:read', alsoWhen)({}, [RUN_ROUTE], EMPTY_MATCH_SNAPSHOT),
+      );
+
+    expect(await guard((has) => has('membership:read'))).toBe(true);
+    expect(await guard((has) => has('audit:read'))).not.toBe(true);
+
+    session.granted = new Set(['organization:read']);
+    expect(await guard(() => false)).toBe(true);
+  });
+
   it('sends an unreadable session to /unavailable', async () => {
     session.state = 'unavailable';
 

@@ -30,8 +30,15 @@ const UNAVAILABLE_URL = '/unavailable';
  * - authenticated without the code → `/forbidden`;
  * - the session could not be read → `/unavailable`;
  * - authenticated with the code → match.
+ *
+ * `alsoWhen` is a second way in for a container route whose children carry their own grants (the
+ * Settings entry opens for any caller holding one of its tabs); it is only consulted when the code
+ * is absent, so it can add a route for such a caller and never remove one.
  */
-export function permissionGuard(permission: string): CanMatchFn {
+export function permissionGuard(
+  permission: string,
+  alsoWhen?: (has: (code: string) => boolean) => boolean,
+): CanMatchFn {
   return async () => {
     const session = inject(SessionStore);
     const router = inject(Router);
@@ -45,6 +52,9 @@ export function permissionGuard(permission: string): CanMatchFn {
     if (state !== 'authenticated') {
       return router.createUrlTree([LOGIN_URL]);
     }
-    return session.has(permission) ? true : router.createUrlTree([FORBIDDEN_URL]);
+    const has = (code: string): boolean => session.has(code);
+    return has(permission) || alsoWhen?.(has) === true
+      ? true
+      : router.createUrlTree([FORBIDDEN_URL]);
   };
 }

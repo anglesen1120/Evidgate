@@ -93,7 +93,7 @@
       <span class="scope-rerun block min-w-0 max-w-full" data-run-rerun>
         <strong>{{ copy.rerun }}</strong>
         <bdi class="block min-w-0 w-full">
-          <app-data-table-value [value]="value" [attr.title]="value" />
+          <app-data-table-value [value]="value" [breakAfterColon]="true" [attr.title]="value" />
         </bdi>
       </span>
     }
@@ -102,7 +102,7 @@
       <span class="scope-reprocess block min-w-0 max-w-full" data-run-reprocess>
         <strong>{{ copy.reprocess }}</strong>
         <bdi class="block min-w-0 w-full">
-          <app-data-table-value [value]="label" [attr.title]="label" />
+          <app-data-table-value [value]="label" [breakAfterColon]="true" [attr.title]="label" />
         </bdi>
       </span>
     }
