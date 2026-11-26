@@ -10,11 +10,18 @@ namespace Evidgate.Modules.Policy.Application.Evaluation;
 /// <param name="AsOf">The instant the set was read at.</param>
 /// <param name="WaiverIds">Active waiver ids, sorted.</param>
 /// <param name="QuarantineIds">Active quarantine entry ids, sorted.</param>
-/// <param name="Hash">The <c>sha256:</c> digest of the canonical JSON of both sorted id lists.</param>
+/// <param name="QuarantinedCaseIds">Catalog cases under an active quarantine entry, sorted, no duplicates.</param>
+/// <param name="WaivedCaseIds">Catalog cases under an active case-scope waiver, sorted, no duplicates.</param>
+/// <param name="Hash">
+/// The <c>sha256:</c> digest of the canonical JSON of both sorted entry id lists; the case ids are derived from those
+/// entries and are deliberately not hashed.
+/// </param>
 internal sealed record ExceptionsSnapshot(
     DateTimeOffset AsOf,
     IReadOnlyList<Guid> WaiverIds,
     IReadOnlyList<Guid> QuarantineIds,
+    IReadOnlyList<Guid> QuarantinedCaseIds,
+    IReadOnlyList<Guid> WaivedCaseIds,
     string Hash);
 
 /// <summary>
@@ -23,7 +30,7 @@ internal sealed record ExceptionsSnapshot(
 /// </summary>
 internal sealed class ExceptionsSnapshotResolver(ITenantDb db, ITenantScopeAccessor scopes)
 {
-    private sealed record ActiveRow(string Kind, Guid Id);
+    private sealed record ActiveRow(string Kind, Guid Id, Guid? CaseId);
 
     /// <summary>Reads the active ids of <paramref name="projectId"/> at <paramref name="asOf"/> and hashes them.</summary>
     internal async Task<ExceptionsSnapshot> ResolveAsync(
@@ -38,7 +45,13 @@ internal sealed class ExceptionsSnapshotResolver(ITenantDb db, ITenantScopeAcces
 
         var waivers = Sorted(rows, "waiver");
         var quarantines = Sorted(rows, "quarantine");
-        return new ExceptionsSnapshot(asOf, waivers, quarantines, HashOf(waivers, quarantines));
+        return new ExceptionsSnapshot(
+            asOf,
+            waivers,
+            quarantines,
+            SortedCases(rows, "quarantine"),
+            SortedCases(rows, "waiver"),
+            HashOf(waivers, quarantines));
     }
 
     /// <summary>The digest of the canonical JSON <c>{"quarantine_ids":[…],"waiver_ids":[…]}</c>.</summary>
@@ -52,6 +65,12 @@ internal sealed class ExceptionsSnapshotResolver(ITenantDb db, ITenantScopeAcces
     // Sorted by the text the hash carries, so the order never depends on Guid's byte comparison or the row order.
     private static Guid[] Sorted(IEnumerable<ActiveRow> rows, string kind) =>
         [.. rows.Where(row => row.Kind == kind).Select(row => row.Id).OrderBy(Text, StringComparer.Ordinal)];
+
+    private static Guid[] SortedCases(IEnumerable<ActiveRow> rows, string kind) =>
+        [.. rows.Where(row => row.Kind == kind && row.CaseId is not null)
+            .Select(row => row.CaseId!.Value)
+            .Distinct()
+            .OrderBy(Text, StringComparer.Ordinal)];
 
     private static string Text(Guid id) => id.ToString("D", CultureInfo.InvariantCulture);
 }

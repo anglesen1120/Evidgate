@@ -5,16 +5,25 @@ namespace Evidgate.Evaluation;
 /// evidence never reported.
 /// </summary>
 /// <param name="ResultCount">How many reported results the required scope holds.</param>
-/// <param name="HasFailure">True when a result in scope reports a confirmed failure.</param>
+/// <param name="HasFailure">
+/// True when a result in scope reports a confirmed failure that still gates: a quarantined non-critical case's
+/// failure does not count.
+/// </param>
 /// <param name="HasNotExecuted">True when a result in scope was skipped or blocked.</param>
 /// <param name="HasUncoveredRequiredItems">
 /// True when the policy names a required case, a required suite or a critical case id the evidence never reported.
 /// </param>
+/// <param name="QuarantinedCases">
+/// The non-critical quarantined cases whose confirmed failure was excluded, ascending and without duplicates.
+/// </param>
+/// <param name="FailedCaseIds">The cases whose confirmed failure still gates, in no particular order.</param>
 internal sealed record RequiredScope(
     int ResultCount,
     bool HasFailure,
     bool HasNotExecuted,
-    bool HasUncoveredRequiredItems)
+    bool HasUncoveredRequiredItems,
+    IReadOnlyList<Guid> QuarantinedCases,
+    IReadOnlyCollection<Guid> FailedCaseIds)
 {
     /// <summary>
     /// Resolves the scope: the policy's required cases and suites when it names either, else the manifest's own
@@ -26,11 +35,15 @@ internal sealed record RequiredScope(
     /// them, so the sweep allocates in the policy's size and never keeps a per-result collection. Selection, failures
     /// and skips are decided once per result, in the same loop.
     /// </remarks>
-    public static RequiredScope Resolve(PolicyRevisionInput policy, IReadOnlyList<CaseResultInput> results)
+    public static RequiredScope Resolve(
+        PolicyRevisionInput policy,
+        IReadOnlyList<CaseResultInput> results,
+        IReadOnlyList<Guid> quarantinedCaseIds)
     {
         var requiredCaseKeys = new HashSet<string>(policy.RequiredCaseKeys, StringComparer.Ordinal);
         var requiredSuiteKeys = new HashSet<string>(policy.RequiredSuiteKeys, StringComparer.Ordinal);
         var criticalCaseIds = new HashSet<Guid>(policy.CriticalCaseIds);
+        var quarantined = new HashSet<Guid>(quarantinedCaseIds);
         var narrowed = requiredCaseKeys.Count > 0 || requiredSuiteKeys.Count > 0;
 
         var pendingCaseKeys = new HashSet<string>(requiredCaseKeys, StringComparer.Ordinal);
@@ -40,6 +53,8 @@ internal sealed record RequiredScope(
         var resultCount = 0;
         var hasFailure = false;
         var hasNotExecuted = false;
+        var failedCaseIds = new HashSet<Guid>();
+        var excluded = new SortedSet<Guid>();
 
         foreach (var result in results)
         {
@@ -62,15 +77,30 @@ internal sealed record RequiredScope(
             }
 
             resultCount++;
-            hasFailure |= IsFailure(result.Status);
             hasNotExecuted |= result.Status is CaseStatus.Skipped or CaseStatus.Blocked;
+            if (!IsFailure(result.Status))
+            {
+                continue;
+            }
+
+            // A critical case never takes the quarantine exemption, whatever the snapshot says.
+            if (!critical && quarantined.Contains(result.CaseId))
+            {
+                excluded.Add(result.CaseId);
+                continue;
+            }
+
+            hasFailure = true;
+            failedCaseIds.Add(result.CaseId);
         }
 
         return new RequiredScope(
             resultCount,
             hasFailure,
             hasNotExecuted,
-            pendingCaseKeys.Count > 0 || pendingSuiteKeys.Count > 0 || pendingCaseIds.Count > 0);
+            pendingCaseKeys.Count > 0 || pendingSuiteKeys.Count > 0 || pendingCaseIds.Count > 0,
+            [.. excluded],
+            failedCaseIds);
     }
 
     private static bool IsFailure(CaseStatus status) =>

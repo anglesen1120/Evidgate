@@ -468,7 +468,7 @@ public sealed partial class EvaluationTaskTests
         command.CommandText =
             """
             select id, completeness, missing, outcome, decision, reasons, policy_hash, manifest_hash,
-                   evaluator_version, mode, exceptions_hash, exceptions_as_of
+                   evaluator_version, mode, exceptions_hash, exceptions_as_of, quarantined_cases
               from public.evaluation
              where org_id = @org_id and run_id = @run_id and evidence_revision = 1 and mode = @mode
             """;
@@ -492,6 +492,7 @@ public sealed partial class EvaluationTaskTests
             rows.GetString(8),
             rows.GetString(9),
             rows.GetString(10),
-            rows.GetDateTime(11));
+            rows.GetDateTime(11),
+            await rows.GetFieldValueAsync<Guid[]>(12, TestContext.Current.CancellationToken));
     }
 }

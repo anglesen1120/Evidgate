@@ -9,16 +9,36 @@ namespace Evidgate.Evaluation;
 /// </summary>
 internal static class CoreEvaluation
 {
-    /// <summary>Computes the core result for one evidence and policy pair.</summary>
-    public static EvaluationResult Compute(EvidenceRevisionInput evidence, PolicyRevisionInput policy)
+    /// <summary>
+    /// Computes the core result for one evidence and policy pair, plus the cases whose confirmed failure still gates
+    /// (what a waiver may annotate). A quarantined non-critical case's failure leaves the gate but stays in the outcome,
+    /// in <see cref="EvaluationResult.QuarantinedCases"/> and as a reason, whatever the decision.
+    /// </summary>
+    public static (EvaluationResult Result, IReadOnlyCollection<Guid> FailedCaseIds) Compute(
+        EvidenceRevisionInput evidence,
+        PolicyRevisionInput policy,
+        ExceptionsSnapshotInput exceptions)
     {
-        var scope = RequiredScope.Resolve(policy, evidence.Results);
+        var scope = RequiredScope.Resolve(policy, evidence.Results, exceptions.QuarantinedCaseIds);
         var missing = EffectiveMissing(evidence, policy, scope);
         var completeness = CompletenessOf(evidence, policy, missing);
         var outcome = OutcomeOf(scope, missing);
         var (decision, reasons) = Decide(evidence, policy, scope, missing, completeness);
 
-        return new EvaluationResult(completeness, missing, outcome, decision, reasons, decision);
+        if (scope.QuarantinedCases.Count > 0)
+        {
+            reasons = ReasonSet.Normalize([.. reasons, EvaluationReason.QuarantinedCaseFailed]);
+        }
+
+        var result = new EvaluationResult(
+            completeness,
+            missing,
+            outcome,
+            decision,
+            reasons,
+            decision,
+            scope.QuarantinedCases);
+        return (result, scope.FailedCaseIds);
     }
 
     /// <summary>
@@ -105,7 +125,7 @@ internal static class CoreEvaluation
             return EvaluationOutcome.NoResults;
         }
 
-        return scope.HasFailure || missing.Contains(MissingReasonCode.SetupError)
+        return scope.HasFailure || scope.QuarantinedCases.Count > 0 || missing.Contains(MissingReasonCode.SetupError)
             ? EvaluationOutcome.HasFailures
             : EvaluationOutcome.AllPassed;
     }

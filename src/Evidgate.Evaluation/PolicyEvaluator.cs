@@ -68,9 +68,17 @@ public sealed class PolicyEvaluator : IPolicyEvaluator
         ArgumentNullException.ThrowIfNull(policy.RequiredArtifactKinds);
         ArgumentNullException.ThrowIfNull(exceptions.WaiverIds);
         ArgumentNullException.ThrowIfNull(exceptions.QuarantineIds);
+        ArgumentNullException.ThrowIfNull(exceptions.QuarantinedCaseIds);
+        ArgumentNullException.ThrowIfNull(exceptions.WaivedCaseIds);
 
-        var core = CoreEvaluation.Compute(evidence, policy);
+        var (core, failedCaseIds) = CoreEvaluation.Compute(evidence, policy, exceptions);
         var (decision, reasons) = ApplyLayers(evidence, policy, exceptions, core);
+
+        // A waiver only annotates a failure that gates; it is applied after the layers, so it can never move the decision.
+        if (decision == EvaluationDecision.Fail && failedCaseIds.Intersect(exceptions.WaivedCaseIds).Any())
+        {
+            reasons = ReasonSet.Normalize([.. reasons, EvaluationReason.WaiverApproved]);
+        }
 
         return core with { Decision = decision, Reasons = reasons };
     }

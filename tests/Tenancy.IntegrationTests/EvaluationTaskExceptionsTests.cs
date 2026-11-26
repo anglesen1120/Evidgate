@@ -9,6 +9,52 @@ namespace Tenancy.IntegrationTests;
 public sealed partial class EvaluationTaskTests
 {
     /// <summary>
+    /// A quarantine of a non-critical failing case stores PASS with the case id and <c>quarantined_case_failed</c>; the
+    /// same entry on a critical case still fails; a case-scope waiver annotates a FAIL and a suite-scope one does not.
+    /// The second evaluation reads the winner back through the stored row.
+    /// </summary>
+    [Theory]
+    [InlineData("quarantine", false, "PASS")]
+    [InlineData("quarantine", true, "FAIL")]
+    [InlineData("case", false, "FAIL")]
+    [InlineData("suite", false, "FAIL")]
+    public async Task Evaluate_TargetedException_StoresItsEffectAndReadsBackTheWinner(
+        string exceptionKind, bool critical, string decision)
+    {
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
+        var matrix = MatrixRow("M1") with
+        {
+            Body = cases => critical ? $$"""{"critical_cases":["{{cases.FirstId}}"]}""" : "{}",
+            FirstCaseStatus = "failed",
+        };
+        var seed = await SeedMatrixAsync(world, matrix);
+        var caseId = (await FirstPlannedCaseAsync(world, seed.RunId)).FirstId;
+        if (exceptionKind == "quarantine")
+        {
+            await InsertQuarantineAsync(world, seed, "active", "now() + interval '1 hour'", caseId);
+        }
+        else
+        {
+            await InsertWaiverAsync(world, seed, "approved", "now() + interval '1 hour'", target: caseId, scope: exceptionKind);
+        }
+
+        var token = TestContext.Current.CancellationToken;
+        var inserted = await EvaluateAsync(world, seed, EvaluationMode.Live, token);
+        var stored = await ReloadAsync(world, seed, "live");
+        var winner = await EvaluateAsync(world, seed, EvaluationMode.Live, token);
+
+        stored.Decision.ShouldBe(decision);
+        stored.Reasons.Contains("required_assertion_failed").ShouldBe(decision == "FAIL");
+        stored.Reasons.Contains("waiver_approved").ShouldBe(exceptionKind == "case");
+        stored.Reasons.Contains("quarantined_case_failed").ShouldBe(decision == "PASS");
+        Guid[] expectedCases = decision == "PASS" ? [caseId] : [];
+        stored.QuarantinedCases.ShouldBe(expectedCases);
+        DecidingOf(inserted).ShouldBe(stored.Deciding);
+        winner.Id.ShouldBe(inserted.Id);
+        DecidingOf(winner).ShouldBe(stored.Deciding);
+    }
+
+    /// <summary>
     /// Only an approved, unexpired waiver counts: requested, revoked and past-expiry waivers are left out of the snapshot,
     /// so the stored hash is the digest of exactly the one live id.
     /// </summary>
@@ -183,7 +229,8 @@ public sealed partial class EvaluationTaskTests
     }
 
     private async Task<Guid> InsertWaiverAsync(
-        RunCreationTests.World world, Seed seed, string state, string expiresAtSql, Guid? projectId = null)
+        RunCreationTests.World world, Seed seed, string state, string expiresAtSql,
+        Guid? projectId = null, Guid? target = null, string scope = "case")
     {
         var id = Guid.CreateVersion7();
         await using var connection = await OwnerAsync(world);
@@ -191,13 +238,14 @@ public sealed partial class EvaluationTaskTests
         command.CommandText =
             $"""
             insert into public.waiver (id, org_id, project_id, scope, target_id, reason, requested_by, approved_by, state, expires_at)
-            values (@id, @org_id, @project_id, 'case', @target, 'known issue', @requested_by,
+            values (@id, @org_id, @project_id, @scope, @target, 'known issue', @requested_by,
                     case when @state = 'approved' then @approver end, @state, {expiresAtSql})
             """;
         command.Parameters.AddWithValue("id", id);
         command.Parameters.AddWithValue("org_id", seed.Org);
         command.Parameters.AddWithValue("project_id", projectId ?? seed.Project);
-        command.Parameters.AddWithValue("target", Guid.CreateVersion7());
+        command.Parameters.AddWithValue("scope", scope);
+        command.Parameters.AddWithValue("target", target ?? Guid.CreateVersion7());
         command.Parameters.AddWithValue("requested_by", Guid.CreateVersion7());
         command.Parameters.AddWithValue("approver", Guid.CreateVersion7());
         command.Parameters.AddWithValue("state", state);
@@ -206,7 +254,7 @@ public sealed partial class EvaluationTaskTests
     }
 
     private async Task<Guid> InsertQuarantineAsync(
-        RunCreationTests.World world, Seed seed, string state, string expiresAtSql)
+        RunCreationTests.World world, Seed seed, string state, string expiresAtSql, Guid? caseId = null)
     {
         var id = Guid.CreateVersion7();
         await using var connection = await OwnerAsync(world);
@@ -214,13 +262,18 @@ public sealed partial class EvaluationTaskTests
         command.CommandText =
             $"""
             insert into public.quarantine_entry (id, org_id, project_id, case_id, owner, reason, state, expires_at)
-            select @id, @org_id, @project_id, c.id, m.id, 'flaky', @state, {expiresAtSql}
+            select @id, @org_id, @project_id, coalesce(@case_id, c.id), m.id, 'flaky', @state, {expiresAtSql}
               from (select id from public.test_case where org_id = @org_id limit 1) c,
                    (select id from public.membership where org_id = @org_id limit 1) m
             """;
         command.Parameters.AddWithValue("id", id);
         command.Parameters.AddWithValue("org_id", seed.Org);
         command.Parameters.AddWithValue("project_id", seed.Project);
+        // Existing callers quarantine any catalog case; the targeted ones name the failing case.
+        command.Parameters.Add(new Npgsql.NpgsqlParameter("case_id", NpgsqlTypes.NpgsqlDbType.Uuid)
+        {
+            Value = (object?)caseId ?? DBNull.Value,
+        });
         command.Parameters.AddWithValue("state", state);
         (await command.ExecuteNonQueryAsync(TestContext.Current.CancellationToken))
             .ShouldBe(1, "the world must hold a catalog case and a membership to quarantine against");

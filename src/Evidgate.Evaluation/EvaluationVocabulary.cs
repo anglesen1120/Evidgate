@@ -88,7 +88,7 @@ public enum CaseStatus
 
 /// <summary>
 /// The closed <c>reasons[]</c> catalogue of an evaluation: codes only, never report text, artifact content or a
-/// producer value. The first fourteen members are emitted by the core computation; the last is reserved for the
+/// producer value. The core computation emits most members; <see cref="FlakyBudgetExceeded"/> is reserved for the
 /// flaky layer the contract names, which may only downgrade a pass.
 /// </summary>
 public enum EvaluationReason
@@ -140,4 +140,10 @@ public enum EvaluationReason
 
     /// <summary>The run is advisory-only (a fork run): complete evidence is held at inconclusive and never passes.</summary>
     AdvisoryOnlyRun = 15,
+
+    /// <summary>A non-critical quarantined case failed; its failure was excluded from the gate and stays visible.</summary>
+    QuarantinedCaseFailed = 16,
+
+    /// <summary>A required case that failed also holds an approved waiver; the waiver annotates and never passes it.</summary>
+    WaiverApproved = 17,
 }
