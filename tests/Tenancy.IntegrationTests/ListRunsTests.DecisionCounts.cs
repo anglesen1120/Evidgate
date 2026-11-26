@@ -96,6 +96,23 @@ public sealed partial class ListRunsTests
         ExpectCounts(oneTickEarlier, pass: 1, fail: 0, inconclusive: 0, noDecision: 1, scanned: 2, truncated: false);
     }
 
+    [Fact]
+    public async Task DecisionCounts_SinceBetweenTwoMicrosecondsExcludesTheRunStoredAtTheEarlierOne()
+    {
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
+        await SeedOrderedDecisionRunsAsync(world, 3);
+        var boundary = SeedStart.AddSeconds(1);
+        var subMicrosecond = boundary.AddTicks(1);
+
+        var atBoundary = await DecisionCountsAsync(world, "since=2026-01-01T01:00:01.0000000%2B01:00");
+        var justAfter = await DecisionCountsAsync(world, $"since={Stamp(subMicrosecond)}");
+
+        // A run stored at T is counted for since = T (the offset spelling is the same instant) but not for T + 100 ns.
+        ExpectCounts(atBoundary, pass: 0, fail: 0, inconclusive: 0, noDecision: 2, scanned: 2, truncated: false);
+        ExpectCounts(justAfter, pass: 0, fail: 0, inconclusive: 0, noDecision: 1, scanned: 1, truncated: false);
+        justAfter.Body.GetProperty("since").GetDateTimeOffset().ShouldBe(subMicrosecond);
+    }
+
     [Theory]
     [InlineData(200, false)]
     [InlineData(201, false)]
@@ -149,6 +166,10 @@ public sealed partial class ListRunsTests
     [InlineData("since=")]
     [InlineData("since=yesterday")]
     [InlineData("since=2026-13-45T00:00:00Z")]
+    [InlineData("since=2026-01-01")]
+    [InlineData("since=12:00:00Z")]
+    [InlineData("since=2026-01-01T12:00:00")]
+    [InlineData("since=2026-01-01T12:00%2B01:00")]
     public async Task DecisionCounts_ABadSinceIsRequestInvalid(string query)
     {
         await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);

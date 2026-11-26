@@ -153,8 +153,12 @@ public sealed class AuditApiTests
             page.Body.GetProperty("next_cursor").ValueKind.ShouldBe(JsonValueKind.Null);
         }
 
-        (await client.SendAsync(HttpMethod.Get, $"/v1/orgs/{org}/audit?project_id=not-a-uuid", caller))
-            .Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        foreach (var invalid in new[] { "not-a-uuid", string.Empty, "%20%20" })
+        {
+            var page = await client.SendAsync(HttpMethod.Get, $"/v1/orgs/{org}/audit?project_id={invalid}", caller);
+            page.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
+            page.ErrorCode.ShouldBe("request_invalid");
+        }
     }
 
     [Fact]

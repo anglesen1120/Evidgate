@@ -257,7 +257,7 @@ export type RunPage = {
  */
 export type RunDecisionCounts = {
     /**
-     * The inclusive lower bound on the run's `created_at` that was applied: the request's `since`, or now minus 30 days when it was absent.
+     * The inclusive lower bound on the run's `created_at` that was applied: the request's `since` as sent (the scan compares it rounded up to the next whole microsecond), or now minus 30 days when it was absent.
      */
     since: string;
     /**
@@ -3909,7 +3909,7 @@ export type AuditAction = string;
 export type AuditObjectType = string;
 
 /**
- * Exact project tag of the audit row. Only project-tagged actions recorded since the tag was introduced match; earlier rows and organization-level actions never do. An id that is unknown or belongs to another org answers an empty page, not 404; a present but non-uuid value is 422 with `details[].path` = `project_id`.
+ * Exact project tag of the audit row. Only project-tagged actions recorded since the tag was introduced match; earlier rows and organization-level actions never do, and not every project action carries the tag yet, so an empty or short result does not prove nothing happened. An id that is unknown or belongs to another org answers an empty page, not 404; a present value that is empty or not a uuid is 422 `request_invalid` with `details[].path` = `project_id`; an absent one applies no filter.
  */
 export type AuditProjectId = string;
 
@@ -4021,7 +4021,7 @@ export type RunTriggerEvent = 'push' | 'pull_request' | 'schedule' | 'manual' | 
 export type RunIsFork = boolean;
 
 /**
- * Inclusive lower bound on `run.created_at` as an RFC 3339 date-time: a run created exactly at `since` is counted, one created a tick earlier is not. Absent means now minus 30 days. A present value that is blank or not a date-time is 422 `request_invalid` with `details[].path` = `since`.
+ * Inclusive lower bound on `run.created_at` as an RFC 3339 date-time with seconds and an explicit offset (`Z` or `±hh:mm`, at most seven fraction digits): a run created exactly at `since` is counted, one created a tick earlier is not. The bound is compared at PostgreSQL's microsecond precision, rounded up to the next whole microsecond, so a `since` between two stored instants excludes the earlier run; the response echoes the requested value. Absent means now minus 30 days. A present value that is blank, a bare date, a time alone, without an offset or not a date-time is 422 `request_invalid` with `details[].path` = `since`.
  */
 export type RunDecisionCountsSince = string;
 
@@ -5356,7 +5356,7 @@ export type GetRunDecisionCountsData = {
     };
     query?: {
         /**
-         * Inclusive lower bound on `run.created_at` as an RFC 3339 date-time: a run created exactly at `since` is counted, one created a tick earlier is not. Absent means now minus 30 days. A present value that is blank or not a date-time is 422 `request_invalid` with `details[].path` = `since`.
+         * Inclusive lower bound on `run.created_at` as an RFC 3339 date-time with seconds and an explicit offset (`Z` or `±hh:mm`, at most seven fraction digits): a run created exactly at `since` is counted, one created a tick earlier is not. The bound is compared at PostgreSQL's microsecond precision, rounded up to the next whole microsecond, so a `since` between two stored instants excludes the earlier run; the response echoes the requested value. Absent means now minus 30 days. A present value that is blank, a bare date, a time alone, without an offset or not a date-time is 422 `request_invalid` with `details[].path` = `since`.
          */
         since?: string;
     };
@@ -9105,7 +9105,7 @@ export type ListAuditData = {
         action?: string;
         object_type?: string;
         /**
-         * Exact project tag of the audit row. Only project-tagged actions recorded since the tag was introduced match; earlier rows and organization-level actions never do. An id that is unknown or belongs to another org answers an empty page, not 404; a present but non-uuid value is 422 with `details[].path` = `project_id`.
+         * Exact project tag of the audit row. Only project-tagged actions recorded since the tag was introduced match; earlier rows and organization-level actions never do, and not every project action carries the tag yet, so an empty or short result does not prove nothing happened. An id that is unknown or belongs to another org answers an empty page, not 404; a present value that is empty or not a uuid is 422 `request_invalid` with `details[].path` = `project_id`; an absent one applies no filter.
          */
         project_id?: string;
         /**
@@ -9168,10 +9168,6 @@ export type ExportAuditData = {
         actor_type?: 'user' | 'ci_producer' | 'agent' | 'platform_operator' | 'system';
         action?: string;
         object_type?: string;
-        /**
-         * Exact project tag of the audit row. Only project-tagged actions recorded since the tag was introduced match; earlier rows and organization-level actions never do. An id that is unknown or belongs to another org answers an empty page, not 404; a present but non-uuid value is 422 with `details[].path` = `project_id`.
-         */
-        project_id?: string;
         /**
          * Inclusive lower bound on `created_at` (ISO 8601).
          */

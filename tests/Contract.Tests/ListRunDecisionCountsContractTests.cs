@@ -33,6 +33,9 @@ public sealed class ListRunDecisionCountsContractTests
         schema["type"].ShouldNotBeNull().GetValue<string>().ShouldBe("string");
         schema["format"].ShouldNotBeNull().GetValue<string>().ShouldBe("date-time");
         schema.ContainsKey("default").ShouldBeFalse("the default is a moving window, not a constant");
+        var description = parameter["description"].ShouldNotBeNull().GetValue<string>();
+        description.ShouldContain("explicit offset");
+        description.ShouldContain("422 `request_invalid`");
     }
 
     [Fact]

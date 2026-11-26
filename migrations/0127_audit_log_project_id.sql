@@ -16,9 +16,14 @@
 -- The partial index serves the filtered keyset page (org_id, project_id, created_at desc, id desc) without a sort;
 -- the unfiltered page keeps audit_log_org_created_id_idx.
 --
--- LOCKS: ADD COLUMN of a nullable column without a default is a catalogue change under a brief ACCESS EXCLUSIVE lock;
--- CREATE INDEX (not CONCURRENTLY, the migrator runs in one transaction) blocks inserts for the scan of the table.
--- 5 s lock_timeout; the table is insert-only.
+-- LOCKS: the runner applies this file in one transaction (`WithTransactionPerScript`), so the ACCESS EXCLUSIVE lock
+-- that ADD COLUMN takes is held until commit, through the CREATE INDEX scan too: reads and inserts on audit_log wait
+-- for the whole file. Adding a nullable column without a default is a catalogue change, but the index build is a
+-- scan of the table and `create index concurrently` is not available in one transaction (same known limit as
+-- 0038_run_project_ref_idx.sql; migrations/README.md, "Known limits"). On a large audit_log, out of band and in this
+-- order: (1) `alter table public.audit_log add column project_id uuid;` and commit (the index needs the column),
+-- (2) `create index concurrently audit_log_org_project_created_id_idx` with this file's exact definition, outside a
+-- transaction, then (3) run this file: its two `if not exists` clauses adopt the column and the index. 5 s lock_timeout.
 set local lock_timeout = '5s';
 
 alter table public.audit_log add column if not exists project_id uuid;

@@ -1410,7 +1410,7 @@ export const revokeApiToken = <ThrowOnError extends boolean = false>(options: Op
 /**
  * Cursor page of the org's audit events, newest first (02.7.1)
  *
- * One statement per page, keyset-ordered on `(created_at, id)` descending and served by `audit_log_org_created_id_idx`. Rows carry the per-org hash chain (`seq`, `prev_hash`, `entry_hash`) so a client can re-verify it. Another org's id is 404. `project_id` narrows the page to the actions recorded with that project tag; it covers only project-tagged actions recorded since the tag was introduced, so earlier rows and organization-level actions are never matched by it. The tag is not part of `entry_hash`: the chain proves the action, not which project it was tagged with. An unknown id or another org's project answers an empty page, not 404.
+ * One statement per page, keyset-ordered on `(created_at, id)` descending and served by `audit_log_org_created_id_idx`. Rows carry the per-org hash chain (`seq`, `prev_hash`, `entry_hash`) so a client can re-verify it. Another org's id is 404. `project_id` narrows the page to the actions recorded with that project tag; it covers only project-tagged actions recorded since the tag was introduced, so earlier rows and organization-level actions are never matched by it. Not every project action carries the tag yet: the filter returns the tagged actions only, so an empty or short result does not prove nothing happened in the project. The tag is not part of `entry_hash`: the chain proves the action, not which project it was tagged with. An unknown id or another org's project answers an empty page, not 404. A present `project_id` that is empty or not a uuid is 422 `request_invalid`; an absent one applies no filter.
  */
 export const listAudit = <ThrowOnError extends boolean = false>(options: Options<ListAuditData, ThrowOnError>): RequestResult<ListAuditResponses, ListAuditErrors, ThrowOnError> => (options.client ?? client).get<ListAuditResponses, ListAuditErrors, ThrowOnError>({
     security: [{
@@ -1425,7 +1425,7 @@ export const listAudit = <ThrowOnError extends boolean = false>(options: Options
 /**
  * Stream the filtered audit events as JSONL or CSV; the export is itself audited (02.7.1)
  *
- * The range defaults to the last 30 days and may span at most 92 days, otherwise 422 `export_range_too_large`; so does a range holding more than 100 000 events. The export writes an `audit.export` audit row in the same transaction. CSV cells that start with a formula character are prefixed with a quote.
+ * The range defaults to the last 30 days and may span at most 92 days, otherwise 422 `export_range_too_large`; so does a range holding more than 100 000 events. The export writes an `audit.export` audit row in the same transaction. CSV cells that start with a formula character are prefixed with a quote. The export ignores `project_id` and exports the whole org range.
  */
 export const exportAudit = <ThrowOnError extends boolean = false>(options: Options<ExportAuditData, ThrowOnError>): RequestResult<ExportAuditResponses, ExportAuditErrors, ThrowOnError> => (options.client ?? client).get<ExportAuditResponses, ExportAuditErrors, ThrowOnError>({
     security: [{

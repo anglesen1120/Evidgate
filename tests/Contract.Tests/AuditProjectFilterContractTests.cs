@@ -14,12 +14,13 @@ public sealed class AuditProjectFilterContractTests
     private const string ExportPath = "/orgs/{o}/audit/export";
 
     [Fact]
-    public void Spec_ListAudit_AndExportAudit_ShareTheProjectIdParameter()
+    public void Spec_ListAudit_ReferencesTheProjectIdParameter_AndExportAuditDoesNot()
     {
         var spec = OpenApiSpec.Load();
 
         spec.ParameterRefs(ListPath, "get").ShouldContain("AuditProjectId");
-        spec.ParameterRefs(ExportPath, "get").ShouldContain("AuditProjectId");
+        spec.ParameterRefs(ExportPath, "get").ShouldNotContain("AuditProjectId");
+        spec.DocumentedText("exportAudit").ShouldContain("ignores `project_id`");
     }
 
     [Fact]
@@ -42,6 +43,8 @@ public sealed class AuditProjectFilterContractTests
         text.ShouldContain("only project-tagged actions recorded since the tag was introduced");
         text.ShouldContain("The tag is not part of `entry_hash`");
         text.ShouldContain("answers an empty page, not 404");
+        text.ShouldContain("Not every project action carries the tag");
+        text.ShouldContain("422 `request_invalid`");
     }
 
     /// <summary>The one query parameter of <c>listAudit</c> with this name, its component reference resolved.</summary>

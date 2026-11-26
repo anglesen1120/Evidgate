@@ -87,6 +87,7 @@ internal sealed class ListRunDecisionCountsQueryHandler(
 
     private async ValueTask<RunDecisionCounts> ScanAsync(Guid projectId, DateTimeOffset since, CancellationToken cancellationToken)
     {
+        var bound = CeilToMicrosecond(since);
         var orgId = scopes.Require().OrgId;
         int pass = 0, fail = 0, inconclusive = 0, scanned = 0;
         var truncated = false;
@@ -95,7 +96,7 @@ internal sealed class ListRunDecisionCountsQueryHandler(
         while (true)
         {
             var take = Math.Min(ChunkSize, cap.Rows - scanned);
-            var rows = await ReadChunkAsync(orgId, projectId, since, last, take + 1, cancellationToken)
+            var rows = await ReadChunkAsync(orgId, projectId, bound, last, take + 1, cancellationToken)
                 .ConfigureAwait(false);
             var more = rows.Count > take;
             IReadOnlyList<RunChunkRow> chunk = more ? [.. rows.Take(take)] : rows;
@@ -126,6 +127,19 @@ internal sealed class ListRunDecisionCountsQueryHandler(
         }
 
         return new RunDecisionCounts(since, pass, fail, inconclusive, scanned - pass - fail - inconclusive, scanned, truncated);
+    }
+
+    /// <summary>
+    /// PostgreSQL keeps microseconds, so a bound between two stored instants must move up to the next one or
+    /// <c>created_at >= since</c> would admit a run stored just before it. A bound at the representable maximum stays.
+    /// </summary>
+    private static DateTimeOffset CeilToMicrosecond(DateTimeOffset instant)
+    {
+        var remainder = instant.UtcTicks % TimeSpan.TicksPerMicrosecond;
+        var step = TimeSpan.TicksPerMicrosecond - remainder;
+        return remainder == 0 || instant.UtcTicks > DateTime.MaxValue.Ticks - step
+            ? instant
+            : instant.AddTicks(step);
     }
 
     private Task<IReadOnlyList<RunChunkRow>> ReadChunkAsync(

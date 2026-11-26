@@ -61,7 +61,7 @@ public static class AuditEndpoints
             return Result.Failure<AuditListResponse>(limitError);
         }
 
-        if (FilterError(context, out var filter) is { } filterError)
+        if (FilterError(context, withProject: true, out var filter) is { } filterError)
         {
             return Result.Failure<AuditListResponse>(filterError);
         }
@@ -87,7 +87,7 @@ public static class AuditEndpoints
                 [new ErrorDetail("format", "invalid")]));
         }
 
-        if (FilterError(context, out var filter) is { } filterError)
+        if (FilterError(context, withProject: false, out var filter) is { } filterError)
         {
             return Result.Failure<IResult>(filterError);
         }
@@ -161,7 +161,8 @@ public static class AuditEndpoints
             : value;
     }
 
-    private static Error? FilterError(HttpContext context, out AuditFilter filter)
+    /// <summary>Binds the shared filters; <c>project_id</c> is read for the list only, the export contract omits it.</summary>
+    private static Error? FilterError(HttpContext context, bool withProject, out AuditFilter filter)
     {
         var query = context.Request.Query;
         filter = new AuditFilter(null, null, null, null, null, null);
@@ -172,11 +173,11 @@ public static class AuditEndpoints
         }
 
         Guid? projectId = null;
-        var rawProjectId = query["project_id"].ToString();
 
-        if (!string.IsNullOrEmpty(rawProjectId))
+        // Present-but-blank is an invalid id, not an absent filter: dropping it would widen the page silently.
+        if (withProject && query.TryGetValue("project_id", out var projectValues) && projectValues.Count > 0)
         {
-            if (!Guid.TryParse(rawProjectId, out var parsedProjectId))
+            if (!Guid.TryParse(projectValues[0], out var parsedProjectId))
             {
                 return Error.Invalid("project_id must be a uuid", [new ErrorDetail("project_id", "invalid")]);
             }

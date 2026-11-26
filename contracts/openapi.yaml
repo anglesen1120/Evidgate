@@ -4909,9 +4909,12 @@ paths:
         `audit_log_org_created_id_idx`. Rows carry the per-org hash chain (`seq`, `prev_hash`,
         `entry_hash`) so a client can re-verify it. Another org's id is 404. `project_id` narrows the page to
         the actions recorded with that project tag; it covers only project-tagged actions recorded since the tag
-        was introduced, so earlier rows and organization-level actions are never matched by it. The tag is not
+        was introduced, so earlier rows and organization-level actions are never matched by it. Not every
+        project action carries the tag yet: the filter returns the tagged actions only, so an empty or short
+        result does not prove nothing happened in the project. The tag is not
         part of `entry_hash`: the chain proves the action, not which project it was tagged with. An unknown id or
-        another org's project answers an empty page, not 404.
+        another org's project answers an empty page, not 404. A present `project_id` that is empty or not a uuid
+        is 422 `request_invalid`; an absent one applies no filter.
       x-permission: audit:read
       x-version: v1
       parameters:
@@ -4955,7 +4958,8 @@ paths:
         The range defaults to the last 30 days and may span at most 92 days, otherwise 422
         `export_range_too_large`; so does a range holding more than 100 000 events. The export
         writes an `audit.export` audit row in the same transaction. CSV cells that start with a
-        formula character are prefixed with a quote.
+        formula character are prefixed with a quote. The export ignores `project_id` and exports the whole
+        org range.
       x-permission: audit:read
       x-version: v1
       parameters:
@@ -4964,7 +4968,6 @@ paths:
         - $ref: '#/components/parameters/AuditActorType'
         - $ref: '#/components/parameters/AuditAction'
         - $ref: '#/components/parameters/AuditObjectType'
-        - $ref: '#/components/parameters/AuditProjectId'
         - $ref: '#/components/parameters/AuditFrom'
         - $ref: '#/components/parameters/AuditTo'
       responses:
@@ -9405,9 +9408,10 @@ components:
       required: false
       description: >-
         Exact project tag of the audit row. Only project-tagged actions recorded since the tag was introduced
-        match; earlier rows and organization-level actions never do. An id that is unknown or belongs to
-        another org answers an empty page, not 404; a present but non-uuid value is 422 with
-        `details[].path` = `project_id`.
+        match; earlier rows and organization-level actions never do, and not every project action carries the
+        tag yet, so an empty or short result does not prove nothing happened. An id that is unknown or belongs
+        to another org answers an empty page, not 404; a present value that is empty or not a uuid is 422
+        `request_invalid` with `details[].path` = `project_id`; an absent one applies no filter.
       schema:
         type: string
         format: uuid
@@ -9617,10 +9621,13 @@ components:
       in: query
       required: false
       description: >-
-        Inclusive lower bound on `run.created_at` as an RFC 3339 date-time: a run
-        created exactly at `since` is counted, one created a tick earlier is not.
-        Absent means now minus 30 days. A present value that is blank or not a
-        date-time is 422 `request_invalid` with `details[].path` = `since`.
+        Inclusive lower bound on `run.created_at` as an RFC 3339 date-time with seconds and an explicit
+        offset (`Z` or `±hh:mm`, at most seven fraction digits): a run created exactly at `since` is counted,
+        one created a tick earlier is not. The bound is compared at PostgreSQL's microsecond precision, rounded
+        up to the next whole microsecond, so a `since` between two stored instants excludes the earlier run; the
+        response echoes the requested value. Absent means now minus 30 days. A present value that is blank, a
+        bare date, a time alone, without an offset or not a date-time is 422 `request_invalid` with
+        `details[].path` = `since`.
       schema:
         type: string
         format: date-time
@@ -10996,8 +11003,9 @@ components:
           type: string
           format: date-time
           description: >-
-            The inclusive lower bound on the run's `created_at` that was applied:
-            the request's `since`, or now minus 30 days when it was absent.
+            The inclusive lower bound on the run's `created_at` that was applied: the request's `since` as
+            sent (the scan compares it rounded up to the next whole microsecond), or now minus 30 days when it
+            was absent.
         pass:
           type: integer
           minimum: 0
