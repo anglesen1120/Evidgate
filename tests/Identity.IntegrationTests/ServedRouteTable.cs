@@ -631,6 +631,7 @@ internal static class RouteRequests
             new(HttpMethod.Delete, $"/v1/orgs/{ctx.OrgId}/memberships/{ctx.MembershipId}/roles/{ctx.RoleId}", IfMatch: "\"1\""));
 
         // ---- Identity ----------------------------------------------------------------------------------------
+        Add("GET", "/v1/me/permissions", _ => new(HttpMethod.Get, "/v1/me/permissions"));
         Add("GET", "/v1/permissions", _ => new(HttpMethod.Get, "/v1/permissions"));
         Add("GET", "/v1/roles", _ => new(HttpMethod.Get, "/v1/roles"));
         Add("POST", "/v1/roles", _ => new(HttpMethod.Post, "/v1/roles",
