@@ -114,12 +114,7 @@ public sealed class HealingLlmGatewayEgressTests
         var (db, scopes) = Database();
         using var cancel = new CancellationTokenSource();
         var provider = new SpyProvider();
-        var pipeline = Substitute.For<IRedactionPipeline>();
-        pipeline.Redact(Arg.Any<string>()).Returns(call =>
-        {
-            cancel.Cancel();
-            return new RedactionPipeline().Redact(call.Arg<string>());
-        });
+        var pipeline = new CountingPipeline(cancel.Cancel);
         var gateway = Gateway(db, scopes, provider, pipeline, HealingAvailability.Shadow);
 
         await Should.ThrowAsync<OperationCanceledException>(
@@ -146,8 +141,7 @@ public sealed class HealingLlmGatewayEgressTests
             Task.FromResult(new HealingLlmResult(HealingLlmStatuses.Ok, """{"answer":1}""", 6, 0.02m)));
         var payload = "password=" + Password;
         var outcome = new RedactionPipeline().Redact(payload);
-        var pipeline = Substitute.For<IRedactionPipeline>();
-        pipeline.Redact(payload).Returns(outcome);
+        var pipeline = new CountingPipeline();
         var gateway = Gateway(db, scopes, provider, pipeline, HealingAvailability.Shadow);
         var request = Request(payload) with { ResponseSchema = """{"type":"object","required":["answer"]}""" };
 
@@ -155,7 +149,7 @@ public sealed class HealingLlmGatewayEgressTests
 
         result.IsSuccess.ShouldBeTrue(result.Error?.Message);
         result.Value!.Result.Status.ShouldBe(HealingLlmStatuses.Ok);
-        pipeline.Received(1).Redact(Arg.Any<string>());
+        pipeline.Calls.ShouldBe(1);
         await provider.Received(2).InvokeAsync(
             Arg.Is<HealingLlmRequest>(sent => sent.Payload == outcome.Text), Arg.Any<CancellationToken>());
         var rows = AttemptRows(db);
@@ -166,6 +160,21 @@ public sealed class HealingLlmGatewayEgressTests
         rows[1].Value("status").ShouldBe(HealingLlmStatuses.Ok);
         rows[0].Value("report_hash").ShouldBe(RedactionReport.HashOf(outcome.Report.ToJson()));
         rows[1].Value("report_hash").ShouldBe(rows[0].Value("report_hash"));
+    }
+
+    /// <summary>A real pipeline that counts calls and can run a hook first (the interface is internal, so no proxy).</summary>
+    private sealed class CountingPipeline(Action? beforeRedact = null) : IRedactionPipeline
+    {
+        private readonly RedactionPipeline _inner = new();
+
+        public int Calls { get; private set; }
+
+        public RedactionOutcome Redact(string payload)
+        {
+            Calls++;
+            beforeRedact?.Invoke();
+            return _inner.Redact(payload);
+        }
     }
 
     [Fact]

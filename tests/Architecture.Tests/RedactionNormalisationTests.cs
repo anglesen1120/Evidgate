@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using Evidgate.Modules.Healing.Application;
 using Shouldly;
@@ -18,6 +19,7 @@ public sealed class RedactionNormalisationTests
     private static readonly string PemBody = string.Concat("MIIEvQIBADANBgkq", "hkiG9w0BAQEFAASC");
     private static readonly string SessionPair = string.Concat("sessionid=", "Q7w8E9r0T1y2U3i4");
     private static readonly RedactionPipeline Pipeline = new();
+    private static readonly RedactionPipeline UntimedPipeline = new(new FrozenClock());
 
     public static TheoryData<string, string, string> Evasions => new()
     {
@@ -49,18 +51,20 @@ public sealed class RedactionNormalisationTests
         get
         {
             var data = new TheoryData<int>();
+            // Both ends of every range, and a middle one where a range is wide; the supplementary rows are the tag
+            // block and the variation selectors supplement, which a char-wise scan never sees.
             var codePoints = Enumerable.Range(0x200B, 5)
                 .Concat(Enumerable.Range(0x202A, 5))
                 .Concat(Enumerable.Range(0x2060, 5))
-                .Concat(Enumerable.Range(0x2066, 4));
+                .Concat(Enumerable.Range(0x2066, 4))
+                .Concat([0x00AD, 0x034F, 0x061C, 0x115F, 0x1160, 0x17B4, 0x17B5])
+                .Concat([0x180B, 0x180C, 0x180D, 0x180E, 0x3164, 0xFE00, 0xFE08, 0xFE0F, 0xFEFF, 0xFFA0])
+                .Concat([0xE0001, 0xE0020, 0xE0041, 0xE007F, 0xE0100, 0xE0180, 0xE01EF, 0x1D173]);
             foreach (var codePoint in codePoints)
             {
                 data.Add(codePoint);
             }
 
-            data.Add(0x00AD);
-            data.Add(0x180E);
-            data.Add(0xFEFF);
             return data;
         }
     }
@@ -85,7 +89,7 @@ public sealed class RedactionNormalisationTests
     [MemberData(nameof(InvisibleCharacters))]
     public void Redact_InvisibleCharacterInsideCredentialKeyword_BlocksEgress(int codePoint)
     {
-        var invisible = ((char)codePoint).ToString();
+        var invisible = char.ConvertFromUtf32(codePoint);
         var benign = "docu" + invisible + "ment=" + Value;
         var control = Pipeline.Redact(benign);
         control.Blocked.ShouldBeFalse();
@@ -96,6 +100,65 @@ public sealed class RedactionNormalisationTests
         outcome.Blocked.ShouldBeTrue();
         outcome.Text.ShouldBeEmpty();
         outcome.Report.Findings.ShouldContain(finding => finding.RuleId == "residual_normalised");
+    }
+
+    [Fact]
+    public void Redact_EveryFormatCharacterInsideCredentialKeyword_BlocksEgress()
+    {
+        var missed = new List<int>();
+        for (var codePoint = 0; codePoint <= 0x10FFFF; codePoint++)
+        {
+            if (codePoint is >= 0xD800 and <= 0xDFFF
+                || CharUnicodeInfo.GetUnicodeCategory(codePoint) != UnicodeCategory.Format)
+            {
+                continue;
+            }
+
+            var outcome = Pipeline.Redact("pass" + char.ConvertFromUtf32(codePoint) + "word=" + Value);
+            if (!outcome.Blocked || outcome.Text.Length != 0)
+            {
+                missed.Add(codePoint);
+            }
+        }
+
+        missed.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void Redact_LoneSurrogateBesideInvisibleCharacter_StillBlocksEgress()
+    {
+        var outcome = Pipeline.Redact("\uD800pass\u200Bword=" + Value);
+
+        outcome.Blocked.ShouldBeTrue();
+        outcome.Text.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void Redact_ThreeThousandBenignBase64ShapedTokens_AreNotBlocked()
+    {
+        var payload = Tokens(Enumerable.Range(0, 3000)
+            .Select(index => Convert.ToBase64String(Encoding.ASCII.GetBytes("n" + index.ToString("D5", CultureInfo.InvariantCulture)))));
+
+        var outcome = UntimedPipeline.Redact(payload);
+
+        outcome.Blocked.ShouldBeFalse();
+        outcome.Text.ShouldBe(payload);
+        outcome.Report.Findings.ShouldBeEmpty();
+    }
+
+    [Theory]
+    [InlineData(4096, false)]
+    [InlineData(4097, true)]
+    [InlineData(5000, true)]
+    public void Redact_DecodableTokensAgainstTheWindowBudget_BlockOnlyBeyondTheCap(int count, bool blocked)
+    {
+        var payload = Tokens(Enumerable.Repeat(Convert.ToBase64String("abcdef"u8), count));
+
+        var outcome = UntimedPipeline.Redact(payload);
+
+        outcome.Blocked.ShouldBe(blocked);
+        outcome.Text.ShouldBe(blocked ? string.Empty : payload);
+        outcome.Report.Findings.Any(finding => finding.RuleId == "residual_scan_truncated").ShouldBe(blocked);
     }
 
     [Theory]
@@ -184,6 +247,14 @@ public sealed class RedactionNormalisationTests
         outcome.Blocked.ShouldBeFalse();
         outcome.Text.ShouldBe(payload);
         outcome.Report.Findings.ShouldBeEmpty();
+    }
+
+    private static string Tokens(IEnumerable<string> tokens) => string.Join(' ', tokens);
+
+    // The decode budget is the subject of these tests, not the 10 s deadline, which a loaded host could trip.
+    private sealed class FrozenClock : TimeProvider
+    {
+        public override long GetTimestamp() => 0;
     }
 
     private static string Fullwidth(string ascii) =>

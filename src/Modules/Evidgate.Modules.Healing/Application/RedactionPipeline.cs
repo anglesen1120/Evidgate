@@ -44,7 +44,10 @@ internal sealed partial class RedactionPipeline(TimeProvider clock) : IRedaction
 
     private const string BlockStart = "<<<EVG-DATA ";
     private const int MaxVariantDepth = 2;
-    private const int MaxBase64TokensPerWindow = 256;
+
+    // A 64K window holds at most about 8,000 base64-shaped tokens of seven characters or more; ordinary dense markup
+    // and identifier lists decode far fewer to valid UTF-8, so only a window built to exhaust the budget reaches it.
+    private const int MaxBase64TokensPerWindow = 4096;
     private const int SeamReach = 256;
     private const int MaxSeamAttempts = 16;
 
