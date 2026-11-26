@@ -25,7 +25,7 @@ public sealed class IncidentStateTests
         incident.State.ShouldBe(IncidentState.Open);
         incident.ContextState.ShouldBe(IncidentContextState.Pending);
 
-        incident.Triage("product defect").IsSuccess.ShouldBeTrue();
+        incident.Triage("product_defect").IsSuccess.ShouldBeTrue();
         incident.State.ShouldBe(IncidentState.Triaged);
         incident.ContextState.ShouldBe(IncidentContextState.Pending);
         incident.Close().IsSuccess.ShouldBeTrue();
@@ -46,16 +46,33 @@ public sealed class IncidentStateTests
     }
 
     [Theory]
+    [InlineData("product_defect")]
+    [InlineData("test_drift")]
+    [InlineData("environment")]
+    [InlineData("data_issue")]
+    [InlineData("unknown")]
+    public void Triage_AllowedLabel_MovesToTriaged(string label)
+    {
+        var incident = Open();
+        incident.Triage(label).IsSuccess.ShouldBeTrue();
+        incident.State.ShouldBe(IncidentState.Triaged);
+    }
+
+    [Theory]
     [InlineData(null)]
     [InlineData("")]
     [InlineData(" \t")]
-    public void Triage_BlankLabel_RefusesWithoutChangingState(string? label)
+    [InlineData("banana")]
+    [InlineData("Product_Defect")]
+    [InlineData("product defect")]
+    [InlineData("unknown ")]
+    public void Triage_InvalidLabel_RefusesWithoutChangingState(string? label)
     {
         var incident = Open();
         incident.Triage(label).Error.ShouldNotBeNull().Code.ShouldBe(ApiErrorCode.RequestInvalid);
         incident.State.ShouldBe(IncidentState.Open);
         incident.ContextState.ShouldBe(IncidentContextState.Pending);
-        incident.Triage("product defect").IsSuccess.ShouldBeTrue();
+        incident.Triage("product_defect").IsSuccess.ShouldBeTrue();
     }
 
     [Fact]
@@ -65,13 +82,13 @@ public sealed class IncidentStateTests
         incident.SettleContext(IncidentContextState.Partial).IsSuccess.ShouldBeTrue();
         incident.Close().Error.ShouldNotBeNull().Code.ShouldBe(ApiErrorCode.InvalidTransition);
         incident.State.ShouldBe(IncidentState.Open);
-        incident.Triage("product defect").IsSuccess.ShouldBeTrue();
-        incident.Triage("product defect").Error.ShouldNotBeNull().Code.ShouldBe(ApiErrorCode.InvalidTransition);
+        incident.Triage("product_defect").IsSuccess.ShouldBeTrue();
+        incident.Triage("product_defect").Error.ShouldNotBeNull().Code.ShouldBe(ApiErrorCode.InvalidTransition);
         incident.State.ShouldBe(IncidentState.Triaged);
         incident.Close().IsSuccess.ShouldBeTrue();
         incident.Close().Error.ShouldNotBeNull().Code.ShouldBe(ApiErrorCode.InvalidTransition);
         incident.State.ShouldBe(IncidentState.Closed);
-        incident.Triage("product defect").Error.ShouldNotBeNull().Code.ShouldBe(ApiErrorCode.InvalidTransition);
+        incident.Triage("product_defect").Error.ShouldNotBeNull().Code.ShouldBe(ApiErrorCode.InvalidTransition);
         incident.State.ShouldBe(IncidentState.Closed);
         incident.ContextState.ShouldBe(IncidentContextState.Partial);
     }

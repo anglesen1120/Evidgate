@@ -16,12 +16,12 @@ namespace Evidgate.BuildingBlocks.Persistence.Tasks;
 /// parameterised (00 §5.7 S1) with the array's PostgreSQL type stated by the
 /// caller rather than guessed from the CLR type.
 /// </remarks>
-internal sealed class TextArrayParameter : SqlMapper.ICustomQueryParameter
+public sealed class TextArrayParameter : SqlMapper.ICustomQueryParameter
 {
     private readonly string[] _values;
 
     /// <summary>Wraps the values of one <c>text[]</c> parameter.</summary>
-    internal TextArrayParameter(string[] values)
+    public TextArrayParameter(string[] values)
     {
         ArgumentNullException.ThrowIfNull(values);
         _values = values;

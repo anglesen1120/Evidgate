@@ -48,8 +48,9 @@ internal sealed class FrozenIncidentFailuresReader(ITenantDb db, ITenantScopeAcc
         return new(header.ProjectId, attempts, frameworks);
     }
 
-    // Classify by the latest admitted attempt before selecting failed retries: filtering failed attempts first
-    // would reopen a recovered execution. Older freezes must not see attempts that arrived later.
+    // Same boundary as the evaluator's FrozenEvidenceSql (created_at <= revision created_at, a transaction-start stamp):
+    // a late commit with an earlier stamp joins the revision, costing a retry row, never a second incident per key.
+    // Classify by the latest admitted attempt first, or a recovered execution would reopen.
     private const string FailingRequiredAttempts = """
         select execution_key as "ExecutionKey", id as "AttemptId", attempt_no as "AttemptNo",
                normalized_status as "Result", case_id as "CaseId", case_revision_id as "CaseRevisionId"

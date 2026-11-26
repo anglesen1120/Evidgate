@@ -1,4 +1,5 @@
 using Evidgate.Modules.Catalog.Contracts;
+using Evidgate.Modules.Evidence.Contracts;
 using Evidgate.Modules.Healing.Application;
 using Evidgate.Modules.Orchestrator.Contracts;
 using Shouldly;
@@ -63,6 +64,52 @@ public sealed partial class IncidentRecordingTests(PostgresTenancyFixture fixtur
     }
 
     [Fact]
+    public async Task Earlier_Admission_Transaction_Committed_After_Freeze_Attaches_Retry_Only_Once()
+    {
+        await using var world = await StartAsync(1);
+        await AttemptAsync(world, 0, 1, "failed");
+        await using var late = await TenantScope.BeginAsync(fixture.OwnerConnectionString(world.Database), world.Org);
+        await FreezeAsync(world, 1);
+        (await RecordAsync(world, 1)).ShouldBe(1);
+        var retry = await InsertAttemptAsync(late, world, 0, 2, "error");
+        await late.CommitAsync();
+
+        await AssertReadersAgreeAsync(world, "error");
+        (await RecordAsync(world, 1)).ShouldBe(1);
+        (await RecordAsync(world, 1)).ShouldBe(0);
+        (await CountAsync(world, "incident")).ShouldBe(1);
+        (await CountAsync(world, "incident_attempt", $"attempt_id='{retry}'")).ShouldBe(1);
+        (await EventsAsync(world)).ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task Earlier_Freeze_Transaction_Excludes_Attempt_Committed_Before_Revision_Insert()
+    {
+        await using var world = await StartAsync(1);
+        await using var freeze = await TenantScope.BeginAsync(fixture.OwnerConnectionString(world.Database), world.Org);
+        await AttemptAsync(world, 0, 1, "failed");
+        await InsertFreezeAsync(freeze, world, 1);
+        await freeze.CommitAsync();
+
+        await AssertReadersAgreeAsync(world, null);
+        (await RecordAsync(world, 1)).ShouldBe(0);
+        await FreezeAsync(world, 2);
+        (await RecordAsync(world, 2)).ShouldBe(1);
+    }
+
+    private static async Task AssertReadersAgreeAsync(World world, string? status)
+    {
+        await using var scope = await ContractScope.BeginAsync(world.Api, world.Org);
+        var evaluated = await scope.Resolve<IFrozenEvidence>().GetFrozenInputAsync(world.Org, world.Plan.RunId, 1, Ct);
+        var failures = await scope.Resolve<IFrozenIncidentFailures>().ReadAsync(world.Plan.RunId, 1, Ct);
+        var latest = failures.ShouldNotBeNull().Attempts.GroupBy(row => row.ExecutionKey)
+            .Select(group => new FrozenAttemptStatus(group.Key, group.MaxBy(row => row.AttemptNo)!.Result)).ToArray();
+        var expected = status is null ? Array.Empty<FrozenAttemptStatus>() : [new(world.Plan.Executions[0].ExecutionKey, status)];
+        evaluated.ShouldNotBeNull().Attempts.ToArray().ShouldBe(expected);
+        latest.ShouldBe(expected);
+    }
+
+    [Fact]
     public async Task Replay_Run_Creates_No_Incident()
     {
         await using var world = await StartAsync(1);
@@ -104,9 +151,13 @@ public sealed partial class IncidentRecordingTests(PostgresTenancyFixture fixtur
             await AttemptAsync(world, index, 1, "failed");
         }
 
+        await AttemptAsync(world, 0, 2, "error");
+        await AttemptAsync(world, 1, 2, "timed_out");
         await FreezeAsync(world, 1);
         world.Api.Statements.Clear();
-        (await RecordAsync(world, 1)).ShouldBe(5);
+        (await RecordAsync(world, 1)).ShouldBe(7);
+        (await CountAsync(world, "incident", "engine = 'playwright'")).ShouldBe(5);
+        (await CountAsync(world, "incident_attempt", "(attempt_no, result) in ((2, 'error'), (2, 'timed_out'))")).ShouldBe(2);
         var statements = world.Api.Statements.Snapshot();
         var insert = statements.Single(s => s.Contains("insert into public.incident (", StringComparison.OrdinalIgnoreCase));
         insert.ShouldContain("unnest(");

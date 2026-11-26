@@ -101,9 +101,9 @@ internal sealed class Incident
             return Refuse($"a {State} incident cannot be triaged");
         }
 
-        if (string.IsNullOrWhiteSpace(label))
+        if (label is not ("product_defect" or "test_drift" or "environment" or "data_issue" or "unknown"))
         {
-            return Result.Failure(Error.Invalid("a triage label is required"));
+            return Result.Failure(Error.Invalid("a recognized triage label is required"));
         }
 
         State = IncidentState.Triaged;
