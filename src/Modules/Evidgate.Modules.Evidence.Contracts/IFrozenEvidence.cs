@@ -9,7 +9,8 @@ namespace Evidgate.Modules.Evidence.Contracts;
 /// The attempt half is the set-based form of "the latest attempt this revision saw": for every execution key of the run
 /// that has an attempt created at or before the revision's own <c>created_at</c>, the status of the attempt with the
 /// highest <c>attempt_no</c>. An execution whose attempts all postdate the freeze has no entry, which is how the caller
-/// tells "no evidence" from "evidence that arrived late".
+/// tells "no evidence" from "evidence that arrived late". The same statement also returns the whole admitted history
+/// (<see cref="FrozenEvidenceInput.AttemptHistory"/>), so a caller can see that an execution failed before it passed.
 /// </para>
 /// </summary>
 public interface IFrozenEvidence
@@ -26,12 +27,19 @@ public interface IFrozenEvidence
     ValueTask<FrozenEvidenceInput?> GetFrozenInputAsync(Guid orgId, Guid runId, int revisionNo, CancellationToken cancellationToken);
 }
 
-/// <summary>One frozen revision and the attempt statuses it admits.</summary>
+/// <summary>One frozen revision and the attempts it admits.</summary>
 /// <param name="Revision">The revision row.</param>
 /// <param name="Attempts">The status of the latest admitted attempt per execution key, ordered by
 /// <see cref="FrozenAttemptStatus.ExecutionKey"/> ordinally; keys whose every attempt postdates the revision's
 /// <c>created_at</c> are absent, never reported with a guessed status.</param>
-public sealed record FrozenEvidenceInput(FrozenEvidenceRevision Revision, IReadOnlyList<FrozenAttemptStatus> Attempts);
+public sealed record FrozenEvidenceInput(FrozenEvidenceRevision Revision, IReadOnlyList<FrozenAttemptStatus> Attempts)
+{
+    /// <summary>
+    /// Every admitted attempt (created at or before the revision's <c>created_at</c>), ordered by execution key and then
+    /// by attempt number ascending; empty when no attempt is admitted.
+    /// </summary>
+    public IReadOnlyList<FrozenAttemptRecord> AttemptHistory { get; init; } = [];
+}
 
 /// <summary>The frozen revision an evaluation judges: its number, the reconciler's completeness and gaps, and its stamp.</summary>
 /// <param name="RevisionNo">The <c>revision_no</c>, <c>&gt;= 1</c>.</param>
@@ -50,3 +58,9 @@ public sealed record FrozenEvidenceRevision(
 /// <param name="ExecutionKey">The planned execution's key, the 64 lowercase hex the run planned.</param>
 /// <param name="Status"><c>passed</c>, <c>failed</c>, <c>skipped</c>, <c>timed_out</c>, <c>error</c> or <c>blocked</c>.</param>
 public sealed record FrozenAttemptStatus(string ExecutionKey, string Status);
+
+/// <summary>One admitted attempt of one execution, the unit the in-run flaky detection reads.</summary>
+/// <param name="ExecutionKey">The planned execution's key, the 64 lowercase hex the run planned.</param>
+/// <param name="AttemptNo">The attempt number, <c>&gt;= 1</c>.</param>
+/// <param name="Status"><c>passed</c>, <c>failed</c>, <c>skipped</c>, <c>timed_out</c>, <c>error</c> or <c>blocked</c>.</param>
+public sealed record FrozenAttemptRecord(string ExecutionKey, int AttemptNo, string Status);

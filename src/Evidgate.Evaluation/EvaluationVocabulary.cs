@@ -91,8 +91,8 @@ public enum CaseStatus
 
 /// <summary>
 /// The closed <c>reasons[]</c> catalogue of an evaluation: codes only, never report text, artifact content or a
-/// producer value. The core computation emits most members; <see cref="FlakyBudgetExceeded"/> is reserved for the
-/// flaky layer the contract names, which may only downgrade a pass.
+/// producer value. The core computation emits most members; the flaky members come from the flaky budget step, which
+/// may only fail a critical retry recovery or downgrade a pass.
 /// </summary>
 public enum EvaluationReason
 {
@@ -141,7 +141,7 @@ public enum EvaluationReason
     /// <summary>The policy requires an artifact kind outside the closed kind list: a policy defect.</summary>
     UnknownRequiredArtifactKind = 13,
 
-    /// <summary>Reserved for the flaky layer: a non-critical retry flip exceeded the policy's budget.</summary>
+    /// <summary>A non-critical retry flip exceeded the policy's budget.</summary>
     FlakyBudgetExceeded = 14,
 
     /// <summary>The run is advisory-only (a fork run): complete evidence is held at inconclusive and never passes.</summary>
@@ -152,4 +152,10 @@ public enum EvaluationReason
 
     /// <summary>A required case that failed also holds an approved waiver; the waiver annotates and never passes it.</summary>
     WaiverApproved = 17,
+
+    /// <summary>A critical case failed and then passed on a retry; the recovery never launders the failure.</summary>
+    FlakyCriticalRetryPass = 18,
+
+    /// <summary>Non-critical retry flips stayed within the policy's flaky budget; the decision is untouched.</summary>
+    FlakyWithinBudget = 19,
 }

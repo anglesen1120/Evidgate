@@ -61,6 +61,10 @@ public sealed class RunCreationTests(PostgresTenancyFixture fixture, TenancyHost
     /// Extra registrations for that host — the task queue, when a suite drives the real consumer against the rows this
     /// host's requests wrote.
     /// </param>
+    /// <param name="maxRetries">
+    /// The suite revision's <c>retry_policy.max_retries</c>; null leaves the request without a policy, so the default of
+    /// no retries applies.
+    /// </param>
     internal static async Task<World> StartAsync(
         PostgresTenancyFixture fixture,
         int cases = 2,
@@ -68,7 +72,8 @@ public sealed class RunCreationTests(PostgresTenancyFixture fixture, TenancyHost
         string? database = null,
         IReadOnlyDictionary<string, string?>? configuration = null,
         Action<IServiceCollection>? services = null,
-        TenancyHostPool? hosts = null)
+        TenancyHostPool? hosts = null,
+        int? maxRetries = null)
     {
         var started = await BeginAsync(fixture, slug, database, configuration, services, hosts);
         var api = started.Api;
@@ -86,7 +91,9 @@ public sealed class RunCreationTests(PostgresTenancyFixture fixture, TenancyHost
                 HttpMethod.Post,
                 $"/v1/suites/{suite.Id()}/revisions",
                 admin,
-                new { members = revisions.Select(id => new { case_revision_id = id }).ToArray() },
+                maxRetries is { } retries
+                    ? (object)new { members = revisions.Select(id => new { case_revision_id = id }).ToArray(), retry_policy = new { max_retries = retries } }
+                    : new { members = revisions.Select(id => new { case_revision_id = id }).ToArray() },
                 NewKey());
             revision.Status.ShouldBe(HttpStatusCode.Created, revision.ErrorMessage);
 

@@ -1287,3 +1287,9 @@ target)` and `session_revoke_audit_append(org, actor, object_type, object_id, me
 
 - `0125` drops `public.incident_list` (created by `0123`; the `0123` file is unchanged and its `incident_project_state_list` index stays). The role-and-privilege scan admits an `evidgate_app`-readable view only with `security_barrier = true`, and a barrier view stays a subquery scan, so the state-filtered keyset page sorted instead of streaming from `incident_project_state_list`.
 - `evidgate_app` already holds `SELECT` on `incident` and `incident_attempt` (`0122`), so the list statements read `incident` directly under FORCE RLS with an explicit `org_id` predicate and compute `attempt_count` inline. No grant, index, policy or trigger changes. Locks: `ACCESS EXCLUSIVE` on the view for one `drop view`, under a 5 s `lock_timeout`.
+
+## Notes on the evaluation flaky reasons (`0128`)
+
+- `0128` replaces `evaluation_reasons_check` with the closed list of `0124` plus `flaky_critical_retry_pass` and `flaky_within_budget` (CASE shape of `0059`, one dimension, no NULL element). No column is added: flaky facts are an in-memory input of the verdict and are not stored.
+- No grant, index, policy or trigger changes: `evidgate_app` keeps table-level `SELECT` + `INSERT` on `evaluation`, and no UPDATE or DELETE path exists. Existing rows hold only old tokens, so the check validates in place.
+- Locks: `ACCESS EXCLUSIVE` on `evaluation` for one `alter table` statement (the drop and the add, one scan of the table) in one transaction under a 5 s `lock_timeout`; the table is insert-only and grows one row per evaluation. Numbers `0126` and `0127` belong to sibling changes. Deploy: the migrator before the worker that stores the new reasons. Rollback: restore the `0124` reason list (only valid while no stored row holds a new token).

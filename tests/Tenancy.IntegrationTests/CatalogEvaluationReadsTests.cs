@@ -59,18 +59,19 @@ public sealed class CatalogEvaluationReadsTests
         EvaluationPlanSeeder.SeedAsync(_fixture, world.Database, org ?? world.Org, executions);
 
     /// <summary>A committed second revision of the plan's suite that declares no member at all.</summary>
-    private async Task<Guid> InsertEmptyRevisionAsync(World world, EvaluationPlanSeeder.Plan plan)
+    private async Task<Guid> InsertEmptyRevisionAsync(World world, EvaluationPlanSeeder.Plan plan, string retryPolicy)
     {
         var revisionId = Guid.CreateVersion7();
         await using var owner = await TenantScope.BeginAsync(_fixture.OwnerConnectionString(world.Database));
         (await owner.ExecuteAsync(
             """
             insert into public.suite_revision (id, org_id, suite_id, revision_no, revision_hash, shard_strategy, retry_policy)
-            values (@id, @org_id, @suite_id, 2, @hash, '{}', '{}')
+            values (@id, @org_id, @suite_id, 2, @hash, '{}', @retry_policy::jsonb)
             """,
             ("id", revisionId),
             ("org_id", world.Org),
             ("suite_id", plan.SuiteId),
+            ("retry_policy", retryPolicy),
             ("hash", "sha256:" + new string('d', 64)))).ShouldBe(1);
         await owner.CommitAsync();
 
@@ -84,12 +85,15 @@ public sealed class CatalogEvaluationReadsTests
 
     // ------------------------------------------------------------------ GetEvaluationSuiteAsync
 
-    [Fact]
-    public async Task GetEvaluationSuiteAsync_ReturnsTheSlugAndWhetherTheRevisionDeclaresNoMember()
+    [Theory]
+    [InlineData("{}", 0)]
+    [InlineData("""{"max_retries":2}""", 2)]
+    [InlineData("""{"max_retries":-1}""", 0)]
+    public async Task GetEvaluationSuiteAsync_ReturnsPinnedSuiteFacts(string retryPolicy, int expectedRetries)
     {
         await using var world = await StartAsync();
         var plan = await SeedPlanAsync(world, 2);
-        var emptyRevision = await InsertEmptyRevisionAsync(world, plan);
+        var emptyRevision = await InsertEmptyRevisionAsync(world, plan, retryPolicy);
 
         await using var caller = await ContractScope.BeginAsync(world.Api, world.Org);
         var contracts = caller.Resolve<ICatalogContracts>();
@@ -98,12 +102,14 @@ public sealed class CatalogEvaluationReadsTests
         seeded.ShouldNotBeNull();
         seeded.SuiteKey.ShouldBe(plan.SuiteSlug);
         seeded.DeclaredEmpty.ShouldBeFalse();
+        seeded.MaxRetries.ShouldBe(0, "the seeded revision's policy is max_retries 0, not the other revision's");
 
         // The mutation this pins: dropping the `not exists suite_member` probe answers false for the empty revision too.
         var empty = await contracts.GetEvaluationSuiteAsync(world.Org, emptyRevision, TestContext.Current.CancellationToken);
         empty.ShouldNotBeNull();
         empty.SuiteKey.ShouldBe(plan.SuiteSlug);
         empty.DeclaredEmpty.ShouldBeTrue();
+        empty.MaxRetries.ShouldBe(expectedRetries);
 
         (await contracts.GetEvaluationSuiteAsync(world.Org, Guid.CreateVersion7(), TestContext.Current.CancellationToken))
             .ShouldBeNull();

@@ -106,8 +106,12 @@ internal sealed class EvaluationInputReader(
             .ConfigureAwait(false);
         var revision = frozen.Revision;
         var policy = await RequirePolicyAsync(orgId, policyRevisionId, cancellationToken).ConfigureAwait(false);
-        var results = await ResultsAsync(orgId, frozen.Attempts, plan.Executions, cancellationToken)
-            .ConfigureAwait(false);
+        // One catalogue read names the case behind every planned revision; results and attempt history both use it.
+        var cases = await catalog.GetEvaluationCasesAsync(
+            orgId,
+            CaseRevisionIdsOf(plan.Executions),
+            cancellationToken).ConfigureAwait(false);
+        var results = Results(cases, frozen.Attempts, plan.Executions);
 
         var evidence = new EvidenceRevisionInput(
             plan.PlannedCount,
@@ -123,6 +127,8 @@ internal sealed class EvaluationInputReader(
                 .ToArray())
         {
             AdvisoryOnly = plan.IsFork,
+            Attempts = AttemptHistory(cases, frozen.AttemptHistory, plan.Executions),
+            MaxRetries = suite.MaxRetries,
         };
 
         return new LoadedEvaluationInputs(
@@ -187,17 +193,11 @@ internal sealed class EvaluationInputReader(
     /// catalogue cannot resolve, is left out on purpose: the evaluator derives <c>missing_result</c> from the planned
     /// count it was given, so a synthesised row here would report a decision the evidence never made.
     /// </summary>
-    private async ValueTask<ResultRow[]> ResultsAsync(
-        Guid orgId,
+    private static ResultRow[] Results(
+        IReadOnlyDictionary<Guid, EvaluationCaseIdentity> cases,
         IReadOnlyList<FrozenAttemptStatus> attempts,
-        IReadOnlyList<EvaluationPlannedExecution> executions,
-        CancellationToken cancellationToken)
+        IReadOnlyList<EvaluationPlannedExecution> executions)
     {
-        var cases = await catalog.GetEvaluationCasesAsync(
-            orgId,
-            CaseRevisionIdsOf(executions),
-            cancellationToken).ConfigureAwait(false);
-
         // Keyed by the execution key, so a plan and a status list that arrive in any order still meet on the key.
         var statuses = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var attempt in attempts)
@@ -218,6 +218,37 @@ internal sealed class EvaluationInputReader(
                         execution.Required)
                     : null)
                 .OfType<ResultRow>(),
+        ];
+    }
+
+    /// <summary>
+    /// Every admitted attempt of a planned execution, with the case it ran. An attempt whose execution is not in the
+    /// plan or whose case revision the catalogue cannot resolve is left out, like a result row: the detector can only
+    /// speak about a case it can name. An unknown stored status raises, as it does for results.
+    /// </summary>
+    private static Evidgate.Evaluation.CaseAttemptInput[] AttemptHistory(
+        IReadOnlyDictionary<Guid, EvaluationCaseIdentity> cases,
+        IReadOnlyList<FrozenAttemptRecord> history,
+        IReadOnlyList<EvaluationPlannedExecution> executions)
+    {
+        var caseOf = new Dictionary<string, Guid>(StringComparer.Ordinal);
+        foreach (var execution in executions)
+        {
+            if (cases.TryGetValue(execution.CaseRevisionId, out var identity))
+            {
+                caseOf[execution.ExecutionKey] = identity.CaseId;
+            }
+        }
+
+        return
+        [
+            .. history
+                .Where(attempt => caseOf.ContainsKey(attempt.ExecutionKey))
+                .Select(attempt => new Evidgate.Evaluation.CaseAttemptInput(
+                    attempt.ExecutionKey,
+                    caseOf[attempt.ExecutionKey],
+                    attempt.AttemptNo,
+                    CaseStatusOf(attempt.Status))),
         ];
     }
 

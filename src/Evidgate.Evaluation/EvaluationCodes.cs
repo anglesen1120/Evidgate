@@ -67,6 +67,8 @@ public static class EvaluationCodes
         EvaluationReason.AdvisoryOnlyRun => "advisory_only_run",
         EvaluationReason.QuarantinedCaseFailed => "quarantined_case_failed",
         EvaluationReason.WaiverApproved => "waiver_approved",
+        EvaluationReason.FlakyCriticalRetryPass => "flaky_critical_retry_pass",
+        EvaluationReason.FlakyWithinBudget => "flaky_within_budget",
         _ => throw new ArgumentOutOfRangeException(nameof(value), value, "not a reason code"),
     };
 

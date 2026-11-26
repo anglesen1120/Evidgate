@@ -42,4 +42,10 @@ public sealed record EvaluationResult(
     /// without duplicates; empty when none was.
     /// </summary>
     public IReadOnlyList<Guid> QuarantinedCases { get; init; } = [];
+
+    /// <summary>
+    /// The executions that passed only on a retry, ordered by execution key (ordinal); empty when there were none. They
+    /// are reported for inspection and are not persisted.
+    /// </summary>
+    public IReadOnlyList<FlakyFact> FlakyFacts { get; init; } = [];
 }
