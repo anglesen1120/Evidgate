@@ -41,6 +41,9 @@ public sealed class EvidenceKindDefaultsTests(PostgresTenancyFixture fixture, Se
     private const string Mp4Type = "video/mp4";
     private const string PngType = "image/png";
     private const string JpegType = "image/jpeg";
+    private const string WebpType = "image/webp";
+    private const string PdfType = "application/pdf";
+    private const string DocxType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
     private const string XmlType = "application/xml";
     private const string TextXmlType = "text/xml";
     private const string JsonType = "application/json";
@@ -52,13 +55,15 @@ public sealed class EvidenceKindDefaultsTests(PostgresTenancyFixture fixture, Se
     /// </summary>
     private sealed record DefaultKind(string Kind, long Cap, string[] MediaTypes, string Sensitivity, string RefusedMediaType);
 
-    /// <summary>The four kinds with a static default, with the published numbers (not read back from the code).</summary>
+    /// <summary>The six kinds with a static default, with the published numbers (not read back from the code).</summary>
     private static readonly DefaultKind[] Defaults =
     [
         new("trace", 100L * 1024 * 1024, [ZipType], "sensitive", Mp4Type),
         new("video", 200L * 1024 * 1024, [Mp4Type], "normal", ZipType),
         new("screenshot", 10L * 1024 * 1024, [PngType, JpegType], "normal", "image/gif"),
         new("raw_report", 256L * 1024 * 1024, [XmlType, TextXmlType, JsonType, HtmlType, ZipType], "normal", PngType),
+        new("requirement_document", 25L * 1024 * 1024, [DocxType, PdfType], "sensitive", ZipType),
+        new("requirement_image", 10L * 1024 * 1024, [PngType, JpegType, WebpType], "sensitive", "image/gif"),
     ];
 
     /// <summary>The four 00 §7 kinds D-A9 fixes no cap for: they keep the fail-closed refusal (06.1.2-T3.1).</summary>

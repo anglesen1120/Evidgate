@@ -63,6 +63,12 @@ public static class ContractSchemaKeys
     /// <c>x-max-bytes</c>; the 5 MiB cap belongs to the route (plan 13.1.1 §8).
     /// </summary>
     public const string AuthoringImport = "authoring-import.v1";
+
+    /// <summary>
+    /// <c>contracts/schemas/authoring-generation-intake.v1.json</c> — the body of the requirement intake route: one
+    /// closed member set per <c>kind</c>, capped at 1 MiB by <c>x-max-bytes</c>.
+    /// </summary>
+    public const string AuthoringGenerationIntake = "authoring-generation-intake.v1";
 }
 
 /// <summary>

@@ -21,6 +21,9 @@ internal sealed class ParsingService : IParsing
     /// </summary>
     public const long DefaultMaxReportCases = 150_000;
 
+    /// <summary>The outer archive is depth 1, so a limit of 1 refuses every entry that is itself a zip.</summary>
+    private const int NoNestedArchives = 1;
+
     private readonly long maxReportCases;
 
     /// <summary>The profile with the published default entry cap — the child's construction path, which reads no options.</summary>
@@ -50,9 +53,9 @@ internal sealed class ParsingService : IParsing
     /// <summary>
     /// Reads the caller-selected entries of one archive (13.1.1-T5.2): the walk is the same one
     /// <see cref="EnumerateArchive"/> runs, with the caller's three size caps in place of
-    /// <see cref="ParsingLimits"/>' archive numbers. The two caps a caller may not state for itself — the
-    /// zip-in-zip nesting depth and the parse timeout — stay the profile's constants, so a format that states
-    /// 1 000 entries / 64 MiB / 20:1 (13.1.1 AC16) changes no other guard.
+    /// <see cref="ParsingLimits"/>' archive numbers. The parse timeout — and the zip-in-zip nesting depth, which a
+    /// caller can only tighten through <see cref="ArchiveCaps.RejectNestedArchives"/> — stay the profile's
+    /// constants, so a format that states 1 000 entries / 64 MiB / 20:1 (13.1.1 AC16) changes no other guard.
     /// </summary>
     /// <param name="content">The untrusted archive bytes; the caller keeps ownership of the stream.</param>
     /// <param name="maxBytes">The per-kind byte cap for the archive object itself.</param>
@@ -75,7 +78,7 @@ internal sealed class ParsingService : IParsing
             caps.MaxEntries,
             caps.MaxExpandedBytes,
             caps.MaxCompressionRatio,
-            ParsingLimits.MaxNesting,
+            caps.RejectNestedArchives ? NoNestedArchives : ParsingLimits.MaxNesting,
             ParsingLimits.ParseTimeout);
 
         return SafeZipArchive.ReadEntries(content, maxBytes, options, selectEntry, maxEntryBytes, cancellationToken);

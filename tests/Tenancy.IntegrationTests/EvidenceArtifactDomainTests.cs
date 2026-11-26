@@ -33,9 +33,12 @@ public sealed class EvidenceArtifactDomainTests
             scanState: scanState);
 
     [Fact]
-    public void ArtifactKind_All_IsTheEightValueContractList() =>
+    public void ArtifactKind_All_IsTheTenValueContractList() =>
         ArtifactKind.All.ShouldBe(
-            ["trace", "video", "screenshot", "raw_report", "dom_snapshot", "a11y_snapshot", "patch", "ui_hierarchy"]);
+        [
+            "trace", "video", "screenshot", "raw_report", "dom_snapshot", "a11y_snapshot", "patch", "ui_hierarchy",
+            "requirement_document", "requirement_image",
+        ]);
 
     [Theory]
     [InlineData("bogus")]

@@ -259,6 +259,35 @@ public sealed class SafeZipArchiveEntryReadTests
         ReasonOf(refused).ShouldBe(ParsingFailureReason.EntryCountExceeded);
     }
 
+    [Fact]
+    public void NestedArchive_RefusedOnlyWhenTheCallerAsksToRejectIt()
+    {
+        // The inner zip carries a non-zip name: the profile recognises it by its leading bytes, never its name.
+        var inner = CreateZip(("inner.txt", One));
+        var outer = CreateZip(("word/document.xml", One), ("media/blob.bin", inner));
+
+        var byDefault = Read(outer, Caps(), _ => true);
+
+        byDefault.IsSuccess.ShouldBeTrue(byDefault.Error?.Message);
+
+        var refused = Read(outer, Caps() with { RejectNestedArchives = true }, _ => true);
+
+        refused.IsSuccess.ShouldBeFalse();
+        refused.Error!.Code.ShouldBe(ParsingErrorCode.ArtifactInvalid);
+        ReasonOf(refused).ShouldBe(ParsingFailureReason.NestingExceeded);
+    }
+
+    [Fact]
+    public void RejectNestedArchives_PlainArchive_StillAccepted()
+    {
+        var plain = CreateZip(("word/document.xml", One), ("word/footnotes.xml", One));
+
+        var result = Read(plain, Caps() with { RejectNestedArchives = true }, _ => true);
+
+        result.IsSuccess.ShouldBeTrue(result.Error?.Message);
+        result.Value.Entries.Count.ShouldBe(2);
+    }
+
     /// <summary>
     /// <paramref name="count"/> one-byte entries named <c>entry-N.txt</c>, for the archives whose entry count is
     /// what the test is about.

@@ -25,6 +25,8 @@ public sealed class EvidenceSecretScanArchiveTests
     /// <summary>The kind cap these cases pass as the object's cap and as the archive's expanded budget.</summary>
     private const long MaxBytes = 1024 * 1024;
 
+    private const string DocxMediaType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+
     private static CancellationToken Token => TestContext.Current.CancellationToken;
 
     /// <summary>A well-formed AWS access-key id, assembled so no literal in this file reads as a credential.</summary>
@@ -49,6 +51,24 @@ public sealed class EvidenceSecretScanArchiveTests
 
         hit.PatternClass.ShouldBe(SecretPatternClass.AwsAccessKey);
         hit.HitCount.ShouldBe(1);
+    }
+
+    /// <summary>
+    /// A secret in the deflated <c>word/document.xml</c> of a DOCX is reported: the compressed package is clean to a
+    /// byte scan, so the declared DOCX type must take the archive arm. The clean document is the positive control.
+    /// </summary>
+    [Fact]
+    public void Scan_Docx_With_Secret_In_Deflated_Document_Part_Is_Flagged_And_Clean_Docx_Is_Not()
+    {
+        var flagged = AuthoringExtractionFixtures.Docx("Sign in with " + PlantedKey);
+        var clean = AuthoringExtractionFixtures.Docx("Check the sign-in screen");
+
+        SecretPatternScanner.Scan(flagged, Token).ShouldBeEmpty();
+
+        var hit = ArtifactSecretScan.Scan(Parsing, DocxMediaType, flagged, MaxBytes, Token).ShouldHaveSingleItem();
+        hit.PatternClass.ShouldBe(SecretPatternClass.AwsAccessKey);
+        hit.HitCount.ShouldBe(1);
+        ArtifactSecretScan.Scan(Parsing, DocxMediaType, clean, MaxBytes, Token).ShouldBeEmpty();
     }
 
     /// <summary>
@@ -251,11 +271,15 @@ public sealed class EvidenceSecretScanArchiveTests
     /// completion applies — so a document is never decompressed and a bundle is never scanned in place.
     /// </summary>
     [Fact]
-    public void Scan_Only_A_Zip_Declared_Type_Takes_The_Archive_Arm()
+    public void Scan_Only_Zip_And_Docx_Declared_Types_Take_The_Archive_Arm()
     {
         ArtifactSecretScan.IsArchive("application/zip").ShouldBeTrue();
         ArtifactSecretScan.IsArchive("APPLICATION/ZIP").ShouldBeTrue();
         ArtifactSecretScan.IsArchive("application/zip; charset=binary").ShouldBeTrue();
+        ArtifactSecretScan.IsArchive(DocxMediaType).ShouldBeTrue();
+        ArtifactSecretScan.IsArchive(DocxMediaType.ToUpperInvariant()).ShouldBeTrue();
+        ArtifactSecretScan.IsArchive(DocxMediaType + "; charset=binary").ShouldBeTrue();
+        ArtifactSecretScan.IsArchive("application/vnd.openxmlformats-officedocument.wordprocessingml.template").ShouldBeFalse();
         ArtifactSecretScan.IsArchive("application/xml").ShouldBeFalse();
         ArtifactSecretScan.IsArchive("application/zip-compressed").ShouldBeFalse();
         ArtifactSecretScan.IsArchive(null).ShouldBeFalse();

@@ -123,6 +123,9 @@ internal static class HealingModule
         services.TryAddScoped<HealingLlmTransactions>();
         services.TryAddScoped<HealingLlmGateway>();
 
+        // The wrapper every caller puts untrusted content through before it becomes a request payload: stateless, so one instance serves all.
+        services.TryAddSingleton<IPromptContextBuilder, PromptContextBuilder>();
+
         // The time budget lives in the pipeline, so the client timeout is infinite: a finite client timeout would abort
         // the whole pipeline — including a retry — before the per-attempt timeout inside it could ever fire. The
         // handler follows the Identity precedent: no redirect (a redirect would leave the configured endpoint) and a

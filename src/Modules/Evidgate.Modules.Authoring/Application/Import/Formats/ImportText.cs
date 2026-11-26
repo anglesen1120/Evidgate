@@ -12,7 +12,7 @@ namespace Evidgate.Modules.Authoring.Application.Import.Formats;
 /// <b>NFC on both sides.</b> AC14 requires import to normalise and export to write NFC, so a decomposed Vietnamese title
 /// and its composed spelling are one row, one <c>content_hash</c> and one authoring version — and two exports of an
 /// unchanged tree are byte-identical. The composition itself is <see cref="AuthoringText.Normalize"/>, never a second
-/// implementation: it refuses when the process cannot compose (00 §5.7 P7, D-S55-Q1) instead of silently storing
+/// implementation: it refuses when the process cannot compose (invariant globalization) instead of silently storing
 /// decomposed text.
 /// </para>
 /// <para>

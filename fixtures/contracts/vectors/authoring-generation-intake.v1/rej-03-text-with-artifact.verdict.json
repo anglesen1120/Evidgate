@@ -1,0 +1,12 @@
+{
+  "schema": "authoring-generation-intake.v1",
+  "valid": false,
+  "errors": [
+    {
+      "index": null,
+      "path": "/artifact_id",
+      "reason": "additional_properties"
+    }
+  ],
+  "comment": "text and an artifact are two different intakes"
+}

@@ -154,6 +154,12 @@ public sealed class IsolationProject
     public required Guid AuthoringChangeId { get; init; }
 
     /// <summary>
+    /// The project's recorded text intake, produced through the intake route — <c>{i}</c> of
+    /// <c>…/authoring/intakes/{i}</c>.
+    /// </summary>
+    public required Guid AuthoringIntakeId { get; init; }
+
+    /// <summary>
     /// The project's drafts (<c>{d}</c> of <c>/v1/drafts/{d}</c>), in seeding order: at least two, so the project
     /// list pages at limit 1 (03.6.1), and the object routes name a real row instead of a random id alone.
     /// </summary>
@@ -981,6 +987,16 @@ public sealed class IsolationWorld
                 },
                 HttpStatusCode.Created).ConfigureAwait(false)).GetProperty("change_id").GetGuid();
 
+            // One text intake per project through the intake route: the intake read's isolation probes name it, so a
+            // scope that forgot the project would answer with this row instead of the random-id control's 404.
+            var authoringIntake = (await SendAsync(
+                HttpMethod.Post,
+                $"/v1/projects/{project}/authoring/intakes",
+                admin,
+                org,
+                new { kind = "text", feature_node_id = authoringFeature, text = "isolation requirement text" },
+                HttpStatusCode.Created).ConfigureAwait(false)).GetProperty("intake_id").GetGuid();
+
             // Two drafts per project through the create route (03.6.1), so the project list pages at limit 1 and the
             // un-nested object routes name a real row of the victim tenant rather than a random id alone.
             var drafts = new List<Guid>();
@@ -1047,6 +1063,7 @@ public sealed class IsolationWorld
                 AuthoringSecondManualCaseId = authoringSecondCase,
                 AuthoringVersionId = authoringVersion,
                 AuthoringChangeId = authoringChange,
+                AuthoringIntakeId = authoringIntake,
                 DraftIds = drafts,
                 AuthoringDeletedNodeId = authoringRestorableNode,
                 AuthoringDeletedNodeVersion = authoringRestorableNodeVersion,

@@ -237,6 +237,8 @@ public sealed class CompositeFkTests : HarnessTest
         {
             ("public.raw_report", "raw_report_run_fk") => "raw_report_artifact_fk",
             ("public.raw_report_reprocess", "raw_report_reprocess_run_fk") => "raw_report_reprocess_artifact_fk",
+            // Moving the shared project id breaks both the project and feature-node references.
+            ("public.authoring_intake", "authoring_intake_project_fk") => "authoring_intake_feature_node_fk",
             // A row whose suite revision is moved to the other org is refused by the BEFORE trigger that reads it
             // (0102's run guard, 0103's manifest guard), and a BEFORE trigger fires ahead of every AFTER foreign key.
             ("public.run", "run_project_fk" or "run_manifest_fk" or "run_environment_revision_fk" or "run_policy_revision_fk"

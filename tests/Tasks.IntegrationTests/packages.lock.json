@@ -1046,6 +1046,28 @@
       "evidgate.modules.audit.contracts": {
         "type": "Project"
       },
+      "evidgate.modules.authoring": {
+        "type": "Project",
+        "dependencies": {
+          "Evidgate.BuildingBlocks.Canonicalization": "[1.0.0, )",
+          "Evidgate.BuildingBlocks.Contracts.Validation": "[1.0.0, )",
+          "Evidgate.BuildingBlocks.Observability": "[1.0.0, )",
+          "Evidgate.BuildingBlocks.Persistence": "[1.0.0, )",
+          "Evidgate.BuildingBlocks.Pipeline": "[1.0.0, )",
+          "Evidgate.BuildingBlocks.SharedKernel": "[1.0.0, )",
+          "Evidgate.Modules.Authoring.Contracts": "[1.0.0, )",
+          "Evidgate.Modules.Catalog.Contracts": "[1.0.0, )",
+          "Evidgate.Modules.Evidence.Contracts": "[1.0.0, )",
+          "FluentValidation": "[12.2.0, )",
+          "Mediator.Abstractions": "[3.0.2, )",
+          "Microsoft.EntityFrameworkCore": "[10.0.14, )",
+          "Microsoft.EntityFrameworkCore.Relational": "[10.0.14, )",
+          "PdfPig": "[0.1.16, )"
+        }
+      },
+      "evidgate.modules.authoring.contracts": {
+        "type": "Project"
+      },
       "evidgate.modules.catalog": {
         "type": "Project",
         "dependencies": {
@@ -1254,6 +1276,7 @@
           "Evidgate.BuildingBlocks.Pipeline": "[1.0.0, )",
           "Evidgate.BuildingBlocks.SharedKernel": "[1.0.0, )",
           "Evidgate.Modules.Audit": "[1.0.0, )",
+          "Evidgate.Modules.Authoring": "[1.0.0, )",
           "Evidgate.Modules.Catalog": "[1.0.0, )",
           "Evidgate.Modules.Evidence": "[1.0.0, )",
           "Evidgate.Modules.Healing": "[1.0.0, )",
@@ -1489,6 +1512,12 @@
         "dependencies": {
           "OpenTelemetry.Api": "[1.20.1, 2.0.0)"
         }
+      },
+      "PdfPig": {
+        "type": "CentralTransitive",
+        "requested": "[0.1.16, )",
+        "resolved": "0.1.16",
+        "contentHash": "qQcbsNMYVY+K5ELptax2S8thNMk0+rSQq3H/KdYj3LLcko8yTCz8y5KIvsKxIyAuTN0ZYNnfsZkM+0EvxTwHVA=="
       },
       "Testcontainers": {
         "type": "CentralTransitive",

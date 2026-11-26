@@ -385,8 +385,9 @@ public sealed class ParseRunnerTests
     [Fact]
     public void Built_Child_Declares_Invariant_Globalization_So_The_Variable_Is_Redundant()
     {
-        // Directory.Build.props puts Evidgate.Parser in the Worker group, so its generated runtimeconfig carries
-        // System.Globalization.Invariant; the runner must not set a variable the runtimeconfig already states.
+        // Directory.Build.props gives Evidgate.Parser its own invariant group, so its generated runtimeconfig carries
+        // System.Globalization.Invariant even though the Worker around it has ICU; the runner must not set a variable
+        // the runtimeconfig already states.
         ChildEnvironment.DeclaresInvariantGlobalization(ChildRunner.ChildAssemblyPath()).ShouldBeTrue();
     }
 

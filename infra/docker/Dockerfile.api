@@ -14,30 +14,27 @@
 # without emulation.
 #
 # Pins, recorded per artefact (all registered in infra/README.md and ADR-0002,
-# asserted by `scripts/build-images.sh --check-pins`):
-#   builder           resolved 2026-09-27 — shared with Dockerfile.worker/.migrator
-#   runtime (`extra`) resolved 2026-10-23 — this image's own base ("the Api's
-#                     runtime" below; Worker/Migrator keep the plain chiseled base
-#                     resolved 2026-09-27, recorded in infra/README.md)
+# asserted by `scripts/build-images.sh --check-pins`; the builder is shared with
+# Dockerfile.worker/.migrator, the `-extra` runtime with Dockerfile.worker):
 #   builder  mcr.microsoft.com/dotnet/sdk:10.0.100
 #            (= global.json sdk.version, the SDK CI installs)
 #   runtime  mcr.microsoft.com/dotnet/aspnet:10.0.12-noble-chiseled-extra
 #            (digest of the multi-arch manifest list — one pin, both platforms;
 #             chiseled + `extra`: no shell, no package manager, runs as UID 1654,
-#             and ships ICU + tzdata, which the authoring module needs to compose
-#             NFC text — `string.Normalize(FormC)` is a silent no-op under
-#             InvariantGlobalization, so the Api cannot run invariant
-#             (13.1.1-T2, D-S55-Q1; `Directory.Build.props` sets the switch for
-#             Evidgate.Worker only). The plain `-chiseled` base is invariant-only:
-#             it sets DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=true and carries no
-#             libicu, so it cannot serve this image)
+#             and ships ICU + tzdata, which the authoring module (Api) and the
+#             intake extraction job (Worker) need to compose NFC text —
+#             `string.Normalize(FormC)` is a silent no-op under
+#             InvariantGlobalization, so neither can run invariant;
+#             `Directory.Build.props` leaves the switch off for both. The plain
+#             `-chiseled` base sets DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=true and
+#             carries no libicu, so it cannot serve these images)
 #            index digest sha256:00e0ad6a7ef8c0c1391b87f05c7ac757a15740455688f2bfcd146a3f4b987efd
 #            platform manifests: linux/amd64 sha256:69c87e30c013eac2024da453545dfc13f1476347726da4e1a534d66789a7564f,
 #            linux/arm64 sha256:c4b3500d52b81de8b82db578c16c90fd621770e135c978c0c516d852ea086985,
 #            linux/arm/v7 sha256:330dedb6a14bef22ca30219a98f6090e4c5ea676eb91d3a1e9e8caea8882ca03
 #
-# Worker and Migrator stay on the plain `10.0.12-noble-chiseled` base: neither
-# composes the authoring module, so both keep globalization-invariant mode.
+# The Migrator stays on the plain `10.0.12-noble-chiseled` base: it composes no
+# text-storing module, so it keeps globalization-invariant mode.
 
 FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:10.0.100@sha256:c7445f141c04f1a6b454181bd098dcfa606c61ba0bd213d0a702489e5bd4cd71 AS build
 
@@ -81,7 +78,7 @@ RUN dotnet restore --locked-mode -p:PublishReadyToRun=true src/Evidgate.Api/Evid
 #
 # PublishReadyToRun is an image-only property (00 §5.7 P7);
 # ServerGarbageCollection and the per-host InvariantGlobalization value come from
-# Directory.Build.props (Server GC on, invariant on for Worker only) and are
+# Directory.Build.props (Server GC on, invariant off for Api and Worker) and are
 # verified on the published runtimeconfig.json, per image, by scripts/build-images.sh.
 RUN set -eux; \
     case "$TARGETARCH" in \

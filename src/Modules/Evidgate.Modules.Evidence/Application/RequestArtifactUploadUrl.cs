@@ -6,6 +6,7 @@ using Evidgate.BuildingBlocks.SharedKernel.Authorization;
 using Evidgate.BuildingBlocks.SharedKernel.Messaging;
 using Evidgate.BuildingBlocks.SharedKernel.Modules;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
+using Evidgate.Modules.Evidence.Contracts;
 using Evidgate.Modules.Evidence.Domain;
 using Evidgate.Modules.Evidence.Endpoints;
 using Evidgate.Modules.Evidence.Infrastructure.Persistence;
@@ -292,16 +293,7 @@ internal sealed class RequestArtifactUploadUrlHandler(
     /// whitespace and control characters are not trimmed away, so the string the policy accepts is exactly the
     /// string that is persisted. A control character anywhere in the type is refused.
     /// </summary>
-    private static bool MediaTypeAllowed(string[] allowed, string? mediaType)
-    {
-        if (mediaType is null || !ArtifactShape.HasNoControlCharacter(mediaType))
-        {
-            return false;
-        }
-
-        var bare = mediaType.Split(';', 2)[0];
-        return allowed.Any(candidate => string.Equals(candidate, bare, StringComparison.OrdinalIgnoreCase));
-    }
+    private static bool MediaTypeAllowed(string[] allowed, string? mediaType) => MediaTypes.IsAllowed(allowed, mediaType);
 
     /// <summary>The 64 lowercase hex characters of a validated <c>sha256:&lt;hex&gt;</c> checksum (the presign form).</summary>
     private static string ChecksumHex(string checksum) => checksum["sha256:".Length..];

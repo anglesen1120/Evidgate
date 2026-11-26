@@ -215,7 +215,7 @@ public sealed partial class EvidenceCaptureOptionsTests : IClassFixture<TenancyH
 
         answer.Status.ShouldBe(HttpStatusCode.OK, answer.ErrorMessage);
         // The raw answer, not only the parsed map: one entry per contract kind, in contract order, every kind once.
-        answer.Body.GetProperty("kinds").GetArrayLength().ShouldBe(8);
+        answer.Body.GetProperty("kinds").GetArrayLength().ShouldBe(10);
         answer.Body.GetProperty("kinds").EnumerateArray()
             .Select(kind => kind.GetProperty("kind").GetString())
             .ShouldBe(ArtifactKinds.All);
@@ -227,6 +227,8 @@ public sealed partial class EvidenceCaptureOptionsTests : IClassFixture<TenancyH
         // a capture the upload route would refuse.
         options["dom_snapshot"].Enabled.ShouldBeFalse();
         options["ui_hierarchy"].Enabled.ShouldBeFalse();
+        options["requirement_document"].Enabled.ShouldBeTrue();
+        options["requirement_image"].Enabled.ShouldBeTrue();
     }
 
     [Fact]

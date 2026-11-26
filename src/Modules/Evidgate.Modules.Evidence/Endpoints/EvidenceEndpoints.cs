@@ -416,7 +416,7 @@ public sealed record CompleteResponse(
 /// <param name="ArtifactId">The artifact id.</param>
 /// <param name="ProjectId">The owning project.</param>
 /// <param name="RunId">The run the artifact belongs to.</param>
-/// <param name="Kind">One of the eight contract kinds.</param>
+/// <param name="Kind">One of the ten contract kinds.</param>
 /// <param name="MediaType">The stored media type.</param>
 /// <param name="State">The artifact's lifecycle state.</param>
 /// <param name="Sensitivity"><c>normal</c> or <c>sensitive</c>, as resolved for this read.</param>

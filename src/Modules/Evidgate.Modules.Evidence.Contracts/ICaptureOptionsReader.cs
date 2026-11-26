@@ -38,7 +38,7 @@ public sealed record RedactionRule(string RuleType, string NamePattern);
 /// <summary>
 /// The project's effective capture options of one artifact kind: whether capture is on, and the rules declared for it.
 /// </summary>
-/// <param name="Kind">One of the eight contract kinds.</param>
+/// <param name="Kind">One of the ten contract kinds.</param>
 /// <param name="CaptureEnabled">
 /// The effective switch: the project row's value when it has one, the kind's static default when it has none, and
 /// <c>false</c> for a kind with neither — the same three cases the upload route's <c>kind_disabled</c> gate resolves.

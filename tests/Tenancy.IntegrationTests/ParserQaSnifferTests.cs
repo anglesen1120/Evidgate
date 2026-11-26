@@ -148,7 +148,7 @@ public sealed class ParserQaSnifferTests
             .ShouldBe(SniffResult.Mismatch);
         MediaSniffer.Check("application/octet-stream", PngMagic)
             .ShouldBe(SniffResult.Mismatch);
-        MediaSniffer.Check("application/pdf", PdfMagic)
+        MediaSniffer.Check("application/x-pdf", PdfMagic)
             .ShouldBe(SniffResult.Mismatch);
     }
 
