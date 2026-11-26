@@ -112,7 +112,7 @@ public sealed class CreateRunProvenanceTests : IClassFixture<TenancyHostPool>
     [Fact]
     public async Task Provenance_BodyCannotClaimAVerifiedRun_422AndNoRun()
     {
-        await using var world = await RunCreationTests.StartRefusalWorldAsync(_fixture, hosts: _hosts);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
 
         // The label is the server's: a body that tries to set it is an unknown ref member, not an override.
         var forged = await RunCreationTests.CreateRunAsync(
