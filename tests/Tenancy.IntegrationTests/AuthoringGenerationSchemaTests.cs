@@ -85,7 +85,7 @@ public sealed class AuthoringGenerationSchemaTests(PostgresTenancyFixture fixtur
 
         foreach (var (column, update, insert) in new[]
         {
-            ("state", true, false), ("extracted_text", true, false), ("failure_code", true, false), ("caps", true, true),
+            ("state", true, false), ("extracted_text", true, false), ("failure_code", true, false), ("caps", false, true),
             ("kind", false, true), ("input_text", false, true), ("artifact_id", false, true), ("created_at", false, false),
         })
         {
@@ -223,7 +223,6 @@ public sealed class AuthoringGenerationSchemaTests(PostgresTenancyFixture fixtur
         (await scope.ExecuteAsync(Update("state = 'ready'"), ("id", id))).ShouldBe(1);
         await RefusesAsync(scope, Update("state = 'rejected', failure_code = 'extraction_failed'"), "23514", ("id", id));
         await RefusesAsync(scope, Update("state = 'extracting'"), "23514", ("id", id));
-        await RefusesAsync(scope, Update("caps = '{\"a\": 1}'"), "23514", ("id", id));
     }
 
     /// <summary>A rejection names one of the ten failure codes, keeps no text, and is final; it may follow received or extracting.</summary>
@@ -273,7 +272,7 @@ public sealed class AuthoringGenerationSchemaTests(PostgresTenancyFixture fixtur
         {
             "id = gen_random_uuid()", "org_id = gen_random_uuid()", $"project_id = '{w.Sibling}'", "feature_node_id = null",
             "kind = 'pdf'", "input_text = 'other'", "media_type = 'text/html'", "declared_bytes = 6", "created_by = null",
-            "created_at = created_at - interval '1 day'",
+            "created_at = created_at - interval '1 day'", "caps = '{\"a\": 1}'",
         })
         {
             var error = await RefusesAsync(owner, Update(set), "23514", ("id", text));
@@ -289,13 +288,17 @@ public sealed class AuthoringGenerationSchemaTests(PostgresTenancyFixture fixtur
         started.MessageText.ShouldContain("authoring_intake_state_invalid");
 
         await using var app = await AppAsync(w);
-        foreach (var set in new[] { "kind = 'pdf'", "input_text = 'other'", "created_at = now()" })
+        foreach (var set in new[] { "kind = 'pdf'", "input_text = 'other'", "created_at = now()", "caps = '{\"a\": 1}'" })
         {
             await RefusesAsync(app, Update(set), "42501", ("id", text));
         }
 
-        (await owner.ExecuteAsync(Update("caps = '{\"a\": 1}'"), ("id", text))).ShouldBe(1);
-        (await owner.ScalarAsync<int>("select version from public.authoring_intake where id = @id", ("id", text))).ShouldBe(2);
+        (await app.ExecuteAsync(Update($"state = 'ready', {HashSql}"), ("id", text))).ShouldBe(1);
+        (await app.ScalarAsync<string>("select caps::text from public.authoring_intake where id = @id", ("id", text))).ShouldBe("{}");
+
+        (await owner.ScalarAsync<int>("select version from public.authoring_intake where id = @id", ("id", pdf))).ShouldBe(1);
+        (await owner.ExecuteAsync(Update("state = 'extracting'"), ("id", pdf))).ShouldBe(1);
+        (await owner.ScalarAsync<int>("select version from public.authoring_intake where id = @id", ("id", pdf))).ShouldBe(2);
     }
 
     /// <summary>

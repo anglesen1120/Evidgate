@@ -53,6 +53,15 @@ public sealed partial class AuthoringIntakeJobTests
             case "size":
                 caps = caps with { MaxDocumentBytes = declared - 1 };
                 break;
+            case "negative_ratio":
+                caps = caps with { MaxCompressionRatio = -1 };
+                break;
+            case "over_ceiling":
+                caps = caps with { MaxPdfPages = int.MaxValue };
+                break;
+            case "negative_timeout":
+                caps = caps with { ExtractionTimeout = TimeSpan.FromSeconds(-5) };
+                break;
             case "media_mismatch":
                 artifactMedia = "application/pdf";
                 break;

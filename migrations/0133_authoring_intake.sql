@@ -199,6 +199,7 @@ create or replace function evidgate.authoring_intake_immutable() returns trigger
        or new.media_type is distinct from old.media_type
        or new.declared_bytes is distinct from old.declared_bytes
        or new.created_by is distinct from old.created_by
+       or new.caps is distinct from old.caps
        or new.created_at is distinct from old.created_at then
       raise exception 'authoring_intake_immutable: what was submitted never changes (UPDATE)'
         using errcode = '23514';
@@ -207,7 +208,6 @@ create or replace function evidgate.authoring_intake_immutable() returns trigger
     if new.state is not distinct from old.state
        and new.extracted_text is not distinct from old.extracted_text
        and new.extracted_text_hash is not distinct from old.extracted_text_hash
-       and new.caps is not distinct from old.caps
        and new.failure_code is not distinct from old.failure_code then
       return new;
     end if;
@@ -265,12 +265,13 @@ create policy authoring_intake_slot_owner_backfill on public.authoring_intake_sl
   for all to evidgate_owner using (true) with check (true);
 
 -- The extracted text is customer test data: no operator or scheduler read, and the app role writes only
--- the request columns on insert and the extraction columns on update.
+-- the request columns on insert and the extraction columns on update. The caps snapshot is written once at
+-- insert and never updated, so no role can loosen the limits a stored intake runs under.
 revoke all on public.authoring_intake from evidgate_app, evidgate_operator, evidgate_worker_sched;
 grant select on public.authoring_intake to evidgate_app;
 grant insert (id, org_id, project_id, feature_node_id, kind, artifact_id, input_text, media_type, declared_bytes, caps, created_by)
   on public.authoring_intake to evidgate_app;
-grant update (state, extracted_text, extracted_text_hash, caps, failure_code)
+grant update (state, extracted_text, extracted_text_hash, failure_code)
   on public.authoring_intake to evidgate_app;
 
 revoke all on public.authoring_intake_slot from evidgate_app, evidgate_operator, evidgate_worker_sched;

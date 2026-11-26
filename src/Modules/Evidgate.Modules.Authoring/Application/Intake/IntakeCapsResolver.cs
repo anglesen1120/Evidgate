@@ -39,10 +39,25 @@ internal sealed class IntakeCapsOptions
 
     /// <summary>Extractions one tenant may run at once.</summary>
     public int MaxConcurrentExtractionsPerTenant { get; set; } = IntakeCaps.Default.MaxConcurrentExtractionsPerTenant;
+
+    /// <summary>The section as one caps value.</summary>
+    internal IntakeCaps ToCaps() => new(
+        MaxDocumentBytes,
+        MaxZipEntries,
+        MaxCompressionRatio,
+        MaxPdfPages,
+        MaxExtractedChars,
+        MaxTextCodePoints,
+        ExtractionTimeout,
+        MaxImageBytes,
+        MaxConcurrentExtractionsPerTenant);
 }
 
-/// <summary>Refuses a caps section that states a non-positive or absurd limit.</summary>
-internal sealed class IntakeCapsOptionsValidator : IValidateOptions<IntakeCapsOptions>
+/// <summary>
+/// The one validity rule of <see cref="IntakeCaps"/>: the host section and a stored caps document are judged by the
+/// same ranges, so a limit that cannot be configured can never be run from a row either.
+/// </summary>
+internal static class IntakeCapsRules
 {
     private const long ByteCeiling = 1024L * 1024 * 1024;
 
@@ -52,34 +67,62 @@ internal sealed class IntakeCapsOptionsValidator : IValidateOptions<IntakeCapsOp
     /// <summary>The largest text intake the row accepts: <c>authoring_intake_input_text_check</c> caps the stored text.</summary>
     internal const int TextCodePointsCeiling = 1_048_576;
 
+    private static readonly TimeSpan TimeoutCeiling = TimeSpan.FromMinutes(5);
+
+    /// <summary>Whether every member of <paramref name="caps"/> is inside its range.</summary>
+    /// <param name="caps">The caps.</param>
+    internal static bool IsValid(IntakeCaps caps) => !Violations(caps).Any();
+
+    /// <summary>One message per member of <paramref name="caps"/> that is outside its range; empty when the caps are valid.</summary>
+    /// <param name="caps">The caps.</param>
+    internal static IEnumerable<string> Violations(IntakeCaps caps)
+    {
+        ArgumentNullException.ThrowIfNull(caps);
+
+        return Ranges(caps);
+    }
+
+    private static IEnumerable<string> Ranges(IntakeCaps caps)
+    {
+        foreach (var failure in new[]
+        {
+            Check(nameof(caps.MaxDocumentBytes), caps.MaxDocumentBytes, ByteCeiling),
+            Check(nameof(caps.MaxImageBytes), caps.MaxImageBytes, ByteCeiling),
+            Check(nameof(caps.MaxZipEntries), caps.MaxZipEntries, 100_000),
+            Check(nameof(caps.MaxCompressionRatio), caps.MaxCompressionRatio, 10_000),
+            Check(nameof(caps.MaxPdfPages), caps.MaxPdfPages, 100_000),
+            Check(nameof(caps.MaxExtractedChars), caps.MaxExtractedChars, ExtractedCharsCeiling),
+            Check(nameof(caps.MaxTextCodePoints), caps.MaxTextCodePoints, Math.Min(caps.MaxExtractedChars, TextCodePointsCeiling)),
+            Check(nameof(caps.MaxConcurrentExtractionsPerTenant), caps.MaxConcurrentExtractionsPerTenant, 64),
+            caps.ExtractionTimeout <= TimeSpan.Zero || caps.ExtractionTimeout > TimeoutCeiling
+                ? $"{nameof(caps.ExtractionTimeout)} must be above zero and at most 5 minutes."
+                : null,
+        })
+        {
+            if (failure is not null)
+            {
+                yield return failure;
+            }
+        }
+    }
+
+    private static string? Check(string member, long value, long ceiling) =>
+        value < 1 || value > ceiling ? $"{member} must be between 1 and {ceiling}." : null;
+}
+
+/// <summary>Refuses a caps section that states a non-positive or absurd limit.</summary>
+internal sealed class IntakeCapsOptionsValidator : IValidateOptions<IntakeCapsOptions>
+{
     /// <inheritdoc />
     public ValidateOptionsResult Validate(string? name, IntakeCapsOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
 
-        var failures = new List<string>();
-        Check(failures, nameof(options.MaxDocumentBytes), options.MaxDocumentBytes, ByteCeiling);
-        Check(failures, nameof(options.MaxImageBytes), options.MaxImageBytes, ByteCeiling);
-        Check(failures, nameof(options.MaxZipEntries), options.MaxZipEntries, 100_000);
-        Check(failures, nameof(options.MaxCompressionRatio), options.MaxCompressionRatio, 10_000);
-        Check(failures, nameof(options.MaxPdfPages), options.MaxPdfPages, 100_000);
-        Check(failures, nameof(options.MaxExtractedChars), options.MaxExtractedChars, ExtractedCharsCeiling);
-        Check(failures, nameof(options.MaxTextCodePoints), options.MaxTextCodePoints, Math.Min(options.MaxExtractedChars, TextCodePointsCeiling));
-        Check(failures, nameof(options.MaxConcurrentExtractionsPerTenant), options.MaxConcurrentExtractionsPerTenant, 64);
-        if (options.ExtractionTimeout <= TimeSpan.Zero || options.ExtractionTimeout > TimeSpan.FromMinutes(5))
-        {
-            failures.Add($"{IntakeCapsOptions.SectionName}:{nameof(options.ExtractionTimeout)} must be above zero and at most 5 minutes.");
-        }
+        var failures = IntakeCapsRules.Violations(options.ToCaps())
+            .Select(failure => $"{IntakeCapsOptions.SectionName}:{failure}")
+            .ToList();
 
         return failures.Count == 0 ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail(failures);
-    }
-
-    private static void Check(List<string> failures, string member, long value, long ceiling)
-    {
-        if (value < 1 || value > ceiling)
-        {
-            failures.Add($"{IntakeCapsOptions.SectionName}:{member} must be between 1 and {ceiling}.");
-        }
     }
 }
 
@@ -87,20 +130,7 @@ internal sealed class IntakeCapsOptionsValidator : IValidateOptions<IntakeCapsOp
 /// <param name="options">The validated section.</param>
 internal sealed class IntakeCapsResolver(IOptions<IntakeCapsOptions> options)
 {
-    private readonly Lazy<IntakeCaps> _caps = new(() =>
-    {
-        var value = options.Value;
-        return new IntakeCaps(
-            value.MaxDocumentBytes,
-            value.MaxZipEntries,
-            value.MaxCompressionRatio,
-            value.MaxPdfPages,
-            value.MaxExtractedChars,
-            value.MaxTextCodePoints,
-            value.ExtractionTimeout,
-            value.MaxImageBytes,
-            value.MaxConcurrentExtractionsPerTenant);
-    });
+    private readonly Lazy<IntakeCaps> _caps = new(() => options.Value.ToCaps());
 
     /// <summary>The resolved caps.</summary>
     internal IntakeCaps Current => _caps.Value;
@@ -119,13 +149,18 @@ internal static class IntakeCapsJson
     /// <param name="caps">The caps.</param>
     internal static string Serialize(IntakeCaps caps) => JsonSerializer.Serialize(caps, Options);
 
-    /// <summary>Reads a stored document back; <see langword="null"/> when it is not a complete caps document.</summary>
+    /// <summary>
+    /// Reads a stored document back; <see langword="null"/> when it is not a complete, in-range caps document. A member
+    /// this build does not know is ignored, so a newer writer's extra limit never hides the limits this build enforces.
+    /// </summary>
     /// <param name="json">The column value.</param>
     internal static IntakeCaps? Deserialize(string json)
     {
         try
         {
-            return JsonSerializer.Deserialize<IntakeCaps>(json, Options);
+            var caps = JsonSerializer.Deserialize<IntakeCaps>(json, Options);
+
+            return caps is not null && IntakeCapsRules.IsValid(caps) ? caps : null;
         }
         catch (JsonException)
         {

@@ -1,5 +1,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics.Metrics;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using Evidgate.BuildingBlocks.Observability;
 using Evidgate.Modules.Authoring.Application.Intake;
 using Evidgate.Modules.Authoring.Infrastructure.Intake.Jobs;
@@ -14,6 +16,8 @@ namespace Tenancy.IntegrationTests;
 /// <summary>The caps section may never state a limit the intake row refuses: the row's own CHECKs are the ceiling.</summary>
 public sealed class AuthoringIntakeCapsValidatorTests
 {
+    private static readonly JsonSerializerOptions SectionJson = new() { PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower };
+
     private static readonly IntakeCapsOptionsValidator Validator = new();
 
     [Fact]
@@ -32,6 +36,19 @@ public sealed class AuthoringIntakeCapsValidatorTests
     [InlineData(1_048_577, false)]
     public void Validate_MaxTextCodePoints_StopsAtTheInputTextCheck(int value, bool valid) =>
         Validator.Validate(null, new IntakeCapsOptions { MaxExtractedChars = 2_000_000, MaxTextCodePoints = value }).Succeeded.ShouldBe(valid);
+
+    [Theory]
+    [MemberData(nameof(AuthoringIntakeCapsJsonTests.InvalidMembers), MemberType = typeof(AuthoringIntakeCapsJsonTests))]
+    public void Validate_InvalidMember_RefusesTheSection(string member, string value) =>
+        Validator.Validate(null, Section(member, value)).Succeeded.ShouldBeFalse();
+
+    [Theory]
+    [MemberData(nameof(AuthoringIntakeCapsJsonTests.ValidBoundaries), MemberType = typeof(AuthoringIntakeCapsJsonTests))]
+    public void Validate_ValidBoundary_Passes(string member, string value) =>
+        Validator.Validate(null, Section(member, value)).Succeeded.ShouldBeTrue();
+
+    private static IntakeCapsOptions Section(string member, string value) =>
+        JsonSerializer.Deserialize<IntakeCapsOptions>(AuthoringIntakeCapsJsonTests.Document(member, value), SectionJson).ShouldNotBeNull();
 }
 
 /// <summary>A stored caps document is either complete or unreadable: a partial one never becomes zero limits.</summary>
@@ -47,6 +64,96 @@ public sealed class AuthoringIntakeCapsJsonTests
     [InlineData("not json")]
     public void Deserialize_IncompleteOrMalformedDocument_ReturnsNull(string json) =>
         IntakeCapsJson.Deserialize(json).ShouldBeNull();
+
+    public static TheoryData<string, string> InvalidMembers => new()
+    {
+        { "max_document_bytes", "-1" },
+        { "max_document_bytes", "0" },
+        { "max_document_bytes", "1073741825" },
+        { "max_image_bytes", "-1" },
+        { "max_image_bytes", "0" },
+        { "max_image_bytes", "1073741825" },
+        { "max_zip_entries", "-1" },
+        { "max_zip_entries", "0" },
+        { "max_zip_entries", "100001" },
+        { "max_compression_ratio", "-1" },
+        { "max_compression_ratio", "0" },
+        { "max_compression_ratio", "10001" },
+        { "max_pdf_pages", "-1" },
+        { "max_pdf_pages", "0" },
+        { "max_pdf_pages", "100001" },
+        { "max_extracted_chars", "-1" },
+        { "max_extracted_chars", "0" },
+        { "max_extracted_chars", "2000001" },
+        { "max_text_code_points", "-1" },
+        { "max_text_code_points", "0" },
+        { "max_text_code_points", "1048577" },
+        { "max_concurrent_extractions_per_tenant", "-1" },
+        { "max_concurrent_extractions_per_tenant", "0" },
+        { "max_concurrent_extractions_per_tenant", "65" },
+        { "extraction_timeout", "\"00:00:00\"" },
+        { "extraction_timeout", "\"-00:00:00.001\"" },
+        { "extraction_timeout", "\"-00:00:05\"" },
+        { "extraction_timeout", "\"-10675199.02:48:05.4775808\"" },
+        { "extraction_timeout", "\"00:05:00.0000001\"" },
+    };
+
+    public static TheoryData<string, string> ValidBoundaries => new()
+    {
+        { "max_document_bytes", "1" },
+        { "max_document_bytes", "1073741824" },
+        { "max_image_bytes", "1" },
+        { "max_image_bytes", "1073741824" },
+        { "max_zip_entries", "1" },
+        { "max_zip_entries", "100000" },
+        { "max_compression_ratio", "1" },
+        { "max_compression_ratio", "10000" },
+        { "max_pdf_pages", "1" },
+        { "max_pdf_pages", "100000" },
+        { "max_extracted_chars", "1" },
+        { "max_extracted_chars", "2000000" },
+        { "max_text_code_points", "1" },
+        { "max_text_code_points", "1048576" },
+        { "max_concurrent_extractions_per_tenant", "1" },
+        { "max_concurrent_extractions_per_tenant", "64" },
+        { "extraction_timeout", "\"00:00:00.0000001\"" },
+        { "extraction_timeout", "\"00:05:00\"" },
+    };
+
+    [Theory]
+    [MemberData(nameof(InvalidMembers))]
+    public void Deserialize_InvalidMember_ReturnsNull(string member, string value) =>
+        IntakeCapsJson.Deserialize(Document(member, value)).ShouldBeNull();
+
+    [Theory]
+    [InlineData("max_compression_ratio", "\"wrong type\"")]
+    [InlineData("max_document_bytes", "null")]
+    [InlineData("extraction_timeout", "5")]
+    public void Deserialize_WrongMemberType_ReturnsNull(string member, string value) =>
+        IntakeCapsJson.Deserialize(Document(member, value)).ShouldBeNull();
+
+    [Fact]
+    public void Deserialize_TextLimitAboveExtractedLimit_ReturnsNull() =>
+        IntakeCapsJson.Deserialize(IntakeCapsJson.Serialize(
+            IntakeCaps.Default with { MaxExtractedChars = 1, MaxTextCodePoints = 2 })).ShouldBeNull();
+
+    [Fact]
+    public void Deserialize_ExtraMember_KeepsKnownCaps() =>
+        IntakeCapsJson.Deserialize(Document("future_limit", "42")).ShouldBe(
+            IntakeCaps.Default with { MaxExtractedChars = 2_000_000, MaxTextCodePoints = 1 });
+
+    [Theory]
+    [MemberData(nameof(ValidBoundaries))]
+    public void Deserialize_ValidBoundary_ReadsTheDocument(string member, string value) =>
+        IntakeCapsJson.Deserialize(Document(member, value)).ShouldNotBeNull();
+
+    internal static string Document(string member, string value)
+    {
+        var caps = IntakeCaps.Default with { MaxExtractedChars = 2_000_000, MaxTextCodePoints = 1 };
+        var document = JsonNode.Parse(IntakeCapsJson.Serialize(caps)).ShouldNotBeNull().AsObject();
+        document[member] = JsonNode.Parse(value);
+        return document.ToJsonString();
+    }
 }
 
 /// <summary>The Worker-wide parser permits: a taken permit stays taken until it is given back.</summary>
