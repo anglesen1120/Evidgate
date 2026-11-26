@@ -272,7 +272,7 @@ public sealed class UsageRollupScheduleTests
     }
 
     /// <summary>Opens the sweep role's connection: a superuser connection switched with <c>set role</c>.</summary>
-    private sealed class SweepRoleDataSource(PostgresTenancyFixture fixture, string database) : IWorkerSchedDataSource
+    internal sealed class SweepRoleDataSource(PostgresTenancyFixture fixture, string database) : IWorkerSchedDataSource
     {
         public async ValueTask<NpgsqlConnection> OpenAsync(CancellationToken cancellationToken = default)
         {

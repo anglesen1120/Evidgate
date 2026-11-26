@@ -179,7 +179,11 @@ revision_no)`, the closed `missing[]` code CHECK of 00 §8.5 including `setup_er
   replay, terminal `done` frozen), with its list index and column-scoped app grants (notes at the end
   of this file); and `0107` is the daily healing LLM budget roll — `evidgate.roll_healing_llm_budget(date)`
   opens each project's row for the new UTC day with the earlier caps and zero usage, executable by
-  `evidgate_worker_sched` alone (notes at the end of this file);
+  `evidgate_worker_sched` alone (notes at the end of this file); and `0126` is the waiver and quarantine
+  expiry sweep — two owner-side definers, `evidgate.exception_expiry_org_ids` (the due orgs' ids, executable by
+  `evidgate_worker_sched` alone) and `evidgate.sweep_expired_exceptions` (one tenant's due rows to `expired`,
+  executable by `evidgate_app` alone and refused for any org but the caller's), the only path that writes
+  `expired` (notes at the end of this file);
   the next free number is one above the highest file in this folder (`ls migrations/*.sql`), and this README does not
   track it; a gap means two branches invented the same sequence and neither history can be trusted.
 - One file runs in one transaction (`WithTransactionPerScript`), so PostgreSQL
@@ -1287,3 +1291,11 @@ target)` and `session_revoke_audit_append(org, actor, object_type, object_id, me
 
 - `0125` drops `public.incident_list` (created by `0123`; the `0123` file is unchanged and its `incident_project_state_list` index stays). The role-and-privilege scan admits an `evidgate_app`-readable view only with `security_barrier = true`, and a barrier view stays a subquery scan, so the state-filtered keyset page sorted instead of streaming from `incident_project_state_list`.
 - `evidgate_app` already holds `SELECT` on `incident` and `incident_attempt` (`0122`), so the list statements read `incident` directly under FORCE RLS with an explicit `org_id` predicate and compute `attempt_count` inline. No grant, index, policy or trigger changes. Locks: `ACCESS EXCLUSIVE` on the view for one `drop view`, under a 5 s `lock_timeout`.
+
+## Notes on the waiver and quarantine expiry sweep (`0126`)
+
+- `0126` adds two functions and no table, column, index, policy or grant on a table. The guards of `0027` and `0030` still refuse `expired` from `evidgate_app`, so a raw `UPDATE ... SET state = 'expired'` stays refused; the sweep is the one path that writes it, because the definer runs as the owner and the guards see `current_user = evidgate_owner`.
+- `evidgate.exception_expiry_org_ids(p_after uuid, p_limit integer)` returns `setof uuid`: one keyset page, in id order, of the orgs that hold an `approved` waiver or an `active` quarantine entry with `expires_at <= now()`. It answers org ids only, the limit is clamped to 1..1000, and `EXECUTE` is `evidgate_worker_sched`'s alone. Its `audit-deferred` line follows `0076`: the projection spans orgs and `audit_log.org_id` is NOT NULL.
+- `evidgate.sweep_expired_exceptions(p_org_id uuid, p_limit integer)` returns the rows it moved (`kind`, `id`, `project_id`, `expires_at`) so the caller writes one audit row per transition in the same transaction. It takes no time argument: the boundary is the transaction's `now()` and `expires_at = now()` is due. It raises `42501` unless `p_org_id` is not null and equals `evidgate.current_org_id()`, which must be set, so it cannot touch another org. `EXECUTE` is `evidgate_app`'s alone, because the sweep must run inside a tenant transaction. A `requested` waiver is never swept. One limit (1..1000) covers both kinds, oldest `expires_at` first; rows locked by another transaction are skipped (`for update skip locked`) and taken by the next call, and locked rows that fall outside the limit stay locked until the caller's transaction ends.
+- Indexes: none added. The existing `waiver_state_expiry_idx` and `quarantine_entry_state_expiry_idx` cover both statements, and a new partial index could take the plan away from the per-project due queries those indexes are pinned for (`WaiverTests.CursorAndDueQueries_UseTheirIndexes`, `QuarantineSchemaTests.ListAndDueQueries_UseTheirIndexes`). The probe reads the index without an org prefix, so its cost follows the two tables' size; both hold human-made rows.
+- Locks: `create or replace function` and `GRANT`/`REVOKE` only, under a 5 s `lock_timeout`. Deploy: the migrator first, then the Worker's `waiver_and_quarantine_expiry` schedule calls them; until it runs, due rows keep the state they held before this file. Rollback: drop the schedule first, then both functions; rows already expired stay expired.

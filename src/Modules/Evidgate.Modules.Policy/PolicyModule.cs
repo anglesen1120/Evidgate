@@ -5,6 +5,7 @@ using Evidgate.Evaluation;
 using Evidgate.Modules.Orchestrator.Contracts;
 using Evidgate.Modules.Policy.Application;
 using Evidgate.Modules.Policy.Application.Evaluation;
+using Evidgate.Modules.Policy.Application.Expiry;
 using Evidgate.Modules.Policy.Application.Queries;
 using Evidgate.Modules.Policy.Contracts;
 using Evidgate.Modules.Policy.Infrastructure.Persistence;
@@ -69,6 +70,14 @@ internal static class PolicyModule
         services.TryAddScoped<ExceptionsSnapshotResolver>();
         services.TryAddScoped<EvaluateRunCommandHandler>();
         services.AddTaskHandler<EvidenceRevisionFrozenPayload, EvidenceRevisionFrozenTaskHandler>();
+
+        // The hourly expiry sweep: a platform task (the scan spans tenants) whose per-org writes run in tenant scopes.
+        // Every Worker fires the schedule and the unique fire key elects one row; the Api composes the same module and
+        // never consumes the queue.
+        services.TryAddSingleton<IWorkerSchedDataSource, WorkerSchedDataSource>();
+        services.TryAddSingleton<ExceptionExpiryStore>();
+        services.AddTaskHandler<SweepExpiredExceptionsCommand, SweepExpiredExceptionsTaskHandler>();
+        services.AddTaskSchedule(ExpirySweeps.Expire);
 
         return services;
     }
