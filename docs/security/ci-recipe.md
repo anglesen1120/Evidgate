@@ -6,26 +6,24 @@ Legend: ✅ verified with a link · ⚠️ unverified · `[INFERENCE]`. GitHub c
 
 ## 1. The two rules
 
-1. **SHA-pin every action and container image.** A tag or branch is mutable, so `uses: owner/action@v5` can change under you; pin the full 40-character commit SHA and keep the release tag in a `# vX.Y.Z` comment. A `docker://` image needs `@sha256:<64 hex>`. This is rule `R2-sha-pinned` in [customer-ci-recipe.md §3](customer-ci-recipe.md#3-the-five-rules), with its GitHub source.
-2. **Give `GITHUB_TOKEN` the least it needs.** Set the workflow default to `permissions: {}` (or read-only), elevate per job, and grant `id-token: write` only on the job that mints the Evidgate token (the `upload` job in the recipe and the quickstart template). When the workflow runs on `pull_request`, that job must also carry its own `if:` that positively requires a non-`pull_request` event (`github.event_name == 'push'`, `'workflow_dispatch'` or `'merge_group'`); the lint fails a token-minting job reachable from `pull_request` with no such guard. This is rule `R3-token-permissions` in [customer-ci-recipe.md §3](customer-ci-recipe.md#3-the-five-rules).
-
-The fork-safe recipe already follows both, and the `evidgate quickstart` template renders the same shape.
+1. **Pin pipeline dependencies.** Use immutable commit or image digests and review updates; do not execute an unpinned installer in the upload job.
+2. **Isolate the credential.** Keep the masked project ingest token in a trusted upload job that does not execute untrusted code. A fork job receives no Evidgate credential. See the [customer recipe](customer-ci-recipe.md#3-the-five-rules).
 
 ## 2. Keeping the pins current
 
-A SHA pin does not update itself. In the customer's own repository, add a `github-actions` entry to `.github/dependabot.yml`; Dependabot then opens a PR when a pinned action has a newer release, and the reviewer re-pins to the new SHA (keeping the `# vX.Y.Z` comment). ✅ [Dependabot options reference](https://docs.github.com/en/code-security/reference/supply-chain-security/dependabot-options-reference) lists `github-actions` as a `package-ecosystem`.
+Use the update tooling of your own CI provider to propose, review and refresh pinned dependencies.
 
 Pin the Evidgate CLI to an exact version too: the rendered steps use `npx --yes --package @evidgate/cli@<version>` with the exact published version, never a range or `latest`. An integrity-pinned install (a committed lockfile with `npm ci --ignore-scripts`, or a checksummed binary) is not available yet ⚠️ (04.9.2-T1).
 
 ## 3. Checking a workflow
 
-`scripts/lint-ci-recipe.sh <file>` checks the five rules on any workflow file; it needs Node.js and the Evidgate repository's `npm ci` (for the `yaml` parser). Run it from an Evidgate checkout:
+For the repository’s historical Actions-format fixture only, `scripts/lint-ci-recipe.sh <file>` checks workflow text using Node.js and the `yaml` parser. It is not a security proof for another CI system:
 
 ```sh
 scripts/lint-ci-recipe.sh /path/to/your-repo/.github/workflows/evidgate.yml
 ```
 
-It exits 0 when the file is clean, 1 on a violation, 2 on a usage or I/O error ([customer-ci-recipe.md §9](customer-ci-recipe.md#9-checking-a-workflow-scriptslint-ci-recipesh)). The `evidgate quickstart` output passes it (11.6.1-T2): `docs/quickstart/github-actions.yml` is the rendered template and lints clean.
+The lint exits 0 on clean input, 1 on a violation and 2 on usage or I/O errors. No lint result proves the project secret is unreachable from untrusted jobs; verify the runner settings.
 
 ## 4. How Evidgate itself follows these rules
 
@@ -37,4 +35,4 @@ The same two rules are enforced on Evidgate's own workflows by the shipped 01.7.
 ## 5. Not covered
 
 - The lint is not shipped to customers as a CLI command or a published package; it stays an Evidgate-repository script ([customer-ci-recipe.md §9](customer-ci-recipe.md#9-checking-a-workflow-scriptslint-ci-recipesh)).
-- The rules cover a GitHub Actions workflow only; other CIs use the ingest-token grant ([customer-ci-recipe.md §5](customer-ci-recipe.md#5-non-oidc-cis-the-ingest-token-grant-explicit-provide)).
+- Customer CI may use any provider. The authenticated Evidgate path is the [project ingest-token grant](customer-ci-recipe.md#5-project-ingest-token-grant).

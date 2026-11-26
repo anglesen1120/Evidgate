@@ -64,7 +64,7 @@
 | `task` | `id`, `org_id` (null for platform tasks), `queue`, `task_type`, `payload jsonb`, `idempotency_key`, `schedule_name`, `fire_at`, `state` (`queued`/`active`/`retry`/`dead_letter`/`done`), `attempts`, `max_attempts`, `available_at`, `locked_until`, `last_error`, `created_at` | `unique (idempotency_key)`; `unique (schedule_name, fire_at)` where `schedule_name` is not null (00 §5.3); partial index `(queue, available_at) WHERE state IN ('queued','retry')`; platform table (no RLS; rows carry `org_id` and handlers open the tenant scope from it) |
 | `idempotency_record` | `org_id`, `project_id`, `operation`, `key`, `request_hash`, `response_status`, `response_body jsonb`, `created_at`, `expires_at` | PK `(org_id, project_id, operation, key)`; RLS by `org_id`; purge by schedule after `expires_at` (T11) |
 
-Schema `evidgate` also holds the NULL-safe helper functions the RLS policies read (`evidgate.current_org_id()`, `evidgate.current_project_id()`, T2), and the empty schema `evidgate_resolve` for pre-tenant `SECURITY DEFINER` resolvers (functions added by 02.6.1 and 03.4.1, T1), both created by migration as the owner role.
+Schema `evidgate` also holds the NULL-safe helper functions the RLS policies read (`evidgate.current_org_id()`, `evidgate.current_project_id()`, T2), and the empty schema `evidgate_resolve` for pre-tenant `SECURITY DEFINER` resolvers (functions added by 02.6.1, T1), both created by migration as the owner role.
 
 **Endpoints:** plan 01 owns no business endpoint. It owns the conventions and the skeleton of `contracts/openapi.yaml` (00 §9) plus operational endpoints outside `/v1`: `GET /internal/health/live`, `GET /internal/health/ready`, `GET /metrics` (see §13 CR-01-4).
 
@@ -234,7 +234,7 @@ Schema `evidgate` also holds the NULL-safe helper functions the RLS policies rea
 |---|---|---|---|---|---|
 | 01.8.1-T1 | S3 emulator licence check and decision: SeaweedFS (Apache-2.0 ✅) chosen; MinIO rejected (AGPL-3.0 ✅); Scality CloudServer (Apache-2.0 ✅) fallback, LocalStack rejected (archived; free tier non-commercial); acceptance = presigned PUT/GET via `AWSSDK.S3` with SigV4, checksum header **and signed `Content-Length`** (oversize PUT rejected, T18) matching the provider path 06 uses; ADR-0004 | S | V1 | G1 | — |
 | 01.8.1-T2 | Compose dev stack: PostgreSQL 18 (digest-pinned) + emulator; Api/Worker via `dotnet watch`, web via `ng serve`; healthchecks, named volumes | M | V1 | G1 | 01.8.1-T1 |
-| 01.8.1-T3 | Dev seed as `Evidgate.Migrator seed-dev` (refuses non-dev environments, idempotent): one org, one project, a dev user with `tenant_admin` + `release_approver` memberships from the 02 roles catalogue, one CI binding for the dev repository; `scripts/dev/up.sh` + `docs/dev-setup.md` quickstart. This is the Stage A bootstrap: no login is needed to reach a first run | M | V1 | G1 | 01.8.1-T2, 02.1.2-T1, 02.4.1-T2 |
+| 01.8.1-T3 | Dev seed as `Evidgate.Migrator seed-dev` (refuses non-dev environments, idempotent): one org, one project, a dev user with `tenant_admin` + `release_approver` memberships from the 02 roles catalogue, `scripts/dev/up.sh` + `docs/dev-setup.md` quickstart. This is the Stage A bootstrap: no login is needed to reach a first run | M | V1 | G1 | 01.8.1-T2, 02.1.2-T1 |
 | 01.8.1-T4 | Seed part 2: mint one dev ingest token (printed once; the CLI dev path of 04.2.1-T2 reads it from `EVIDGATE_DEV_TOKEN`) and one sample policy revision | S | V1 | G1 | 01.8.1-T3, 02.4.2-T1, 07.1.1-T1 |
 
 ### Epic 01.9 ADRs and engineering docs (M0-M1)
@@ -252,7 +252,7 @@ Schema `evidgate` also holds the NULL-safe helper functions the RLS policies rea
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
 | 01.10.1-T1 | Emit our own CI results in the ingest format: xUnit v3 JUnit XML report (⚠️ format checked here), Vitest and Playwright JUnit → artifact set produced by the same adapter code as customers (04, T48) | M | V1 | G2 | 01.7.1-T1 |
-| 01.10.1-T2 | Ingest our own runs: CI exchanges the GitHub OIDC credential (F3) for a short-lived ingest token and pushes runs for `main` and PRs | M | V1 | G2 | 01.10.1-T1 |
+| 01.10.1-T2 | Ingest our own runs: our CI uses a project ingest token (repository secret) and pushes runs for `main` and PRs | M | V1 | G2 | 01.10.1-T1 |
 | 01.10.1-T3 | Gate our own pull requests on the Evidgate decision (required check; "missing evidence never yields PASS" is exercised weekly) | M | V1 | G2 | 01.10.1-T2 |
 | 01.10.1-T4 | Fixture promotion loop: parser errors/warnings and mapping gaps found by dogfooding become `fixtures/` cases and 04 issues | S | V2 | G2 | 01.10.1-T3 |
 

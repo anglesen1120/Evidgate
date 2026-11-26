@@ -15,14 +15,14 @@
 - V2 (M4): customer reference evidence, subscription/billing boundary decision, WIPO/USPTO trademark follow-through.
 - V3 (M5+): automated billing, dunning, self-serve plans, enterprise contracts.
 
-**Out of scope:** published price list before O5 is closed with pilot data, revenue forecasts, a payment gateway, automated tax handling, and any promise of hosted runners or device farms (00 §1.3).
+**Out of scope:** published price list before O5 is closed with pilot data, revenue forecasts, a payment gateway, automated tax handling, any promise of device farms (00 §1.3), and overage billing for hosted-run minutes (OI-13-806).
 
 **Rule for this plan:** it contains **no invented prices**. Every price field is `[OPEN] O5` until the cost and willingness-to-pay data from the G2 price test exists.
 
 **CR-D-2 pilot cohorts.** The pilot runs as two cohorts, one per phase gate ([13 §4.3](13-product-phases.md), CR-D-2 §5 and §6.7), instead of one V1 cohort:
 
 - **G1 authoring cohort (5–10 teams, free trial).** Teams start from requirements: they use requirement → checklist → manual test case authoring, batched review, versions and export for at least 3 weeks. The exit signal is at least 5 teams for 3 weeks with exports or real use of the test cases; the stop signal is fewer than 3 teams returning after week 1 (`13.9.1-T1`). A free trial is the only way to reach that count — it measures adoption and return, not willingness to pay, so D1 applies from G2 (below).
-- **G2 run-and-remember cohort (at least 3 teams).** The same teams, plus new ones, turn approved test cases into Playwright scripts bound to live elements, run them in their own CI (A5) and let Evidgate store element profiles. Exit signal: at least 70 % of generated scripts pass 3 of 3 runs on one build without manual edits, and at least 3 teams agree to pay before G3 starts (`13.9.1-T2`).
+- **G2 run-and-remember cohort (at least 3 teams).** The same teams, plus new ones, turn approved test cases into Playwright scripts bound to live elements, run them in their own CI or on Evidgate's hosted runner (A5 and its D-HOSTED-RUN exception, Epic 13.11) and let Evidgate store element profiles. Exit signal: at least 70 % of generated scripts pass 3 of 3 runs on one build without manual edits, and at least 3 teams agree to pay before G3 starts (`13.9.1-T2`).
 - Discovery (12.1.1), the agreement pack (12.2.1) and the frozen metric definitions (12.2.1-T2) serve both cohorts; baseline and after windows are measured per cohort, so a team that stays from G1 into G2 keeps one continuous baseline, and a team joining at G2 gets its own.
 
 **Price test (CR-D-2 §6.7).** No price is published before the test, and the test happens in a fixed order: G1 measures free-trial use only — features created, test cases exported, weekly return — and is explicitly **not** a price signal; the real offer is made at the end of G2, where at least 3 teams must agree to pay before G3 starts. O5 (12.4.1-T4) closes on that evidence. The AI credit rate card is **not** decided in this plan: credits per AI action, the per-tenant / per-project budget and the "no less than 3× the measured model cost, reviewed monthly" rule are owned by `08.5.5` (CR-D-2 §6.2; rule decided by the owner 2026-10-23); this plan only meters the `ai_credit` usage-ledger rows that `08.5.5-T1` writes under the `08.5.5-T2` billing key `ai:<call_id>`, additively to `ai_tokens` — the metric-list rename stays `[OPEN]` (OI-08-06, decided at the 12.3.1 review).
@@ -31,14 +31,14 @@
 
 - **FR-12-1** Discovery: at least 5 structured interviews with QA leads/engineers from teams that already run automation, plus a documented intake of their real reports (Playwright JSON/HTML, JUnit XML) and failure samples, with provenance and written permission to reuse. Output feeds O1 (CI/engine) and the scope decisions in 00 §1.3.
 - **FR-12-2** Pilot selection criteria (all must hold): already has automated tests in a supported engine; at least one web suite that runs on pull requests; releases at least twice a month; a named owner who can sign a DPA and a pilot agreement; willing to share before-metrics; no unresolved data-residency blocker; and willing to pay a pilot fee at G2. Target: 5–10 teams in the G1 free authoring cohort and at least 3 paying teams in the G2 run cohort (CR-D-2 §5, §6.7). **CR-D-2 cohort split:** the G1 authoring cohort does not need an existing automation suite — a team that starts from requirements and has a named owner, a signable DPA and a realistic path to a paid G2 pilot qualifies, and the first two criteria (a supported engine, a web suite on pull requests) apply from the G2 run cohort.
-- **FR-12-3** A pilot agreement is signed before any upload, containing: scope and duration, price and payment terms, the DPA (plan 11) as an annex, data handling and deletion terms, success metrics, exit criteria, support expectations, and an explicit "not included" list (hosted runners, device farm, platform breadth beyond 00 §1.3).
+- **FR-12-3** A pilot agreement is signed before any upload, containing: scope and duration, price and payment terms, the DPA (plan 11) as an annex, data handling and deletion terms, success metrics, exit criteria, support expectations, and an explicit "not included" list (device farm, hosted minutes beyond the plan’s included monthly quota, platform breadth beyond 00 §1.3). Customer terms must state that test/staging environments must not contain production data or real personal data. Only test/staging data may be sent to the AI gateway, after secret scanning and redaction. The pilot DPA above is separate from an AI-provider DPA; a provider DPA, transfer impact assessment and zero-retention terms are not prerequisites for the first real AI call.
 - **FR-12-4** Baseline is measured **before** the gate is enabled: triage time per failure and test-maintenance hours per sprint, using the method fixed in 12.2.1-T2, for at least two sprints, with raw data retained so the comparison can be audited.
 - **FR-12-5** After metrics: triage time, maintenance time, repeated incidents handled correctly (counted against the customer's own labels — only human labels count as ground truth, 00 §8.7), retention (still using it after the pilot window), and contribution margin per tenant.
 - **FR-12-6** Guardrail metric: heal rate and missed-bug rate are reviewed together every month. A rising heal rate with rising missed bugs is a **failed** pilot outcome, not a success (source §9: "tỷ lệ healed thành công cao nhưng bỏ sót bug tăng là kết quả không đạt").
 - **FR-12-7** Usage ledger: append-only entries, each with a unique `billing_key` per source metering event — `unique (org_id, billing_key)` (T43), quantity, unit, period, the applied price reference and the resulting amount. The `billing_key` is produced by the emitting plan, not by plan 12: 04 `04.8.1-T1` for accepted results (per-batch `batch:<event_batch_id>:<metric>` keys, T50), 06 `06.5.2-T2` for storage/egress usage, 08 `08.5.5-T1` / `08.5.5-T2` for AI credit (`ai_credit`, key `ai:<call_id>`, additive to `ai_tokens` — OI-08-06). Corrections are new adjustment rows referencing the corrected row - never edits to an issued row (source §9).
-- **FR-12-8** Metered metrics (each with a defined measurement point and a reconciliation query): results count; artifact GB-month; egress GB; runner minutes (later, only if we ever run tests); device minutes (later); AI tokens (`ai_tokens`) and AI credits (`ai_credit`, written by `08.5.5-T1` as an additive metric — OI-08-06); support hours.
+- **FR-12-8** Metered metrics (each with a defined measurement point and a reconciliation query): results count; artifact GB-month; egress GB; runner minutes (hosted runs, from G2, written by `13.11.1-T11`); device minutes (later); AI tokens (`ai_tokens`) and AI credits (`ai_credit`, written by `08.5.5-T1` as an additive metric — OI-08-06); support hours.
 - **FR-12-9** Quota enforcement: per-project and per-tenant limits with warn at 80 % and block at 100 %. A blocked upload is an explicit error (429/`quota_exceeded` style), never a silent drop; ingestion already committed is unaffected.
-- **FR-12-10** Pricing hypotheses (not commitments): an onboarding fee plus a subscription per project (and/or per concurrency level) with an included results-and-artifact quota; AI usage priced as an overage once measured. In V1 the customer's CI pays for runner minutes, so we do not bill runner minutes - but our own cloud and support cost still exist. AI credit pricing is not set here: credits per action and their budget are owned by `08.5.5` (CR-D-2 §6.2); this plan meters the `ai_credit` ledger rows that `08.5.5-T1` writes, additively to `ai_tokens` (OI-08-06).
+- **FR-12-10** Pricing hypotheses (not commitments): an onboarding fee plus a subscription per project (and/or per concurrency level) with an included results-and-artifact quota; AI usage priced as an overage once measured. In V1 the customer's CI pays for its own runner minutes, so we do not bill them - but our own cloud and support cost still exist. For hosted runs from G2, each subscription plan includes a monthly `runner_minutes` quota. 13.11.1-T11 reuses the 12.3.1 / 04.8.1 quota gate to refuse new hosted runs when exhausted; no overage is billed. Only the minute allowance per plan remains to be set after 05.9.2-T1 measures cost (OI-13-806). AI credit pricing is not set here: credits per action and their budget are owned by `08.5.5` (CR-D-2 §6.2); this plan meters the `ai_credit` ledger rows that `08.5.5-T1` writes, additively to `ai_tokens` (OI-08-06).
 - **FR-12-11** Invoicing in the pilot is manual: generated from a documented ledger query, checked by two people, issued with a monthly statement the customer can reconcile. No invoices are generated by hand-editing numbers.
 - **FR-12-12** Trademark: search "Evidgate" in classes 9 and 42 (Vietnam first), then file; WIPO Madrid designation and US filing follow. Verified fee facts to use when budgeting: WIPO basic fee 653 CHF (black-and-white mark) or 903 CHF (colour), plus a complementary fee of 100 CHF per designated Madrid member and a supplementary fee of 100 CHF per class beyond three ✅ ([wipo.int Madrid fees](https://www.wipo.int/en/web/madrid-system/how_to/file/fees), read 2026-09-24); USPTO base application filing fee $350 per class for a Section 1/44 application, plus $200 per class if the free-form text box is used and $100 per class for insufficient information, with a $150 per class statement of use for an intent-to-use filing ✅ ([uspto.gov trademark fee information](https://www.uspto.gov/trademarks/trademark-fee-information), page last updated 2025-01-18, read 2026-09-24). Vietnam NOIP official fees and attorney costs are ⚠️ unverified until quoting.
 - **FR-12-13** M3 exit value review (the G2 gate under CR-D-2, [13 §4.3](13-product-phases.md)): a written review with the measured metrics, cost per tenant, churn/stop reasons, and a V2 go/no-go with named conditions and an owner.
@@ -77,7 +77,7 @@
 |---|---|---|
 | Interview notes + pain map | current process, tooling, where triage and maintenance time goes, gate process, compliance constraints | O1, 00 §1.3 scope, 09 screens |
 | Artifact intake | real reports/failure samples, provenance, permission, redaction state | 04 fixtures, 08 evaluation set |
-| CI/engine decision (O1) | GitHub Actions + Playwright TypeScript + one JUnit producer, confirmed with named teams | 01/04/05 planning |
+| CI/engine decision (O1) | any CI with the CLI + Playwright TypeScript + one JUnit producer, confirmed with named teams | 01/04/05 planning |
 | Pilot pipeline | 8-10 screened teams, ranked, with ≥2 letters of intent | 12.2 |
 
 ### 4.2 Pilot pipeline
@@ -90,7 +90,7 @@ screen against FR-12-2 → letter of intent → agreement + DPA signed → onboa
 |---|---|---|---|---|
 | Triage time per failure | median time from a failure being reported to a label+owner being set (self-reported where the tool is not ours) | ticket system + product timestamps | weekly | must improve vs baseline, or a written reason |
 | Test-maintenance time | hours per sprint spent fixing test mechanics (excludes product fixes) | customer timesheet | per sprint | must improve, or no-healing value claim |
-| Repeated incidents handled correctly | repeated failures whose label matched the human label later applied | product labels | monthly | >50 % correct before any V2 PR capability `[DECISION]` |
+| Repeated incidents handled correctly | repeated failures whose label matched the human label later applied | product labels | monthly | >50 % correct before any V2 script-revision approval capability `[DECISION]` |
 | Retention | still running the pilot after the window, with ≥N runs/week | product usage | monthly | continues or has a dated reason |
 | Contribution margin | revenue − (API/DB share + object GB-month + egress + AI tokens + support hours) | ledger + cost model | monthly | must be non-negative by M3 exit, or a written plan |
 | Heal rate | accepted candidates ÷ eligible failures | product | monthly | reported only next to missed bugs |
@@ -112,13 +112,14 @@ Reconciliation: a documented query per metric per period plus adjustments; the r
 
 | Component | Basis | Number |
 |---|---|---|
-| Onboarding fee | one-off, covers repo/CI connection, first suite mapping, fixture work | `[OPEN] O5` |
+| Onboarding fee | one-off, covers CI result delivery, first suite mapping, fixture work | `[OPEN] O5` |
 | Subscription per project | monthly, per project under test | `[OPEN] O5` |
 | Concurrency add-on | if parallel CI shards require a raised limit | `[OPEN] O5` |
 | Included quota | results and artifact GB-month per project | `[OPEN] O5` |
 | AI overage | per 1k tokens (healing), measured after the V2 beta | `[OPEN] O5` |
 | Support | included hours per month, then hourly | `[OPEN] O5` |
-| Hosted runner/device minutes | not offered in V1-V2; customer CI pays its own | n/a |
+| Hosted runner minutes | Included in each subscription plan up to its monthly minute quota; new hosted runs refused at exhaustion, no overage billing | Decided (owner 2026-11-27), OI-13-806; set per-plan minute limits after 05.9.2-T1 measures cost |
+| Device minutes | not offered in V1-V2; customer CI pays its own | n/a |
 
 ### 4.6 Trademark plan (O7)
 
@@ -193,7 +194,7 @@ Fee figures below are ✅ from the pages I opened: WIPO Madrid fees ([wipo.int](
 | 12.1.1-T1 | Interview guide + 5+ structured interviews with QA leads/engineers (current gate process, triage and maintenance cost, compliance constraints) | L | V1 | G4 | - |
 | 12.1.1-T2 | Artifact intake: real reports/failure samples with provenance, permission and redaction state recorded | M | V1 | G4 | - |
 | 12.1.1-T3 | Discovery log and pain-to-feature map feeding the scope decisions in 00 §1.3 | S | V1 | G4 | 12.1.1-T1 |
-| 12.1.1-T4 | CI/engine decision (O1): GitHub Actions + Playwright TypeScript + one JUnit producer, confirmed with named teams | S | V1 | G4 | 12.1.1-T1, 12.1.1-T2 |
+| 12.1.1-T4 | CI/engine decision (O1): any CI with the CLI + Playwright TypeScript + one JUnit producer, confirmed with named teams | S | V1 | G4 | 12.1.1-T1, 12.1.1-T2 |
 | 12.1.1-T5 | Pilot pipeline: screen 8-10 teams against FR-12-2, rank, secure ≥2 letters of intent | M | V1 | G4 | 12.1.1-T1 |
 
 Epic 12.1 total: 5.0
@@ -320,3 +321,5 @@ Estimate unit: sizes assume one senior full-stack .NET + Angular developer (00 �
 2026-09-25 CR-D-1 + TL review: `billing_key` re-scoped to `unique (org_id, billing_key)` per source event with per-batch ingest keys (T43/T50); `usage_price` gained nullable `org_id` per-pilot overrides (T44, applied in 12.3.1-T3); `quota_counter` gained `org_id`/`project_id`/`period`/`unique (org_id, id)` (T45); estimate unit re-based to senior .NET + Angular (F-12-4). No task ids added, removed or resized.
 
 2026-10-23 CR-D-2: pilot split into a G1 authoring cohort (free trial, 5–10 teams, at least 3 weeks) and a G2 run-and-remember cohort (at least 3 teams agree to pay before G3); D1 amended and D10 added; O5 now closes on the G2 price test (§1, §3, §5, §6, §11); AI credit pricing left with `08.5.5`; FR-12-2 cohort qualification and FR-12-10 boundary added. No task ids added, removed or resized. Later the same day the owner decided the credit pricing rule (at least 3× the cost per action measured in the G1 free trial, reviewed monthly; amounts open until the G2 offer).
+
+> **2026-11-26/27 D-HOSTED-RUN, D-NO-GITHUB (S698):** FR-12-10 and §4.5 now meter hosted `runner_minutes` from G2 (13.11.1-T11) within an included monthly plan quota, with hard refusal at exhaustion and no overage (OI-13-806); 12.1.1-T4 and the O1 row no longer name GitHub Actions (any CI with the CLI). No task id was added, removed or resized, so the plan 12 totals are unchanged.

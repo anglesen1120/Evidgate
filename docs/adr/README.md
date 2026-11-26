@@ -24,7 +24,7 @@
 | [0004-s3-emulator-local-dev.md](0004-s3-emulator-local-dev.md) | S3 emulator for local development | accepted | 2026-09-25 |
 | [0005-licence-allow-deny-policy.md](0005-licence-allow-deny-policy.md) | Licence allow/deny policy for NuGet and npm | accepted | 2026-09-25 |
 | [0006-cqrs-pipeline-and-data-access.md](0006-cqrs-pipeline-and-data-access.md) | CQRS pipeline and data access | accepted | 2026-09-25 |
-| [0007-single-github-app.md](0007-single-github-app.md) | Single GitHub App per environment (production + non-production) | proposed | 2026-10-11 |
+| [0007-single-github-app.md](0007-single-github-app.md) | Single GitHub App per environment (production + non-production) | Superseded by D-NO-GITHUB | 2026-10-11 |
 | [0008-web-integration-fit.md](0008-web-integration-fit.md) | Web integration fit: SDK behind `HttpClient`, zoneless, Trusted Types, CDK tables, SignalStore | accepted | 2026-10-24 |
 | [0009-event-table-partitioning.md](0009-event-table-partitioning.md) | Event-class table partitioning: key, dedupe key and retention windows | proposed | 2026-10-27 |
 | [0010-audit-chain-keyed-hash-and-external-checkpoints.md](0010-audit-chain-keyed-hash-and-external-checkpoints.md) | Audit chain: HMAC-keyed hash, key custody and rotation, signed external checkpoints | proposed | 2026-10-28 |

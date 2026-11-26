@@ -215,7 +215,7 @@ Note: 10.1.1-T4 owns the origin's infrastructure (domain, DNS, TLS, hosting, hea
 | 10.7.1-T1 | Dead-letter runbook for the `task` queue table: triage query, classification, safe replay, escalation — the linked action for 01.5.1-T4 and alert 10.3.1-T5 (F-10-4) | M | V1 | G2 | 01.5.1-T4 |
 | 10.7.1-T2 | Stuck run runbook: detect runs past the collection deadline, inspect lease/epoch state (00 §5.3), reconcile or cancel without inventing evidence | M | V1 | G2 | 10.3.1-T3 |
 | 10.7.1-T3 | Orphan artifact runbook: objects without `ready`, `pending_upload` past TTL, retention sweep failures (00 §8.4) | S | V1 | G2 | 10.5.1-T2 |
-| 10.7.1-T4 | Key rotation runbook: ingest tokens, CI OIDC trust, JWT signing keys, webhook secrets, database credentials, provider keys, and the ingest/API token HMAC pepper — a new `pepper_vN` signs new tokens while old versions verify until their last token expires (T5) — rotation without downtime or lost events; GitHub App private key and webhook secret per [`docs/runbooks/github-app-key-custody.md`](../docs/runbooks/github-app-key-custody.md) (stub from 02.4.3-T1, ADR-0007) | M | V1 | G1 | 10.1.1-T2 |
+| 10.7.1-T4 | Key rotation runbook: ingest tokens, JWT signing keys, webhook secrets, database credentials, provider keys, and the ingest/API token HMAC pepper — a new `pepper_vN` signs new tokens while old versions verify until their last token expires (T5) — rotation without downtime or lost events | M | V1 | G1 | 10.1.1-T2 |
 | 10.7.1-T5 | Kill switch runbook + drill: system → tenant → project healing availability (00 §8.7, DECISIONS §5.9) flipped while ingest, runs and gates continue | M | V1 | G2 | 10.3.1-T5, 08.6.3-T1 |
 | 10.7.1-T6 | Incident process: severity ladder, on-call expectation for the pilot, communication, postmortem template with a follow-up task rule | M | V1 | G2 | 10.7.1-T1 |
 
@@ -251,7 +251,7 @@ Note: 10.1.1-T4 owns the origin's infrastructure (domain, DNS, TLS, hosting, hea
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
 | 10.10.1-T1 | Define and measure the trigger: number of workflows with long human waits, recovery incidents caused by queue/outbox limitations, and the manual work each costs (metrics from 10.3.1-T3) | S | V1 | G4 | 10.3.1-T3 |
-| 10.10.1-T2 | Temporal evaluation spike (only if the trigger fires): model the healing PR flow and approval waits, cost of running one more system, migration path; output memo to plan 08/00 | M | V3 | G4 | 10.10.1-T1 |
+| 10.10.1-T2 | Temporal evaluation spike (only if the trigger fires): model the healing approval flow and approval waits, cost of running one more system, migration path; output memo to plan 08/00 | M | V3 | G4 | 10.10.1-T1 |
 
 ### Epic 10.11 Edge and abuse limits (M2) [PROPOSAL review 2026-10-02]
 #### Story 10.11.1 Ingress and abuse limits — acceptance: unauthenticated endpoints, presign issuance and org-level reads have limits, and oversized or slow requests are cut at the edge.
@@ -268,7 +268,7 @@ Note: 10.1.1-T4 owns the origin's infrastructure (domain, DNS, TLS, hosting, hea
 ## 10. Dependencies
 
 - **01-foundation:** CI pipeline (01.7.1-T1), `Evidgate.Migrator` DbUp runner and role split (01.4.1-T1/T2), dev stack (01.8.1-T2), `outbox`/`task` dead-letter + operator CLI (01.5.1-T4), event schema and limits (01.3.1-T2), Testcontainers.PostgreSQL harness (01.6.1-T2). Plan 10 needs the layout additions of `01 §13 CR-01-3` (`infra/`, `scripts/`).
-- **02-identity-tenancy:** token and signing keys for the rotation runbook (10.7.1-T4), audit trail for support access (§6), GitHub App key custody stub (02.4.3-T1).
+- **02-identity-tenancy:** token and signing keys for the rotation runbook (10.7.1-T4), audit trail for support access (§6).
 - **03-catalog-authoring / 05-runs-orchestration:** stuck-run detection signals and lease/epoch state for 10.7.1-T2; outbox task types for the queue-age alert.
 - **06-evidence-artifacts:** artifact lifecycle states, retention sweep and orphan reconciliation feeding 10.7.1-T3 and 10.5.1-T2.
 - **07-policy-decisions:** policy revision rollout path used by the shadow decision compare (10.2.2-T3); webhook delivery metrics for the alert set.
@@ -314,3 +314,5 @@ Task sizes use the shared units (XS 0.25 · S 0.5 · M 1 · L 2 · XL 3 person-d
 |---|---|---|---|
 | CR-10-1 | 00 §11 Non-functional requirements | Add an operational row so the plan-10 SLIs trace to the shared table: "Operational SLIs (measured, not SLA): queue/outbox lag, dead-letter depth, lease-loss rate, incomplete rate, parser-error rate, artifact-failure rate, healing false-positive rate (targets and thresholds owned by plan 10)". | Tech Lead |
 | CR-10-2 | 00 §14 Estimate roll-up | This plan's row becomes `38 tasks, V1 42.5, V2 2, V3 1, raw 45.5, buffered 54.6` (new task 10.1.1-T4, M, V1, M2). Two notes for the same pass: (a) plan 10 has no per-epic total lines in §9 (only §12 carries sums), unlike 09/11/12 - decide whether to add them file-wide; (b) plan 10's §11 has no static-hosting open question; the viewer origin is now 10.1.1-T4 and the `apps/web` static-host question stays in 09 §11 (#3). | Integrator - applied 2026-09-25 |
+
+> **2026-11-27 D-NO-GITHUB (S698):** 10.7.1-T4 drops the CI OIDC trust and GitHub App key-custody clauses (the runbook `docs/runbooks/github-app-key-custody.md` is deleted by 02.11.1-T3); the dependency note on 02.4.3-T1 is removed. No task id or size changed, so the plan 10 totals are unchanged.

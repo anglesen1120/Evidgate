@@ -68,7 +68,7 @@ Web libraries are fixed by DECISIONS §4.2 (licence and version verified 2026-09
 
 | Screen | Main tasks (source §3) | Evidence to show | Endpoints / data | Permission |
 |---|---|---|---|---|
-| Project & Catalog | connect repo, filter tests, assign owner | test id, revision, test type, rename history | catalog read APIs (03); `GET /v1/projects/{p}/runs` | `project:read`, `case:write` |
+| Project & Catalog | filter tests, assign owner, show the project ingest token step | test id, revision, test type, rename history | catalog read APIs (03); `GET /v1/projects/{p}/runs` | `project:read`, `case:write` |
 | Test Studio (V2) | create draft, review patch | diff, assertion, data, dry run, approver | drafts/revisions/suites APIs (03) | `draft:write`, `draft:dry_run`, `draft:merge_request` |
 | Run & Release | start, cancel, view gate | build digest, manifest, missing shards, each attempt | `POST /v1/projects/{p}/runs`, `GET /v1/runs/{r}`, `POST /v1/runs/{r}/cancel`, `GET /v1/runs/{r}/decision` | `run:create`, `run:cancel`, `decision:read` |
 | Failure Inbox | triage, assign owner | log, trace, root error, infra error, related issue | incidents APIs (08), artifact viewer (06) | `healing:triage`, `artifact:read` |
@@ -88,7 +88,7 @@ Web libraries are fixed by DECISIONS §4.2 (licence and version verified 2026-09
 
 ### 4.3 Flows
 
-**Onboarding (source §3):** create project → connect repo/CI (GitHub OIDC exchange or hashed project token, shown once) → run a sample suite → **compare with the original report** (normalised results vs the producer's own report: counts, ids, statuses, digests; discrepancies become mapping findings for 04) → enable regular collection (collect mode, policy advisory preview, explicit statement of what is not yet gating). No step may be skipped silently; each step is resumable and shows the run it produced.
+**Onboarding (source §3):** create project → optional "send results from your CI" step (hashed project ingest token, shown once, copyable, rotatable; no repository or GitHub connection, D-NO-GITHUB) → run a sample suite → **compare with the original report** (normalised results vs the producer's own report: counts, ids, statuses, digests; discrepancies become mapping findings for 04) → enable regular collection (collect mode, policy advisory preview, explicit statement of what is not yet gating). No step may be skipped silently; each step is resumable and shows the run it produced.
 
 **Investigation (source §3):** open failure → triage label (rule/model/human source shown) → either "fix the product" or "propose healing" (V2) → rerun a new revision → compare. Comparison is always evidence-revision based; the previous revision stays linkable.
 
@@ -192,7 +192,7 @@ Epic 09.1 total: 11.0
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
 | 09.2.1-T1 | Wizard shell with resumable steps and per-step evidence panel | L | V1 | G1 | 09.1.1-T4 |
-| 09.2.1-T2 | Connect repo/CI step: GitHub OIDC exchange path and project ingest token (shown once, copyable, rotatable) | M | V1 | G2 | 02.4.1-T1, 02.4.2-T1 |
+| 09.2.1-T2 | CI results step (optional): project ingest token, shown once, copyable, rotatable | M | V1 | G2 | 02.4.2-T1 |
 | 09.2.1-T3 | Sample-suite step: first run shown live (state, attempts, failures) | M | V1 | G2 | 09.3.1-T2 |
 | 09.2.1-T4 | Report comparison step: normalised results vs the original producer report with per-case diffs and discrepancy reasons | L | V1 | G2 | 04.4.1-T6, 06.1.2-T1 |
 | 09.2.1-T5 | Enable step: collect mode, policy advisory preview, explicit "not gating yet" statement, confirmation audit | M | V1 | G2 | 07.1.1-T1 |
@@ -244,7 +244,7 @@ Epic 09.4 total: 8.0
 | 09.5.1-T1 | Healing Review queue (shadow): candidate status, label source, sample counts, availability state | M | V1 | G3 | 08.3.1-T1 |
 | 09.5.1-T2 | Candidate detail (V1 read-only): patch diff, validation results, negative control, lineage, risk flags, "proposal only" banner | L | V1 | G3 | 08.4.1-T1, 08.4.2-T1 |
 | 09.5.1-T3 | Shadow comparison: original failure vs shadow result in two blocks, official run untouched | M | V1 | G3 | 09.3.1-T4 |
-#### Story 09.5.2 Approval (V2) - acceptance: approve/reject binds to `candidate_hash` + base commit, is re-permissioned, and a stale hash is rejected with a visible conflict.
+#### Story 09.5.2 Approval (V2) - acceptance: approve/reject binds to `candidate_hash` + base script revision, is re-permissioned, and a stale hash is rejected with a visible conflict.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
 | 09.5.2-T1 | Approve/reject flow (V2): `If-Match`+`candidate_hash`, reason required, expiry, sensitive-case second reviewer | L | V2 | G3 | 08.6.1-T1 |
@@ -334,7 +334,7 @@ Epic 09.8 total: 6.0
 | 09.10.1-T7 | Healing review: queue, shadow detail, approval, knowledge and revocation, availability (mockups 12-16) | L | V1 | G3 | 09.10.1-T3, 09.5.1-T1, 09.5.2-T3 |
 | 09.10.1-T8 | Test Studio: template gallery, draft editor, review and merge, suite composition (mockups 17-20) | M | V2 | G4 | 09.10.1-T3, 09.6.1-T1 |
 | 09.10.1-T9 | Authoring: feature tree, case editor, pending changes, generation, AI settings, import and export, generated scripts, UI-change proposal (mockups 40-47) | XL | V2 | G1 | 09.10.1-T3, 13.4.1-T1 |
-| 09.10.1-T10 | Onboarding and catalog: onboarding wizard, project connection, test catalog, mapping resolution (mockups 23-26) | L | V1 | G2 | 09.10.1-T3, 09.2.1-T1, 09.2.1-T6 |
+| 09.10.1-T10 | Onboarding and catalog: onboarding wizard, CI results step, test catalog, mapping resolution (mockups 23-26) | L | V1 | G2 | 09.10.1-T3, 09.2.1-T1, 09.2.1-T6 |
 | 09.10.1-T11 | Settings core: settings shell, members and roles, secret references, release policy, usage and credits, audit log, security events (mockups 27-33) | L | V1 | G2 | 09.10.1-T3, 09.7.1-T1 |
 | 09.10.1-T12 | Settings extended: agent pools, webhooks, support access, API tokens, deploy targets (mockups 34-38) | M | V2 | G4 | 09.10.1-T11, 09.7.1-T7, 09.7.2-T1 |
 | 09.10.1-T13 | Visual-regression baseline and accessibility pass at 1440 and 900 px, light and dark, vi and en, over every migrated screen | L | V2 | G4 | 09.10.1-T4, 09.10.1-T5, 09.10.1-T6, 09.10.1-T7, 09.10.1-T8, 09.10.1-T9, 09.10.1-T10, 09.10.1-T12, 09.8.1-T2 |
@@ -348,7 +348,7 @@ Epic 09.8 total: 6.0
 | Needs | From |
 |---|---|
 | Workspace scaffold, contracts pipeline, generated SDK, lint/test toolchain | 01.1.1-T3, 01.3.2-T1, 01.7.1-T1 |
-| OIDC login, membership, permissions, CI token exchange, audit read | 02.3.1-T1, 02.1.2-T1, 02.2.1-T1, 02.4.1-T1, 02.4.2-T1, 02.7.1-T1 |
+| OIDC login, membership, permissions, CI token exchange, audit read | 02.3.1-T1, 02.1.2-T1, 02.2.1-T1, 02.4.1-T3, 02.4.2-T1, 02.7.1-T1 |
 | Catalog identity/revisions/mapping, suites, templates, drafts, AI drafts | 03.1.1-T1, 03.1.2-T2, 03.2.1-T1, 03.2.1-T3, 03.2.1-T4, 03.2.1-T5, 03.5.1-T1, 03.6.1-T1, 03.6.1-T2, 03.7.1-T1 |
 | Report comparison vs the original producer report (stored raw report + parsed events per case with discrepancy reasons) | 04.4.1-T6 |
 | Run creation/state, finalize+`missing[]`, cancel, rerun, agent pools | 05.2.1-T1, 05.3.1-T1, 05.3.2-T1, 05.4.1-T1, 05.5.1-T1, 05.7.3-T1 |
@@ -403,3 +403,5 @@ Epic 09.8 total: 6.0
 | 09-CR-3 | 00 §14: this plan's row becomes 09 `59 tasks, V1 52.5, V2 18.5, V3 0, raw 71.0, buffered 85.2` (new task 09.7.1-T9, S, V1, M3); with 10 (+1.0 V1) and 11 (+1.0 V1) the set totals become 479 tasks, V1 410.5, V2 112.75, V3 13.25, raw 536.0, buffered 643.2, V1 buffered 492.6, and by milestone M2 147.5, M3 118. `AGENTS.md`'s header line ("476 tasks, 533.5 raw / 640.2 buffered") needs the same refresh | The roll-up is the program's one authoritative total and must equal the sum of plan §12 tables after every task addition | Applied 2026-09-25 by integrator |
 
 > **Addendum (09-CR-3):** Integrator applied 2026-09-25: final set after 04/05/10/11 additions = 487 tasks, V1 416.5, V2 113.75, V3 13.25, raw 543.5, buffered 652.2 (00 §14); the interim figures above are superseded.
+
+> **2026-11-27 D-NO-GITHUB (S698):** 09.2.1-T2 is now an optional CI results step (project ingest token, no GitHub OIDC exchange, no repository connection); 09.5.2 approval binds `candidate_hash` + base script revision (plan 08 D3); the onboarding wizard and the Project & Catalog screen no longer "connect repo". No size changed, so the plan 09 totals are unchanged; dependency 02.4.1-T1 (removed) is replaced by 02.4.1-T3 in the §11 map and dropped from 09.2.1-T2.
