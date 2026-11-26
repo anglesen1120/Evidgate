@@ -1769,3 +1769,9 @@ Closed by S686 (#1428, `a6e30cd4`): `EffectivePermissionsSource` now defaults to
 | Settings members tab refuses a limited role holding membership:read (S686) | Under the `limited` fixture session (`membership:read` granted) `/en/orgs/<org>/settings/members` renders 'Not authorized' and no tab strip, although the members tab's own permission is held. Cause not investigated (settings shell gate or the members page's own read). A limited role is the first case where this shows, so it is a real defect, not a fixture artefact. | receiver: web follow-up lane |
 
 Closed by S689 (#1431, cbe7554f): the cause was the `settings` navigation entry gate (`organization:read`), not the tab guard; the Settings route now also opens for a caller holding any tab's own read code, and the index lands on the first openable tab.
+
+## Moved from status-carried.md by S688 (2026-11-26)
+
+| Evaluator ignores quarantine on a critical case (07.3.1-T2 hand-over, from PR #58) | Evaluator must ignore an active exception for a pinned-policy critical case (T23). Activation now refuses a newly critical quarantined case; that refusal does not replace evaluator defense in depth. | receiver: 07.3.2-T1; hand-over Notes: `plans/features/07-policy-decisions/07.3.1-waiver-and-quarantine-lifecycles.md:142` |
+
+Closed by S688 (#1430, 56b477ff): the evaluator ignores a quarantine id for a critical case (`RequiredScope`), pinned by `Evaluation.UnitTests.QuarantineWaiverEffectsTests.M18_CriticalFailure_IgnoresQuarantine`.
