@@ -88,7 +88,8 @@ internal static class IncidentListRules
 }
 
 /// <summary>
-/// The Dapper statements over <c>public.incident_list</c>. Both are one statement: RLS hides other orgs and the
+/// The Dapper statements over <c>public.incident</c> (the first failing attempt is stored on it, so the attempt count is that
+/// plus the retries in <c>incident_attempt</c>). Both are one statement: FORCE RLS hides other orgs and the
 /// explicit <c>org_id</c> predicate is the access path of <c>incident_project_list</c>. The order is that index's:
 /// newest first, <c>id</c> ascending for ties, so the next page continues at an equal timestamp by a larger id.
 /// </summary>
@@ -96,7 +97,9 @@ internal static class IncidentSql
 {
     private const string Columns = """
         id, project_id, run_id, attempt_id, case_id, case_revision_id, execution_key, engine, state, context_state,
-        attempt_count, created_at, updated_at, version
+        (1 + (select count(*) from public.incident_attempt a
+               where a.org_id = incident.org_id and a.incident_id = incident.id))::integer as attempt_count,
+        created_at, updated_at, version
         """;
 
     private const string Filters = """
@@ -106,7 +109,7 @@ internal static class IncidentSql
 
     internal const string FirstPage = "select " + Columns + """
 
-          from public.incident_list
+          from public.incident
          where org_id = @org_id::uuid and project_id = @project_id::uuid
         """ + Filters + """
 
@@ -116,7 +119,7 @@ internal static class IncidentSql
 
     internal const string NextPage = "select " + Columns + """
 
-          from public.incident_list
+          from public.incident
          where org_id = @org_id::uuid and project_id = @project_id::uuid
         """ + Filters + """
 
@@ -128,12 +131,12 @@ internal static class IncidentSql
 
     internal const string ById = "select " + Columns + """
 
-          from public.incident_list
+          from public.incident
          where org_id = @org_id::uuid and id = @id::uuid
         """;
 }
 
-/// <summary>The module's read path over <c>incident_list</c>, inside the caller's read-only tenant transaction.</summary>
+/// <summary>The module's read path over <c>incident</c>, inside the caller's read-only tenant transaction.</summary>
 internal sealed class IncidentReadStore(ITenantDb db, ITenantScopeAccessor scopes)
 {
     /// <summary>One keyset page: <paramref name="take"/> rows (the caller asks for one more than it returns).</summary>

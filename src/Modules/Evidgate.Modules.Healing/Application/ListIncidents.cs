@@ -20,7 +20,7 @@ internal sealed record ListIncidentsQuery(Guid ProjectId, string? State, string?
 
 /// <summary>
 /// Handler of <see cref="ListIncidentsQuery"/>: <c>healing:triage</c> reads, a project outside the credential's or
-/// the request's scope is 403, and the page is one statement over <c>incident_list</c>. An unknown project or
+/// the request's scope is 403, and the page is one statement over <c>incident</c>. An unknown project or
 /// another tenant's reads as an empty page, because RLS leaves no row to find.
 /// </summary>
 [Permission(Permissions.Healing.Triage)]

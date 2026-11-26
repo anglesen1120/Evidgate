@@ -40,28 +40,25 @@ public sealed partial class IncidentRecordingTests
     }
 
     [Fact]
-    public async Task incident_list_view_is_invoker_scoped_and_app_read_only()
+    public async Task incident_tables_are_app_read_only_for_the_list_and_the_list_view_is_gone()
     {
         var database = await fixture.SharedDatabaseAsync();
-        (await fixture.ScalarAsync<string>(
-            database,
-            "select coalesce(array_to_string(reloptions, ','), '') from pg_class where oid = 'public.incident_list'::regclass"))
-            .Split(',').ShouldContain("security_invoker=true");
-        foreach (var (role, privilege, expected) in new[]
+        (await fixture.ScalarAsync<bool>(database, "select to_regclass('public.incident_list') is null")).ShouldBeTrue();
+        foreach (var table in new[] { "public.incident", "public.incident_attempt" })
         {
-            ("evidgate_app", "SELECT", true),
-            ("evidgate_app", "INSERT", false),
-            ("evidgate_app", "UPDATE", false),
-            ("evidgate_app", "DELETE", false),
-            ("evidgate_operator", "SELECT", false),
-            ("evidgate_worker", "SELECT", false),
-            ("evidgate_worker_sched", "SELECT", false),
-        })
-        {
-            (await fixture.ScalarAsync<bool>(
-                database,
-                $"select has_table_privilege('{role}', 'public.incident_list', '{privilege}')"))
-                .ShouldBe(expected, $"{role} {privilege}");
+            foreach (var (role, expected) in new[]
+            {
+                ("evidgate_app", true),
+                ("evidgate_operator", false),
+                ("evidgate_worker", false),
+                ("evidgate_worker_sched", false),
+            })
+            {
+                (await fixture.ScalarAsync<bool>(
+                    database,
+                    $"select has_table_privilege('{role}', '{table}', 'SELECT')"))
+                    .ShouldBe(expected, $"{role} {table}");
+            }
         }
     }
 
