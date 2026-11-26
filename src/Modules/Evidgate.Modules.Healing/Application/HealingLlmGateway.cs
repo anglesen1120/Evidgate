@@ -129,11 +129,12 @@ internal sealed partial class HealingLlmGateway(
     HealingLlmTransactions transactions,
     IOptions<HealingProviderOptions> options,
     IOptions<HealingLlmOptions> llmOptions,
+    IRedactionPipeline redaction,
     ILogger<HealingLlmGateway> logger)
 {
     /// <summary>Places the call and records every attempt.</summary>
     /// <param name="orgId">The tenant the call belongs to, from the caller's authenticated context.</param>
-    /// <param name="request">The call; its payload is already redacted by the caller.</param>
+    /// <param name="request">The call; its payload is the raw prompt text, which the gateway masks before any send.</param>
     /// <param name="cancellationToken">Cancellation of the call.</param>
     /// <returns>
     /// The outcome, with the id of the row that reports it, or the failure of a guard that refused the call.
@@ -165,6 +166,7 @@ internal sealed partial class HealingLlmGateway(
         var totalTokens = 0L;
         var totalCost = 0m;
         HealingLlmInvocation? last = null;
+        var redacted = new RedactedPayload();
 
         for (var attempt = 1; ; attempt++)
         {
@@ -189,7 +191,7 @@ internal sealed partial class HealingLlmGateway(
                 return Refuse(budgetReason);
             }
 
-            var attemptResult = await RunAttemptAsync(orgId, request, attempt, schema, reservation, cancellationToken)
+            var attemptResult = await RunAttemptAsync(orgId, request, attempt, schema, reservation, redacted, cancellationToken)
                 .ConfigureAwait(false);
 
             // A token total that two attempts could push past int is clamped instead of wrapping negative.
@@ -224,41 +226,11 @@ internal sealed partial class HealingLlmGateway(
         int attempt,
         Corvus.Json.Validator.JsonSchema? schema,
         HealingLlmReservation? reservation,
+        RedactedPayload redacted,
         CancellationToken cancellationToken)
     {
-        HealingLlmResult result;
-
-        if (cancellationToken.IsCancellationRequested)
-        {
-            // Nothing has left the process yet, so nothing can have been billed: the hold goes back whole.
-            await ReleaseAsync(orgId, request.ProjectId, reservation).ConfigureAwait(false);
-            cancellationToken.ThrowIfCancellationRequested();
-        }
-
-        var notSent = false;
-
-        try
-        {
-            // The provider's own numbers are brought inside the row's bounds before anything is recorded, so a provider
-            // that reports an unknown status or an impossible cost cannot fail the INSERT or label the ledger.
-            result = HealingLlmResultRules.Recordable(
-                await provider.InvokeAsync(request, cancellationToken).ConfigureAwait(false));
-        }
-        catch (HealingLlmNotSentException)
-        {
-            // A handler refused before the send, so nothing can have been billed: settling zero usage records the error
-            // row and returns the whole hold, unlike the unknown-outcome failures below that keep it charged.
-            result = new HealingLlmResult(HealingLlmStatuses.Error, null, 0, 0m);
-            notSent = true;
-        }
-        catch
-        {
-            // The request may have left the process, so the provider may bill it whatever the outcome was: the hold
-            // stays as the charge (an over-count at worst) and an error row records it. Refunding here would let repeated
-            // failing calls drain the budget past its cap.
-            await ChargeEstimateAsync(orgId, request, attempt, reservation).ConfigureAwait(false);
-            throw;
-        }
+        var (result, outcome, notSent) = await SendAsync(orgId, request, attempt, reservation, redacted, cancellationToken)
+            .ConfigureAwait(false);
 
         if (reservation is not null && !notSent && !ReportsUsage(result))
         {
@@ -277,8 +249,69 @@ internal sealed partial class HealingLlmGateway(
             content = null;
         }
 
-        var callId = await SettleAttemptAsync(orgId, request, attempt, status, result, reservation).ConfigureAwait(false);
+        var callId = await SettleAttemptAsync(orgId, request, attempt, status, result, reservation, outcome.Report)
+            .ConfigureAwait(false);
         return (status, content, result.Tokens, result.Cost, callId);
+    }
+
+    /// <summary>Mask, then send the masked text, or send nothing when the mask could not be trusted (NotSent: it never left).</summary>
+    private async Task<(HealingLlmResult Result, RedactionOutcome Outcome, bool NotSent)> SendAsync(
+        Guid orgId,
+        HealingLlmRequest request,
+        int attempt,
+        HealingLlmReservation? reservation,
+        RedactedPayload redacted,
+        CancellationToken cancellationToken)
+    {
+        if (cancellationToken.IsCancellationRequested)
+        {
+            // Nothing has left the process yet, so nothing can have been billed: the hold goes back whole.
+            await ReleaseAsync(orgId, request.ProjectId, reservation).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
+        }
+
+        // After every admission guard and the budget hold, before the first byte can leave: the one place the payload
+        // is masked (once per call; a retry sends the same masked text), outside any transaction.
+        RedactionOutcome outcome;
+        try
+        {
+            outcome = redacted.Outcome ??= redaction.Redact(request.Payload);
+        }
+        catch
+        {
+            // A pipeline fault sends nothing, so the hold goes back whole and the fault is the caller's to see.
+            await ReleaseAsync(orgId, request.ProjectId, reservation).ConfigureAwait(false);
+            throw;
+        }
+
+        if (outcome.Blocked)
+        {
+            // A secret-shaped value survived masking: no provider is reached, nothing is billed, the row says why.
+            LogLeakBlocked(request.ProjectId, outcome.Report.Findings.Count);
+            return (new HealingLlmResult(HealingLlmStatuses.BlockedLeak, null, 0, 0m), outcome, true);
+        }
+
+        try
+        {
+            // Bring the provider's numbers inside the row's bounds before recording, so an unknown status or impossible cost cannot fail the INSERT.
+            var answer = HealingLlmResultRules.Recordable(
+                await provider.InvokeAsync(request with { Payload = outcome.Text }, cancellationToken).ConfigureAwait(false));
+            return (answer, outcome, false);
+        }
+        catch (HealingLlmNotSentException)
+        {
+            // A handler refused before the send, so nothing can have been billed: settling zero usage records the
+            // error row and returns the whole hold, unlike the unknown-outcome failures below that keep it charged.
+            return (new HealingLlmResult(HealingLlmStatuses.Error, null, 0, 0m), outcome, true);
+        }
+        catch
+        {
+            // The request may have left the process, so the provider may bill it whatever the outcome was: the hold
+            // stays as the charge (an over-count at worst) and an error row records it. Refunding here would let
+            // repeated failing calls drain the budget past its cap.
+            await ChargeEstimateAsync(orgId, request, attempt, reservation, outcome.Report).ConfigureAwait(false);
+            throw;
+        }
     }
 
     /// <summary>
@@ -290,7 +323,8 @@ internal sealed partial class HealingLlmGateway(
         int attempt,
         string status,
         HealingLlmResult result,
-        HealingLlmReservation? reservation)
+        HealingLlmReservation? reservation,
+        RedactionReport report)
     {
         try
         {
@@ -302,7 +336,7 @@ internal sealed partial class HealingLlmGateway(
                     async ct =>
                     {
                         var id = await recorder
-                            .RecordAsync(request, attempt, status, result.Tokens, result.Cost, ct)
+                            .RecordAsync(request, attempt, status, result.Tokens, result.Cost, report, ct)
                             .ConfigureAwait(false);
 
                         if (reservation is not null)
@@ -336,7 +370,8 @@ internal sealed partial class HealingLlmGateway(
         Guid orgId,
         HealingLlmRequest request,
         int attempt,
-        HealingLlmReservation? reservation)
+        HealingLlmReservation? reservation,
+        RedactionReport report)
     {
         if (reservation is null)
         {
@@ -351,7 +386,8 @@ internal sealed partial class HealingLlmGateway(
                     attempt,
                     HealingLlmStatuses.Error,
                     new HealingLlmResult(HealingLlmStatuses.Error, null, reservation.Tokens, reservation.Cost),
-                    reservation)
+                    reservation,
+                    report)
                 .ConfigureAwait(false);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
@@ -401,24 +437,6 @@ internal sealed partial class HealingLlmGateway(
             LogReleaseFailed(exception, projectId);
         }
     }
-
-    /// <summary>The structured record of a reservation that could not be released (the project only).</summary>
-    /// <param name="exception">The release failure.</param>
-    /// <param name="projectId">The project whose estimate stays counted until the period resets.</param>
-    [LoggerMessage(
-        EventId = 8610,
-        Level = LogLevel.Error,
-        Message = "Healing LLM budget reservation could not be released; it stays counted until the period resets (project={ProjectId})")]
-    private partial void LogReleaseFailed(Exception exception, Guid projectId);
-
-    /// <summary>The structured record of a settlement whose outcome is unknown; the hold stays counted.</summary>
-    /// <param name="exception">The connection-level failure.</param>
-    /// <param name="projectId">The project whose estimate stays counted until the period resets.</param>
-    [LoggerMessage(
-        EventId = 8611,
-        Level = LogLevel.Error,
-        Message = "Healing LLM settlement outcome unknown; the reservation is kept counted until the period resets (project={ProjectId})")]
-    private partial void LogSettlementUnknown(Exception exception, Guid projectId);
 
     /// <summary>The tokens to hold for one attempt: the prompt and schema estimate plus the output ceiling.</summary>
     /// <param name="request">The call about to be placed.</param>

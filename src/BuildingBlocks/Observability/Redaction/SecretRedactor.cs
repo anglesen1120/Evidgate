@@ -260,7 +260,25 @@ public sealed class SecretRedactor
     /// carries), then the quoted values, then the unquoted one. Text longer than
     /// <see cref="MaxTextLength"/> is cut <em>before</em> any pattern runs (review F7).
     /// </remarks>
-    public string RedactText(string? text)
+    public string RedactText(string? text) => RedactCore(text, MaxTextLength, counts: null);
+
+    /// <summary>
+    /// The egress form of <see cref="RedactText"/>: the same patterns in the same order, but the text is cut at
+    /// <paramref name="maxLength"/> (a caller that must not lose content passes a window it already bounded) and every
+    /// replacement is counted per rule id in <paramref name="counts"/>, so a report can say what was masked without
+    /// holding a value. A pass that times out masks the whole text and counts <c>regex_timeout</c>.
+    /// </summary>
+    /// <param name="text">The text to scrub.</param>
+    /// <param name="counts">Receives the number of replacements per rule id.</param>
+    /// <param name="maxLength">The longest text the patterns are given.</param>
+    public string RedactTextCounted(string text, Dictionary<string, int> counts, int maxLength)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        ArgumentNullException.ThrowIfNull(counts);
+        return RedactCore(text, maxLength, counts);
+    }
+
+    private string RedactCore(string? text, int maxLength, Dictionary<string, int>? counts)
     {
         if (string.IsNullOrEmpty(text))
         {
@@ -272,21 +290,21 @@ public sealed class SecretRedactor
             return text;
         }
 
-        var subject = text.Length > MaxTextLength
-            ? string.Concat(text.AsSpan(0, MaxTextLength), Ellipsis)
+        var subject = text.Length > maxLength
+            ? string.Concat(text.AsSpan(0, maxLength), Ellipsis)
             : text;
 
-        subject = Replace(_githubTokenShapes, subject, Mask);
-        subject = Replace(_cookieHeader, subject, HeaderReplacement);
-        subject = Replace(_authorizationHeader, subject, HeaderReplacement);
+        subject = Replace(_githubTokenShapes, subject, Mask, "token_shape", counts);
+        subject = Replace(_cookieHeader, subject, HeaderReplacement, "cookie", counts);
+        subject = Replace(_authorizationHeader, subject, HeaderReplacement, "authorization_header", counts);
 
         // Quoted forms first: their value may contain the `;`/`'` separators the
         // unquoted pattern stops at.
-        subject = Replace(_quotedSecretAssignment, subject, AssignmentReplacement);
-        subject = Replace(_singleQuotedSecretAssignment, subject, AssignmentReplacement);
-        subject = Replace(_secretAssignment, subject, AssignmentReplacement);
+        subject = Replace(_quotedSecretAssignment, subject, AssignmentReplacement, "credential_assignment", counts);
+        subject = Replace(_singleQuotedSecretAssignment, subject, AssignmentReplacement, "credential_assignment", counts);
+        subject = Replace(_secretAssignment, subject, AssignmentReplacement, "credential_assignment", counts);
 
-        return Replace(_cookieNameAssignment, subject, AssignmentReplacement);
+        return Replace(_cookieNameAssignment, subject, AssignmentReplacement, "cookie", counts);
     }
 
     /// <summary>
@@ -359,14 +377,40 @@ public sealed class SecretRedactor
     /// text becomes <see cref="Mask"/>, because a partially scanned text may still hold the secret
     /// the pattern was looking for (review F7).
     /// </summary>
-    private static string Replace(Regex pattern, string text, string replacement)
+    private static string Replace(
+        Regex pattern,
+        string text,
+        string replacement,
+        string ruleId,
+        Dictionary<string, int>? counts)
     {
         try
         {
-            return pattern.Replace(text, replacement);
+            if (counts is null)
+            {
+                return pattern.Replace(text, replacement);
+            }
+
+            var matches = 0;
+            var result = pattern.Replace(text, match =>
+            {
+                matches++;
+                return match.Result(replacement);
+            });
+            if (matches > 0)
+            {
+                counts[ruleId] = counts.GetValueOrDefault(ruleId) + matches;
+            }
+
+            return result;
         }
         catch (RegexMatchTimeoutException)
         {
+            if (counts is not null)
+            {
+                counts["regex_timeout"] = counts.GetValueOrDefault("regex_timeout") + 1;
+            }
+
             return Mask;
         }
     }

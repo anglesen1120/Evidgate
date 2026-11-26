@@ -118,6 +118,7 @@ internal static class HealingModule
 
         // Every attempt is recorded through the module's tenant Dapper path, so all three are scoped like the switch
         // store; the gateway reserves the period budget before it places a call, through the same seam.
+        services.TryAddSingleton<IRedactionPipeline, RedactionPipeline>();
         services.TryAddScoped<HealingLlmCallRecorder>();
         services.TryAddScoped<HealingLlmBudgetLedger>();
         services.TryAddScoped<HealingLlmTransactions>();
