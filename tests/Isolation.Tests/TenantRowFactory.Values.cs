@@ -130,6 +130,13 @@ internal sealed partial class TenantRowFactory
             // satisfies none of them. `missing`/`reasons` keep their '{}' default (a CHECK rejects the
             // generic {"probe"} element), and the live key is satisfiable because every generated row gets
             // a freshly created run and policy revision.
+            // release_decision (0129) closes completeness and decision, wants a JSON array of components and a
+            // content address that is unique per row (the dedupe key is (org, release, policy revision, hash)).
+            ("public.release_decision", "completeness") => "complete",
+            ("public.release_decision", "decision") => "PASS",
+            ("public.release_decision", "component_evaluations") => "[]",
+            ("public.release_decision", "inputs_hash") =>
+                "sha256:" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture) + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture),
             ("public.evaluation", "completeness") => "complete",
             ("public.evaluation", "outcome") => "all_passed",
             ("public.evaluation", "decision") => "PASS",

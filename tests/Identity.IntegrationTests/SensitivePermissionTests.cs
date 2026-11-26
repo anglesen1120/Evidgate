@@ -416,6 +416,7 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
             ("/v1/projects/{p}/policy-activation", seeded.PolicyRevisionId),
             ("/v1/runs/{r}", seeded.RunId),
             ("/v1/releases/{id}", seeded.ReleaseId),
+            ("/v1/releases/{id}/decision", seeded.ReleaseId),
         ];
 
         foreach (var (template, id) in seededRoutes)
@@ -590,6 +591,8 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
             // The release read answers its component list — a name, a digest and ids, no secret — and carries no
             // bound run, so it is clean by construction while the scan still covers the route.
             ["/v1/releases/{id}"] = $"/v1/releases/{seeded.ReleaseId}",
+            // The release decision: pending while nothing is aggregated, so the body holds no verdict or reason.
+            ["/v1/releases/{id}/decision"] = $"/v1/releases/{seeded.ReleaseId}/decision",
         };
 
     /// <summary>

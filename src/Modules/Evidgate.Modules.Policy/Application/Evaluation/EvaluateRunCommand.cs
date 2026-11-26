@@ -5,6 +5,7 @@ using Evidgate.BuildingBlocks.Persistence.Outbox;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.Evaluation;
+using Evidgate.Modules.Policy.Application.Releases;
 using Evidgate.Modules.Policy.Infrastructure.Persistence;
 using Evidgate.Modules.Policy.Webhooks.Application;
 
@@ -124,6 +125,19 @@ internal sealed class EvaluateRunCommandHandler(
         {
             var winner = await ReadWinnerAsync(row, cancellationToken).ConfigureAwait(false);
             return Result.Success(ToRecord(winner));
+        }
+
+        // A new live verdict may complete a release the run is bound to; the event commits with the row, and a
+        // shadow row (a replay's only slot) never announces one.
+        if (string.Equals(row.Mode, EvaluationModeCode.Of(EvaluationMode.Live), StringComparison.Ordinal))
+        {
+            await outbox.EnqueueAsync(
+                ReleaseAggregateContract.EvaluationTaskType,
+                ReleaseAggregateContract.PayloadJson(scopes.Require().OrgId, row.RunId, inserted.Id),
+                ReleaseAggregateContract.AggregateType,
+                inserted.Id,
+                ReleaseAggregateContract.IdempotencyKey(inserted.Id),
+                cancellationToken).ConfigureAwait(false);
         }
 
         // The measurement describes a durable verdict, so it waits for the commit this handler does not own: a

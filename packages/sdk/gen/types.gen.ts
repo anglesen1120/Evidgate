@@ -757,15 +757,46 @@ export type ReleaseComponentDetail = {
 };
 
 /**
- * Release decision body of `GET /releases/{id}/decision` (00 §8.5/§9.3). Not reconciled with the run body `Decision`; the release story owns its shape.
+ * One declared component of a release and what the aggregation found for it.
+ */
+export type ReleaseComponentDecision = {
+    /**
+     * The release component's key.
+     */
+    component_id: string;
+    /**
+     * The run the verdict came from; null when no run matched the component.
+     */
+    run_id: string | null;
+    /**
+     * `revision_no` of the frozen evidence revision the run verdict judged; null while missing.
+     */
+    evidence_revision: number | null;
+    status: 'evaluated' | 'missing';
+    /**
+     * Null while the component is missing.
+     */
+    decision: 'PASS' | 'FAIL' | 'INCONCLUSIVE' | null;
+    reasons: Array<'component_digest_mismatch' | 'component_run_unbound' | 'component_not_evaluated' | 'component_failed' | 'component_inconclusive' | 'aggregation_bound_exceeded'>;
+};
+
+/**
+ * Body of `GET /releases/{id}/decision`: one shape for an aggregated and a pending release. Every member is required; a pending release has `status: pending` and null in every other member except `release_id`. Aggregated members are copied from one immutable `release_decision` row.
  */
 export type ReleaseDecision = {
+    status: 'pending' | 'aggregated';
     /**
-     * null while pending (00 §9.3); UPPER per 00 §7
+     * null while pending, never a default; UPPER per 00 §7
      */
-    decision?: 'PASS' | 'FAIL' | 'INCONCLUSIVE' | null;
-    evaluation_revision?: string;
-    reasons?: Array<string>;
+    decision: 'PASS' | 'FAIL' | 'INCONCLUSIVE' | null;
+    release_id: string;
+    id: string | null;
+    policy_revision_id: string | null;
+    completeness: 'complete' | 'incomplete' | null;
+    reasons: Array<'component_digest_mismatch' | 'component_run_unbound' | 'component_not_evaluated' | 'component_failed' | 'component_inconclusive' | 'mixed_policy_revisions' | 'aggregation_bound_exceeded'> | null;
+    components: Array<ReleaseComponentDecision> | null;
+    inputs_hash: string | null;
+    created_at: string | null;
 };
 
 /**

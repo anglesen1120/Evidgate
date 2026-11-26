@@ -1314,6 +1314,16 @@ target)` and `session_revoke_audit_append(org, actor, object_type, object_id, me
 - No grant, index, policy or trigger changes: `evidgate_app` keeps table-level `SELECT` + `INSERT` on `evaluation`, and no UPDATE or DELETE path exists. Existing rows hold only old tokens, so the check validates in place.
 - Locks: `ACCESS EXCLUSIVE` on `evaluation` for one `alter table` statement (the drop and the add, one scan of the table) in one transaction under a 5 s `lock_timeout`; the table is insert-only and grows one row per evaluation. Numbers `0126` and `0127` belong to sibling changes. Deploy: the migrator before the worker that stores the new reasons. Rollback: restore the `0124` reason list (only valid while no stored row holds a new token).
 
+## Notes on the release decision (`0129`)
+
+- `0129` adds `release_decision`: one immutable aggregate of a release's per-component decisions, keyed `(org_id, id)` with composite foreign keys to `release` and `policy_revision`. `unique (org_id, release_id, policy_revision_id, inputs_hash)` is the dedupe key: the aggregation inserts with `on conflict do nothing` and reads the winner, so a retried task or a second trigger over equal inputs writes nothing.
+- Checks pin the closed decision, completeness and reason token sets, require `complete` for `PASS`, bound `component_evaluations` to 200 elements and require the `sha256:<64 hex>` hash shape. The trigger `evidgate.release_decision_immutable` refuses `UPDATE` and `DELETE` (23514) for every role.
+- RLS is forced; the tenant policy is `TO evidgate_app`, the backfill policy `TO evidgate_owner`. The app role holds `SELECT` and `INSERT`, the operator `SELECT`; `evidgate_worker_sched` holds nothing. No `SECURITY DEFINER` function is added.
+- `release_decision_release_created_idx (org_id, release_id, created_at desc, id desc)` serves the newest-aggregate read without a sort. The table is new, so `create index` locks nothing that exists.
+- No backfill: releases bound before the migration get their first aggregate on the next live evaluation of a bound run or the next bind.
+- `release_run_release_created_idx (org_id, release_id, created_at, id)` on `release_run` serves the aggregation's capped, ordered binding read without a sort. It is a plain `CREATE INDEX` in the migration transaction (SHARE lock on `release_run` for the build); `release_run` is append-only and small at pilot volume, so a concurrent out-of-band build is not planned.
+- `reasons` also admits `aggregation_bound_exceeded`: a release holding more bindings than one aggregation reads (2000) stores an incomplete `INCONCLUSIVE` aggregate with every component missing, under the revision of its last aggregate, instead of keeping an older `PASS` current.
+
 ## Notes on outbound webhooks (`0131`)
 
 - `0131` adds `public.webhook_endpoint` (URL, encrypted secret and its last-four hint, event-type list, soft-delete state) and `public.webhook_outbound_delivery` (one row per endpoint and event: `unique (org_id, endpoint_id, event_id)`). The inbound CI table `public.webhook_delivery` of `0106` is unchanged. Both tables have `unique (org_id, id)`, FORCE RLS with `TO evidgate_app` and `TO evidgate_owner` policies, and the `set_updated_at_and_version` trigger.
