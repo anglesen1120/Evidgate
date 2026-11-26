@@ -112,7 +112,28 @@ EVIDGATE__SESSION__PEPPER=$(rv_random_base64 32)"
   printf '%s\n' "$content"
 }
 
-# Creates the secrets file on the first deploy and never touches its content
+# An env file made before a key existed lacks it, and compose refuses to start
+# on a missing key. Appends only the absent ones, once; a key that is already
+# there (even with an unexpected value) is never touched, so a pepper that
+# signed live invites is never rotated by a redeploy. The value travels on
+# stdin, never in argv.
+rv_env_add_missing() {
+  local key line add=""
+  for key in EVIDGATE__INVITE__PEPPER EVIDGATE__INVITE__PEPPERVERSION; do
+    rv_run "grep -q '^$key=' $(rv_quote "$RV_ENV_FILE")" && continue
+    case "$key" in
+      *PEPPERVERSION) line="$key=1" ;;
+      *) line="$key=$(rv_random_base64 32)" ;;
+    esac
+    add="${add}${line}"$'\n'
+  done
+  [ -n "$add" ] || return 0
+  # The leading newline guards a file whose last line has none.
+  printf '\n%s' "$add" | rv_mutate "set -eu; cat >> $(rv_quote "$RV_ENV_FILE")"
+  rv_info "$RV_ENV_FILE gained the missing invite keys (existing values untouched)"
+}
+
+# Creates the secrets file on the first deploy and never rewrites its content
 # again: it holds the only copy of the database and API credentials, and a
 # rewrite would lock every running service out of its own data.
 rv_env_ensure() { # SHA PUBLIC_ORIGIN TUNNEL_TOKEN; returns 0 created, 1 kept
@@ -122,7 +143,8 @@ rv_env_ensure() { # SHA PUBLIC_ORIGIN TUNNEL_TOKEN; returns 0 created, 1 kept
     if rv_run "grep -Eq '=__[A-Za-z0-9_]+__\$' $(rv_quote "$RV_ENV_FILE")"; then
       rv_die "$RV_ENV_FILE still holds a __PLACEHOLDER__; it is never rewritten, so fill it in on the host or move it aside and deploy again"
     fi
-    rv_info "$RV_ENV_FILE kept existing (never rewritten): $(rv_target):$RV_ENV_FILE"
+    rv_env_add_missing
+    rv_info "$RV_ENV_FILE kept existing (values never rewritten): $(rv_target):$RV_ENV_FILE"
     return 1
   fi
 
