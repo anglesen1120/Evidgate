@@ -39,6 +39,34 @@ export type CursorList = {
     next_cursor: string | null;
 };
 
+/**
+ * One incident: a failing planned execution of a run that a frozen evidence revision verified (08.1.1). Carries no attempt payload and no error text. `attempt_count` is the first failing attempt plus its recorded retries.
+ */
+export type Incident = {
+    id: string;
+    project_id: string;
+    run_id: string;
+    attempt_id: string;
+    case_id: string;
+    case_revision_id: string;
+    execution_key: string;
+    engine: string;
+    state: 'open' | 'triaged' | 'closed';
+    context_state: 'pending' | 'complete' | 'partial';
+    attempt_count: number;
+    created_at: string;
+    updated_at: string;
+    version: number;
+};
+
+/**
+ * 00 §9.1 cursor page of incidents, newest first (`created_at` desc, `id` asc); `next_cursor` is null on the last page.
+ */
+export type IncidentPage = {
+    items: Array<Incident>;
+    next_cursor: string | null;
+};
+
 export type RunStateDto = {
     run_id: string;
     state: 'created' | 'queued' | 'running' | 'collecting' | 'complete' | 'incomplete' | 'canceled';
@@ -4086,6 +4114,16 @@ export type DraftId = string;
 export type TemplateId = string;
 
 export type IncidentId = string;
+
+/**
+ * One of `open`, `triaged`, `closed`; blank, repeated or any other value is 422 `request_invalid`.
+ */
+export type IncidentStateFilter = 'open' | 'triaged' | 'closed';
+
+/**
+ * Exact execution key, 64 lowercase hex; blank, repeated or any other value is 422 `request_invalid`.
+ */
+export type IncidentExecutionKey = string;
 
 export type JobId = string;
 
@@ -10876,6 +10914,14 @@ export type ListIncidentsData = {
          */
         cursor?: string;
         limit?: number;
+        /**
+         * One of `open`, `triaged`, `closed`; blank, repeated or any other value is 422 `request_invalid`.
+         */
+        state?: 'open' | 'triaged' | 'closed';
+        /**
+         * Exact execution key, 64 lowercase hex; blank, repeated or any other value is 422 `request_invalid`.
+         */
+        execution_key?: string;
     };
     url: '/projects/{p}/incidents';
 };
@@ -10894,6 +10940,10 @@ export type ListIncidentsErrors = {
      */
     404: ErrorEnvelope;
     /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
+     */
+    422: ErrorEnvelope;
+    /**
      * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
      */
     429: ErrorEnvelope;
@@ -10909,7 +10959,7 @@ export type ListIncidentsResponses = {
     /**
      * Page of incidents
      */
-    200: CursorList;
+    200: IncidentPage;
 };
 
 export type ListIncidentsResponse = ListIncidentsResponses[keyof ListIncidentsResponses];
@@ -10952,8 +11002,10 @@ export type GetIncidentResponses = {
     /**
      * Incident detail
      */
-    200: unknown;
+    200: Incident;
 };
+
+export type GetIncidentResponse = GetIncidentResponses[keyof GetIncidentResponses];
 
 export type LabelIncidentData = {
     body: {

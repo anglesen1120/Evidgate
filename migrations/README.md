@@ -1272,6 +1272,11 @@ target)` and `session_revoke_audit_append(org, actor, object_type, object_id, me
 - Accepted residuals: the triggers are normal row triggers, so a superuser using `session_replication_role = replica`, or the table owner disabling or dropping a trigger, bypasses them; the app role cannot. `healing_llm_call.incident_id` stays unconstrained until a later migration adds its composite FK to `public.incident`.
 - Deploy: the migration before the recorder ships. Rollback: drop `incident_attempt`, then `incident`, then the four functions; no other table changes.
 
+## Notes on the incident read view (`0123`)
+
+- `public.incident_list` uses `security_invoker` to preserve the caller's RLS on incidents and retries. Only the app role gets a standing `SELECT` grant. The attempt count includes the first failure stored on `incident`; the unfiltered page uses `0122`'s `(org_id, project_id, created_at DESC, id ASC)` index and a `state`-filtered page uses `incident_project_state_list` `(org_id, project_id, state, created_at DESC, id ASC)`, added here because `0122`'s `incident_project_state` stops at `state` and would force a sort.
+- Deploy before enabling incident reads. To roll back, stop serving those reads and drop the view and `incident_project_state_list`; no base rows change.
+
 ## Notes on the evaluation exception effects (`0124`)
 
 - `0124` adds `evaluation.quarantined_cases uuid[] not null default '{}'` (the catalog case ids whose confirmed failure a quarantine entry excluded, written sorted ascending) with `evaluation_quarantined_cases_check` (one dimension, no NULL element, CASE shape of `0059`), and replaces `evaluation_reasons_check` with the closed list of `0109` plus `quarantined_case_failed` and `waiver_approved`. The column has no foreign key: the row is an immutable verdict and a case id is an audit fact.

@@ -179,6 +179,7 @@ export const FIXTURE_ROUTES: readonly FixtureRoute[] = [
   { operationId: 'listPermissions', method: 'GET', path: '/permissions' },
   { operationId: 'listRoles', method: 'GET', path: '/roles' },
   { operationId: 'listMyOrganizations', method: 'GET', path: '/orgs' },
+  { operationId: 'getMyPermissions', method: 'GET', path: '/me/permissions' },
   { operationId: 'createProject', method: 'POST', path: '/orgs/{o}/projects' },
   { operationId: 'listProjects', method: 'GET', path: '/orgs/{o}/projects' },
   { operationId: 'getProject', method: 'GET', path: '/projects/{p}' },
@@ -298,6 +299,9 @@ export const FIXTURE_ROUTES: readonly FixtureRoute[] = [
   // The pinned revision read of the composition screen. Its states are selected by variant, the
   // same way the run detail's are: the id in the path never picks the document.
   { operationId: 'getSuiteRevision', method: 'GET', path: '/suite-revisions/{r}' },
+  // The incident reads; both answer by variant, so the id in the path never picks the document.
+  { operationId: 'listIncidents', method: 'GET', path: '/projects/{p}/incidents' },
+  { operationId: 'getIncident', method: 'GET', path: '/incidents/{i}' },
 ];
 
 const API_PREFIX = `${API_BASE_PATH}/`;

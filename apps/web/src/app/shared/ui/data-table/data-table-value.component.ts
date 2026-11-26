@@ -48,7 +48,7 @@ import { escapeFormatChars } from '../values/ref-name-display';
       (keydown.enter)="show()"
       (keydown.space)="openFromKeyboard($event)"
       (keydown.escape)="dismiss($event)"
-      ><bdi>{{ displayValue() }}</bdi></span
+      ><!-- prettier-ignore --><bdi>@for (part of parts(); track $index) {@if (breakAfterColon()) {<span class="inline-block max-w-full">{{ part }}</span>} @else {{{ part }}}}</bdi></span
     >
     @if (clipped()) {
       <!-- The value span already holds the whole text (clipping is visual only), so it is the
@@ -75,9 +75,15 @@ export class DataTableValueComponent {
   readonly truncate = input(false);
   readonly fixedRow = input(false);
   readonly nowrap = input(false);
+  /** Lets a line wrap after each ':' so `a:b` wraps at the colon, not inside a word. */
+  readonly breakAfterColon = input(false);
   protected readonly displayValue = computed(() => {
     const value = this.value();
     return typeof value === 'string' ? escapeFormatChars(value) : value;
+  });
+  protected readonly parts = computed(() => {
+    const text = String(this.displayValue());
+    return this.breakAfterColon() ? text.split(/(?<=:)/) : [text];
   });
   protected readonly singleLine = computed(() => this.truncate() || this.fixedRow());
   protected readonly expanded = signal(false);

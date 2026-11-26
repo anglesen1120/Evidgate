@@ -46,7 +46,6 @@ import { NarrowMutationPolicy } from '../../../shared/ui/narrow/narrow-mutation-
         *hlmDialogPortal
         [showCloseButton]="false"
         data-api-revoke-dialog
-        [size]="'lg'"
         class="wrap-anywhere"
         (keydown.escape)="escape($event)"
       >

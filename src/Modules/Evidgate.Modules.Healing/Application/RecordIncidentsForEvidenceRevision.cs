@@ -74,6 +74,10 @@ internal sealed class RecordIncidentsForEvidenceRevisionHandler(IFrozenIncidentF
             await audit.FlushAsync(org, db, cancellationToken).ConfigureAwait(false);
         }
 
+        // Counted after the commit this handler does not own, so a rolled-back attempt or a repeat adds nothing.
+        var createdCount = writes.Created.Count;
+        scopes.Require().AfterCommit(() => EvidgateTelemetry.RecordIncidentCreated(createdCount));
+
         return Result.Success<int>(count);
     }
 }

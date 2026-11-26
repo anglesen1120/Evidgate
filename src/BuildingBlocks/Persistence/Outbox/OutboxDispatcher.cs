@@ -28,7 +28,8 @@ public sealed record OutboxDispatchResult(int Claimed, int Enqueued)
 /// <c>insert … select</c> into <c>task</c>, one <c>update</c> stamping
 /// <c>dispatched_at</c> — so a crash anywhere inside it is safe by construction:
 /// the stamp and the task rows share fate, and a second attempt is deduped by
-/// <c>task_idem_uq</c> (<c>'outbox:' || outbox.id</c>).
+/// <c>task_idem_uq</c> (<c>'outbox:' || outbox.id</c>). Registered <see cref="OutboxSubscription"/>s add a second
+/// <c>insert … select</c> of one task per subscriber (key suffixed with the delivery type) in the same transaction.
 /// </summary>
 /// <remarks>
 /// Runs as <c>evidgate_worker</c> on the keyed worker data source: that role alone holds
@@ -51,6 +52,8 @@ public sealed partial class OutboxDispatcher : IDisposable
     private readonly ObservableGauge<long> _undispatched;
     private readonly string[] _routeTaskTypes;
     private readonly string[] _routeQueues;
+    private readonly string[] _subscriptionSourceTypes;
+    private readonly string[] _subscriptionDeliveryTypes;
     private readonly TimeProvider _time;
     private volatile bool _disposed;
 
@@ -69,11 +72,26 @@ public sealed partial class OutboxDispatcher : IDisposable
         IOptions<TasksOptions> options,
         ILogger<OutboxDispatcher> logger,
         TimeProvider timeProvider)
+        : this(dataSource, options, logger, timeProvider, [])
+    {
+    }
+
+    /// <summary>Creates the dispatcher with the extra delivery tasks modules subscribed to outbox event types.</summary>
+    public OutboxDispatcher(
+        [FromKeyedServices(TaskWorkerDataSource.Key)] NpgsqlDataSource dataSource,
+        IOptions<TasksOptions> options,
+        ILogger<OutboxDispatcher> logger,
+        TimeProvider timeProvider,
+        IEnumerable<OutboxSubscription> subscriptions)
     {
         ArgumentNullException.ThrowIfNull(dataSource);
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(logger);
         ArgumentNullException.ThrowIfNull(timeProvider);
+        ArgumentNullException.ThrowIfNull(subscriptions);
+        var registered = subscriptions.ToArray();
+        _subscriptionSourceTypes = [.. registered.Select(subscription => subscription.SourceTaskType)];
+        _subscriptionDeliveryTypes = [.. registered.Select(subscription => subscription.DeliveryTaskType)];
 
         _time = timeProvider;
         _dataSource = dataSource;
@@ -105,6 +123,39 @@ public sealed partial class OutboxDispatcher : IDisposable
         var routes = TaskQueueRouting.Routes(_options);
         _routeTaskTypes = routes.TaskTypes;
         _routeQueues = routes.Queues;
+    }
+
+    /// <summary>
+    /// Inserts one task per (claimed outbox row, matching subscription) in one statement. The key carries the delivery
+    /// task type, so each subscriber dedupes on its own and a redispatch adds nothing.
+    /// </summary>
+    private async Task EnqueueSubscriptionTasksAsync(
+        NpgsqlConnection connection,
+        NpgsqlTransaction transaction,
+        Guid[] claimed,
+        CancellationToken cancellationToken)
+    {
+        var taskIds = new Guid[claimed.Length * _subscriptionSourceTypes.Length];
+        for (var i = 0; i < taskIds.Length; i++)
+        {
+            taskIds[i] = Guid.CreateVersion7();
+        }
+
+        await connection.ExecuteAsync(new CommandDefinition(
+            OutboxDispatchSql.EnqueueSubscriptionTasks,
+            new
+            {
+                outbox_ids = new UuidArrayParameter(claimed),
+                task_ids = new UuidArrayParameter(taskIds),
+                subscription_count = _subscriptionSourceTypes.Length,
+                source_task_types = new TextArrayParameter(_subscriptionSourceTypes),
+                delivery_task_types = new TextArrayParameter(_subscriptionDeliveryTypes),
+                route_task_types = new TextArrayParameter(_routeTaskTypes),
+                route_queues = new TextArrayParameter(_routeQueues),
+                default_queue = _options.DispatchDefaultQueue,
+            },
+            transaction,
+            cancellationToken: cancellationToken)).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -152,6 +203,13 @@ public sealed partial class OutboxDispatcher : IDisposable
             },
             transaction,
             cancellationToken: cancellationToken)).ConfigureAwait(false)).ToArray();
+
+        // A subscriber is one more delivery task per matching row; the row is stamped dispatched in this same
+        // transaction, so the primary task and every subscriber task share fate.
+        if (_subscriptionSourceTypes.Length > 0)
+        {
+            await EnqueueSubscriptionTasksAsync(connection, transaction, claimed, cancellationToken).ConfigureAwait(false);
+        }
 
         var lags = (await connection.QueryAsync<double>(new CommandDefinition(
             OutboxDispatchSql.MarkDispatched,
