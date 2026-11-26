@@ -176,8 +176,7 @@ Information line, so grep both hosts' start logs for `Quota gate` after any chan
 There is no cross-host check; an operator who switches the gate off on purpose does it on both.
 
 One more shape is a feature that stays **absent until it is configured**: the federated-login rows
-(`EVIDGATE__LOGIN__*`, `EVIDGATE__OIDC__GOOGLE__*`, 02.3.1-T1.1/T1.2, and `EVIDGATE__OAUTH__GITHUB__*`,
-02.3.1-T1.3) are `requiredAtBoot: false` and
+(`EVIDGATE__LOGIN__*`, `EVIDGATE__OIDC__GOOGLE__*`, 02.3.1-T1.1/T1.2) are `requiredAtBoot: false` and
 `required: false` in every environment, because a host without them serves every other route and answers
 `GET /v1/auth/oidc/{provider}/start` and `/callback` with 503 `unavailable` plus `Retry-After` — no flag
 enables the routes, only the configuration. `EVIDGATE__LOGIN__PUBLICBASEURL` is the browser-facing https
@@ -187,13 +186,8 @@ configuration and `EVIDGATE__OIDC__GOOGLE__CLIENTSECRET` is `secret: true` and r
 `ISecretProvider`. The other eleven rows (`StateLifetimeSeconds`, `RetryAfterSeconds`, the three Google
 endpoints, the clock-skew and JWKS lifetimes, the outbound timeout and the response-body cap) keep their
 code defaults in every environment, and the three provider endpoints are refused at boot unless they stay
-on the fixed Google allowlist (S4). The GitHub half has the same shape: `EVIDGATE__OAUTH__GITHUB__CLIENTID`
-is plain configuration, `EVIDGATE__OAUTH__GITHUB__CLIENTSECRET` is `secret: true` and resolved through
-`ISecretProvider`, and its five other rows (`AuthorizeUrl`, `TokenUrl`, `ApiBaseUrl`, the outbound timeout
-and the response-body cap) keep their code defaults, with the three endpoints refused at boot unless they
-stay on the fixed GitHub allowlist (`github.com` for the browser redirect and the token exchange,
-`api.github.com` for the two profile reads, S4). GitHub is OAuth2 only (ruling T6): there is no ID token,
-so the section carries no issuer, JWKS or clock-skew key. The session group that finishes a login
+on the fixed Google allowlist (S4). Do not provision the retired OAuth login credentials.
+The session group that finishes a login
 (02.3.1-T1.4) has the same shape and is just as optional at boot: `EVIDGATE__SESSION__PEPPER` is
 `secret: true` and resolved through `ISecretProvider` and is the one key a login cannot do without — a
 host without it still serves every route and answers a verified callback 503 `unavailable` rather than
@@ -252,8 +246,7 @@ acknowledges, dispatches and prunes the queue — the Api does not hold it), the
 (`EVIDGATE__CI__SIGNINGKEY`, `EVIDGATE__CI__PEPPER`, `EVIDGATE__CI__PREVIOUSPEPPER`), the object-storage
 identity (`EVIDGATE__OBJECT__ACCESSKEY`, `EVIDGATE__OBJECT__SECRETKEY`), the Migrator
 connection string (`EVIDGATE_MIGRATOR__CONNECTIONSTRING`), the Google login client secret
-(`EVIDGATE__OIDC__GOOGLE__CLIENTSECRET`, 02.3.1-T1.2), the GitHub login client secret
-(`EVIDGATE__OAUTH__GITHUB__CLIENTSECRET`, 02.3.1-T1.3) and the two session-cookie peppers
+(`EVIDGATE__OIDC__GOOGLE__CLIENTSECRET`, 02.3.1-T1.2) and the two session-cookie peppers
 (`EVIDGATE__SESSION__PEPPER`, 02.3.1-T1.4: the cookie value is stored only as
 `HMAC-SHA256(pepper_vN, value)` in `session.cookie_hmac`; and `EVIDGATE__SESSION__PREVIOUSPEPPER`,
 02.3.2-T1.1: the pepper a rotation window is still draining, empty otherwise). A name outside the registry is refused with an

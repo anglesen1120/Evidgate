@@ -14,7 +14,7 @@ The M0 gate (00 §4) says "a team commits to provide data and trial". With no in
 
 | Attribute | Target | Why |
 |---|---|---|
-| Stack | Playwright (TypeScript) tests on GitHub Actions; optional second producer pytest/JUnit | The only V1 adapters (00 §1.3) |
+| Stack | Playwright (TypeScript) tests in customer CI (any provider); optional second producer pytest/JUnit | The only V1 adapters (00 §1.3) |
 | Suite size | 200–1 500 automated tests, at least one nightly or per-PR run | Big enough to show flakiness and missing evidence, small enough to onboard in one sitting |
 | Pain | Visible flakiness (reruns, "just rerun it"), releases decided by gut feel or a green tick that hides skipped tests | This is what completeness-aware PASS/FAIL/INCONCLUSIVE fixes |
 | Release rhythm | At least 2 releases a month | Gives decisions to measure within the pilot window |

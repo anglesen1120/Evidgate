@@ -14,7 +14,7 @@
 
 **Out of scope:** evidence completeness verdicts and the evidence freeze result (06) — `evidence_revision` rows are persisted by 05 — policy evaluation and decisions (07), the artifact object lifecycle (06), agent execution (05), healing (08), pricing (12).
 
-**CR-D-2 boundary (script generation and local runs).** Playwright **script generation** from an approved test case — `evidgate generate`, live-page element binding, the locator policy, the 3-of-3 stability check, PR delivery — and **local execution** of generated tests on a developer machine (`evidgate run`) live in [13 §4.2 and epic 13.5](13-product-phases.md), phase G2. This plan keeps the report path those commands reuse: `manifests upload`, `run create`, the spool / send / `finalize` loop, artifact upload, the reporters and the mappers. The two command families stay distinct: `evidgate run create` opens a run here, `evidgate run` executes already-generated tests there and ingests their results through this plan.
+**CR-D-2 boundary (script generation and local runs).** Playwright **script generation** from an approved test case — `evidgate generate`, live-page element binding, the locator policy, the 3-of-3 stability check, script-store delivery — and **local execution** of generated tests on a developer machine (`evidgate run`) live in [13 §4.2 and epic 13.5](13-product-phases.md), phase G2. This plan keeps the report path those commands reuse: `manifests upload`, `run create`, the spool / send / `finalize` loop, artifact upload, the reporters and the mappers. The two command families stay distinct: `evidgate run create` opens a run here, `evidgate run` executes already-generated tests there and ingests their results through this plan.
 
 **Version split.** V1 = event API, CLI, Playwright reporter, JUnit mapper, fixtures, protocol v1, in `ingest_only` and CI mode. V1/M2 = reprocess of a stored raw report, usage events per accepted result. V2 = Appium/mobile mapping (Android conditional, 00 §1.3). V3 = nothing owned here (iOS/hosted runners are 05). CR-D-2 additionally places the mobile producer `adapter-mobile` (mobilewright / mobile-mcp) at **G4**, after the `13.7.1` go / no-go memo; the memo's spike runs in G2 and commits to no adapter.
 
@@ -22,8 +22,8 @@
 
 - **FR-04-1 (atomic batch)** `POST /v1/runs/{r}/events` validates the whole batch, canonicalises it and commits it in one transaction; the response acknowledges each event as `accepted` or `duplicate` (00 §9.4). A schema error, an `execution_key` that is not a planned execution of the run (422 `unknown_execution_key`, T10), or an unknown `producer_id` (422 `unknown_producer`, T9) rejects the **whole** batch with the failing indices; the same `event_id` with a different payload rejects the batch 409 `duplicate_different_payload` (T50).
 - **FR-04-2 (limits)** ≤ 500 events and ≤ 1 MiB **before decompression** per request. `Content-Encoding: gzip` is accepted under an expanded-size and ratio cap; exceeding any cap → 413 `batch_too_large` without partial commit.
-- **FR-04-3 (producer sequence)** `(run, producer_id, sequence)` is unique and never reused; a restarted shard uses a new `producer_id` or resumes from a checkpoint. Order is by `(producer_id, sequence)`, never receive time. `producer_id` must be a registered `producer_slot` of the run (T9): run create writes one slot per manifest shard (contract in `Evidgate.Modules.Ingestion.Contracts.IProducerRegistry.RegisterSlotsAsync`, invoked by 05's run-create command inside the same tenant transaction); the first accepted write binds the slot to the caller's token identity (`bound_token_jti`, plus `bound_ci_run_ref` from the GitHub `run_id`/`run_attempt` claims when present, which must match the run's declared CI reference). An unknown producer → 422 `unknown_producer`; a write or `finalize` under a slot bound to another identity → 403 `producer_slot_taken`.
-- **FR-04-4 (auth)** CI authenticates with a GitHub OIDC JWT or a project ingest token exchanged at `POST /v1/ci/token` for a short-lived `ci_producer` token scoped to one project (02 owns minting; this plan owns the client side and the failure paths).
+- **FR-04-3 (producer sequence)** `(run, producer_id, sequence)` is unique and never reused; a restarted shard uses a new `producer_id` or resumes from a checkpoint. Order is by `(producer_id, sequence)`, never receive time. `producer_id` must be a registered `producer_slot` of the run (T9): run create writes one slot per manifest shard (contract in `Evidgate.Modules.Ingestion.Contracts.IProducerRegistry.RegisterSlotsAsync`, invoked by 05's run-create command inside the same tenant transaction); the first accepted write binds the slot to the caller's token identity (stable authenticated producer across token renewal; see OI-02-36; declared run and attempt metadata is not authorization). An unknown producer → 422 `unknown_producer`; a write or `finalize` under a slot bound to another identity → 403 `producer_slot_taken`.
+- **FR-04-4 (auth)** CI authenticates with a project ingest token exchanged at `POST /v1/ci/token` for a short-lived `ci_producer` token scoped to one project (02 owns minting; this plan owns the client side and the failure paths).
 - **FR-04-5 (no blind rerun)** On upload failure the CLI retries the same events with the same `event_id`s until its deadline and never re-runs business logic (DECISIONS A9; source §7 "CI mất mạng").
 - **FR-04-6 (mapping fidelity)** Each adapter maps to the raw status **as sent** plus a normalised status (00 §8.3); the mapper never overwrites the raw value, and every normalised row records `parser_id` + `parser_version`.
 - **FR-04-7 (raw report kept)** The raw report object is stored before parsing and is the input for reprocess; reprocess with a new parser version creates a **new evidence revision** and is distinct from a rerun (source §7).
@@ -69,7 +69,7 @@
 
 | Endpoint | Owner | Notes |
 |---|---|---|
-| `POST /v1/ci/token` | 02 (client side here) | CLI exchanges OIDC JWT or ingest token |
+| `POST /v1/ci/token` | 02 (client side here) | CLI exchanges the ingest token |
 | `POST /v1/runs/{r}/events` | **04** | 00 §9.3/§9.4; permission `event:write` |
 | `POST /v1/runs/{r}/finalize` | **04** (semantics + reconciliation in 05) | producer, shard, `last_sequence`, `count`, `manifest_hash` → 202; rejected 403 `producer_slot_taken` unless the caller is the token identity bound to the slot (T9) |
 | `POST /v1/artifacts/upload-url`, `POST /v1/artifacts/{a}/complete` | 06 (CLI side here) | adapter uploads traces/videos/raw reports |
@@ -170,11 +170,11 @@
 
 ### Epic 04.2 `evidgate` CLI
 > **CR-D-2 note:** `evidgate generate` (`13.5.1`) and `evidgate run` for local execution (`13.5.2`) are built in plan 13 on top of this epic; the commands here remain the report path (`manifests upload`, `run create`, spool / send / `finalize`, artifacts).
-#### Story 04.2.1 Authenticate from CI — acceptance: the CLI exchanges an OIDC JWT or ingest token for a scoped `ci_producer` token, caches it, refreshes before expiry and fails loudly on 403.
+#### Story 04.2.1 Authenticate from CI — acceptance: the CLI exchanges an ingest token for a scoped `ci_producer` token, caches it, refreshes before expiry and fails loudly on 403.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 04.2.1-T1 | OIDC/ingest-token exchange, token cache + refresh on top of the CLI skeleton (04.2.1-T2) | S | V1 | G2 | 02.4.1, 02.4.2, 04.2.1-T2 |
-| 04.2.1-T2 | CLI skeleton, `EVIDGATE_*` config, exit codes and a dev auth path: `EVIDGATE_DEV_TOKEN` carries an ingest token minted by `seed-dev` (01.8.1-T4), no OIDC; the M1 commands 04.2.2/04.2.3 build on it; OIDC exchange is 04.2.1-T1 | S | V1 | G2 | 01.1.1-T3 |
+| 04.2.1-T1 | Ingest-token exchange, token cache + refresh on top of the CLI skeleton (04.2.1-T2) | S | V1 | G2 | 02.4.1, 02.4.2, 04.2.1-T2 |
+| 04.2.1-T2 | CLI skeleton, `EVIDGATE_*` config, exit codes and a dev auth path: `EVIDGATE_DEV_TOKEN` carries an ingest token minted by `seed-dev` (01.8.1-T4); the M1 commands 04.2.2/04.2.3 build on it; the exchange is 04.2.1-T1 | S | V1 | G2 | 01.1.1-T3 |
 #### Story 04.2.2 Manifest and run — acceptance: `evidgate run create` is idempotent for the same key and payload, prints the run id, and returns 409 on a different payload.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
@@ -190,7 +190,7 @@
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
 | 04.2.4-T1 | `artifacts upload` (upload-url → PUT → complete), retry and checksum verification | M | V1 | G2 | 06.1.1, 06.1.2 |
-| 04.2.4-T2 | `quickstart`, docs, GitHub Actions example workflow (OIDC, no long-lived secret) | S | V1 | G2 | 04.2.1-T1 |
+| 04.2.4-T2 | `quickstart`, docs, provider-neutral customer CI examples that use the ingest token as a CI secret | S | V1 | G2 | 04.2.1-T1 |
 | 04.2.4-T3 | CLI end-to-end test against the local stack from the fixture run | M | V1 | G2 | 04.2.3-T1, 04.6.1-T2 |
 
 ### Epic 04.3 Playwright reporter adapter
@@ -262,7 +262,7 @@
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
 | 04.9.1-T1 | `evidgate replay` CLI command: fetch the replay job spec by `replay_grant_id` (08.4.3-T1), check out the candidate patch, run the pinned Playwright version, send results as a `replay` run | L | V1 | G3 | 04.2.3-T1, 05.2.1-T5 |
-| 04.9.1-T2 | CI workflow template and quickstart for the replay job (OIDC, no long-lived secret), with the isolation requirements of 11.2.1-T6 stated for the customer | M | V1 | G3 | 04.9.1-T1, 11.2.1-T6 |
+| 04.9.1-T2 | CI workflow template and quickstart for the replay job (project ingest token as a CI secret), with the isolation requirements of 11.2.1-T6 stated for the customer | M | V1 | G3 | 04.9.1-T1, 11.2.1-T6 |
 | 04.9.1-T3 | Conformance tests: replay refused without a valid grant, replay run excluded from regression/release/incident creation, pinned-version mismatch reported | M | V1 | G3 | 04.9.1-T1 |
 | 04.9.1-T4 | Failure paths: grant expiry mid-run, customer CI timeout, partial result upload; documented exit codes | S | V1 | G3 | 04.9.1-T1 |
 
@@ -285,7 +285,7 @@
 | Plan | Needed for | Story/task ids (checked against the sibling plan files 2026-09-24, plan 10 re-checked 2026-09-25) |
 |---|---|---|
 | 01 | contracts pipeline, generated schemas, integration harness, own CI | 01.3.1, 01.3.2, 01.6.1, 01.7.1 |
-| 02 | OIDC login, `POST /v1/ci/token`, scoped `ci_producer` tokens, RLS | 02.2.1, 02.4.1, 02.4.2, 02.6.1 |
+| 02 | Google OIDC login, `POST /v1/ci/token`, scoped `ci_producer` tokens, RLS | 02.2.1, 02.4.1, 02.4.2, 02.6.1 |
 | 03 | stable case ids, revisions, suites, variants, fixtures | 03.1.1, 03.1.3, 03.2.1, 03.3.1 |
 | 05 | manifest verification, run creation (calls `IProducerRegistry.RegisterSlotsAsync` in its tenant transaction, 04.1.2-T4), environment revisions, attempt write interface, finalize semantics (binding check via `IProducerRegistry`, T9), evidence-revision persistence, job epochs, device lease | 04.1.2-T4, 05.1.1-T4, 05.1.2-T1, 05.2.1-T1, 05.3.2-T1, 05.3.2-T5, 05.3.3-T2, 05.7.2-T1, 05.8.1-T1 |
 | 06 | artifact upload/complete, raw-report storage, evidence freeze result (`freeze(run_id)`; 05 persists the revision) | 06.1.1, 06.1.2, 06.3.1, 06.5.1 |

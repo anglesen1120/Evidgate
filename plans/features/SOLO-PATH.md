@@ -21,7 +21,7 @@ Remaining raw person-days (done tasks excluded; dependency closure included). Ea
 
 Demo result: a Playwright run in CI sends a manifest and events through the CLI; the server finalizes it and returns **PASS / FAIL / INCONCLUSIVE with completeness**, and a run with a missing shard never yields PASS (source §12 Sprint-2 demo).
 
-Stories, in build order (remaining days): **01.8.1-T3 `seed-dev` bootstrap** (1.0: org, project, dev user, memberships, CI binding — the way into the system before login exists; part 2, 01.8.1-T4, mints a dev ingest token and the sample policy once 02.4.2 and 07.1.1 land, 0.5) · 02.1.1 org/project API (1.5) · 02.6.1 + 02.6.2 tenant context (2.0) · 02.7.1 audit writer (2.0; 05.3.1 writes audit rows) · 02.4.1 + 02.4.2 CI authentication (6.0) · 03.1.1 + 03.1.3 + 03.2.1 stable case identity and suite revisions (5.0) · 05.1.1 + 05.1.2 manifest and environment revision (5.0) · 04.1.1 + 04.1.2 atomic batch ingest (6.0) · 05.2.1 + 05.2.2 run creation with branch/PR identity (7.5) · 04.2.1 + 04.2.2 + 04.2.3 CLI (4.5; the CLI skeleton 04.2.1-T2 comes first and uses `EVIDGATE_DEV_TOKEN`) · 04.3.1 + 04.3.2 Playwright reporter (4.0) · 05.3.1 + 05.3.2 + 05.3.3 state machine, reconcile, attempts (10.0) · 06.1.1 + 06.1.2 + 06.5.1 artifact completion and completeness (6.0) · 07.1.1 + 07.2.1 + 07.2.2 + 07.3.1 + 07.5.1 policy and evaluator (9.25).
+Stories, in build order (remaining days): **01.8.1-T3 `seed-dev` bootstrap** (1.0: org, project, dev user, memberships — the way into the system before login exists; part 2, 01.8.1-T4, mints a dev ingest token and the sample policy once 02.4.2 and 07.1.1 land, 0.5) · 02.1.1 org/project API (1.5) · 02.6.1 + 02.6.2 tenant context (2.0) · 02.7.1 audit writer (2.0; 05.3.1 writes audit rows) · 02.4.1 + 02.4.2 CI authentication (6.0) · 03.1.1 + 03.1.3 + 03.2.1 stable case identity and suite revisions (5.0) · 05.1.1 + 05.1.2 manifest and environment revision (5.0) · 04.1.1 + 04.1.2 atomic batch ingest (6.0) · 05.2.1 + 05.2.2 run creation with branch/PR identity (7.5) · 04.2.1 + 04.2.2 + 04.2.3 CLI (4.5; the CLI skeleton 04.2.1-T2 comes first and uses `EVIDGATE_DEV_TOKEN`) · 04.3.1 + 04.3.2 Playwright reporter (4.0) · 05.3.1 + 05.3.2 + 05.3.3 state machine, reconcile, attempts (10.0) · 06.1.1 + 06.1.2 + 06.5.1 artifact completion and completeness (6.0) · 07.1.1 + 07.2.1 + 07.2.2 + 07.3.1 + 07.5.1 policy and evaluator (9.25).
 
 Calendar `[INFERENCE]`: ×1.4 buffer ≈ 110 days ≈ 22 weeks; with a 0.7 focus factor (review, interruptions, context switching) ≈ 158 days ≈ 31 weeks. The per-story days above are the story's remaining tasks; the 78.75 total is the dependency closure (it also pulls in done-adjacent tasks such as 02.1.1-T3 quota columns and 03.2.1-T5 diff API).
 
@@ -57,11 +57,15 @@ Owner decision 2026-10-31 (D-PILOT0): deliver a dogfood Pilot-0 first, then cont
 
 **Days (raw, plan sizes × AGENTS.md scale XS 0.25 · S 0.5 · M 1 · L 2 · XL 3).** Critical path: CR-08 2.0 + CR-09 1.0 + CR-11 1.0 (register sizes L, M, M) + 07.2.1-T1 1.0 + 07.2.1-T2 1.0 + 07.2.2-T1 1.0 + 07.2.2-T2 1.0 + 07.2.2-T3 0.5 + 07.5.2-T1 0.5 = 9.0 days (the CR-10 remainder is unsized and not counted; size it when scheduling). Side lanes: 0.5 + 1.0 + 2.0 + 1.0 = 4.5 days. Pilot-0 sized total 9.0 + 4.5 = 13.5 raw days. Calendar `[INFERENCE]`: ×1.4 buffer = 18.9 days; with the 0.7 focus factor ≈ 27 days; the e2e wiring through the adapter and CLI is not sized in the plans.
 
-**Deferred to Pilot-1 (external team):** 02.4.3-T2/T3 + 07.6.1-T1 GitHub App and check run; 07.5.1 late re-evaluation; 04.1.2 rate limit/epoch; 05.2.2-T3 fork PR; 03.2.1-T2..T4; 09.3.1-T6..T11; register rows CR-12..CR-16; and O3 hosting (before any real customer data). 02.4.1-T2..T4 (OIDC CI token) are already landed on develop (STATUS §2, a0c3a08), so no work remains there; Pilot-0 uses the seeded dev token instead of OIDC.
+**Pilot-1 scope correction (D-NO-GITHUB, 2026-11-27):** The GitHub App, check run and OIDC exchange are removed, not deferred; 02.11.1 deletes their landed code. Pilot-0 uses its seeded dev token. The other Pilot-1 items remain as listed below.
+
+> Historical schedule (superseded for GitHub): **Deferred to Pilot-1 (external team):** 02.4.3-T2/T3 + 07.6.1-T1 GitHub App and check run; 07.5.1 late re-evaluation; 04.1.2 rate limit/epoch; 05.2.2-T3 fork PR; 03.2.1-T2..T4; 09.3.1-T6..T11; register rows CR-12..CR-16; and O3 hosting (before any real customer data). 02.4.1-T2..T4 (OIDC CI token) are already landed on develop (STATUS §2, a0c3a08), so no work remains there; Pilot-0 uses the seeded dev token instead of OIDC.
 
 ### Stage B — see it and gate on it (+19.5 raw days)
 
-Demo result: sign in, see the run list, run detail, evidence panel and decision; a GitHub check run carries the decision on the PR. Stories: 02.3.1 login (2.0) · 09.1.1 shell, session, shared state components (T1, T3, T4, T5, T7, T8, and the T2 integration spike they depend on) · 09.3.1 T1, T2, T3, T5 run list, detail, evidence, decision · 07.6.1 GitHub check run (02.4.3-T1/T2 GitHub App installation, now an explicit dependency of 07.6.1-T1) · 07.5.2 decision read API.
+The Stage B demo signs in, shows the run list, detail, evidence and decision, and gates with `evidgate gate`. No repository connection is required (D-NO-GITHUB; 02.11.1).
+
+> Historical demo (superseded): Demo result: sign in, see the run list, run detail, evidence panel and decision; a GitHub check run carries the decision on the PR. Stories: 02.3.1 login (2.0) · 09.1.1 shell, session, shared state components (T1, T3, T4, T5, T7, T8, and the T2 integration spike they depend on) · 09.3.1 T1, T2, T3, T5 run list, detail, evidence, decision · 07.6.1 GitHub check run (02.4.3-T1/T2 GitHub App installation, now an explicit dependency of 07.6.1-T1) · 07.5.2 decision read API.
 
 Cumulative A + B = 98.25 raw days: ≈ 28 weeks with the 1.4 buffer, ≈ 39 weeks with the 0.7 focus factor.
 
@@ -98,7 +102,7 @@ SAML (02.3.3), custom roles, operator console beyond the grant API (02.8), billi
 
 ## 5. Getting in before login (Stage A bootstrap)
 
-Login (02.3.1) is Stage B, so Stage A needs another way to create the first tenant. `Evidgate.Migrator seed-dev` (01.8.1-T3/T4) refuses any environment except dev and creates: one org, one project, a dev user holding `tenant_admin` and `release_approver`, one CI binding for the dev repository, then (after 02.4.2 and 07.1.1) one ingest token printed once and one sample policy revision. The CLI reads that token from `EVIDGATE_DEV_TOKEN` (04.2.1-T2, refused on staging/prod). A real GitHub Actions run uses the OIDC path (02.4.1) against the seeded CI binding. API tests use a test principal and never the seed.
+Before interactive login exists, use the dev-only `Evidgate.Migrator seed-dev` (01.8.1-T3/T4) for a local org, project, dev user, memberships and optional dev ingest token and sample policy. `EVIDGATE_DEV_TOKEN` is refused on staging/prod. Real customer jobs use a protected project ingest token; API tests use a test principal, never the seed.
 
 ## 6. Open points
 

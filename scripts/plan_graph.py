@@ -94,7 +94,7 @@ def cw(c):
     return cwave[c]
 wave = {s: cw(scomp[s]) for s in sms}
 if "--json" in sys.argv:
-    json.dump(dict(stories={s: dict(stories.get(s, {}), ms=f"G{sms[s]}", wave=wave[s], deps=sorted(sdeps[s]),
+    json.dump(dict(stories={s: dict(stories.get(s, {}), ms=f"G{sms[s]}", wave=wave[s], deps=sorted(sdeps[s], key=lambda x: [int(p) for p in x.split(".")]),
         size=sum(SIZE[d['size']] for d in tasks.values() if d['story'] == s),
         tasks=sorted([t for t in tasks if tasks[t]['story'] == s], key=lambda x: int(x.split('-T')[1])))
         for s in sms}, tasks=tasks), sys.stdout, indent=1); sys.exit(0)

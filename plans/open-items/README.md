@@ -20,6 +20,19 @@ Rows re-counted in S136 (2026-10-28) over every `| OI-` row of the five files; t
 3. A ⚠️ row is closed only by the check it names (official doc, command output or experiment), with the link or output recorded in the source file. Never close a ⚠️ by assumption.
 4. A reviewer working from the spec package (`plans/features/SOLO-PATH.md` §3) treats an open row that blocks the reviewed task as a failed review.
 
+**ID ranges reserved for S698 feature plans (2026-11-27).** Before assigning a new id in these namespaces, check this list; a feature plan adds its rows to the register named here and to its own Notes table, and no placeholder rows exist. Used already: OI-13-701…707 and OI-13-801…806 (`05-product-phases-g1.md`), OI-02-34 and OI-02-35 (`01-core-identity.md`).
+
+| Story | Register file | Range |
+|---|---|---|
+| 13.10.1 requirements | `05-product-phases-g1.md` | OI-13-710…719 |
+| 13.10.2 manual runs | `05-product-phases-g1.md` | OI-13-720…729 |
+| 13.10.3 test case reports | `05-product-phases-g1.md` | OI-13-730…739 |
+| 13.10.4 tracker connections | `05-product-phases-g1.md` | OI-13-740…749 |
+| 13.11.1 hosted runs | `05-product-phases-g1.md` | OI-13-810…819 |
+| 02.11.1 GitHub removal | `01-core-identity.md` | OI-02-36 and up |
+| 07.5.5 manual evidence in the release decision | `03-policy-healing-web.md` | OI-07-24 and up |
+| 03.4.3 register customer-owned tests from CI | `02-catalog-ingest-runs-evidence.md` | OI-03-17 and up |
+
 ## 2. Stage A blockers in build order (28)
 
 Stage A order from `plans/features/SOLO-PATH.md` §2. "Type" tells you what closing the row needs.
@@ -52,8 +65,8 @@ Stage A order from `plans/features/SOLO-PATH.md` §2. "Type" tells you what clos
 | 24 | OI-06-03 per-kind artifact size caps | 06.1.2-T3 | owner decision | **Closed (D-A9)** screenshot 10 MiB, log 20 MiB, trace 100 MiB, html_report 100 MiB, video 200 MiB, raw_report 256 MiB |
 | 25 | OI-07-02 07 dependency-id note | 07.1.1-T1 | paperwork | **Closed 2026-10-02** (sentence replaced in 07 §10) |
 | 26 | OI-07-15 reserve `promotion.inconclusive_as` | 07.1.1-T1 | contract edit | Reserve the optional field, default `blocked`, in 00 §8.6 |
-| 27 | OI-05-01 branch-scoped policy mode | 07.1.1-T1 | owner decision | **Closed (D-A10)** One policy per project with a `gating_refs` rule: default branch (and an optional release-branch glob) gate; other refs are evaluated as advisory |
-| 28 | OI-05-02 `unverified_ref`/fork runs advisory only | 07.2.1-T1 | owner decision | **Closed (D-A11)** Yes: `unverified_ref` or fork ⇒ decision recorded `advisory = true`, never gating, no override in V1 |
+| 27 | OI-05-01 branch-scoped policy mode | 07.1.1-T1 | owner decision | **Closed (D-A10, amended 2026-11-27):** a non-fork run on the declared default branch or optional release-branch glob may gate; other refs are advisory |
+| 28 | OI-05-02 provenance and fork runs | 07.2.1-T1 | owner decision | **Closed (D-A11, amended 2026-11-27):** `unverified_ref` labels declared provenance, not a gating veto. Fork runs remain advisory-only |
 
 Exact wording, sources and the information needed for each row are in the area files. Sizes and numbers in the defaults are `[INFERENCE]`.
 

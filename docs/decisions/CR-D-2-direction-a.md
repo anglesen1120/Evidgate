@@ -1,6 +1,6 @@
 # CR-D-2 — Direction (a): requirements → test cases → scripts → self-learning repair
 
-> Status: **owner decision, 2026-10-23 (chat).** The owner chose direction (a) and accepted the risk plan in §6. The owner accepted the recommendation to keep A5 (customer-operated execution) for phases G1–G3 when asking for this note. On the same day the owner asked for a separate master plan ([`plans/13-product-phases.md`](../../plans/13-product-phases.md)) plus the rewiring of the existing plans, and for a mobile spike in G2 with adoption of its techniques on web; the owner then chose mobile-mcp / mobilewright over Google ARTEMIS for iOS + Android coverage (§7). The edits listed in §8 are made in the same pull request as this file, except row 9.
+> Status: **owner decision, 2026-10-23 (chat).** The owner chose direction (a) and accepted the risk plan in §6. The owner accepted the recommendation to keep A5 (customer-operated execution) for phases G1–G3 when asking for this note (amended 2026-11-26: hosted runs from G2, DECISIONS D-HOSTED-RUN). On the same day the owner asked for a separate master plan ([`plans/13-product-phases.md`](../../plans/13-product-phases.md)) plus the rewiring of the existing plans, and for a mobile spike in G2 with adoption of its techniques on web; the owner then chose mobile-mcp / mobilewright over Google ARTEMIS for iOS + Android coverage (§7). The edits listed in §8 are made in the same pull request as this file, except row 9.
 > Legend: ✅ verified with a link · ⚠️ unverified · `[INFERENCE]` · `[DECISION]` · `[OPEN]`. Every threshold below is a starting value for the owner to tune, not a measured fact.
 
 ## 1. Decision
@@ -28,7 +28,7 @@ The evidence store, tenancy, identity and policy work already built stay as the 
 1. **Project setup:** description, test environment URL, languages, and AI settings: writing style, coverage strategy, four priority criteria, exclusion rules, step detail level, each with templates.
 2. **Author:** requirement text, documents or UI images → AI checklist → batched review (comment, merge, delete, then one "update") → test cases. Every AI update creates a version and a timeline entry.
 3. **Script:** an approved test case becomes a Playwright script. Each step is bound to an element found on the live page. Scripts reach the repository only as a pull request (A2 unchanged).
-4. **Run:** in customer CI or with `evidgate run` on a developer machine (A5 kept, §4). Results, traces and redacted DOM / accessibility snapshots are ingested.
+4. **Run:** in customer CI or with `evidgate run` on a developer machine (A5 kept, §4) (amended 2026-11-26: hosted runs from G2, DECISIONS D-HOSTED-RUN). Results, traces and redacted DOM / accessibility snapshots are ingested.
 5. **Learn:** every green run records an **element profile** per bound step: role, accessible name, test id, id, text, neighbours, position.
 6. **Classify a failure** against the last green profile into the plan 08.2.2 label set (`product_defect`, `test_drift`, `environment`, `data_issue`, `unknown`; 00 §8.7). A human label overrides a rule or model label. The repair-relevant outcomes are:
    - `test_drift`, same element with a changed id / attributes (locator drift) → propose a new locator and the matching test case edit;
@@ -59,7 +59,7 @@ The evidence store, tenancy, identity and policy work already built stay as the 
 | `DECISIONS.md` §1 | Evidence + release gate; healing as an add-on | Test authoring and self-learning maintenance on an evidence foundation (§1 above) `[DECISION]` |
 | A4 (timing only) | Healing in shadow / proposal mode, validated before a human applies it; delivery plan: shadow in V1, PR in V2 (00 §4 M4) | Same rule; proposals and approved pull requests are offered from G3, after the per-project shadow window (§6.1) `[DECISION]` |
 | §5.7 | Runtime auto-apply off in V1 and V2; V3 may reuse approved mappings | Unchanged in substance: **runtime auto-apply stays off in G1–G3**; reuse of approved mappings is considered at G4 at the earliest, under O6 `[DECISION]` |
-| A5 | Customer-operated execution, no hosted runner in V1–V2 | **Kept for G1–G3** (customer CI or local `evidgate run`); a hosted runner is reconsidered at G4 only on paying demand `[DECISION]` |
+| A5 | Customer-operated execution, no hosted runner in V1–V2 | **Kept for G1–G3** (customer CI or local `evidgate run`); a hosted runner is reconsidered at G4 only on paying demand `[DECISION]` (amended 2026-11-26: hosted runs from G2, DECISIONS D-HOSTED-RUN) |
 | A2 | Git holds approved test code | Unchanged |
 | §5 rules 1–6, 8, 9 | Mechanics only, forbidden patterns, original failure kept, semantic checks, sensitive cases reviewed, hash-bound approval, rule of three, kill switches | Unchanged |
 
@@ -74,7 +74,7 @@ Phases are sequence plus exit gates, not dates (same rule as O8). A phase does n
 | G1 Author | Project + AI settings, requirement → checklist → test cases, batched updates, versions, timeline, export (csv / xlsx / json), vi + en; model gateway, credits and redaction (§6.2, §6.6) | At least 5 external teams use it for at least 3 weeks and export or use the test cases | Fewer than 3 teams return after week 1 |
 | G2 Run | Test case → Playwright script bound to live elements with a pre-action target check (§7); CI / local run; ingest results and redacted snapshots; element profiles; mobile spike with mobile-mcp / mobilewright (13.7.1, §7) | At least 70 % of generated scripts pass 3 of 3 runs on the same build without manual edits; at least 3 teams agree to pay | Most scripts need manual repair |
 | G3 Learn and repair | Failure classification, locator proposals with an accessibility + OCR + visual locate fallback (13.7.2, §7), validation, review screen, pull requests, per-project feedback ranking | Shadow window: **0 adjudicated false repairs** on the 08.8.1 corpus over at least 300 proposals, reported with the rule-of-three caveat (08.8.2-T2: true rate may still be up to ~1 %); the acceptance rate is reported but is not the gate; the severity-weighted threshold stays O6 `[OPEN]` | Any false repair whose cause is not understood and fixed |
-| G4 Expand | Requirement-change impact analysis, policy / gate, team review, mobile (§7), hosted runner if paid for | Paying demand per item | — |
+| G4 Expand | Requirement-change impact analysis, policy / gate, team review, mobile (§7), hosted runner if paid for (amended 2026-11-26: hosted runs from G2, DECISIONS D-HOSTED-RUN) | Paying demand per item | — |
 
 ## 6. Risk register
 
@@ -116,7 +116,7 @@ Plus: a **per-project shadow window** of 2–4 weeks (proposals labelled, measur
 ### 6.5 One developer, growing scope
 
 - Phase gates (§5) are hard stops.
-- One engine (Playwright), one CI (GitHub Actions), one model provider behind the gateway (08.5.1, 08.5.5).
+- One engine (Playwright), customer CI (any provider, project ingest token), one model provider behind the gateway (08.5.1, 08.5.5).
 - G1 reuses Tenancy, Identity and Catalog; G2 reuses the CLI, `adapter-playwright` and Evidence.
 - Deferred work (§3) stays frozen until G4, except the data-protection items named in §3.
 
