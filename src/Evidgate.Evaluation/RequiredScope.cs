@@ -51,7 +51,8 @@ internal sealed record RequiredScope(
         return sweep.ToScope();
     }
 
-    private static bool IsFailure(CaseStatus status) =>
+    /// <summary>True for the statuses that count as a failing assertion; skipped and blocked are not failures.</summary>
+    internal static bool IsFailure(CaseStatus status) =>
         status is CaseStatus.Failed or CaseStatus.TimedOut or CaseStatus.Error;
 
     private sealed class Sweep

@@ -21,6 +21,7 @@ public class PolicyPersistenceSqlOwnershipTests
         "evaluation",
         "policy_revision",
         "quarantine_entry",
+        "release_decision",
         "waiver",
     };
 
@@ -80,7 +81,7 @@ public class PolicyPersistenceSqlOwnershipTests
             .Distinct(StringComparer.Ordinal)
             .Order(StringComparer.Ordinal);
 
-        named.ShouldBe(["evaluation", "policy_revision", "quarantine_entry", "waiver"]);
+        named.ShouldBe(["evaluation", "policy_revision", "quarantine_entry", "release_decision", "waiver"]);
         PolicySqlTableRules.FindViolations(files, OwnedTables).ShouldBeEmpty();
     }
 }

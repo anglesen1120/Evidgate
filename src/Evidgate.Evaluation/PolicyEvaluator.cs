@@ -8,6 +8,8 @@ using System.Collections;
 /// </summary>
 public sealed class PolicyEvaluator : IPolicyEvaluator
 {
+    private static readonly FlakyDetector Detector = new();
+
     private readonly IReadOnlyList<IDecisionLayer> layers;
 
     /// <summary>Creates the evaluator with no post-core layers.</summary>
@@ -61,6 +63,7 @@ public sealed class PolicyEvaluator : IPolicyEvaluator
         // instead of failing deeper inside the computation.
         ArgumentNullException.ThrowIfNull(evidence.Missing);
         ArgumentNullException.ThrowIfNull(evidence.Results);
+        ArgumentNullException.ThrowIfNull(evidence.Attempts);
         ArgumentNullException.ThrowIfNull(policy.RequiredCaseKeys);
         ArgumentNullException.ThrowIfNull(policy.RequiredSuiteKeys);
         ArgumentNullException.ThrowIfNull(policy.CriticalCaseIds);
@@ -72,15 +75,18 @@ public sealed class PolicyEvaluator : IPolicyEvaluator
         ArgumentNullException.ThrowIfNull(exceptions.WaivedCaseIds);
 
         var (core, failedCaseIds) = CoreEvaluation.Compute(evidence, policy, exceptions);
-        var (decision, reasons) = ApplyLayers(evidence, policy, exceptions, core);
+        var flakyFacts = Detector.Detect(evidence.Attempts, evidence.MaxRetries);
+        var (decision, reasons) = ApplyLayers(evidence, policy, exceptions, core, flakyFacts);
 
         // A waiver only annotates a failure that gates; it is applied after the layers, so it can never move the decision.
-        if (decision == EvaluationDecision.Fail && AnyWaived(failedCaseIds, exceptions.WaivedCaseIds))
+        if (decision == EvaluationDecision.Fail
+            && (AnyWaived(failedCaseIds, exceptions.WaivedCaseIds)
+                || AnyWaived(FlakyBudgetPolicy.CriticalCaseIds(flakyFacts, policy), exceptions.WaivedCaseIds)))
         {
             reasons = ReasonSet.Normalize([.. reasons, EvaluationReason.WaiverApproved]);
         }
 
-        return core with { Decision = decision, Reasons = reasons };
+        return core with { Decision = decision, Reasons = reasons, FlakyFacts = flakyFacts };
     }
 
     /// <summary>True when a still-gating failed case also holds a waiver; the empty sides short-circuit.</summary>
@@ -105,13 +111,15 @@ public sealed class PolicyEvaluator : IPolicyEvaluator
     /// <summary>
     /// Runs every layer in order. A layer may only downgrade the core pass to an inconclusive verdict: once the
     /// decision is not a pass it is frozen, a proposal to raise it is ignored, and so is a proposal outside the
-    /// decision enum. A downgrade drops the pass-only reason, which no longer describes the result.
+    /// decision enum. A downgrade drops the pass-only reason, which no longer describes the result. The flaky budget
+    /// is a built-in step after the layers, so no layer can see or reorder it.
     /// </summary>
     private (EvaluationDecision Decision, IReadOnlyList<EvaluationReason> Reasons) ApplyLayers(
         EvidenceRevisionInput evidence,
         PolicyRevisionInput policy,
         ExceptionsSnapshotInput exceptions,
-        EvaluationResult core)
+        EvaluationResult core,
+        IReadOnlyList<FlakyFact> flakyFacts)
     {
         var decision = core.Decision;
         var reasons = new List<EvaluationReason>(core.Reasons);
@@ -146,6 +154,8 @@ public sealed class PolicyEvaluator : IPolicyEvaluator
             decision = EvaluationDecision.Inconclusive;
             reasons.RemoveAll(reason => reason == EvaluationReason.ScopeBuildPolicyPinned);
         }
+
+        decision = FlakyBudgetPolicy.Apply(flakyFacts, policy, exceptions, decision, reasons);
 
         if (decision != EvaluationDecision.Pass)
         {

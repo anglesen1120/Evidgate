@@ -14,7 +14,8 @@ internal sealed class PolicyContracts(
     GetActivePolicyQuery query,
     GetRequiredArtifactKindsQuery requiredArtifactKinds,
     GetLiveEvaluationsQuery liveEvaluations,
-    GetLatestLiveDecisionsQuery latestLiveDecisions) : IPolicyContracts
+    GetLatestLiveDecisionsQuery latestLiveDecisions,
+    CountLatestLiveDecisionsQuery latestLiveDecisionCounts) : IPolicyContracts
 {
     /// <summary>Resolves the revision a new run pins, or null when the project has no active policy.</summary>
     /// <param name="projectId">The project the run is created in.</param>
@@ -46,4 +47,10 @@ internal sealed class PolicyContracts(
         IReadOnlyList<Guid> runIds,
         CancellationToken cancellationToken) =>
         latestLiveDecisions.GetAsync(runIds, cancellationToken);
+
+    /// <inheritdoc />
+    public ValueTask<LiveDecisionCounts> CountLatestLiveDecisionsAsync(
+        IReadOnlyList<Guid> runIds,
+        CancellationToken cancellationToken) =>
+        latestLiveDecisionCounts.CountAsync(runIds, cancellationToken);
 }

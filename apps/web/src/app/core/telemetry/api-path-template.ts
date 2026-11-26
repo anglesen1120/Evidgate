@@ -49,6 +49,8 @@ export const KNOWN_API_SEGMENTS: ReadonlySet<string> = new Set<string>([
   'complete',
   'confirm',
   'decision',
+  'decision-counts',
+  'deploy-targets',
   'dev',
   'diff',
   'discard',
@@ -127,6 +129,8 @@ export const KNOWN_API_SEGMENTS: ReadonlySet<string> = new Set<string>([
   'users',
   'versions',
   'waivers',
+  'webhook-deliveries',
+  'webhook-endpoints',
   'webhooks',
 ]);
 

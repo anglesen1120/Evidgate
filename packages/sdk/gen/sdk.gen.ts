@@ -2,7 +2,7 @@
 
 import { client } from './client.gen.js';
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client/index.js';
-import type { ActivatePolicyRevisionData, ActivatePolicyRevisionErrors, ActivatePolicyRevisionResponses, ApplyAuthoringChangesData, ApplyAuthoringChangesErrors, ApplyAuthoringChangesResponses, ApproveHealingCandidateData, ApproveHealingCandidateErrors, ApproveHealingCandidateResponses, ApproveSupportGrantData, ApproveSupportGrantErrors, ApproveSupportGrantResponses, ApproveWaiverData, ApproveWaiverErrors, ApproveWaiverResponses, BindReleaseRunData, BindReleaseRunErrors, BindReleaseRunResponses, CancelMembershipInviteData, CancelMembershipInviteErrors, CancelMembershipInviteResponses, CancelRunData, CancelRunErrors, CancelRunResponses, ClaimJobData, ClaimJobErrors, ClaimJobResponses, CompleteArtifactData, CompleteArtifactErrors, CompleteArtifactResponses, CompleteFederatedLoginData, CompleteFederatedLoginErrors, CompleteGitHubInstallData, CompleteGitHubInstallErrors, CompleteGitHubInstallResponses, ConfirmProviderLinkData, ConfirmProviderLinkErrors, ConfirmProviderLinkResponses, CreateApiTokenData, CreateApiTokenErrors, CreateApiTokenResponses, CreateArtifactUploadUrlData, CreateArtifactUploadUrlErrors, CreateArtifactUploadUrlResponses, CreateAuthoringNodeData, CreateAuthoringNodeErrors, CreateAuthoringNodeResponses, CreateChecklistItemData, CreateChecklistItemErrors, CreateChecklistItemResponses, CreateCiBindingData, CreateCiBindingErrors, CreateCiBindingResponses, CreateDevSessionData, CreateDevSessionErrors, CreateDevSessionResponses, CreateDraftData, CreateDraftErrors, CreateDraftResponses, CreateEnvironmentRevisionData, CreateEnvironmentRevisionErrors, CreateEnvironmentRevisionResponses, CreateFixtureData, CreateFixtureErrors, CreateFixtureResponses, CreateFixtureRevisionData, CreateFixtureRevisionErrors, CreateFixtureRevisionResponses, CreateIngestTokenData, CreateIngestTokenErrors, CreateIngestTokenResponses, CreateManifestData, CreateManifestErrors, CreateManifestResponses, CreateManualCaseData, CreateManualCaseErrors, CreateManualCaseResponses, CreateMembershipData, CreateMembershipErrors, CreateMembershipResponses, CreateOrganizationData, CreateOrganizationErrors, CreateOrganizationResponses, CreatePolicyRevisionData, CreatePolicyRevisionErrors, CreatePolicyRevisionResponses, CreateProjectData, CreateProjectErrors, CreateProjectResponses, CreateQuarantineEntryData, CreateQuarantineEntryErrors, CreateQuarantineEntryResponses, CreateReleaseData, CreateReleaseErrors, CreateReleaseResponses, CreateRoleData, CreateRoleErrors, CreateRoleResponses, CreateRunData, CreateRunErrors, CreateRunResponses, CreateSuiteData, CreateSuiteErrors, CreateSuiteResponses, CreateSuiteRevisionData, CreateSuiteRevisionErrors, CreateSuiteRevisionResponses, CreateWaiverData, CreateWaiverErrors, CreateWaiverResponses, DeleteAuthoringNodeData, DeleteAuthoringNodeErrors, DeleteAuthoringNodeResponses, DeleteChecklistItemData, DeleteChecklistItemErrors, DeleteChecklistItemResponses, DeleteManualCaseData, DeleteManualCaseErrors, DeleteManualCaseResponses, DisableCiBindingData, DisableCiBindingErrors, DisableCiBindingResponses, DiscardAuthoringChangeData, DiscardAuthoringChangeErrors, DiscardAuthoringChangeResponses, DiscardPendingProviderLinkData, DiscardPendingProviderLinkErrors, DiscardPendingProviderLinkResponses, DisconnectGitHubInstallData, DisconnectGitHubInstallErrors, DisconnectGitHubInstallResponses, DryRunDraftData, DryRunDraftErrors, DryRunDraftResponses, ExchangeCiTokenData, ExchangeCiTokenErrors, ExchangeCiTokenResponses, ExportAuditData, ExportAuditErrors, ExportAuditResponses, ExportAuthoringData, ExportAuthoringErrors, ExportAuthoringResponses, FinalizeRunData, FinalizeRunErrors, FinalizeRunResponses, GetArtifactDownloadUrlData, GetArtifactDownloadUrlErrors, GetArtifactDownloadUrlResponses, GetArtifactMetadataData, GetArtifactMetadataErrors, GetArtifactMetadataResponses, GetAuthoringChangeData, GetAuthoringChangeErrors, GetAuthoringChangeResponses, GetAuthoringVersionData, GetAuthoringVersionErrors, GetAuthoringVersionResponses, GetCaptureOptionsData, GetCaptureOptionsErrors, GetCaptureOptionsResponses, GetCaseData, GetCaseErrors, GetCaseResponses, GetDraftData, GetDraftErrors, GetDraftResponses, GetEnvironmentRevisionData, GetEnvironmentRevisionErrors, GetEnvironmentRevisionResponses, GetFixtureData, GetFixtureErrors, GetFixtureResponses, GetGitHubInstallationData, GetGitHubInstallationErrors, GetGitHubInstallationResponses, GetHealingCandidateData, GetHealingCandidateErrors, GetHealingCandidateResponses, GetHealingSwitchData, GetHealingSwitchErrors, GetHealingSwitchResponses, GetIncidentData, GetIncidentErrors, GetIncidentResponses, GetManualCaseData, GetManualCaseErrors, GetManualCaseResponses, GetMembershipData, GetMembershipErrors, GetMembershipResponses, GetMyPermissionsData, GetMyPermissionsErrors, GetMyPermissionsResponses, GetMyProfileData, GetMyProfileErrors, GetMyProfileResponses, GetOrganizationData, GetOrganizationErrors, GetOrganizationResponses, GetPendingProviderLinkData, GetPendingProviderLinkErrors, GetPendingProviderLinkResponses, GetPolicyActivationData, GetPolicyActivationErrors, GetPolicyActivationResponses, GetPolicyHeadData, GetPolicyHeadErrors, GetPolicyHeadResponses, GetPolicyRevisionData, GetPolicyRevisionErrors, GetPolicyRevisionResponses, GetProjectAiSettingsData, GetProjectAiSettingsErrors, GetProjectAiSettingsResponses, GetProjectAiSettingsVersionData, GetProjectAiSettingsVersionErrors, GetProjectAiSettingsVersionResponses, GetProjectData, GetProjectErrors, GetProjectResponses, GetReleaseData, GetReleaseDecisionData, GetReleaseDecisionErrors, GetReleaseDecisionResponses, GetReleaseErrors, GetReleaseResponses, GetReportComparisonData, GetReportComparisonErrors, GetReportComparisonResponses, GetRetentionPolicyData, GetRetentionPolicyErrors, GetRetentionPolicyResponses, GetRunData, GetRunDecisionData, GetRunDecisionErrors, GetRunDecisionResponses, GetRunErrors, GetRunResponses, GetSuiteData, GetSuiteErrors, GetSuiteResponses, GetSuiteRevisionData, GetSuiteRevisionDiffData, GetSuiteRevisionDiffErrors, GetSuiteRevisionDiffResponses, GetSuiteRevisionErrors, GetSuiteRevisionExecutionPlanData, GetSuiteRevisionExecutionPlanErrors, GetSuiteRevisionExecutionPlanResponses, GetSuiteRevisionResponses, GetTemplateData, GetTemplateErrors, GetTemplateResponses, GetUsageLedgerData, GetUsageLedgerErrors, GetUsageLedgerResponses, GetUsageSummaryData, GetUsageSummaryErrors, GetUsageSummaryResponses, GrantMembershipRoleData, GrantMembershipRoleErrors, GrantMembershipRoleResponses, HeartbeatJobData, HeartbeatJobErrors, HeartbeatJobResponses, ImportAuthoringData, ImportAuthoringErrors, ImportAuthoringResponses, LabelIncidentData, LabelIncidentErrors, LabelIncidentResponses, LinkManualCaseData, LinkManualCaseErrors, LinkManualCaseResponses, ListApiTokensData, ListApiTokensErrors, ListApiTokensResponses, ListAuditData, ListAuditErrors, ListAuditResponses, ListAuthoringChangesData, ListAuthoringChangesErrors, ListAuthoringChangesResponses, ListAuthoringTreeData, ListAuthoringTreeErrors, ListAuthoringTreeResponses, ListAuthoringVersionsData, ListAuthoringVersionsErrors, ListAuthoringVersionsResponses, ListCaseRevisionsData, ListCaseRevisionsErrors, ListCaseRevisionsResponses, ListCasesData, ListCasesErrors, ListCasesResponses, ListChecklistItemsData, ListChecklistItemsErrors, ListChecklistItemsResponses, ListCiBindingsData, ListCiBindingsErrors, ListCiBindingsResponses, ListDraftsData, ListDraftsErrors, ListDraftsResponses, ListEvidenceRevisionsData, ListEvidenceRevisionsErrors, ListEvidenceRevisionsResponses, ListFixturesData, ListFixturesErrors, ListFixturesResponses, ListHealingCandidatesData, ListHealingCandidatesErrors, ListHealingCandidatesResponses, ListIncidentsData, ListIncidentsErrors, ListIncidentsResponses, ListIngestTokensData, ListIngestTokensErrors, ListIngestTokensResponses, ListManualCasesData, ListManualCasesErrors, ListManualCasesResponses, ListMembershipsData, ListMembershipsErrors, ListMembershipsResponses, ListMyOrganizationsData, ListMyOrganizationsErrors, ListMyOrganizationsResponses, ListPermissionsData, ListPermissionsErrors, ListPermissionsResponses, ListPolicyRevisionsData, ListPolicyRevisionsErrors, ListPolicyRevisionsResponses, ListProjectAiSettingsTemplatesData, ListProjectAiSettingsTemplatesErrors, ListProjectAiSettingsTemplatesResponses, ListProjectAiSettingsVersionsData, ListProjectAiSettingsVersionsErrors, ListProjectAiSettingsVersionsResponses, ListProjectsData, ListProjectsErrors, ListProjectsResponses, ListProjectWaiversData, ListProjectWaiversErrors, ListProjectWaiversResponses, ListQuarantineEntriesData, ListQuarantineEntriesErrors, ListQuarantineEntriesResponses, ListRolesData, ListRolesErrors, ListRolesResponses, ListRunAttemptsData, ListRunAttemptsErrors, ListRunAttemptsResponses, ListRunsData, ListRunsErrors, ListRunsResponses, ListSecurityEventsData, ListSecurityEventsErrors, ListSecurityEventsResponses, ListSessionsData, ListSessionsErrors, ListSessionsResponses, ListSuitesData, ListSuitesErrors, ListSuitesResponses, ListSupportGrantsData, ListSupportGrantsErrors, ListSupportGrantsResponses, ListTemplatesData, ListTemplatesErrors, ListTemplatesResponses, LogoutData, LogoutErrors, LogoutResponses, MoveManualCaseData, MoveManualCaseErrors, MoveManualCaseResponses, OpenDraftPullRequestData, OpenDraftPullRequestErrors, OpenDraftPullRequestResponses, PostRunEventsData, PostRunEventsErrors, PostRunEventsResponses, QueueAuthoringChangeData, QueueAuthoringChangeErrors, QueueAuthoringChangeResponses, ReceiveGithubWebhookData, ReceiveGithubWebhookErrors, ReceiveGithubWebhookResponses, RegisterGitRepoBindingData, RegisterGitRepoBindingErrors, RegisterGitRepoBindingResponses, RejectHealingCandidateData, RejectHealingCandidateErrors, RejectHealingCandidateResponses, RemoveMemberData, RemoveMemberErrors, RemoveMemberResponses, RemoveQuarantineEntryData, RemoveQuarantineEntryErrors, RemoveQuarantineEntryResponses, ReorderAuthoringNodesData, ReorderAuthoringNodesErrors, ReorderAuthoringNodesResponses, ReprocessRunData, ReprocessRunErrors, ReprocessRunResponses, RequestSupportGrantData, RequestSupportGrantErrors, RequestSupportGrantResponses, RerunRunData, RerunRunErrors, RerunRunResponses, ResendMembershipInviteData, ResendMembershipInviteErrors, ResendMembershipInviteResponses, RestoreAuthoringNodeData, RestoreAuthoringNodeErrors, RestoreAuthoringNodeResponses, RestoreAuthoringVersionData, RestoreAuthoringVersionErrors, RestoreAuthoringVersionResponses, RestoreChecklistItemData, RestoreChecklistItemErrors, RestoreChecklistItemResponses, RestoreManualCaseData, RestoreManualCaseErrors, RestoreManualCaseResponses, RevokeAllSessionsData, RevokeAllSessionsErrors, RevokeAllSessionsResponses, RevokeApiTokenData, RevokeApiTokenErrors, RevokeApiTokenResponses, RevokeHealingCandidateData, RevokeHealingCandidateErrors, RevokeHealingCandidateResponses, RevokeIngestTokenData, RevokeIngestTokenErrors, RevokeIngestTokenResponses, RevokeMembershipRoleData, RevokeMembershipRoleErrors, RevokeMembershipRoleResponses, RevokeSessionData, RevokeSessionErrors, RevokeSessionResponses, RevokeSupportGrantData, RevokeSupportGrantErrors, RevokeSupportGrantResponses, RevokeUserSessionsData, RevokeUserSessionsErrors, RevokeUserSessionsResponses, RevokeWaiverData, RevokeWaiverErrors, RevokeWaiverResponses, RotateIngestTokenData, RotateIngestTokenErrors, RotateIngestTokenResponses, SaveProjectAiSettingsData, SaveProjectAiSettingsErrors, SaveProjectAiSettingsResponses, SetArtifactKindPolicyOverrideData, SetArtifactKindPolicyOverrideErrors, SetArtifactKindPolicyOverrideResponses, SetCaseRequirementRefData, SetCaseRequirementRefErrors, SetCaseRequirementRefResponses, SetHealingSwitchData, SetHealingSwitchErrors, SetHealingSwitchResponses, SetManualCaseStateData, SetManualCaseStateErrors, SetManualCaseStateResponses, SetRetentionPolicyData, SetRetentionPolicyErrors, SetRetentionPolicyResponses, StageInviteTokenData, StageInviteTokenErrors, StageInviteTokenResponses, StartFederatedLoginData, StartFederatedLoginErrors, StartGitHubInstallData, StartGitHubInstallErrors, StartGitHubInstallResponses, StartProviderLinkData, StartProviderLinkErrors, StartProviderLinkResponses, UnlinkManualCaseData, UnlinkManualCaseErrors, UnlinkManualCaseResponses, UpdateAuthoringNodeData, UpdateAuthoringNodeErrors, UpdateAuthoringNodeResponses, UpdateCaseData, UpdateCaseErrors, UpdateCaseResponses, UpdateChecklistItemData, UpdateChecklistItemErrors, UpdateChecklistItemResponses, UpdateCiBindingData, UpdateCiBindingErrors, UpdateCiBindingResponses, UpdateDraftData, UpdateDraftErrors, UpdateDraftResponses, UpdateManualCaseData, UpdateManualCaseErrors, UpdateManualCaseResponses, UpdateMembershipData, UpdateMembershipErrors, UpdateMembershipResponses, UpdateMyProfileData, UpdateMyProfileErrors, UpdateMyProfileResponses, UpdateOrganizationData, UpdateOrganizationErrors, UpdateOrganizationResponses, UpdateProjectData, UpdateProjectErrors, UpdateProjectResponses, UpdateRoleData, UpdateRoleErrors, UpdateRoleResponses } from './types.gen.js';
+import type { ActivatePolicyRevisionData, ActivatePolicyRevisionErrors, ActivatePolicyRevisionResponses, ApplyAuthoringChangesData, ApplyAuthoringChangesErrors, ApplyAuthoringChangesResponses, ApproveHealingCandidateData, ApproveHealingCandidateErrors, ApproveHealingCandidateResponses, ApproveSupportGrantData, ApproveSupportGrantErrors, ApproveSupportGrantResponses, ApproveWaiverData, ApproveWaiverErrors, ApproveWaiverResponses, BindReleaseRunData, BindReleaseRunErrors, BindReleaseRunResponses, CancelMembershipInviteData, CancelMembershipInviteErrors, CancelMembershipInviteResponses, CancelRunData, CancelRunErrors, CancelRunResponses, ClaimJobData, ClaimJobErrors, ClaimJobResponses, CompleteArtifactData, CompleteArtifactErrors, CompleteArtifactResponses, CompleteFederatedLoginData, CompleteFederatedLoginErrors, CompleteGitHubInstallData, CompleteGitHubInstallErrors, CompleteGitHubInstallResponses, ConfirmProviderLinkData, ConfirmProviderLinkErrors, ConfirmProviderLinkResponses, CreateApiTokenData, CreateApiTokenErrors, CreateApiTokenResponses, CreateArtifactUploadUrlData, CreateArtifactUploadUrlErrors, CreateArtifactUploadUrlResponses, CreateAuthoringNodeData, CreateAuthoringNodeErrors, CreateAuthoringNodeResponses, CreateChecklistItemData, CreateChecklistItemErrors, CreateChecklistItemResponses, CreateCiBindingData, CreateCiBindingErrors, CreateCiBindingResponses, CreateDeployTargetData, CreateDeployTargetErrors, CreateDeployTargetResponses, CreateDevSessionData, CreateDevSessionErrors, CreateDevSessionResponses, CreateDraftData, CreateDraftErrors, CreateDraftResponses, CreateEnvironmentRevisionData, CreateEnvironmentRevisionErrors, CreateEnvironmentRevisionResponses, CreateFixtureData, CreateFixtureErrors, CreateFixtureResponses, CreateFixtureRevisionData, CreateFixtureRevisionErrors, CreateFixtureRevisionResponses, CreateIngestTokenData, CreateIngestTokenErrors, CreateIngestTokenResponses, CreateManifestData, CreateManifestErrors, CreateManifestResponses, CreateManualCaseData, CreateManualCaseErrors, CreateManualCaseResponses, CreateMembershipData, CreateMembershipErrors, CreateMembershipResponses, CreateOrganizationData, CreateOrganizationErrors, CreateOrganizationResponses, CreatePolicyRevisionData, CreatePolicyRevisionErrors, CreatePolicyRevisionResponses, CreateProjectData, CreateProjectErrors, CreateProjectResponses, CreateQuarantineEntryData, CreateQuarantineEntryErrors, CreateQuarantineEntryResponses, CreateReleaseData, CreateReleaseErrors, CreateReleaseResponses, CreateRoleData, CreateRoleErrors, CreateRoleResponses, CreateRunData, CreateRunErrors, CreateRunResponses, CreateSuiteData, CreateSuiteErrors, CreateSuiteResponses, CreateSuiteRevisionData, CreateSuiteRevisionErrors, CreateSuiteRevisionResponses, CreateWaiverData, CreateWaiverErrors, CreateWaiverResponses, CreateWebhookEndpointData, CreateWebhookEndpointErrors, CreateWebhookEndpointResponses, DeleteAuthoringNodeData, DeleteAuthoringNodeErrors, DeleteAuthoringNodeResponses, DeleteChecklistItemData, DeleteChecklistItemErrors, DeleteChecklistItemResponses, DeleteManualCaseData, DeleteManualCaseErrors, DeleteManualCaseResponses, DeleteWebhookEndpointData, DeleteWebhookEndpointErrors, DeleteWebhookEndpointResponses, DisableCiBindingData, DisableCiBindingErrors, DisableCiBindingResponses, DisableDeployTargetData, DisableDeployTargetErrors, DisableDeployTargetResponses, DiscardAuthoringChangeData, DiscardAuthoringChangeErrors, DiscardAuthoringChangeResponses, DiscardPendingProviderLinkData, DiscardPendingProviderLinkErrors, DiscardPendingProviderLinkResponses, DisconnectGitHubInstallData, DisconnectGitHubInstallErrors, DisconnectGitHubInstallResponses, DryRunDraftData, DryRunDraftErrors, DryRunDraftResponses, ExchangeCiTokenData, ExchangeCiTokenErrors, ExchangeCiTokenResponses, ExportAuditData, ExportAuditErrors, ExportAuditResponses, ExportAuthoringData, ExportAuthoringErrors, ExportAuthoringResponses, FinalizeRunData, FinalizeRunErrors, FinalizeRunResponses, GetArtifactDownloadUrlData, GetArtifactDownloadUrlErrors, GetArtifactDownloadUrlResponses, GetArtifactMetadataData, GetArtifactMetadataErrors, GetArtifactMetadataResponses, GetAuthoringChangeData, GetAuthoringChangeErrors, GetAuthoringChangeResponses, GetAuthoringVersionData, GetAuthoringVersionErrors, GetAuthoringVersionResponses, GetCaptureOptionsData, GetCaptureOptionsErrors, GetCaptureOptionsResponses, GetCaseData, GetCaseErrors, GetCaseResponses, GetDeployTargetData, GetDeployTargetErrors, GetDeployTargetResponses, GetDraftData, GetDraftErrors, GetDraftResponses, GetEnvironmentRevisionData, GetEnvironmentRevisionErrors, GetEnvironmentRevisionResponses, GetFixtureData, GetFixtureErrors, GetFixtureResponses, GetGitHubInstallationData, GetGitHubInstallationErrors, GetGitHubInstallationResponses, GetHealingCandidateData, GetHealingCandidateErrors, GetHealingCandidateResponses, GetHealingSwitchData, GetHealingSwitchErrors, GetHealingSwitchResponses, GetIncidentData, GetIncidentErrors, GetIncidentResponses, GetManualCaseData, GetManualCaseErrors, GetManualCaseResponses, GetMembershipData, GetMembershipErrors, GetMembershipResponses, GetMyPermissionsData, GetMyPermissionsErrors, GetMyPermissionsResponses, GetMyProfileData, GetMyProfileErrors, GetMyProfileResponses, GetOrganizationData, GetOrganizationErrors, GetOrganizationResponses, GetPendingProviderLinkData, GetPendingProviderLinkErrors, GetPendingProviderLinkResponses, GetPolicyActivationData, GetPolicyActivationErrors, GetPolicyActivationResponses, GetPolicyHeadData, GetPolicyHeadErrors, GetPolicyHeadResponses, GetPolicyRevisionData, GetPolicyRevisionErrors, GetPolicyRevisionResponses, GetProjectAiSettingsData, GetProjectAiSettingsErrors, GetProjectAiSettingsResponses, GetProjectAiSettingsVersionData, GetProjectAiSettingsVersionErrors, GetProjectAiSettingsVersionResponses, GetProjectData, GetProjectErrors, GetProjectResponses, GetReleaseData, GetReleaseDecisionData, GetReleaseDecisionErrors, GetReleaseDecisionResponses, GetReleaseErrors, GetReleaseResponses, GetReportComparisonData, GetReportComparisonErrors, GetReportComparisonResponses, GetRetentionPolicyData, GetRetentionPolicyErrors, GetRetentionPolicyResponses, GetRunData, GetRunDecisionCountsData, GetRunDecisionCountsErrors, GetRunDecisionCountsResponses, GetRunDecisionData, GetRunDecisionErrors, GetRunDecisionResponses, GetRunErrors, GetRunResponses, GetSuiteData, GetSuiteErrors, GetSuiteResponses, GetSuiteRevisionData, GetSuiteRevisionDiffData, GetSuiteRevisionDiffErrors, GetSuiteRevisionDiffResponses, GetSuiteRevisionErrors, GetSuiteRevisionExecutionPlanData, GetSuiteRevisionExecutionPlanErrors, GetSuiteRevisionExecutionPlanResponses, GetSuiteRevisionResponses, GetTemplateData, GetTemplateErrors, GetTemplateResponses, GetUsageLedgerData, GetUsageLedgerErrors, GetUsageLedgerResponses, GetUsageSummaryData, GetUsageSummaryErrors, GetUsageSummaryResponses, GetWebhookEndpointData, GetWebhookEndpointErrors, GetWebhookEndpointResponses, GrantMembershipRoleData, GrantMembershipRoleErrors, GrantMembershipRoleResponses, HeartbeatJobData, HeartbeatJobErrors, HeartbeatJobResponses, ImportAuthoringData, ImportAuthoringErrors, ImportAuthoringResponses, LabelIncidentData, LabelIncidentErrors, LabelIncidentResponses, LinkManualCaseData, LinkManualCaseErrors, LinkManualCaseResponses, ListApiTokensData, ListApiTokensErrors, ListApiTokensResponses, ListAuditData, ListAuditErrors, ListAuditResponses, ListAuthoringChangesData, ListAuthoringChangesErrors, ListAuthoringChangesResponses, ListAuthoringTreeData, ListAuthoringTreeErrors, ListAuthoringTreeResponses, ListAuthoringVersionsData, ListAuthoringVersionsErrors, ListAuthoringVersionsResponses, ListCaseRevisionsData, ListCaseRevisionsErrors, ListCaseRevisionsResponses, ListCasesData, ListCasesErrors, ListCasesResponses, ListChecklistItemsData, ListChecklistItemsErrors, ListChecklistItemsResponses, ListCiBindingsData, ListCiBindingsErrors, ListCiBindingsResponses, ListDeployTargetsData, ListDeployTargetsErrors, ListDeployTargetsResponses, ListDraftsData, ListDraftsErrors, ListDraftsResponses, ListEvidenceRevisionsData, ListEvidenceRevisionsErrors, ListEvidenceRevisionsResponses, ListFixturesData, ListFixturesErrors, ListFixturesResponses, ListHealingCandidatesData, ListHealingCandidatesErrors, ListHealingCandidatesResponses, ListIncidentsData, ListIncidentsErrors, ListIncidentsResponses, ListIngestTokensData, ListIngestTokensErrors, ListIngestTokensResponses, ListManualCasesData, ListManualCasesErrors, ListManualCasesResponses, ListMembershipsData, ListMembershipsErrors, ListMembershipsResponses, ListMyOrganizationsData, ListMyOrganizationsErrors, ListMyOrganizationsResponses, ListPermissionsData, ListPermissionsErrors, ListPermissionsResponses, ListPolicyRevisionsData, ListPolicyRevisionsErrors, ListPolicyRevisionsResponses, ListProjectAiSettingsTemplatesData, ListProjectAiSettingsTemplatesErrors, ListProjectAiSettingsTemplatesResponses, ListProjectAiSettingsVersionsData, ListProjectAiSettingsVersionsErrors, ListProjectAiSettingsVersionsResponses, ListProjectsData, ListProjectsErrors, ListProjectsResponses, ListProjectWaiversData, ListProjectWaiversErrors, ListProjectWaiversResponses, ListQuarantineEntriesData, ListQuarantineEntriesErrors, ListQuarantineEntriesResponses, ListRolesData, ListRolesErrors, ListRolesResponses, ListRunAttemptsData, ListRunAttemptsErrors, ListRunAttemptsResponses, ListRunsData, ListRunsErrors, ListRunsResponses, ListSecurityEventsData, ListSecurityEventsErrors, ListSecurityEventsResponses, ListSessionsData, ListSessionsErrors, ListSessionsResponses, ListSuitesData, ListSuitesErrors, ListSuitesResponses, ListSupportGrantsData, ListSupportGrantsErrors, ListSupportGrantsResponses, ListTemplatesData, ListTemplatesErrors, ListTemplatesResponses, ListWebhookDeliveriesData, ListWebhookDeliveriesErrors, ListWebhookDeliveriesResponses, ListWebhookEndpointsData, ListWebhookEndpointsErrors, ListWebhookEndpointsResponses, LogoutData, LogoutErrors, LogoutResponses, MoveManualCaseData, MoveManualCaseErrors, MoveManualCaseResponses, OpenDraftPullRequestData, OpenDraftPullRequestErrors, OpenDraftPullRequestResponses, PostRunEventsData, PostRunEventsErrors, PostRunEventsResponses, QueueAuthoringChangeData, QueueAuthoringChangeErrors, QueueAuthoringChangeResponses, ReceiveGithubWebhookData, ReceiveGithubWebhookErrors, ReceiveGithubWebhookResponses, RegisterGitRepoBindingData, RegisterGitRepoBindingErrors, RegisterGitRepoBindingResponses, RejectHealingCandidateData, RejectHealingCandidateErrors, RejectHealingCandidateResponses, RemoveMemberData, RemoveMemberErrors, RemoveMemberResponses, RemoveQuarantineEntryData, RemoveQuarantineEntryErrors, RemoveQuarantineEntryResponses, ReorderAuthoringNodesData, ReorderAuthoringNodesErrors, ReorderAuthoringNodesResponses, ReprocessRunData, ReprocessRunErrors, ReprocessRunResponses, RequestSupportGrantData, RequestSupportGrantErrors, RequestSupportGrantResponses, RerunRunData, RerunRunErrors, RerunRunResponses, ResendMembershipInviteData, ResendMembershipInviteErrors, ResendMembershipInviteResponses, RestoreAuthoringNodeData, RestoreAuthoringNodeErrors, RestoreAuthoringNodeResponses, RestoreAuthoringVersionData, RestoreAuthoringVersionErrors, RestoreAuthoringVersionResponses, RestoreChecklistItemData, RestoreChecklistItemErrors, RestoreChecklistItemResponses, RestoreManualCaseData, RestoreManualCaseErrors, RestoreManualCaseResponses, RevokeAllSessionsData, RevokeAllSessionsErrors, RevokeAllSessionsResponses, RevokeApiTokenData, RevokeApiTokenErrors, RevokeApiTokenResponses, RevokeHealingCandidateData, RevokeHealingCandidateErrors, RevokeHealingCandidateResponses, RevokeIngestTokenData, RevokeIngestTokenErrors, RevokeIngestTokenResponses, RevokeMembershipRoleData, RevokeMembershipRoleErrors, RevokeMembershipRoleResponses, RevokeSessionData, RevokeSessionErrors, RevokeSessionResponses, RevokeSupportGrantData, RevokeSupportGrantErrors, RevokeSupportGrantResponses, RevokeUserSessionsData, RevokeUserSessionsErrors, RevokeUserSessionsResponses, RevokeWaiverData, RevokeWaiverErrors, RevokeWaiverResponses, RotateIngestTokenData, RotateIngestTokenErrors, RotateIngestTokenResponses, SaveProjectAiSettingsData, SaveProjectAiSettingsErrors, SaveProjectAiSettingsResponses, SetArtifactKindPolicyOverrideData, SetArtifactKindPolicyOverrideErrors, SetArtifactKindPolicyOverrideResponses, SetCaseRequirementRefData, SetCaseRequirementRefErrors, SetCaseRequirementRefResponses, SetHealingSwitchData, SetHealingSwitchErrors, SetHealingSwitchResponses, SetManualCaseStateData, SetManualCaseStateErrors, SetManualCaseStateResponses, SetRetentionPolicyData, SetRetentionPolicyErrors, SetRetentionPolicyResponses, StageInviteTokenData, StageInviteTokenErrors, StageInviteTokenResponses, StartFederatedLoginData, StartFederatedLoginErrors, StartGitHubInstallData, StartGitHubInstallErrors, StartGitHubInstallResponses, StartProviderLinkData, StartProviderLinkErrors, StartProviderLinkResponses, UnlinkManualCaseData, UnlinkManualCaseErrors, UnlinkManualCaseResponses, UpdateAuthoringNodeData, UpdateAuthoringNodeErrors, UpdateAuthoringNodeResponses, UpdateCaseData, UpdateCaseErrors, UpdateCaseResponses, UpdateChecklistItemData, UpdateChecklistItemErrors, UpdateChecklistItemResponses, UpdateCiBindingData, UpdateCiBindingErrors, UpdateCiBindingResponses, UpdateDeployTargetData, UpdateDeployTargetErrors, UpdateDeployTargetResponses, UpdateDraftData, UpdateDraftErrors, UpdateDraftResponses, UpdateManualCaseData, UpdateManualCaseErrors, UpdateManualCaseResponses, UpdateMembershipData, UpdateMembershipErrors, UpdateMembershipResponses, UpdateMyProfileData, UpdateMyProfileErrors, UpdateMyProfileResponses, UpdateOrganizationData, UpdateOrganizationErrors, UpdateOrganizationResponses, UpdateProjectData, UpdateProjectErrors, UpdateProjectResponses, UpdateRoleData, UpdateRoleErrors, UpdateRoleResponses, UpdateWebhookEndpointData, UpdateWebhookEndpointErrors, UpdateWebhookEndpointResponses } from './types.gen.js';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -318,6 +318,21 @@ export const createRun = <ThrowOnError extends boolean = false>(options: Options
         'Content-Type': 'application/json',
         ...options.headers
     }
+});
+
+/**
+ * Counts of a project's runs by newest live decision
+ *
+ * Dashboard counts: how many of the project's runs created at or after `since` (default now minus 30 days, inclusive `created_at >= since`) have a newest `live` evaluation of `PASS`, `FAIL` or `INCONCLUSIVE`, and how many have none (`no_decision`). A run with evaluations at several evidence revisions counts once, under its latest; a `shadow` evaluation never counts. The read scans at most 5000 runs, newest first; when more match, `truncated` is `true` and the counts cover the newest `scanned` runs. The verdict is `decision:read` data while the route answers under `run:read`: a caller without `decision:read` gets 403 `forbidden` rather than counts that would disclose it. An unknown project (or another tenant's) is 404 `not_found`, checked before the permission.
+ */
+export const getRunDecisionCounts = <ThrowOnError extends boolean = false>(options: Options<GetRunDecisionCountsData, ThrowOnError>): RequestResult<GetRunDecisionCountsResponses, GetRunDecisionCountsErrors, ThrowOnError> => (options.client ?? client).get<GetRunDecisionCountsResponses, GetRunDecisionCountsErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-evidgate_session',
+            type: 'apiKey'
+        }, { scheme: 'bearer', type: 'http' }],
+    url: '/projects/{p}/runs/decision-counts',
+    ...options
 });
 
 /**
@@ -705,6 +720,8 @@ export const bindReleaseRun = <ThrowOnError extends boolean = false>(options: Op
 
 /**
  * Per-component status + release aggregate (never PASS with a missing component)
+ *
+ * The newest stored aggregate of the release's per-component decisions, or `200` with `decision: pending` and `status: pending` while none exists. A pure read: it writes no row, enqueues no task and never triggers an aggregation; the aggregate is written off the outbox when a live evaluation of a bound run is stored or a run is bound. A component is matched only to a non-replay run bound to it whose recorded digest equals the release's declared digest: an unbound component is `missing` with `component_run_unbound`, a digest that does not match is `missing` with `component_digest_mismatch`, and a component never falls back to the newest run. A missing component is never `PASS`, a `FAIL` on any component is `FAIL`, and components judged under more than one policy revision add `mixed_policy_revisions` and are never `PASS`. An unknown id, another tenant's id, and a release of a project other than the caller's scoped project are the one `404 not_found`.
  */
 export const getReleaseDecision = <ThrowOnError extends boolean = false>(options: Options<GetReleaseDecisionData, ThrowOnError>): RequestResult<GetReleaseDecisionResponses, GetReleaseDecisionErrors, ThrowOnError> => (options.client ?? client).get<GetReleaseDecisionResponses, GetReleaseDecisionErrors, ThrowOnError>({
     security: [{
@@ -1393,9 +1410,107 @@ export const revokeApiToken = <ThrowOnError extends boolean = false>(options: Op
 });
 
 /**
+ * Cursor page of the live webhook endpoints of a project, never the secret (07.6.3)
+ *
+ * Keyset-ordered on `(created_at, id)` ascending. Each item carries `secret_hint` and `secret_version` and nothing that could reconstruct the secret. A deleted endpoint is not listed. An unknown project, or one of another org, is 404; a malformed `cursor` or an out-of-range `limit` is 422.
+ */
+export const listWebhookEndpoints = <ThrowOnError extends boolean = false>(options: Options<ListWebhookEndpointsData, ThrowOnError>): RequestResult<ListWebhookEndpointsResponses, ListWebhookEndpointsErrors, ThrowOnError> => (options.client ?? client).get<ListWebhookEndpointsResponses, ListWebhookEndpointsErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-evidgate_session',
+            type: 'apiKey'
+        }, { scheme: 'bearer', type: 'http' }],
+    url: '/projects/{p}/webhook-endpoints',
+    ...options
+});
+
+/**
+ * Register an outbound webhook endpoint; the signing secret is returned once (07.6.3)
+ *
+ * The endpoint is created `active` and receives the project's `evaluation.created` events. `url` must be https on port 443 with no userinfo, and every address its host resolves to must be public; a target the guard refuses is 422 `endpoint_url_blocked` with the closed reason in `error.details[0].reason` (`scheme`, `userinfo`, `port`, `host`, `address` or `resolution`). `event_types` is optional and defaults to every supported type. A project holds at most 20 live endpoints (409 `endpoint_limit_reached`) and one live endpoint per URL (409 `endpoint_url_taken`). The caller must be an active member of the org (403 `no_membership`). The signing secret (`secret`) is shown in this answer only: the row keeps ciphertext, every later read carries just `secret_hint` and `secret_version`, and the audit row names the endpoint and never the secret. The answer is `Cache-Control: no-store` and is never replayed, so this route takes no `Idempotency-Key` (README): a retried create is a second endpoint or is refused as a duplicate URL.
+ */
+export const createWebhookEndpoint = <ThrowOnError extends boolean = false>(options: Options<CreateWebhookEndpointData, ThrowOnError>): RequestResult<CreateWebhookEndpointResponses, CreateWebhookEndpointErrors, ThrowOnError> => (options.client ?? client).post<CreateWebhookEndpointResponses, CreateWebhookEndpointErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-evidgate_session',
+            type: 'apiKey'
+        }, { scheme: 'bearer', type: 'http' }],
+    url: '/projects/{p}/webhook-endpoints',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Delete a webhook endpoint; its delivery history is kept (07.6.3)
+ *
+ * A soft delete: the row turns `deleted` and is never removed, so no new delivery is created for it, a delivery still in flight is recorded as `endpoint_disabled`, and the delivery log stays readable. The URL becomes free for a new endpoint. A repeat finds no live row and answers 404 `not_found` without a second audit event, so the route takes no `Idempotency-Key` (README).
+ */
+export const deleteWebhookEndpoint = <ThrowOnError extends boolean = false>(options: Options<DeleteWebhookEndpointData, ThrowOnError>): RequestResult<DeleteWebhookEndpointResponses, DeleteWebhookEndpointErrors, ThrowOnError> => (options.client ?? client).delete<DeleteWebhookEndpointResponses, DeleteWebhookEndpointErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-evidgate_session',
+            type: 'apiKey'
+        }, { scheme: 'bearer', type: 'http' }],
+    url: '/projects/{p}/webhook-endpoints/{e}',
+    ...options
+});
+
+/**
+ * One webhook endpoint, never the secret; the ETag is its version (07.6.3)
+ *
+ * An unknown id, a deleted endpoint, or one of another org or project is 404.
+ */
+export const getWebhookEndpoint = <ThrowOnError extends boolean = false>(options: Options<GetWebhookEndpointData, ThrowOnError>): RequestResult<GetWebhookEndpointResponses, GetWebhookEndpointErrors, ThrowOnError> => (options.client ?? client).get<GetWebhookEndpointResponses, GetWebhookEndpointErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-evidgate_session',
+            type: 'apiKey'
+        }, { scheme: 'bearer', type: 'http' }],
+    url: '/projects/{p}/webhook-endpoints/{e}',
+    ...options
+});
+
+/**
+ * Change a webhook endpoint's URL, event types or state under If-Match (07.6.3)
+ *
+ * Omitted members are unchanged and at least one must be present. A new `url` passes the same guard as a registration (422 `endpoint_url_blocked`; 409 `endpoint_url_taken` when another live endpoint of the project has it). `state` moves between `active` and `disabled`; `deleted` is reached only by `DELETE`. A missing `If-Match` is 422; a stale or malformed one is 412 `precondition_failed` and nothing is written. The secret is never part of the body or the answer; rotating it is a separate route.
+ */
+export const updateWebhookEndpoint = <ThrowOnError extends boolean = false>(options: Options<UpdateWebhookEndpointData, ThrowOnError>): RequestResult<UpdateWebhookEndpointResponses, UpdateWebhookEndpointErrors, ThrowOnError> => (options.client ?? client).patch<UpdateWebhookEndpointResponses, UpdateWebhookEndpointErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-evidgate_session',
+            type: 'apiKey'
+        }, { scheme: 'bearer', type: 'http' }],
+    url: '/projects/{p}/webhook-endpoints/{e}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Cursor page of a project's outbound webhook deliveries, newest first (07.6.2)
+ *
+ * Keyset-ordered on `(created_at, id)` descending and served by the delivery list indexes; `state` narrows the page to one delivery state (`queued`, `sending`, `delivered`, `retrying` or `dead_letter`; any other value is 422). A row carries the attempt count, the next attempt time, the closed `last_error` code and the last HTTP status — never a response body or an address. Deliveries of a deleted endpoint stay listed. An unknown project, or one of another org, is 404. Dead-lettered deliveries are replayed by the operator route `POST /internal/operator/webhook-deliveries/{event_id}/replay?org_id=` (not part of this document, like every `/internal*` route): it requeues the event's dead-lettered deliveries of active endpoints and answers 404 when the org has no delivery for the event, 409 `delivery_not_dead_letter` when none is dead-lettered.
+ */
+export const listWebhookDeliveries = <ThrowOnError extends boolean = false>(options: Options<ListWebhookDeliveriesData, ThrowOnError>): RequestResult<ListWebhookDeliveriesResponses, ListWebhookDeliveriesErrors, ThrowOnError> => (options.client ?? client).get<ListWebhookDeliveriesResponses, ListWebhookDeliveriesErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-evidgate_session',
+            type: 'apiKey'
+        }, { scheme: 'bearer', type: 'http' }],
+    url: '/projects/{p}/webhook-deliveries',
+    ...options
+});
+
+/**
  * Cursor page of the org's audit events, newest first (02.7.1)
  *
- * One statement per page, keyset-ordered on `(created_at, id)` descending and served by `audit_log_org_created_id_idx`. Rows carry the per-org hash chain (`seq`, `prev_hash`, `entry_hash`) so a client can re-verify it. Another org's id is 404.
+ * One statement per page, keyset-ordered on `(created_at, id)` descending and served by `audit_log_org_created_id_idx`. Rows carry the per-org hash chain (`seq`, `prev_hash`, `entry_hash`) so a client can re-verify it. Another org's id is 404. `project_id` narrows the page to the actions recorded with that project tag; it covers only project-tagged actions recorded since the tag was introduced, so earlier rows and organization-level actions are never matched by it. Not every project action carries the tag yet: the filter returns the tagged actions only, so an empty or short result does not prove nothing happened in the project. The tag is not part of `entry_hash`: the chain proves the action, not which project it was tagged with. An unknown id or another org's project answers an empty page, not 404. A present `project_id` that is empty or not a uuid is 422 `request_invalid`; an absent one applies no filter.
  */
 export const listAudit = <ThrowOnError extends boolean = false>(options: Options<ListAuditData, ThrowOnError>): RequestResult<ListAuditResponses, ListAuditErrors, ThrowOnError> => (options.client ?? client).get<ListAuditResponses, ListAuditErrors, ThrowOnError>({
     security: [{
@@ -1410,7 +1525,7 @@ export const listAudit = <ThrowOnError extends boolean = false>(options: Options
 /**
  * Stream the filtered audit events as JSONL or CSV; the export is itself audited (02.7.1)
  *
- * The range defaults to the last 30 days and may span at most 92 days, otherwise 422 `export_range_too_large`; so does a range holding more than 100 000 events. The export writes an `audit.export` audit row in the same transaction. CSV cells that start with a formula character are prefixed with a quote.
+ * The range defaults to the last 30 days and may span at most 92 days, otherwise 422 `export_range_too_large`; so does a range holding more than 100 000 events. The export writes an `audit.export` audit row in the same transaction. CSV cells that start with a formula character are prefixed with a quote. The export ignores `project_id` and exports the whole org range.
  */
 export const exportAudit = <ThrowOnError extends boolean = false>(options: Options<ExportAuditData, ThrowOnError>): RequestResult<ExportAuditResponses, ExportAuditErrors, ThrowOnError> => (options.client ?? client).get<ExportAuditResponses, ExportAuditErrors, ThrowOnError>({
     security: [{
@@ -2238,6 +2353,89 @@ export const listQuarantineEntries = <ThrowOnError extends boolean = false>(opti
         }, { scheme: 'bearer', type: 'http' }],
     url: '/projects/{p}/quarantine',
     ...options
+});
+
+/**
+ * A project's deploy targets in display order
+ *
+ * Every member role may read (`project:read`). Targets are ordered by `order`, then name; disabled targets are listed with their `state`. A project holds at most 50 targets, so the list is one page and `next_cursor` is always null. Another tenant's project is 404; a credential scoped to another project is 403 `project_scope_mismatch`.
+ */
+export const listDeployTargets = <ThrowOnError extends boolean = false>(options: Options<ListDeployTargetsData, ThrowOnError>): RequestResult<ListDeployTargetsResponses, ListDeployTargetsErrors, ThrowOnError> => (options.client ?? client).get<ListDeployTargetsResponses, ListDeployTargetsErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-evidgate_session',
+            type: 'apiKey'
+        }, { scheme: 'bearer', type: 'http' }],
+    url: '/projects/{p}/deploy-targets',
+    ...options
+});
+
+/**
+ * Create a deploy target; a duplicate name (any case) is 409 target_exists
+ *
+ * Requires `project:write`. `name` is a slug (letters, digits, `.`, `_`, `-`; 1..63 characters, starting with a letter or digit) unique per project ignoring case, across active and disabled targets. `policy_revision_id` pins a revision of this project; a revision of another project or tenant is 422 `request_invalid` (path `policy_revision_id`). A project holds at most 50 targets. The answer carries the new `version` as `ETag`. Idempotency-Key required.
+ */
+export const createDeployTarget = <ThrowOnError extends boolean = false>(options: Options<CreateDeployTargetData, ThrowOnError>): RequestResult<CreateDeployTargetResponses, CreateDeployTargetErrors, ThrowOnError> => (options.client ?? client).post<CreateDeployTargetResponses, CreateDeployTargetErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-evidgate_session',
+            type: 'apiKey'
+        }, { scheme: 'bearer', type: 'http' }],
+    url: '/projects/{p}/deploy-targets',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Disable a deploy target; the row is kept
+ *
+ * Requires `project:write`. Moves an `active` target to `disabled` and returns it: a target is never removed, so its name stays reserved and anything that references it keeps resolving. `If-Match` is required (stale is 412). An already disabled target is 409 `invalid_transition`. Idempotency-Key required.
+ */
+export const disableDeployTarget = <ThrowOnError extends boolean = false>(options: Options<DisableDeployTargetData, ThrowOnError>): RequestResult<DisableDeployTargetResponses, DisableDeployTargetErrors, ThrowOnError> => (options.client ?? client).delete<DisableDeployTargetResponses, DisableDeployTargetErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-evidgate_session',
+            type: 'apiKey'
+        }, { scheme: 'bearer', type: 'http' }],
+    url: '/projects/{p}/deploy-targets/{t}',
+    ...options
+});
+
+/**
+ * One deploy target, its version in the ETag
+ *
+ * Requires `project:read`. A target of another project or tenant is 404.
+ */
+export const getDeployTarget = <ThrowOnError extends boolean = false>(options: Options<GetDeployTargetData, ThrowOnError>): RequestResult<GetDeployTargetResponses, GetDeployTargetErrors, ThrowOnError> => (options.client ?? client).get<GetDeployTargetResponses, GetDeployTargetErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-evidgate_session',
+            type: 'apiKey'
+        }, { scheme: 'bearer', type: 'http' }],
+    url: '/projects/{p}/deploy-targets/{t}',
+    ...options
+});
+
+/**
+ * Change a deploy target; a stale If-Match is 412
+ *
+ * Requires `project:write`. `If-Match` is required and carries the `ETag` of the target the client read: absent or unparsable is 422, a version that is no longer current is 412 `precondition_failed` (details `If-Match`, `version`). The body names the members to change (`name`, `order`, `policy_revision_id`, `state`); `policy_revision_id: null` clears the pin, an empty body or an unknown member is 422. A renamed target that collides with another (any case) is 409 `target_exists`. `state` moves between `active` and `disabled` and is never a delete. Idempotency-Key required.
+ */
+export const updateDeployTarget = <ThrowOnError extends boolean = false>(options: Options<UpdateDeployTargetData, ThrowOnError>): RequestResult<UpdateDeployTargetResponses, UpdateDeployTargetErrors, ThrowOnError> => (options.client ?? client).patch<UpdateDeployTargetResponses, UpdateDeployTargetErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-evidgate_session',
+            type: 'apiKey'
+        }, { scheme: 'bearer', type: 'http' }],
+    url: '/projects/{p}/deploy-targets/{t}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**

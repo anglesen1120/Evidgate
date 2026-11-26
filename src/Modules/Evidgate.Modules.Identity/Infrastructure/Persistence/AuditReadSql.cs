@@ -8,7 +8,8 @@ internal static class AuditReadSql
 {
     /// <summary>
     /// One page. Optional filters are <c>null</c>-tolerant; the cursor predicate is the tuple
-    /// comparison the <c>(org_id, created_at desc, id desc)</c> index serves. <c>@limit</c> is page size + 1.
+    /// comparison the <c>(org_id, created_at desc, id desc)</c> index serves, and a project filter is served by the
+    /// partial <c>(org_id, project_id, created_at desc, id desc)</c> index. <c>@limit</c> is page size + 1.
     /// </summary>
     internal const string Page =
         """
@@ -22,6 +23,7 @@ internal static class AuditReadSql
            and (@actor_type::text is null or actor_type = @actor_type)
            and (@action::text is null or action = @action)
            and (@object_type::text is null or object_type = @object_type)
+           and (@project_id::uuid is null or project_id = @project_id)
            and (@from::timestamptz is null or created_at >= @from)
            and (@to::timestamptz is null or created_at < @to)
            and (@cursor_created_at::timestamptz is null or (created_at, id) < (@cursor_created_at, @cursor_id::uuid))

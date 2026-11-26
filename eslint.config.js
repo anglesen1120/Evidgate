@@ -321,7 +321,7 @@ module.exports = tseslint.config(
     },
   },
   {
-    files: ['packages/**/*.{ts,tsx}'],
+    files: ['packages/**/*.{ts,tsx}', 'fixtures/webhook-receiver/**/*.ts'],
     // 01.6.1-T1.2 / 01.6.1-T5.1: the same spec/config exclusion as the apps/web block above.
     // The fixture modules the specs share (`*.testing.ts`) are excluded from the emitting
     // project too, so the project service cannot open them — the block below types them
@@ -386,6 +386,7 @@ module.exports = tseslint.config(
           './tsconfig.spec.json',
           './apps/web/tsconfig.spec.json',
           './packages/*/tsconfig.spec.json',
+          './fixtures/webhook-receiver/tsconfig.spec.json',
         ],
         tsconfigRootDir: __dirname,
       },

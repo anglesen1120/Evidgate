@@ -12,15 +12,13 @@ namespace Evidgate.Modules.Policy.Infrastructure.Persistence;
 internal static class RunDecisionSql
 {
     /// <summary>
-    /// One latest live verdict per requested run, driven from the id array: each run probes its newest live row
-    /// through the partial <c>evaluation_live_key</c> (org, run, revision), so a page costs one index descent per
-    /// run rather than a scan of the org's evaluations followed by a sort. A run without a live row yields no row.
+    /// The latest-live-per-run source both batch statements read, so the page's verdicts and the counts cannot
+    /// disagree: driven from the id array, each run probes its newest live row (highest evidence revision, shadow
+    /// ignored) through the partial <c>evaluation_live_key</c> (org, run, revision), so a chunk costs one index
+    /// descent per run rather than a scan of the org's evaluations followed by a sort. A run without a live row
+    /// yields no row.
     /// </summary>
-    internal const string LatestLiveBatch = """
-        select v.run_id as "RunId",
-               v.decision as "DecisionValue",
-               v.evidence_revision as "EvidenceRevision",
-               v.id as "EvaluationId"
+    private const string LatestLivePerRun = """
           from unnest(@ids::uuid[]) as u(run_id)
           cross join lateral (
               select e.id, e.run_id, e.decision, e.evidence_revision
@@ -31,6 +29,27 @@ internal static class RunDecisionSql
                order by e.evidence_revision desc
                limit 1
           ) v
+        """;
+
+    /// <summary>One latest live verdict per requested run.</summary>
+    internal const string LatestLiveBatch = $"""
+        select v.run_id as "RunId",
+               v.decision as "DecisionValue",
+               v.evidence_revision as "EvidenceRevision",
+               v.id as "EvaluationId"
+        {LatestLivePerRun}
+        """;
+
+    /// <summary>
+    /// The newest live verdicts of the requested runs, counted per decision in the statement itself: one grouped row
+    /// per decision present, never a row per run, so a chunk of runs costs the same index descents as the batch read
+    /// and a handful of result rows.
+    /// </summary>
+    internal const string LatestLiveCounts = $"""
+        select v.decision as "DecisionValue",
+               count(*)::int as "Runs"
+        {LatestLivePerRun}
+         group by v.decision
         """;
 
     /// <summary>

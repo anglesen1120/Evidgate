@@ -89,7 +89,7 @@ internal sealed class CreateWaiverCommandHandler(
             },
             cancellationToken).ConfigureAwait(false) ?? throw new InvalidOperationException("the waiver insert returned no row");
 
-        audit.Describe(new AuditObject("waiver", id.ToString("D")));
+        audit.Describe(new AuditObject("waiver", id.ToString("D"), ProjectId: row.ProjectId));
 
         return Result.Success(row, 201);
     }
@@ -201,7 +201,7 @@ internal sealed class ApproveWaiverCommandHandler(
             return Result.Failure<WaiverDto>(WaiverErrors.StateConflict);
         }
 
-        audit.Describe(new AuditObject("waiver", command.WaiverId.ToString("D")));
+        audit.Describe(new AuditObject("waiver", command.WaiverId.ToString("D"), ProjectId: approved.ProjectId));
 
         return Result.Success(approved);
     }
@@ -253,7 +253,7 @@ internal sealed class RevokeWaiverCommandHandler(
             return Result.Failure<WaiverDto>(WaiverErrors.StateConflict);
         }
 
-        audit.Describe(new AuditObject("waiver", command.WaiverId.ToString("D")));
+        audit.Describe(new AuditObject("waiver", command.WaiverId.ToString("D"), ProjectId: revoked.ProjectId));
 
         return Result.Success(revoked);
     }

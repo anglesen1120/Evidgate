@@ -209,6 +209,10 @@ internal static class SchemaConventionScan
             "public.incident_attempt",
             SchemaRule.AuditColumns | SchemaRule.VersionTrigger,
             "Append-only retry rows (migration 0122): the app role holds SELECT + INSERT and `incident_attempt_append_only` raises 23514 on every UPDATE and DELETE for every role, so a retry is written once and keeps created_at only — no updated_at/version and no version trigger. Its tenant key, composite FKs (incident, case_attempt), uniqueness and RLS are NOT exempt."),
+        new SchemaExemption(
+            "public.release_decision",
+            SchemaRule.AuditColumns | SchemaRule.VersionTrigger,
+            "Append-only release decisions (migration 0129): `release_decision_immutable` refuses every UPDATE and DELETE and the app role holds SELECT + INSERT, so a row keeps `created_at` only, like `evaluation`; a changed input set is a new row and the newest by `created_at` is the current decision."),
     ];
 
     /// <summary>

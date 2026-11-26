@@ -179,7 +179,11 @@ revision_no)`, the closed `missing[]` code CHECK of 00 §8.5 including `setup_er
   replay, terminal `done` frozen), with its list index and column-scoped app grants (notes at the end
   of this file); and `0107` is the daily healing LLM budget roll — `evidgate.roll_healing_llm_budget(date)`
   opens each project's row for the new UTC day with the earlier caps and zero usage, executable by
-  `evidgate_worker_sched` alone (notes at the end of this file);
+  `evidgate_worker_sched` alone (notes at the end of this file); and `0126` is the waiver and quarantine
+  expiry sweep — two owner-side definers, `evidgate.exception_expiry_org_ids` (the due orgs' ids, executable by
+  `evidgate_worker_sched` alone) and `evidgate.sweep_expired_exceptions` (one tenant's due rows to `expired`,
+  executable by `evidgate_app` alone and refused for any org but the caller's), backed by partial indexes
+  on `(org_id, expires_at, id)` for approved waivers and active quarantines (notes at the end of this file);
   the next free number is one above the highest file in this folder (`ls migrations/*.sql`), and this README does not
   track it; a gap means two branches invented the same sequence and neither history can be trusted.
 - One file runs in one transaction (`WithTransactionPerScript`), so PostgreSQL
@@ -1287,3 +1291,51 @@ target)` and `session_revoke_audit_append(org, actor, object_type, object_id, me
 
 - `0125` drops `public.incident_list` (created by `0123`; the `0123` file is unchanged and its `incident_project_state_list` index stays). The role-and-privilege scan admits an `evidgate_app`-readable view only with `security_barrier = true`, and a barrier view stays a subquery scan, so the state-filtered keyset page sorted instead of streaming from `incident_project_state_list`.
 - `evidgate_app` already holds `SELECT` on `incident` and `incident_attempt` (`0122`), so the list statements read `incident` directly under FORCE RLS with an explicit `org_id` predicate and compute `attempt_count` inline. No grant, index, policy or trigger changes. Locks: `ACCESS EXCLUSIVE` on the view for one `drop view`, under a 5 s `lock_timeout`.
+
+## Notes on the audit project tag (`0127`)
+
+- `0127` adds the nullable `audit_log.project_id uuid` and the partial index `audit_log_org_project_created_id_idx (org_id, project_id, created_at desc, id desc) where project_id is not null`, so the project-filtered audit page streams from the index without a sort. No backfill: rows written before this migration, and actions that belong to no project, keep NULL and are never matched by a project filter.
+- Threat model: `project_id` is a non-evidentiary tag. It is NOT part of `entry_hash` (the 14 canonical fields of `AuditHashing` are unchanged, so every existing chain verifies): the chain proves the action happened, not which project it was tagged with. A reader must not treat the tag as tamper-evident.
+- No foreign key: audit rows outlive the project they describe, like the text `object_id`. Append-only is unchanged: `evidgate_app` holds only `SELECT` + `INSERT` on `audit_log` (`0015` revoked `UPDATE`, `DELETE`, `TRUNCATE`), so the tag cannot be rewritten after the insert; no grant, policy or trigger changes.
+- Locks: the runner applies the file in one transaction, so the `ACCESS EXCLUSIVE` lock of `add column` is held until commit, through the index build: reads and inserts on `audit_log` wait for the whole file, under a 5 s `lock_timeout` for acquiring it. Operator note, same known limit as `0038`: on a large table, out of band and in this order, (1) `alter table public.audit_log add column project_id uuid;` and commit (the index needs the column), (2) `create index concurrently audit_log_org_project_created_id_idx on public.audit_log (org_id, project_id, created_at desc, id desc) where project_id is not null;` outside a transaction, then (3) run this migration: its two `if not exists` clauses adopt the column and the index. Deploy: the migrator before the API that writes the tag (a writer that omits it still inserts). Rollback: drop the index and the column; no other table changes.
+- Numbering: `0127` follows `0126` from a sibling lane; the migrator refuses a gap, so run this migration only on a tree that holds `0126`.
+
+## Notes on the waiver and quarantine expiry sweep (`0126`)
+
+- `0126` adds two functions and two partial indexes; it adds no table, column, policy or grant on a table. The guards of `0027` and `0030` still refuse a raw `UPDATE ... SET state = 'expired'` from `evidgate_app`; the sweep runs as the owner.
+- `evidgate.exception_expiry_org_ids(p_after uuid, p_limit integer)` returns `setof uuid`: one keyset page, in id order, of the orgs that hold an `approved` waiver or an `active` quarantine entry with `expires_at <= now()`. It answers org ids only, the limit is clamped to 1..1000, and `EXECUTE` is `evidgate_worker_sched`'s alone. Its `audit-deferred` line follows `0076`: the projection spans orgs and `audit_log.org_id` is NOT NULL.
+- `evidgate.sweep_expired_exceptions(p_org_id uuid, p_limit integer)` returns the rows it moved (`kind`, `id`, `project_id`, `expires_at`). The task handler writes one audit row per returned row in the same tenant transaction; a direct `evidgate_app` call bypasses the handler but can only expire already-due rows in its current org. `EXECUTE` is `evidgate_app`'s alone; a null or mismatched tenant raises `42501`. The cutoff is the transaction's `now()`, inclusive. A single limit (1..1000) covers both kinds, oldest due first. Locked candidates are skipped; rows locked but not selected stay locked until transaction end.
+- Indexes: `waiver_org_due_idx` (approved waivers) and `quarantine_entry_org_due_idx` (active quarantine entries) order `(org_id, expires_at, id)` without the existing indexes' project prefix. They serve both the per-org sweep and the cross-org due-org probe; the per-project indexes remain in place.
+- Locks: `create index` takes a `SHARE` lock on each small table of human-created entries, blocking writes until commit; `lock_timeout` is 5 s. Deploy the migration before enabling the Worker's `waiver_and_quarantine_expiry` schedule. For rollback, disable the schedule and drop both functions and both new indexes. Already-expired rows stay expired.
+
+## Notes on the evaluation flaky reasons (`0128`)
+
+- `0128` replaces `evaluation_reasons_check` with the closed list of `0124` plus `flaky_critical_retry_pass` and `flaky_within_budget` (CASE shape of `0059`, one dimension, no NULL element). No column is added: flaky facts are an in-memory input of the verdict and are not stored.
+- No grant, index, policy or trigger changes: `evidgate_app` keeps table-level `SELECT` + `INSERT` on `evaluation`, and no UPDATE or DELETE path exists. Existing rows hold only old tokens, so the check validates in place.
+- Locks: `ACCESS EXCLUSIVE` on `evaluation` for one `alter table` statement (the drop and the add, one scan of the table) in one transaction under a 5 s `lock_timeout`; the table is insert-only and grows one row per evaluation. Numbers `0126` and `0127` belong to sibling changes. Deploy: the migrator before the worker that stores the new reasons. Rollback: restore the `0124` reason list (only valid while no stored row holds a new token).
+
+## Notes on the release decision (`0129`)
+
+- `0129` adds `release_decision`: one immutable aggregate of a release's per-component decisions, keyed `(org_id, id)` with composite foreign keys to `release` and `policy_revision`. `unique (org_id, release_id, policy_revision_id, inputs_hash)` is the dedupe key: the aggregation inserts with `on conflict do nothing` and reads the winner, so a retried task or a second trigger over equal inputs writes nothing.
+- Checks pin the closed decision, completeness and reason token sets, require `complete` for `PASS`, bound `component_evaluations` to 200 elements and require the `sha256:<64 hex>` hash shape. The trigger `evidgate.release_decision_immutable` refuses `UPDATE` and `DELETE` (23514) for every role.
+- RLS is forced; the tenant policy is `TO evidgate_app`, the backfill policy `TO evidgate_owner`. The app role holds `SELECT` and `INSERT`, the operator `SELECT`; `evidgate_worker_sched` holds nothing. No `SECURITY DEFINER` function is added.
+- `release_decision_release_created_idx (org_id, release_id, created_at desc, id desc)` serves the newest-aggregate read without a sort. The table is new, so `create index` locks nothing that exists.
+- No backfill: releases bound before the migration get their first aggregate on the next live evaluation of a bound run or the next bind.
+- `release_run_release_created_idx (org_id, release_id, created_at, id)` on `release_run` serves the aggregation's capped, ordered binding read without a sort. It is a plain `CREATE INDEX` in the migration transaction (SHARE lock on `release_run` for the build); `release_run` is append-only and small at pilot volume, so a concurrent out-of-band build is not planned.
+- `reasons` also admits `aggregation_bound_exceeded`: a release holding more bindings than one aggregation reads (2000) stores an incomplete `INCONCLUSIVE` aggregate with every component missing, under the revision of its last aggregate, instead of keeping an older `PASS` current.
+
+## Notes on deploy targets (`0130`)
+
+- `0130` adds `public.deploy_target` (a named, ordered release destination per project, optional pinned policy revision) and `unique (org_id, project_id, id)` on `policy_revision` so the pin's composite FK names the target's own project. The unique name index is on `lower(name)`, across `active` and `disabled`.
+- A target is never deleted: the guard trigger refuses `DELETE` for every role and allows only `active` <-> `disabled`; identity columns are immutable. `evidgate_app` may insert six columns and update four; `version` and `updated_at` belong to the shared trigger.
+- Locks: the added unique constraint builds its index under `ACCESS EXCLUSIVE` on `policy_revision` until the migration commits (an append-only table, small, but treat it as a blocking migration); the rest creates new objects. The constraint is added only when absent, so re-running is a no-op. Number `0129` belongs to a sibling change; `0131` follows.
+
+## Notes on outbound webhooks (`0131`)
+
+- `0131` adds `public.webhook_endpoint` (URL, encrypted secret and its last-four hint, event-type list, soft-delete state) and `public.webhook_outbound_delivery` (one row per endpoint and event: `unique (org_id, endpoint_id, event_id)`). The inbound CI table `public.webhook_delivery` of `0106` is unchanged. Both tables have `unique (org_id, id)`, FORCE RLS with `TO evidgate_app` and `TO evidgate_owner` policies, and the `set_updated_at_and_version` trigger.
+- Keys: the delivery's endpoint FK is `(org_id, project_id, endpoint_id)` against `webhook_endpoint_org_project_id_key`, so a delivery cannot name an endpoint of another project; `(org_id, event_id)` references `evaluation`, so a delivery cannot outlive its evaluation and carries no expiry of its own. A deleted endpoint keeps its row, and the partial unique `(org_id, project_id, url) where state <> 'deleted'` lets the URL be registered again.
+- `webhook_endpoint.created_by` is a composite FK `(org_id, created_by)` to `membership (org_id, id)`, the shape of `api_token.created_by`. The replay function's `p_actor` is the operator's audit actor id (not a tenant member), so it carries no FK.
+- Guards (SQLSTATE `23514`): an endpoint moves `active <-> disabled` and either to the terminal `deleted`; a delivery moves `queued -> sending -> delivered | retrying | dead_letter`, `retrying -> sending | dead_letter`, and `dead_letter -> queued` only when the caller is not `evidgate_app`. Neither table can be deleted from.
+- Grants: `evidgate_app` holds SELECT, column-scoped INSERT and column-scoped UPDATE on both tables; the operator and sweep roles hold nothing (the endpoint row holds the encrypted secret).
+- `evidgate.replay_webhook_delivery(p_event_id uuid, p_actor uuid)` returns `table (delivery_id uuid)`: owner-run, tenant-scoped, `EXECUTE` for `evidgate_app` only; it re-queues `dead_letter` deliveries of active endpoints and audits `webhook_delivery.replay` per row in the same transaction.
+- Locks: new tables only; `lock_timeout` is 5 s. Numbering: the migrator refuses a gap, so apply only on a tree that holds `0130`. Deploy: the migrator before any API or Worker that registers endpoints or queues deliveries. Rollback: stop those, then drop the function, `webhook_outbound_delivery`, then `webhook_endpoint`.

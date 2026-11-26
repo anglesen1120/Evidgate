@@ -1775,3 +1775,15 @@ Closed by S689 (#1431, cbe7554f): the cause was the `settings` navigation entry 
 | Evaluator ignores quarantine on a critical case (07.3.1-T2 hand-over, from PR #58) | Evaluator must ignore an active exception for a pinned-policy critical case (T23). Activation now refuses a newly critical quarantined case; that refusal does not replace evaluator defense in depth. | receiver: 07.3.2-T1; hand-over Notes: `plans/features/07-policy-decisions/07.3.1-waiver-and-quarantine-lifecycles.md:142` |
 
 Closed by S688 (#1430, 56b477ff): the evaluator ignores a quarantine id for a critical case (`RequiredScope`), pinned by `Evaluation.UnitTests.QuarantineWaiverEffectsTests.M18_CriticalFailure_IgnoresQuarantine`.
+
+## Moved from status-carried.md by S692 (2026-11-26)
+
+| Quarantine entry expiry (07.3.1-T2 hand-over, from PR #58) | `evidgate_app` can never write `expired` (guard trigger); a due `active` entry stays `active` until the sweeper runs and meanwhile blocks a new entry for the case with 409 `quarantine_conflict` (removal is allowed). The sweeper needs its own grant or an owner `SECURITY DEFINER` function, like the waiver sweeper row above (07.3.1 plan §10 T2 Notes) | receiver: 07.3.2-T2; hand-over Notes: `plans/features/07-policy-decisions/07.3.1-waiver-and-quarantine-lifecycles.md:142` |
+
+| Waiver sweeper vs `waiver_guard` (07.3.1-T1 hand-over, from #30) | Migration 0027 grants the app role `UPDATE (state, approved_by)` behind the `evidgate.waiver_guard` trigger, which refuses `→ expired` from `evidgate_app` and allows expiry only from `approved`; 07.3.2 §4/§8 still assume `SELECT, INSERT` only. The sweep stays an owner-run `SECURITY DEFINER` function; expiring a due `requested` waiver needs a guard change in T2's migration (07.3.2 plan §10 T2 Notes) | receiver: 07.3.2-T2; hand-over Notes: `plans/features/07-policy-decisions/07.3.1-waiver-and-quarantine-lifecycles.md:142` |
+
+Closed by S692 (#1439, 43336fde): migration 0126 adds the owner-run `SECURITY DEFINER` functions `evidgate.sweep_expired_exceptions` and `evidgate.exception_expiry_org_ids`, and the hourly schedule `waiver_and_quarantine_expiry` expires due approved waivers and active quarantine entries with one audit row each, pinned by `EvaluationTaskTests.Expiry_DueRows_ExpireOnceWithOneAuditRowEachAndTheNextSnapshotDiffers`. The guard change for due `requested` waivers was not made (see 'Requested waivers never expire (S692)').
+
+## Moved from status-carried.md by S693 (2026-11-27)
+
+| Dashboard API proposals (S674) | The dashboards label partial samples because the API lacks: `GET /projects/{p}/runs` descending order (or a latest-run projection on the project list), per-decision run counts, an audit project filter, an incidents total (and the incidents route itself, plan 08), a project total on the org project list, membership and pending-invite aggregates, and a credit balance in the usage summary. Contract work; each removes a "latest unavailable"/"sample" label. S676 evidence: the runs list still receives ascending `(created_at,id)` pages and now labels oldest-first order; `order=desc` remains a proposal, not an accepted parameter. Low-Medium. |

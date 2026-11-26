@@ -140,7 +140,8 @@ internal sealed class ActivatePolicyCommandHandler(
                 ["outcome"] = outcome.Changed ? "changed" : "unchanged",
                 ["previous_id"] = outcome.PreviousPolicyRevisionId?.ToString("D") ?? string.Empty,
                 ["mode"] = outcome.Mode,
-            }));
+            },
+            ProjectId: command.ProjectId));
 
         return Result.Success(new PolicyActivationDto(
             command.ProjectId,

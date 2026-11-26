@@ -136,7 +136,7 @@ public sealed class ListRunsIndexPlanTests
     }
 
     /// <summary>Every node type and index name in an <c>EXPLAIN (FORMAT JSON)</c> document, however the plan nests.</summary>
-    private static (List<string> NodeTypes, List<string> IndexNames) PlanNodes(string json)
+    internal static (List<string> NodeTypes, List<string> IndexNames) PlanNodes(string json)
     {
         var nodeTypes = new List<string>();
         var indexNames = new List<string>();

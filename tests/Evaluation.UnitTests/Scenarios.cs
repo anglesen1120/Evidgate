@@ -59,5 +59,11 @@ internal static class Scenarios
             status,
             required);
 
+    public static CaseAttemptInput[] Attempts(params CaseStatus[] statuses) =>
+        Attempts(CheckoutKey, CheckoutCaseId, statuses);
+
+    public static CaseAttemptInput[] Attempts(string executionKey, Guid caseId, params CaseStatus[] statuses) =>
+        [.. statuses.Select((status, index) => new CaseAttemptInput(executionKey, caseId, index + 1, status))];
+
     public static ExceptionsSnapshotInput NoExceptions => new(DateTimeOffset.UnixEpoch, [], []);
 }

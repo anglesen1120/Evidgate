@@ -78,6 +78,8 @@ internal sealed class ExportAuditCommandHandler(ITenantDb db, ITenantScopeAccess
                     actor_type = command.Filter.ActorType,
                     action = command.Filter.Action,
                     object_type = command.Filter.ObjectType,
+                    // The export contract has no project filter; the shared page statement still needs the bind.
+                    project_id = (Guid?)null,
                     from,
                     to,
                     cursor_created_at = cursorCreatedAt,

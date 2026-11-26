@@ -43,12 +43,20 @@ public sealed partial class FrozenEvidenceTests
         await SeedRevisionAsync(world, narrow.RunId, 1, freeze);
         await SeedRevisionAsync(world, wide.RunId, 1, freeze);
         await SeedAttemptAsync(world, narrow.RunId, narrow.Executions[0], 1, "passed", Base);
-        foreach (var execution in wide.Executions)
+        await using (var owner = await TenantScope.BeginAsync(_fixture.OwnerConnectionString(world.Database)))
         {
-            for (var attemptNo = 1; attemptNo <= 3; attemptNo++)
-            {
-                await SeedAttemptAsync(world, wide.RunId, execution, attemptNo, "passed", Base.AddMinutes(attemptNo));
-            }
+            (await owner.ExecuteAsync(
+                """
+                insert into public.case_attempt
+                  (id, org_id, run_id, execution_key, case_id, attempt_no, raw_status, normalized_status, created_at)
+                select gen_random_uuid(), pe.org_id, pe.run_id, pe.execution_key, tr.case_id, n, 'passed', 'passed', @stamp
+                  from public.planned_execution pe
+                  join public.test_revision tr on tr.org_id = pe.org_id and tr.id = pe.case_revision_id
+                  cross join generate_series(1, 5) n
+                 where pe.org_id = @org_id and pe.run_id = @run_id
+                """,
+                ("org_id", world.Org), ("run_id", wide.RunId), ("stamp", freeze))).ShouldBe(60);
+            await owner.CommitAsync();
         }
 
         await using var caller = await ContractScope.BeginAsync(world.Api, world.Org);
@@ -66,8 +74,10 @@ public sealed partial class FrozenEvidenceTests
 
         narrowInput.ShouldNotBeNull();
         narrowInput.Attempts.Count.ShouldBe(1);
+        narrowInput.AttemptHistory.Count.ShouldBe(1);
         wideInput.ShouldNotBeNull();
         wideInput.Attempts.Count.ShouldBe(12);
+        wideInput.AttemptHistory.Count.ShouldBe(60);
 
         // The mutation this pins: reading the header and then the attempts in separate round trips, or joining the
         // attempts in the application, makes the count follow the attempt count instead of the revision.

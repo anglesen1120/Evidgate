@@ -105,7 +105,7 @@ internal sealed class BindReleaseRunHandler(
             return Result.Failure<ReleaseBindResult>(closed);
         }
 
-        return await BindAsync(command.ReleaseId, runId, orgId, run!, cancellationToken).ConfigureAwait(false);
+        return await BindAsync(command.ReleaseId, release!.ProjectId, runId, orgId, run!, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -181,6 +181,7 @@ internal sealed class BindReleaseRunHandler(
     /// <summary>The match and its write: components, insert, the rows the pair now holds, then the event and the audit row.</summary>
     private async ValueTask<Result<ReleaseBindResult>> BindAsync(
         Guid releaseId,
+        Guid projectId,
         Guid runId,
         Guid orgId,
         RunRow run,
@@ -228,7 +229,7 @@ internal sealed class BindReleaseRunHandler(
                 match.Mismatched.Count,
                 cancellationToken)
             .ConfigureAwait(false);
-        ReleaseBindWriter.Describe(audit, releaseId, runId, bound.Count, match.Mismatched.Count);
+        ReleaseBindWriter.Describe(audit, releaseId, projectId, runId, bound.Count, match.Mismatched.Count);
 
         return Result.Success(BindResult(releaseId, runId, bound, match), StatusCodes.Status201Created);
     }

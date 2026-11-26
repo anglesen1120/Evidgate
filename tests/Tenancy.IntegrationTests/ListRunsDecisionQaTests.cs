@@ -18,20 +18,7 @@ public sealed partial class ListRunsTests
         var run = await CreateBranchAsync(world, "main", ShaOne);
         var policy = await SeedPolicyAsync(world);
         await InsertEvaluationAsync(world, run, policy, 1, "live", "PASS");
-        var role = Guid.CreateVersion7();
-        await _fixture.ExecuteAsync(world.Database, $"""
-            insert into public.role (id, org_id, code, name, is_builtin, kind)
-            values ('{role:D}', '{world.Org:D}', 'run_reader', 'Run reader', false, 'member');
-            insert into public.role_permission (id, org_id, role_id, permission_code)
-            values (gen_random_uuid(), '{world.Org:D}', '{role:D}', 'run:read'),
-                   (gen_random_uuid(), '{world.Org:D}', '{role:D}', 'project:read');
-            delete from public.membership_role
-             where org_id = '{world.Org:D}' and membership_id in
-               (select id from public.membership where org_id = '{world.Org:D}' and user_id = '{world.User:D}');
-            insert into public.membership_role (id, org_id, membership_id, role_id)
-            select gen_random_uuid(), org_id, id, '{role:D}' from public.membership
-             where org_id = '{world.Org:D}' and user_id = '{world.User:D}';
-            """);
+        var role = await RestrictToRunReadAsync(world);
 
         var denied = await world.Client.SendAsync(HttpMethod.Get, $"/v1/runs/{run}/decision", world.Admin);
         denied.Status.ShouldBe(HttpStatusCode.Forbidden);
@@ -55,6 +42,25 @@ public sealed partial class ListRunsTests
         {
             restricted.Body.ToString().ShouldNotContain("\"PASS\"");
         }
+    }
+
+    internal async Task<Guid> RestrictToRunReadAsync(RunCreationTests.World world)
+    {
+        var role = Guid.CreateVersion7();
+        await _fixture.ExecuteAsync(world.Database, $"""
+            insert into public.role (id, org_id, code, name, is_builtin, kind)
+            values ('{role:D}', '{world.Org:D}', 'run_reader', 'Run reader', false, 'member');
+            insert into public.role_permission (id, org_id, role_id, permission_code)
+            values (gen_random_uuid(), '{world.Org:D}', '{role:D}', 'run:read'),
+                   (gen_random_uuid(), '{world.Org:D}', '{role:D}', 'project:read');
+            delete from public.membership_role
+             where org_id = '{world.Org:D}' and membership_id in
+               (select id from public.membership where org_id = '{world.Org:D}' and user_id = '{world.User:D}');
+            insert into public.membership_role (id, org_id, membership_id, role_id)
+            select gen_random_uuid(), org_id, id, '{role:D}' from public.membership
+             where org_id = '{world.Org:D}' and user_id = '{world.User:D}';
+            """);
+        return role;
     }
 
     [Theory]
@@ -309,7 +315,7 @@ public sealed partial class ListRunsTests
         (await IdsAsync(world, "decision=inconclusive")).ShouldBe(new[] { run });
     }
 
-    private async Task<Guid[]> SeedOrderedDecisionRunsAsync(RunCreationTests.World world, int count, bool tied = false)
+    internal async Task<Guid[]> SeedOrderedDecisionRunsAsync(RunCreationTests.World world, int count, bool tied = false)
     {
         if (count == 0)
         {

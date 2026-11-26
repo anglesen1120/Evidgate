@@ -89,9 +89,8 @@ public sealed class ReleaseRunReadIndexPlanTests
     }
 
     /// <summary>
-    /// The release detail lists a release's bindings by <c>(created_at, id)</c> over <c>(org_id, release_id)</c>, which
-    /// the binding key's prefix serves; the explained release holds bindings of several runs, so the plan proves the
-    /// read still finds them once the narrower <c>(org_id, run_id)</c> index is gone.
+    /// Both release-side indexes lead with <c>(org_id, release_id)</c>. The release-created index also supplies
+    /// <c>(created_at, id)</c> order, so the release detail should not have to sort its bindings.
     /// </summary>
     [Fact]
     public async Task ReleaseDetail_BoundRuns_KeepTheBindingKeyPrefix()
@@ -120,14 +119,17 @@ public sealed class ReleaseRunReadIndexPlanTests
                 parameters.AddWithValue("release_id", releaseId);
             });
 
-        plan.SelfAndDescendants()
-            .Where(node => node.IndexName is not null)
-            .Select(node => node.IndexName)
-            .ShouldContain("release_run_binding_key", "the release's bindings are the binding key's prefix");
-        plan.SelfAndDescendants()
-            .Where(node => node.NodeType == "Seq Scan")
+        var nodes = plan.SelfAndDescendants().ToList();
+        var indexes = nodes.Select(node => node.IndexName).OfType<string>().ToList();
+        indexes.ShouldNotBeEmpty("the release's bindings must be located by index");
+        indexes.ShouldNotContain(name => name != "release_run_binding_key" && name != "release_run_release_created_idx",
+            "only these two indexes lead with the release binding prefix");
+        nodes.Where(node => node.NodeType == "Seq Scan")
             .Select(node => node.Relation)
             .ShouldNotContain("release_run", "a sequential scan would read every run's bindings");
+        nodes.Select(node => node.NodeType)
+            .ShouldNotContain(type => type.Contains("Sort", StringComparison.Ordinal),
+                "the release-created index already orders the bindings by created_at and id");
     }
 
     /// <summary>

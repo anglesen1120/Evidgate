@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 using Evidgate.BuildingBlocks.Persistence.Audit;
 using Evidgate.BuildingBlocks.Persistence.Outbox;
+using Evidgate.Modules.Orchestrator.Contracts;
 
 namespace Evidgate.Modules.Orchestrator.Application.Releases;
 
@@ -17,8 +18,8 @@ internal static class ReleaseBindWriter
     /// <summary>The action both paths record, and the outbox task type an applied binding enqueues.</summary>
     internal const string Action = "release.bind";
 
-    /// <summary>The outbox task type of an applied binding: no handler consumes it yet, and an unclaimed row stays queued.</summary>
-    internal const string TaskType = "orchestrator.release.bound";
+    /// <summary>The outbox task type of an applied binding; the Policy module subscribes to it for the release aggregate.</summary>
+    internal const string TaskType = ReleaseBoundContract.OutboxTaskType;
 
     /// <summary>
     /// Describes the release a binding changed: allowlisted keys only, and never a component key or digest. The explicit
@@ -30,7 +31,7 @@ internal static class ReleaseBindWriter
     /// <param name="runId">The run the binding is for.</param>
     /// <param name="boundCount">The rows the pair holds after the write.</param>
     /// <param name="mismatchedCount">The release components the run does not match.</param>
-    internal static void Describe(IAuditTrail audit, Guid releaseId, Guid runId, int boundCount, int mismatchedCount) =>
+    internal static void Describe(IAuditTrail audit, Guid releaseId, Guid projectId, Guid runId, int boundCount, int mismatchedCount) =>
         audit.Describe(new AuditObject(
             "release",
             releaseId.ToString("D"),
@@ -39,7 +40,8 @@ internal static class ReleaseBindWriter
                 ["count"] = boundCount.ToString(CultureInfo.InvariantCulture),
                 ["outcome"] = mismatchedCount == 0 ? "complete" : "partial",
                 ["run_id"] = runId.ToString("D"),
-            }));
+            },
+            ProjectId: projectId));
 
     /// <summary>
     /// Queues the <c>release.bind</c> entry itself. Only a path whose ambient action is a different one calls this: a

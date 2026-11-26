@@ -56,7 +56,7 @@ internal sealed class TransitionRunStateCommandHandler(
     /// </para>
     /// </summary>
     private const string LockRunForTransition = """
-        select state, version, current_evidence_revision_id
+        select state, version, current_evidence_revision_id, project_id
           from public.run
          where id = @run_id
          for no key update
@@ -151,7 +151,7 @@ internal sealed class TransitionRunStateCommandHandler(
         // (AuditTrail.cs) and Record consumes it, so a caller that audits its own action must call
         // audit.Describe(...) for its own entry only AFTER this method returns: a Describe made before the call
         // would be overwritten by this one and then swallowed by this Record.
-        audit.Describe(new AuditObject("run", command.RunId.ToString("D")));
+        audit.Describe(new AuditObject("run", command.RunId.ToString("D"), ProjectId: row.ProjectId));
         audit.Record(RunStateTransitionContract.AuditAction, ActorFor(command.Actor));
 
         activity?.SetTag("evidgate.run_id", command.RunId.ToString("D"));
@@ -199,5 +199,7 @@ internal sealed class TransitionRunStateCommandHandler(
         public int Version { get; set; }
 
         public Guid? CurrentEvidenceRevisionId { get; set; }
+
+        public Guid ProjectId { get; set; }
     }
 }

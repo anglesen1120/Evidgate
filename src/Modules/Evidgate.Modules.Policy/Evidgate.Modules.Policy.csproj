@@ -14,6 +14,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Evidgate.Modules.Policy.Contracts\Evidgate.Modules.Policy.Contracts.csproj" />
+    <ProjectReference Include="..\Evidgate.Modules.Identity.Contracts\Evidgate.Modules.Identity.Contracts.csproj" />
     <!-- The frozen-evidence event this module consumes: its task type constant and payload (declared by the module
          that writes the outbox row, so the two sides cannot drift), and the run plan the evaluation judges evidence
          against (module data is private, so the run's own tables are reached through this project). -->
@@ -38,5 +39,6 @@
     <InternalsVisibleTo Include="Evidgate.Migrator" />
     <InternalsVisibleTo Include="Hosts.IntegrationTests" />
     <InternalsVisibleTo Include="Tenancy.IntegrationTests" />
+    <InternalsVisibleTo Include="Tasks.IntegrationTests" />
   </ItemGroup>
 </Project>

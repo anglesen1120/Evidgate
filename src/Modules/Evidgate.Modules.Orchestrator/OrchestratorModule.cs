@@ -32,6 +32,7 @@ internal static class OrchestratorModule
         // The digest-match surface the evaluation path reads (build_mismatch): the stored bindings of a release/run
         // pair and the release components the run does not match, derived on read from the two rows, never stored.
         services.TryAddScoped<IReleaseBindingReader, ReleaseBindingReader>();
+        services.TryAddScoped<IReleaseAggregationReader, ReleaseAggregationReader>();
 
         // The release read's binding section: insertion order over the binding key, so no query here can become a
         // "latest run" join.
@@ -68,6 +69,9 @@ internal static class OrchestratorModule
             .BindConfiguration(RunCancelOptions.SectionName)
             .ValidateDataAnnotations()
             .ValidateOnStart();
+
+        // The decision-count scan cap is a plain registered value (not configuration); a test replaces it with a small one.
+        services.TryAddSingleton(new RunDecisionCountsScanCap(RunDecisionCountsScanCap.DefaultRows));
 
         // 05.3.3-T2: the case-attempt writer and the blocked-dependant resolver 04's event-batch commit calls
         // inside its own tenant transaction. Scoped like every other module service; the writer and the resolver

@@ -152,6 +152,7 @@ public sealed partial class FrozenEvidenceTests : IClassFixture<TenancyHostPool>
         first.Revision.ManifestHash.ShouldBe("sha256:" + new string('b', 64));
         first.Revision.CreatedAt.ShouldBe(frozen, TimeSpan.FromMilliseconds(1));
         first.Attempts.ShouldBeEmpty();
+        first.AttemptHistory.ShouldBeEmpty();
 
         var second = await evidence.GetFrozenInputAsync(world.Org, plan.RunId, 2, TestContext.Current.CancellationToken);
         second.ShouldNotBeNull();
@@ -241,6 +242,13 @@ public sealed partial class FrozenEvidenceTests : IClassFixture<TenancyHostPool>
                 (plan.Executions[1].ExecutionKey, "blocked"),
             ],
             ignoreOrder: true);
+        FrozenAttemptRecord[] expected =
+        [
+            new(plan.Executions[0].ExecutionKey, 1, "failed"),
+            new(plan.Executions[0].ExecutionKey, 2, "passed"),
+            new(plan.Executions[1].ExecutionKey, 1, "blocked"),
+        ];
+        input.AttemptHistory.ShouldBe(expected.OrderBy(row => row.ExecutionKey, StringComparer.Ordinal));
     }
 
     [Fact]
@@ -262,6 +270,7 @@ public sealed partial class FrozenEvidenceTests : IClassFixture<TenancyHostPool>
         input.ShouldNotBeNull();
 
         input.Attempts.Select(row => row.Status).ShouldBe(["failed"]);
+        input.AttemptHistory.ShouldBe([new FrozenAttemptRecord(plan.Executions[0].ExecutionKey, 1, "failed")]);
     }
 
     [Fact]
@@ -283,6 +292,7 @@ public sealed partial class FrozenEvidenceTests : IClassFixture<TenancyHostPool>
         input.ShouldNotBeNull();
 
         input.Attempts.Select(row => row.Status).ShouldBe(["passed"]);
+        input.AttemptHistory.Select(row => row.AttemptNo).ShouldBe([1, 2]);
     }
 
     [Fact]

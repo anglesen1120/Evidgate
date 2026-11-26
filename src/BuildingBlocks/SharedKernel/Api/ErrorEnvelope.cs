@@ -282,6 +282,9 @@ public static class ApiErrorCode
     /// <summary>409: an active quarantine entry for that case already exists in the project (07.3.1 §5, T23).</summary>
     public const string QuarantineConflict = "quarantine_conflict";
 
+    /// <summary>409: a deploy target with that name (compared case-insensitively) already exists in the project.</summary>
+    public const string TargetExists = "target_exists";
+
     /// <summary>422: the mint command carried a client-supplied object key; keys are server-chosen only (06.1.1 AC1, FR-06-1).</summary>
     public const string ObjectKeyNotAllowed = "object_key_not_allowed";
 

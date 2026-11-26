@@ -8,9 +8,11 @@ namespace Evidgate.Modules.Catalog.Infrastructure.Persistence;
 internal static class EvaluationReadSql
 {
     /// <summary>
-    /// One suite revision's evaluation facts: the slug of its suite and whether the revision declares no member. The
-    /// <c>not exists</c> probe answers the second fact without a second statement or a count over up to ten thousand
-    /// members, and both tables are joined on their composite tenant key as well as the id.
+    /// One suite revision's evaluation facts: the slug of its suite, whether the revision declares no member and its
+    /// retry allowance. The <c>not exists</c> probe answers the second fact without a second statement or a count over
+    /// up to ten thousand members, and both tables are joined on their composite tenant key as well as the id. A
+    /// revision whose policy names no <c>max_retries</c> (the default policy is <c>{}</c>) allows none; the value is
+    /// clamped to a non-negative number far above the schema's cap so the evaluator's <c>+ 1</c> cannot overflow.
     /// </summary>
     internal const string LoadSuite = """
         select s.slug as "SuiteKey",
@@ -18,7 +20,12 @@ internal static class EvaluationReadSql
                  select 1
                    from public.suite_member sm
                   where sm.org_id = @org_id
-                    and sm.suite_revision_id = sr.id) as "DeclaredEmpty"
+                    and sm.suite_revision_id = sr.id) as "DeclaredEmpty",
+               coalesce(
+                 case when jsonb_typeof(sr.retry_policy -> 'max_retries') = 'number'
+                      then least(greatest(floor((sr.retry_policy ->> 'max_retries')::numeric), 0), 1000)::int
+                 end,
+                 0) as "MaxRetries"
           from public.suite_revision sr
           join public.suite s on s.org_id = sr.org_id and s.id = sr.suite_id
          where sr.org_id = @org_id

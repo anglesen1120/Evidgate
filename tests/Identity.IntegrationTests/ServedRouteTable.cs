@@ -518,6 +518,7 @@ internal sealed record RouteRequestContext(
     Guid CiBindingId,
     Guid IngestTokenId,
     Guid ApiTokenId,
+    Guid WebhookEndpointId,
     Guid RunId,
     Guid NodeId,
     Guid ItemId,
@@ -529,6 +530,7 @@ internal sealed record RouteRequestContext(
     internal static RouteRequestContext Fresh(Guid orgId, Guid projectId) => new(
         orgId,
         projectId,
+        Guid.CreateVersion7(),
         Guid.CreateVersion7(),
         Guid.CreateVersion7(),
         Guid.CreateVersion7(),
@@ -676,6 +678,15 @@ internal static class RouteRequests
         Add("GET", "/v1/projects/{p}/api-tokens", ctx => new(HttpMethod.Get, $"/v1/projects/{ctx.ProjectId}/api-tokens"));
         Add("DELETE", "/v1/api-tokens/{t}", ctx => new(HttpMethod.Delete, $"/v1/api-tokens/{ctx.ApiTokenId}"));
 
+        Add("POST", "/v1/projects/{p}/webhook-endpoints", ctx => new(HttpMethod.Post, $"/v1/projects/{ctx.ProjectId}/webhook-endpoints",
+            new JsonObject { ["url"] = $"https://93.184.216.34/{ctx.WebhookEndpointId}" }));
+        Add("GET", "/v1/projects/{p}/webhook-endpoints", ctx => new(HttpMethod.Get, $"/v1/projects/{ctx.ProjectId}/webhook-endpoints"));
+        Add("GET", "/v1/projects/{p}/webhook-endpoints/{e}", ctx => new(HttpMethod.Get, $"/v1/projects/{ctx.ProjectId}/webhook-endpoints/{ctx.WebhookEndpointId}"));
+        Add("PATCH", "/v1/projects/{p}/webhook-endpoints/{e}", ctx => new(HttpMethod.Patch, $"/v1/projects/{ctx.ProjectId}/webhook-endpoints/{ctx.WebhookEndpointId}",
+            new JsonObject { ["state"] = "disabled" }, IfMatch: "\"1\""));
+        Add("DELETE", "/v1/projects/{p}/webhook-endpoints/{e}", ctx => new(HttpMethod.Delete, $"/v1/projects/{ctx.ProjectId}/webhook-endpoints/{ctx.WebhookEndpointId}"));
+        Add("GET", "/v1/projects/{p}/webhook-deliveries", ctx => new(HttpMethod.Get, $"/v1/projects/{ctx.ProjectId}/webhook-deliveries"));
+
         // ---- Support grants (SupportGrantEndpoints.cs; 02.8.1 §5) ---------------------------------------------
         // The tenant's approve, revoke and list. The openapi /support-grants request route is the operator's and is not
         // mapped, and a fresh grant id is a valid probe because authorization precedes the lookup.
@@ -809,6 +820,8 @@ internal static class RouteRequests
         Add("POST", "/v1/projects/{p}/runs", ctx => new(HttpMethod.Post, $"/v1/projects/{ctx.ProjectId}/runs",
             Run(ctx), IdempotencyKey: Key()));
         Add("GET", "/v1/projects/{p}/runs", ctx => new(HttpMethod.Get, $"/v1/projects/{ctx.ProjectId}/runs"));
+        Add("GET", "/v1/projects/{p}/runs/decision-counts", ctx =>
+            new(HttpMethod.Get, $"/v1/projects/{ctx.ProjectId}/runs/decision-counts"));
         Add("POST", "/v1/projects/{p}/environments/{e}/revisions", ctx =>
             new(HttpMethod.Post, $"/v1/projects/{ctx.ProjectId}/environments/staging/revisions", Environment(), IdempotencyKey: Key()));
         Add("GET", "/v1/environment-revisions/{id}", ctx =>
@@ -836,6 +849,7 @@ internal static class RouteRequests
         Add("POST", "/v1/projects/{p}/releases", ctx => new(HttpMethod.Post,
             $"/v1/projects/{ctx.ProjectId}/releases", ReleaseCreate(ctx), IdempotencyKey: Key()));
         Add("GET", "/v1/releases/{id}", _ => new(HttpMethod.Get, $"/v1/releases/{Guid.CreateVersion7()}"));
+        Add("GET", "/v1/releases/{id}/decision", _ => new(HttpMethod.Get, $"/v1/releases/{Guid.CreateVersion7()}/decision"));
         // The explicit bind addresses the release in the path and the run in the body, both fresh here, so a granted
         // caller reaches the visibility probe and answers the 404 `not_found` the matrix classifies; nothing is
         // created, and the recipe never becomes an oracle over an existing release or run.
@@ -896,6 +910,17 @@ internal static class RouteRequests
         Add("POST", "/v1/quarantine", ctx => new(HttpMethod.Post, "/v1/quarantine", Quarantine(ctx), IdempotencyKey: Key()));
         Add("DELETE", "/v1/quarantine/{q}", ctx => new(HttpMethod.Delete, $"/v1/quarantine/{ctx.QuarantineId}", IdempotencyKey: Key()));
         Add("GET", "/v1/projects/{p}/quarantine", ctx => new(HttpMethod.Get, $"/v1/projects/{ctx.ProjectId}/quarantine"));
+
+        // ---- Deploy targets ----------------------------------------------------------------------------------
+        // A denied caller never reaches a lookup, so the target id is a fresh one and the PATCH body names one field.
+        Add("GET", "/v1/projects/{p}/deploy-targets", ctx => new(HttpMethod.Get, $"/v1/projects/{ctx.ProjectId}/deploy-targets"));
+        Add("POST", "/v1/projects/{p}/deploy-targets", ctx => new(HttpMethod.Post, $"/v1/projects/{ctx.ProjectId}/deploy-targets",
+            new JsonObject { ["name"] = "probe" }, IdempotencyKey: Key()));
+        Add("GET", "/v1/projects/{p}/deploy-targets/{t}", ctx => new(HttpMethod.Get, $"/v1/projects/{ctx.ProjectId}/deploy-targets/{Guid.CreateVersion7()}"));
+        Add("PATCH", "/v1/projects/{p}/deploy-targets/{t}", ctx => new(HttpMethod.Patch, $"/v1/projects/{ctx.ProjectId}/deploy-targets/{Guid.CreateVersion7()}",
+            new JsonObject { ["order"] = 1 }, IfMatch: "\"1\"", IdempotencyKey: Key()));
+        Add("DELETE", "/v1/projects/{p}/deploy-targets/{t}", ctx => new(HttpMethod.Delete, $"/v1/projects/{ctx.ProjectId}/deploy-targets/{Guid.CreateVersion7()}",
+            IfMatch: "\"1\"", IdempotencyKey: Key()));
 
         // ---- Healing (08.6.3-T1) -----------------------------------------------------------------------------
         // The switch routes carry no path id: the read answers the three scope rows of the caller's org, and the

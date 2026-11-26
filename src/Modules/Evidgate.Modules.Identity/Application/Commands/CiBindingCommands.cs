@@ -106,7 +106,7 @@ internal sealed class CreateCiBindingCommandHandler(
             return Result.Failure<CiBindingCreatedResponse>(Error.NotFound("no such project is visible to this tenant"));
         }
 
-        audit.Describe(new AuditObject("ci_binding", binding.Id.ToString("D")));
+        audit.Describe(new AuditObject("ci_binding", binding.Id.ToString("D"), ProjectId: binding.ProjectId));
 
         return Result.Success(new CiBindingCreatedResponse(binding.ToView(), challenge), status: 201);
     }
@@ -208,7 +208,8 @@ internal sealed class UpdateCiBindingCommandHandler(
         audit.Describe(new AuditObject(
             "ci_binding",
             binding.Id.ToString("D"),
-            Metadata: new Dictionary<string, string> { ["status"] = binding.Status }));
+            Metadata: new Dictionary<string, string> { ["status"] = binding.Status },
+            ProjectId: binding.ProjectId));
 
         // Re-read for the trigger-maintained version.
         await context.Entry(binding).ReloadAsync(cancellationToken).ConfigureAwait(false);
@@ -260,7 +261,7 @@ internal sealed class DisableCiBindingCommandHandler(
             return Result.Failure(Error.PreconditionFailed("the binding changed since it was read; retry"));
         }
 
-        audit.Describe(new AuditObject("ci_binding", binding.Id.ToString("D")));
+        audit.Describe(new AuditObject("ci_binding", binding.Id.ToString("D"), ProjectId: binding.ProjectId));
 
         return Result.Success(StatusCodes.Status204NoContent);
     }

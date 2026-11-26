@@ -107,7 +107,7 @@ internal sealed class CreateIngestTokenCommandHandler(
             return Result.Failure<IngestTokenCreatedResponse>(Error.NotFound("no such project is visible to this tenant"));
         }
 
-        audit.Describe(new AuditObject("ingest_token", entity.Id.ToString("D")));
+        audit.Describe(new AuditObject("ingest_token", entity.Id.ToString("D"), ProjectId: entity.ProjectId));
 
         return Result.Success(new IngestTokenCreatedResponse(entity.ToView(now), generated.Full, OverlapEndsAt: null), status: 201);
     }
@@ -225,7 +225,7 @@ internal sealed class RotateIngestTokenCommandHandler(
             return Result.Failure<IngestTokenCreatedResponse>(Error.PreconditionFailed("the token changed; retry"));
         }
 
-        audit.Describe(new AuditObject("ingest_token", old.Id.ToString("D")));
+        audit.Describe(new AuditObject("ingest_token", old.Id.ToString("D"), ProjectId: old.ProjectId));
 
         return Result.Success(new IngestTokenCreatedResponse(successor.ToView(now), generated.Full, overlapEnds));
     }
@@ -286,7 +286,7 @@ internal sealed class RevokeIngestTokenCommandHandler(
             return Result.Failure(Error.PreconditionFailed("the token changed; retry"));
         }
 
-        audit.Describe(new AuditObject("ingest_token", token.Id.ToString("D")));
+        audit.Describe(new AuditObject("ingest_token", token.Id.ToString("D"), ProjectId: token.ProjectId));
 
         return Result.Success(StatusCodes.Status204NoContent);
     }

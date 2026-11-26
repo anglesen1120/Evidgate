@@ -1,13 +1,17 @@
 using Evidgate.BuildingBlocks.Contracts.Validation;
+using Evidgate.BuildingBlocks.Persistence.Outbox;
 using Evidgate.BuildingBlocks.Persistence.Tasks;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.Evaluation;
 using Evidgate.Modules.Orchestrator.Contracts;
 using Evidgate.Modules.Policy.Application;
 using Evidgate.Modules.Policy.Application.Evaluation;
+using Evidgate.Modules.Policy.Application.Expiry;
 using Evidgate.Modules.Policy.Application.Queries;
+using Evidgate.Modules.Policy.Application.Releases;
 using Evidgate.Modules.Policy.Contracts;
 using Evidgate.Modules.Policy.Infrastructure.Persistence;
+using Evidgate.Modules.Policy.Webhooks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -38,6 +42,7 @@ internal static class PolicyModule
         services.TryAddScoped<GetRequiredArtifactKindsQuery>();
         services.TryAddScoped<GetLiveEvaluationsQuery>();
         services.TryAddScoped<GetLatestLiveDecisionsQuery>();
+        services.TryAddScoped<CountLatestLiveDecisionsQuery>();
         services.TryAddScoped<IPolicyContracts, PolicyContracts>();
 
         // The existence read another module's ordering needs: whether a run already holds a stored live verdict. Scoped
@@ -69,6 +74,26 @@ internal static class PolicyModule
         services.TryAddScoped<ExceptionsSnapshotResolver>();
         services.TryAddScoped<EvaluateRunCommandHandler>();
         services.AddTaskHandler<EvidenceRevisionFrozenPayload, EvidenceRevisionFrozenTaskHandler>();
+
+        // The release aggregate: a live evaluation (outbox row written with it) and a release bind (this module's own
+        // delivery of the Orchestrator event) both end in one idempotent command. No route resolves the handler.
+        services.TryAddScoped<AggregateReleaseDecisionCommandHandler>();
+        services.AddTaskHandler<EvaluationCreatedPayload, ReleaseAggregateOnEvaluationTaskHandler>();
+        services.AddOutboxSubscription(ReleaseBoundContract.OutboxTaskType, ReleaseAggregateContract.BoundTaskType);
+        services.AddTaskHandler<ReleaseBoundPayload, ReleaseAggregateOnBindTaskHandler>();
+
+        // The hourly expiry sweep: a platform task (the scan spans tenants) whose per-org writes run in tenant scopes.
+        // Every Worker fires the schedule and the unique fire key elects one row; the Api composes the same module and
+        // never consumes the queue.
+        services.TryAddSingleton<IWorkerSchedDataSource, WorkerSchedDataSource>();
+        services.TryAddSingleton<ExceptionExpiryStore>();
+        services.AddTaskHandler<SweepExpiredExceptionsCommand, SweepExpiredExceptionsTaskHandler>();
+        services.AddTaskSchedule(ExpirySweeps.Expire);
+
+        // Outbound webhooks: endpoint registry and API, then the fan-out and signed delivery handlers.
+        services.AddWebhookCore();
+        services.AddWebhookEndpoints();
+        services.AddWebhookDelivery();
 
         return services;
     }

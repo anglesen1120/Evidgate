@@ -8,7 +8,7 @@
 
 **Goal.** A QA team writes requirements, gets a reviewed checklist and manual test cases, turns approved test cases into Playwright scripts bound to real elements, runs them in its own CI, and gets safe, reviewed repair proposals when the application's UI drifts, without a product bug ever being hidden.
 
-**In scope.** The authoring model (feature tree, checklist, manual test case, versions, batched review), project AI settings, requirement → checklist → test case generation, export / import, the authoring screens (G1); script generation against the live application, `evidgate run`, element profiles, the mobile spike with mobile-mcp / mobilewright (G2); multimodal locate fallback, locator-drift vs UI-change classification, test case review proposals, review evidence additions (G3); the measurements behind each phase gate.
+**In scope.** The authoring model (feature tree, checklist, manual test case, versions, batched review), project AI settings, requirement → checklist → test case generation, export / import, the authoring screens (G1); script generation against the live application, `evidgate run`, element profiles, the mobile spike with mobile-mcp / mobilewright (G2); multimodal locate fallback, locator-drift vs UI-change classification, test case review proposals, review evidence additions (G3); the measurements behind each phase gate; projects without a repository: requirements and AC as traced entities, advisory manual runs, test case reports, optional GitHub / Jira / Linear connections (13.10).
 
 **Out of scope.** The platform pieces this plan reuses (tenancy 02, catalog identity 03.1–03.2, ingestion 04, artifacts 06, incidents / candidates / validation / approval 08), mobile execution (G4), hosted runners (A5), runtime auto-apply (§5.7).
 
@@ -24,9 +24,14 @@
 | FR-13-6 | Element profiles store attributes and structure (role, accessible name, test id, id, text length class, neighbours, position), never input values or user content. |
 | FR-13-7 | Within the 08.2.2 label `test_drift`, a rule set separates locator drift (same role and accessible name) from UI change; only locator drift yields a script repair candidate; `product_defect`, `environment`, `data_issue` and `unknown` yield none. |
 | FR-13-8 | Every gate metric in §4.3 is computed from stored data, not entered by hand. |
+| FR-13-9 | A requirement (user story, acceptance criterion, spec section) is versioned append-only with author, source and reason (source `tracker` is the 13.10.4 sync, an extension of FR-13-1's list); links to checklist items and manual test cases pin a version; coverage per requirement is computed from stored links and results. |
+| FR-13-10 | A manual execution result is advisory: it is never an evaluation input, never creates or changes an `evaluation` or `release_decision`, and is shown only in a section labelled advisory. |
+| FR-13-11 | A test case report is an immutable snapshot; every format (PDF, DOCX, XLSX, web) renders the same snapshot; a share link exposes only that snapshot. |
+| FR-13-12 | Tracker connections (Jira Cloud, Linear) are read-only: no call writes to Jira or Linear, and OAuth tokens are sent only to the provider's authorization and API hosts and never reach a browser, a log or an audit record. |
 
 ## 3. Key decisions
 
+- `[DECISION]` Projects without a repository (owner, 2026-11-26): (1) manual execution results move up to G2 as advisory only and never feed a release decision; (2) requirements, user stories and AC become a stored, versioned entity linked to checklist items and manual test cases, with coverage per requirement; (3) projects without a repository get a test case report (test plan, test cases, traceability matrix with gaps, manual execution and advisory readiness; PDF, DOCX, XLSX and a read-only web link) instead of generated scripts, while projects with a repository keep script generation through PRs (13.5, unchanged); (4) GitHub becomes one optional connection and Jira Cloud and Linear are added as read-only import connectors over OAuth (Atlassian OAuth 2.0 3LO scope `read:jira-work` ✅ https://developer.atlassian.com/cloud/jira/platform/scopes-for-oauth-2-3LO-and-forge-apps/; Linear OAuth 2.0 scope `read`, access token 24 h, refresh token 30 d ✅ https://linear.app/developers/oauth-2-0-authentication), manual "sync now" and scheduled, no write-back; (5) import and sync use the REST (Jira) and GraphQL (Linear) APIs now; the vendors' remote MCP servers (Atlassian `https://mcp.atlassian.com/v2/mcp` ✅ https://support.atlassian.com/atlassian-ai-gateway/docs/how-to-upgrade-from-atlassian-mcp-v1-to-atlassian-mcp-v2/, Linear `https://mcp.linear.app/mcp` ✅ https://linear.app/docs/mcp) are a later option for the AI generation step only, no task now. Build order: right after area 07, before area 08 (epic 13.10).
 - `[DECISION]` CR-D-2: the product leads with authoring and self-learning repair; the release decision (07) is reporting, not the lead feature.
 - `[DECISION]` A5 kept for G1–G3: generation, runs and replays execute on the customer side (`packages/cli`), never on Evidgate hosts.
 - `[DECISION]` Rules decide, models suggest: profile similarity classifies; a model or the multimodal locator only proposes, and every proposal passes 08.4 validation.
@@ -47,6 +52,7 @@
 - `manual_case_link` (`manual_test_case_id`, `test_case_id`).
 - `generated_script` (`manual_test_case_id`, `test_case_id`, `state` draft / active / flaky / retired, `stability_runs`, `pr_url`).
 - `element_profile` (append-only per run and bound step; `case_revision_id`, `step_no`, profile jsonb, `profile_hash`, `spec_version`).
+- Epic 13.10 (projects without a repository): `requirement` (`feature_node_id` null, `kind` user_story / acceptance_criterion / spec_section / other, `title`, `external_ref` null, `parent_requirement_id` null, `tracker_item_id` null, added with `tracker_item`), `requirement_version` (append-only; `requirement_id`, `version_no`, `body` ≤ 20 000 code points after NFC, `content_hash`, `source` manual / import / tracker / ai, `author_membership_id`, `reason`), `requirement_link` (`requirement_id`, pinned `requirement_version_id`, target `checklist_item_id` or `manual_test_case_id`), `manual_run` (`name`, `build_label` ≤ 128, `environment_revision_id` null, `state` open / closed), `manual_run_case` (`manual_run_id`, `manual_test_case_id`, pinned authoring version), `manual_result` (append-only; `manual_run_case_id`, `status` passed / failed / blocked / skipped, `note` ≤ 4 000 code points, `executed_by` membership, `executed_at`, evidence artifact refs), `test_report` (immutable snapshot written complete by the async job, which holds the progress state; scope, sections, `language`, pinned versions, `content_hash`), `test_report_share` (`test_report_id`, token hash, `expires_at`, `revoked_at`), `tracker_connection` (`provider` jira_cloud / linear, project scope, `state` active / needs_reauth / disconnected, encrypted tokens, sync schedule), `tracker_item` (`tracker_connection_id`, provider id, key, url, `content_hash`, last seen, removed upstream flag).
 All tables carry `org_id`, composite tenant FKs and FORCE RLS (00 §5.4).
 Refinements from the G1 feature plans (S52, 2026-10-23): `plans/features/13-product-phases/13.1.1-feature-tree-and-manual-test-cases.md` adds the support tables `authoring_code_counter` (per-project case-code counter), 13.1.2 adds `checklist_item_lineage` (merge and split lineage) and 13.2.1 adds `ai_settings_use` (one row per `ai_run_id`, the settings version a run used). Each carries `org_id`, composite tenant FKs and FORCE RLS like the tables above; none changes a task size.
 Refinements from story 13.2.2 (S92, 2026-10-26): role profiles add the tables `role_prompt_template` (platform, read-only seeds, no `org_id`, like `ai_settings_template`), `role_profile` (identity, project scope), `role_profile_version` (append-only, `content_hash`) and `role_profile_use` (one row per `ai_run_id`: profile id, version, hash, optional run note ≤ 500 code points after NFC). The org-scoped tables carry `org_id`, composite tenant FKs and FORCE RLS like the tables above; the task sizes are in §9 (13.2.2-T3).
@@ -57,6 +63,7 @@ Refinements from story 13.2.2 (S92, 2026-10-26): role profiles add the tables `r
 2. **Script:** approved test case + environment URL + seed test → `evidgate generate` on the customer side → bound script → 3 stability runs → PR.
 3. **Learn:** green run → reporter captures bound-step profiles → profile store (latest green per step).
 4. **Repair:** failed run → incident (08.1) → 08.2.2 label → within `test_drift`, profile rules → locator drift: candidate (08.3) → validation (08.4) → review (08.6.1 + 13.8.2); UI change: test case review proposal.
+5. **Spec-only:** documents / CSV / Jira / Linear → requirements → checklist → manual test cases → manual run → test case report (PDF / DOCX / XLSX / read-only link); no repository is needed and no script is generated (13.10).
 
 ### 4.3 Phase gates (measured by 13.9.1)
 
@@ -246,9 +253,50 @@ Notes (S92): the generation flow screens of 13.4.1-T4 carry the role-profile sel
 | 13.9.1-T3 | G3 false-repair adjudication report | S | V1 | G3 | 13.8.1-T4, 08.8.1-T3 |
 **Epic 13.9 total: 1.5**
 
+### Epic 13.10 Projects without a repository (G1, G2)
+#### Story 13.10.1 Requirements, user stories and acceptance criteria — acceptance: a project stores user stories, AC and spec sections as versioned requirements, links them to checklist items and manual test cases, and shows coverage per requirement, with no Git binding.
+| ID | Task | Size | Version | Milestone | Depends on |
+|---|---|---|---|---|---|
+| 13.10.1-T1 | `requirement` (kind `user_story` / `acceptance_criterion` / `spec_section` / `other`, `title`, optional `external_ref` with the 03.1.4 `requirement_ref` character rule, optional `feature_node_id`, optional `parent_requirement_id` so AC sit under a story, optional `tracker_item_id`, column added by the 13.10.4-T1 migration) + `requirement_version` (append-only, body ≤ 20 000 code points after NFC, `content_hash`, `source` manual / import / tracker / ai, author, `reason`) schema + migration (FORCE RLS, composite FKs) | L | V1 | G1 | 13.1.1-T1, 01.4.1-T1 |
+| 13.10.1-T2 | CRUD + version list + restore-as-new-version API (`authoring:read` / `authoring:write`), `If-Match`, audit, OpenAPI, isolation route cases | M | V1 | G1 | 13.10.1-T1, 02.2.1-T2, 02.7.1-T2 |
+| 13.10.1-T3 | `requirement_link` to `checklist_item` and `manual_test_case` pinning the requirement version; coverage read model per requirement (linked cases, approved cases, latest manual result from 13.10.2, linked automated `test_case`; until G2 supplies results the manual-result part reads "not available", never zero or passing) | M | V1 | G1 | 13.10.1-T2, 13.1.1-T4 |
+| 13.10.1-T4 | Import user stories and AC from CSV, XLSX and Markdown (heading = story, list item = AC, a `Given/When/Then` block kept verbatim as one AC) through the 13.1.1-T5 importer; spec text uploaded through 13.3.1-T1 can be saved as `spec_section` requirements | M | V1 | G1 | 13.10.1-T2, 13.1.1-T5, 13.3.1-T1 |
+| 13.10.1-T5 | Generation input: 13.3.1 accepts `requirement_ids[]` (pinned versions) besides text and documents; provenance stores the versions; generated checklist items are linked to their requirement | S | V1 | G1 | 13.10.1-T3, 13.3.1-T2 |
+| 13.10.1-T6 | UI via the `design-ui` agent first: requirement tree/list, editor with versions, link panel, coverage view, vi + en, WCAG 2.2 AA | L | V1 | G1 | 13.10.1-T3, 13.4.1-T1 |
+#### Story 13.10.2 Manual execution runs (advisory) — acceptance: a tester executes selected manual test cases, records passed / failed / blocked / skipped with notes and evidence files, and gets run and coverage summaries; manual results never create or change an evaluation or release decision.
+| ID | Task | Size | Version | Milestone | Depends on |
+|---|---|---|---|---|---|
+| 13.10.2-T1 | `manual_run` (name, `build_label` free text ≤ 128, optional `environment_revision_id`, state open → closed with transition trigger), `manual_run_case` (manual test case + pinned authoring version), `manual_result` (append-only; status `passed` / `failed` / `blocked` / `skipped`, note ≤ 4 000 code points, executed_by membership, executed_at; latest row per run case wins) schema + migration (FORCE RLS, composite FKs) | L | V1 | G2 | 13.1.1-T1, 13.1.1-T3 |
+| 13.10.2-T2 | API: create a run from a selection (feature node, requirement, or case list), record a result with `Idempotency-Key`, close a run; read `authoring:read`, write new permission `manual_run:write` seeded to `qa_engineer`, `test_maintainer`, `tenant_admin`; audit, OpenAPI, isolation route cases | M | V1 | G2 | 13.10.2-T1, 02.2.1-T2, 02.7.1-T2 |
+| 13.10.2-T3 | Evidence files on a result through the 06 artifact path (sensitivity class, async secret scan), never inlined | M | V1 | G2 | 13.10.2-T2, 06.1.2-T3, 06.2.3-T1 |
+| 13.10.2-T4 | Run summary and coverage read models (latest result per case, by feature node and by requirement), consumed by the 13.10.3 report | M | V1 | G2 | 13.10.2-T2, 13.10.1-T3 |
+| 13.10.2-T5 | Advisory guard: manual results never enter 07's frozen inputs and never create `evaluation` / `release_decision` rows; a test proves a failed manual result leaves an existing PASS unchanged; the release view (09.3.1-T10, G4, on 07.5.3-T2) lists them only in a section labelled "Manual results (advisory)", a hand-over recorded in Notes | S | V1 | G2 | 13.10.2-T2, 07.2.2-T1 |
+| 13.10.2-T6 | UI via the `design-ui` agent first: run list, keyboard-first execution screen (pass / fail / blocked / skip, attach evidence), run summary, vi + en, WCAG 2.2 AA | L | V1 | G2 | 13.10.2-T2, 13.4.1-T1 |
+#### Story 13.10.3 Test case reports — acceptance: for any project (the primary deliverable when no repository is bound), a user builds an immutable report with chosen sections (test plan, test cases, traceability matrix with gaps, manual execution + advisory readiness) and downloads it as PDF, DOCX or XLSX or shares a read-only link; the same snapshot renders identically in every format.
+| ID | Task | Size | Version | Milestone | Depends on |
+|---|---|---|---|---|---|
+| 13.10.3-T1 | `test_report` immutable snapshot (scope: feature nodes / requirements / manual run; sections; language vi/en; pinned requirement + case versions and, when present, manual results; `content_hash`) built by an async task-queue job; create needs `authoring:write`, read `authoring:read`; audit, OpenAPI, isolation route cases | M | V1 | G1 | 13.10.1-T3, 01.6.1-T1 |
+| 13.10.3-T2 | Section builders: test plan (scope, requirement list, priorities, free-text strategy and environment fields), test cases (steps, data, expected results by feature/requirement), traceability matrix requirement ↔ case with uncovered requirements and unlinked cases flagged, execution section with the advisory readiness summary (before any manual run exists it reads "no manual execution recorded", never "0 failed"; counts by status, blocked/failed list, the "advisory, not a release decision" label) | M | V1 | G1 | 13.10.3-T1 |
+| 13.10.3-T3 | XLSX and DOCX renderers on the existing hand-written OOXML writer of `AuthoringExporter` (one sheet / heading per section), vi + en strings, formula-injection escaping as in the CSV/XLSX export | L | V1 | G1 | 13.10.3-T2, 13.1.1-T5 |
+| 13.10.3-T4 | PDF renderer: choose a .NET PDF library through ADR-0002 (licence, CVE, maintenance) with an ADR row; fallback if none passes: the web report's print stylesheet ("Save as PDF"), recorded in the ADR | M | V1 | G1 | 13.10.3-T2 |
+| 13.10.3-T5 | Read-only share link: unguessable token (≥ 128 bit, stored hashed like the landed 02.4.4-T1 API token), off by default, issue and revoke need `project:write` (OI-13-604), expiry (default 30 days), revocable, audited, `noindex`, no session cookie, serves only the snapshot | M | V1 | G1 | 13.10.3-T1 |
+| 13.10.3-T6 | UI via the `design-ui` agent first: report builder (scope, sections, language, format), report history, download, share-link management, the public read-only report page; vi + en, WCAG 2.2 AA | L | V1 | G1 | 13.10.3-T2, 13.4.1-T1 |
+#### Story 13.10.4 Optional connections: GitHub, Jira Cloud, Linear — acceptance: a project picks any connection (GitHub, Jira Cloud, Linear) or none; Jira and Linear connect by OAuth and import issues read-only as requirements (story + AC), re-sync creates a new requirement version only when content changes, and nothing is ever written back.
+| ID | Task | Size | Version | Milestone | Depends on |
+|---|---|---|---|---|---|
+| 13.10.4-T1 | `tracker_connection` (provider `jira_cloud` / `linear`, project-scoped, state `active` / `needs_reauth` / `disconnected` with transition trigger (`active` and `needs_reauth` may each move to `disconnected`), OAuth tokens encrypted at rest with the existing ASP.NET Data Protection key ring, never returned or logged) + `tracker_item` (provider id, key, url, content hash, last seen) schema + migration (this migration also adds `requirement.tracker_item_id` with its composite tenant FK); OAuth authorization-code flow with `state` and PKCE where supported, scopes Jira `read:jira-work` (+ refresh scope per OI-13-702) and Linear `read`; connect/disconnect need `project:write` | L | V1 | G1 | 13.10.1-T1, 02.2.1-T2 |
+| 13.10.4-T2 | Jira Cloud import: site choice via accessible resources (`cloudId`), JQL or project/epic filter, issue → `user_story` requirement, AC from a chosen custom field or a description section headed "Acceptance criteria", Atlassian Document Format → plain text/Markdown, `external_ref` = issue key; dedupe by (connection, issue id) | L | V1 | G1 | 13.10.4-T1, 13.10.1-T2 |
+| 13.10.4-T3 | Linear import over GraphQL: team / project / cycle filter, issue → `user_story`, AC from a description section headed "Acceptance criteria" (Markdown) or sub-issues by label, `external_ref` = identifier; same dedupe | M | V1 | G1 | 13.10.4-T1, 13.10.1-T2 |
+| 13.10.4-T4 | Sync: "sync now" and a scheduled sync per connection (Cronos, default daily), new `requirement_version` only on content-hash change, removed upstream items marked, 429 `Retry-After` and refresh-token handling (expired refresh → `needs_reauth`), outbound hosts fixed to the provider API hosts, audit | M | V1 | G1 | 13.10.4-T2, 13.10.4-T3 |
+| 13.10.4-T5 | Security and isolation tests: state/PKCE mismatch refused, tokens absent from responses/logs/audit, cross-tenant connection access refused, revoked grant → `needs_reauth`, oversized issue text truncated per the requirement cap | S | V1 | G1 | 13.10.4-T4 |
+| 13.10.4-T6 | UI via the `design-ui` agent first: project Integrations page with GitHub / Jira / Linear cards (all optional), connect flow, filter picker with preview, import, sync status; vi + en, WCAG 2.2 AA | L | V1 | G1 | 13.10.4-T4, 13.4.1-T1 |
+| 13.10.4-T7 | Onboarding: the connect-CI/GitHub step becomes optional with a path choice (GitHub / Jira / Linear / documents only); verify today's behaviour first and record it | S | V1 | G1 | 13.10.4-T6 |
+**Epic 13.10 total: 32.0** (13.10.1 7.5 · 13.10.2 7.5 · 13.10.3 8.0 · 13.10.4 9.0)
+Notes (owner 2026-11-26): manual results are advisory and never feed 07; repo-less projects get test case reports, not scripts (13.5 unchanged for projects with a repo); Jira/Linear import is read-only over their REST/GraphQL APIs; the vendors' MCP servers are a later option for the AI generation step only; build order: right after area 07, before 08 (13.10.1-T5 waits for 13.3.1-T2; 13.10.2-T5 waits for 07.2.2-T1, and the G4 release view 09.3.1-T10 shows manual results only in an advisory-labelled section); tasks whose dependencies sit in a later area are built in the area that unblocks them. Detailed feature plans are written when the tasks are scheduled.
+
 ## 10. Dependencies
 
-- **01** (`01.4.1-T1`), **02** (`02.1.1-T1`, `02.2.1-T2`, `02.7.1-T2`), **03** (`03.1.1-T1`, `03.1.3-T1`, `03.4.2-T1`, `03.7.1-T3`), **04** (`04.2.1-T1`, `04.2.1-T2`, `04.3.1-T1`), **05** (`05.3.2-T5`), **06** (`06.1.2-T2`, `06.1.2-T3`), **08** (`08.1.2-T2`, `08.1.2-T3`, `08.2.2-T2`, `08.3.1-T1`, `08.4.1-T2`, `08.5.1-T1`, `08.5.2-T1`, `08.5.3-T1`, `08.5.5-T2`, `08.6.1-T1`, `08.8.1-T1`, `08.8.1-T3`), **09** (`09.1.1-T4`, `09.1.1-T11`, `09.5.1-T2`), **11** (`11.4.1-T3`).
+- **01** (`01.4.1-T1`), **02** (`02.1.1-T1`, `02.2.1-T2`, `02.7.1-T2`), **03** (`03.1.1-T1`, `03.1.3-T1`, `03.4.2-T1`, `03.7.1-T3`), **04** (`04.2.1-T1`, `04.2.1-T2`, `04.3.1-T1`), **05** (`05.3.2-T5`), **06** (`06.1.2-T2`, `06.1.2-T3`), **08** (`08.1.2-T2`, `08.1.2-T3`, `08.2.2-T2`, `08.3.1-T1`, `08.4.1-T2`, `08.5.1-T1`, `08.5.2-T1`, `08.5.3-T1`, `08.5.5-T2`, `08.6.1-T1`, `08.8.1-T1`, `08.8.1-T3`), **09** (`09.1.1-T4`, `09.1.1-T11`, `09.5.1-T2`), **11** (`11.4.1-T3`); epic 13.10 adds **01** (`01.6.1-T1`), **06** (`06.2.3-T1`), **07** (`07.2.2-T1`) and **13.3.1-T1** (intake).
 
 ## 11. Open questions
 
@@ -258,6 +306,7 @@ Notes (S92): the generation flow screens of 13.4.1-T4 carry the role-profile sel
 | Q2 | Credit amounts per AI action. Rule `[DECISION]` (owner, 2026-10-23, CR-D-2 §6.2): at least 3× the cost per action measured in the G1 free trial, reviewed monthly; the amounts stay `[OPEN]` | Owner | before the G2 offer (12.4.1-T4) |
 | Q3 | Who supplies the seed test when the customer has none | Owner + pilot QA lead | before 13.5.1-T1 |
 | Q4 | Role-profile governance: who may create or edit profiles, per-tenant limits, sharing across projects, whether the per-run note is stored, and the test-plan / integration-scenario output kinds; defaults `[OPEN]` in `plans/open-items/05-product-phases-g1.md` (OI-13-301 to OI-13-305) | Owner | before 13.2.2-T3 (permission, limits, note), before any test-plan story (output kinds) |
+| Q5 | When does the AI step read tracker context through the vendors' MCP servers? Default: after 08.5.1, not before G2 `[OPEN]` | Owner | after 08.5.1 (no task now) |
 
 ## 12. Estimate summary
 
@@ -272,9 +321,10 @@ Notes (S92): the generation flow screens of 13.4.1-T4 carry the role-profile sel
 | 13.7 Mobile spike and multimodal locate fallback | 5.0 | 0 | 0 | 5.0 |
 | 13.8 Drift classification and repair proposals | 7.0 | 0 | 0 | 7.0 |
 | 13.9 Phase gates | 1.5 | 0 | 0 | 1.5 |
-| **Total** | **66.5** | **0** | **0** | **66.5** |
+| 13.10 Projects without a repository | 32.0 | 0 | 0 | 32.0 |
+| **Total** | **98.5** | **0** | **0** | **98.5** |
 
-→ with 20 % buffer **79.8** person-days. By phase (raw): G1 35.5 · G2 20.5 · G3 10.5.
+→ with 20 % buffer **118.2** person-days. By phase (raw): G1 60.0 · G2 28.0 · G3 10.5 (13.10: G1 24.5, G2 7.5).
 
 ## 13. Contract change requests
 
@@ -285,3 +335,7 @@ Notes (S92): the generation flow screens of 13.4.1-T4 carry the role-profile sel
 | CR-3 | 00 §8: states for `generated_script` (draft → active / flaky → retired) and `authoring_change` (pending → applied / discarded) | Canonical state list |
 | CR-4 | 00 §4: phases G1–G4 replace milestones M0–M5 as the Milestone value in every plan | CR-D-2 |
 | CR-5 | 00 §3: glossary entries `role profile`, `role prompt template` (S92, 2026-10-26; logged in 00 §15) | New names used by 13.2.2, 13.3.1 and 13.4.1 |
+| CR-6 | 00 §3: glossary entries `requirement`, `requirement version`, `manual run`, `manual result`, `test case report`, `share link`, `tracker connection` (logged in 00 §15) | New names used by 13.10 |
+| CR-7 | 00 §2: permission `manual_run:write` (`qa_engineer`, `test_maintainer`, `tenant_admin`); `contracts/permissions.json` follows in 13.10.2-T2 | Manual results need their own write string |
+| CR-8 | 00 §8: states for `manual_run` (open → closed) and `tracker_connection` (active ↔ needs_reauth; either → disconnected); `manual_result`, `requirement_version` and `test_report` are append-only / immutable | Canonical state list |
+| CR-9 | 00 §1 decision of 2026-10-02 amended: manual execution results planned in G2 as advisory only, Jira Cloud and Linear read-only import in G1, write-back out of scope (owner 2026-11-26) | Owner decision |

@@ -7,7 +7,8 @@
   },
   "workspaces": [
     "apps/web",
-    "packages/*"
+    "packages/*",
+    "fixtures/webhook-receiver"
   ],
   "scripts": {
     "build": "tsc -b tsconfig.json && npm run build -w apps/web",

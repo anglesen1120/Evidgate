@@ -94,7 +94,8 @@ internal sealed class CreatePolicyRevisionCommandHandler(
             "policy_revision",
             row.Id.ToString("D"),
             AfterHash: Convert.FromHexString(row.Hash[CanonicalHash.Prefix.Length..]),
-            Metadata: new Dictionary<string, string> { ["outcome"] = row.Created ? "created" : "unchanged" }));
+            Metadata: new Dictionary<string, string> { ["outcome"] = row.Created ? "created" : "unchanged" },
+            ProjectId: command.ProjectId));
 
         // The response body is the stored jsonb (finding CR5), not the caller's element: the database's rendering is
         // what a later GET returns, so a create and a replay answer with the same bytes.

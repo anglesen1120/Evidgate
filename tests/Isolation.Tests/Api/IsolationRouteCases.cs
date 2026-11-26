@@ -278,6 +278,8 @@ public static partial class IsolationRouteCases
                 Fixed([bp.ActiveTokenId, bp.RevokedTokenId]), aAdmin, $"/v1/projects/{ap.Id}/ingest-tokens?limit=1"));
             walks.Add(new(Get("/v1/projects/{p}/api-tokens"), $"org B project {bp.Slug} api tokens", bAdmin, $"/v1/projects/{bp.Id}/api-tokens?limit=1", "id",
                 Fixed([.. bp.ApiTokenIds]), aAdmin, $"/v1/projects/{ap.Id}/api-tokens?limit=1"));
+            walks.Add(new(Get("/v1/projects/{p}/webhook-endpoints"), $"org B project {bp.Slug} webhook endpoints", bAdmin,
+                $"/v1/projects/{bp.Id}/webhook-endpoints", "id", Fixed([bp.WebhookEndpointId])));
             walks.Add(new(Get("/v1/projects/{p}/cases"), $"org B project {bp.Slug} cases", bAdmin, $"/v1/projects/{bp.Id}/cases?limit=1", "id",
                 Fixed(bp.CaseIds), aAdmin, $"/v1/projects/{ap.Id}/cases?limit=1"));
             walks.Add(new(Get("/v1/projects/{p}/suites"), $"org B project {bp.Slug} suites", bAdmin, $"/v1/projects/{bp.Id}/suites?limit=1", "id",
@@ -705,6 +707,25 @@ public static partial class IsolationRouteCases
         ObjectCase("DELETE", "/v1/api-tokens/{t}", p => [("api token", p.ApiTokenIds[0]), ("revoked api token", p.ApiTokenIds[1])], id =>
             new(HttpMethod.Delete, $"/v1/api-tokens/{id}")),
 
+        ProjectCase("POST", "/v1/projects/{p}/webhook-endpoints", p => new(HttpMethod.Post, $"/v1/projects/{p}/webhook-endpoints",
+            new JsonObject { ["url"] = "https://93.184.216.34/probe" })),
+        ProjectCase("GET", "/v1/projects/{p}/webhook-endpoints", p => new(HttpMethod.Get, $"/v1/projects/{p}/webhook-endpoints"),
+            ownControl: true),
+        ObjectCaseWith("GET", "/v1/projects/{p}/webhook-endpoints/{e}", p => [("webhook endpoint", p.WebhookEndpointId)],
+            (id, p) => new(HttpMethod.Get, $"/v1/projects/{p.Id}/webhook-endpoints/{id}"),
+            SiblingEndpoint((project, id) => new(HttpMethod.Get, $"/v1/projects/{project}/webhook-endpoints/{id}")),
+            own: p => new(HttpMethod.Get, $"/v1/projects/{p.Id}/webhook-endpoints/{p.WebhookEndpointId}")),
+        ObjectCaseWith("PATCH", "/v1/projects/{p}/webhook-endpoints/{e}", p => [("webhook endpoint", p.WebhookEndpointId)],
+            (id, p) => new(HttpMethod.Patch, $"/v1/projects/{p.Id}/webhook-endpoints/{id}",
+                new JsonObject { ["state"] = "disabled" }, "\"1\""),
+            SiblingEndpoint((project, id) => new(HttpMethod.Patch, $"/v1/projects/{project}/webhook-endpoints/{id}",
+                new JsonObject { ["state"] = "disabled" }, "\"1\""))),
+        ObjectCaseWith("DELETE", "/v1/projects/{p}/webhook-endpoints/{e}", p => [("webhook endpoint", p.WebhookEndpointId)],
+            (id, p) => new(HttpMethod.Delete, $"/v1/projects/{p.Id}/webhook-endpoints/{id}"),
+            SiblingEndpoint((project, id) => new(HttpMethod.Delete, $"/v1/projects/{project}/webhook-endpoints/{id}"))),
+        ProjectCase("GET", "/v1/projects/{p}/webhook-deliveries", p => new(HttpMethod.Get, $"/v1/projects/{p}/webhook-deliveries?limit=1"),
+            ownControl: true),
+
         // ---- CI token exchange (CiTokenEndpoints.cs:41): pre-tenant, credential-authenticated --------------------
         Case("POST", "/v1/ci/token", (route, w) =>
         [
@@ -953,6 +974,10 @@ public static partial class IsolationRouteCases
         // release_not_found, never a 403 that would name existence.
         ReleaseCreateCase(),
         ReleaseReadCase(),
+        // The release decision is addressed by the release id alone and resolved under RLS: another org's release is
+        // the one 404 not_found, and the own-project control answers 200 with the pending body (nothing is aggregated).
+        ObjectCase("GET", "/v1/releases/{id}/decision", p => [("release", p.ReleaseId)], id =>
+            new(HttpMethod.Get, $"/v1/releases/{id}/decision"), ownControl: true),
         // The bind route names the release in its path and the run in its body, so both sides are resolved under the
         // caller's tenant: another org's release and another org's run are the same 404 not_found, and run:create is
         // outside the service-role ceiling, so a ci_producer is refused before the handler.
@@ -975,6 +1000,10 @@ public static partial class IsolationRouteCases
                 ["raw_report_id"] = Guid.CreateVersion7().ToString(),
                 ["parser_version"] = "1.1.0",
             })),
+        // The project-scoped decision counts: a foreign or unknown project is the one 404, and the caller's own
+        // project answers 200 (zero counts on a project with no runs).
+        ProjectCase("GET", "/v1/projects/{p}/runs/decision-counts",
+            p => new(HttpMethod.Get, $"/v1/projects/{p}/runs/decision-counts"), ownControl: true),
         // 05.2.2-T2: the project-scoped run list. As a list, its positive control is the full-pagination walk
         // (Lists); the extra probes pin the ref_name filter, which must not widen tenancy.
         ProjectCase("GET", "/v1/projects/{p}/runs", p => new(HttpMethod.Get, $"/v1/projects/{p}/runs"), list: true,
@@ -1021,6 +1050,16 @@ public static partial class IsolationRouteCases
         QuarantineCreateCase(),
         QuarantineRemoveCase(),
         ProjectCase("GET", "/v1/projects/{p}/quarantine", p => new(HttpMethod.Get, $"/v1/projects/{p}/quarantine"), list: true),
+
+        // ---- Policy deploy targets (DeployTargetEndpoints.cs) ----------------------------------------------------
+        // Every route names its project in {p}; a foreign project is the same 404 an unknown one gets, so the
+        // project case covers cross-tenant and cross-project reads and writes. The target id is a fresh one.
+        ProjectCase("GET", "/v1/projects/{p}/deploy-targets", p => new(HttpMethod.Get, $"/v1/projects/{p}/deploy-targets"), ownControl: true),
+        ProjectCase("POST", "/v1/projects/{p}/deploy-targets", p => new(HttpMethod.Post, $"/v1/projects/{p}/deploy-targets", new JsonObject { ["name"] = "probe" })),
+        ProjectCase("GET", "/v1/projects/{p}/deploy-targets/{t}", p => new(HttpMethod.Get, $"/v1/projects/{p}/deploy-targets/{Guid.CreateVersion7()}")),
+        ProjectCase("PATCH", "/v1/projects/{p}/deploy-targets/{t}", p => new(HttpMethod.Patch, $"/v1/projects/{p}/deploy-targets/{Guid.CreateVersion7()}",
+            new JsonObject { ["order"] = 1 }, IfMatch: "\"1\"")),
+        ProjectCase("DELETE", "/v1/projects/{p}/deploy-targets/{t}", p => new(HttpMethod.Delete, $"/v1/projects/{p}/deploy-targets/{Guid.CreateVersion7()}", IfMatch: "\"1\"")),
 
         .. IncidentCases(),
         // ---- Healing switch (HealingEndpoints.cs; 08.6.3-T1) ----------------------------------------------------
@@ -2330,6 +2369,18 @@ public static partial class IsolationRouteCases
                 .. ids(w.Acme2.Projects[1]).Select(id => new RouteProbe(route, $"sibling project api's {id.Label}", runner => runner.RefusedAsync(
                     route, $"sibling project api's {id.Label}", OrgBService(w), request(id.Id, w.Acme2.Projects[1]), allowed: [403, 404]))),
             ]);
+
+    /// <summary>
+    /// Org B's own project in the path with an endpoint of org B's other project: refused exactly like a random id, so
+    /// a lookup that drops the project predicate (org isolation alone still holding) answers 200 and fails here.
+    /// </summary>
+    private static Func<ApiRoute, IsolationWorld, IEnumerable<RouteProbe>> SiblingEndpoint(Func<Guid, Guid, ProbeRequest> request) =>
+        (route, w) =>
+        [
+            Pair(route, "org B endpoint of the sibling project", ProbeExpect.NotFound, OrgBAdmin(w),
+                request(w.Acme2.Projects[0].Id, w.Acme2.Projects[1].WebhookEndpointId),
+                request(w.Acme2.Projects[0].Id, Guid.CreateVersion7())),
+        ];
 
     // ---------------------------------------------------------------------------------------------------- helpers
 

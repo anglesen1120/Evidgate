@@ -61,7 +61,7 @@ public static class AuditEndpoints
             return Result.Failure<AuditListResponse>(limitError);
         }
 
-        if (FilterError(context, out var filter) is { } filterError)
+        if (FilterError(context, withProject: true, out var filter) is { } filterError)
         {
             return Result.Failure<AuditListResponse>(filterError);
         }
@@ -87,7 +87,7 @@ public static class AuditEndpoints
                 [new ErrorDetail("format", "invalid")]));
         }
 
-        if (FilterError(context, out var filter) is { } filterError)
+        if (FilterError(context, withProject: false, out var filter) is { } filterError)
         {
             return Result.Failure<IResult>(filterError);
         }
@@ -161,14 +161,28 @@ public static class AuditEndpoints
             : value;
     }
 
-    private static Error? FilterError(HttpContext context, out AuditFilter filter)
+    /// <summary>Binds the shared filters; <c>project_id</c> is read for the list only, the export contract omits it.</summary>
+    private static Error? FilterError(HttpContext context, bool withProject, out AuditFilter filter)
     {
         var query = context.Request.Query;
-        filter = new AuditFilter(null, null, null, null, null);
+        filter = new AuditFilter(null, null, null, null, null, null);
 
         if (!TryDate(query["from"].ToString(), out var from) || !TryDate(query["to"].ToString(), out var to))
         {
             return Error.Invalid("from and to must be ISO 8601 timestamps", [new ErrorDetail("from", "invalid")]);
+        }
+
+        Guid? projectId = null;
+
+        // Present-but-blank is an invalid id, not an absent filter: dropping it would widen the page silently.
+        if (withProject && query.TryGetValue("project_id", out var projectValues) && projectValues.Count > 0)
+        {
+            if (!Guid.TryParse(projectValues[0], out var parsedProjectId))
+            {
+                return Error.Invalid("project_id must be a uuid", [new ErrorDetail("project_id", "invalid")]);
+            }
+
+            projectId = parsedProjectId;
         }
 
         filter = new AuditFilter(
@@ -176,7 +190,8 @@ public static class AuditEndpoints
             NullIfEmpty(query["action"].ToString()),
             NullIfEmpty(query["object_type"].ToString()),
             from,
-            to);
+            to,
+            projectId);
 
         return null;
     }
