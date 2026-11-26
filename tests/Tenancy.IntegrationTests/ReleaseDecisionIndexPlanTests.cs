@@ -55,7 +55,7 @@ public sealed class ReleaseDecisionIndexPlanTests
     }
 
     [Fact]
-    public async Task BindingRead_UsesTheBindingKeyWithoutSeqScan()
+    public async Task BindingRead_UsesTheReleaseCreatedIndexWithoutSortOrSeqScan()
     {
         await using var database = await _fixture.CreateDedicatedDatabaseAsync();
         await using var world = await RunCreationTests.StartAsync(_fixture, database: database.Name);
@@ -68,7 +68,8 @@ public sealed class ReleaseDecisionIndexPlanTests
             command.Parameters.AddWithValue("limit", 2001);
         });
 
-        plan.Indexes.ShouldContain("release_run_binding_key");
+        plan.Indexes.ShouldContain("release_run_release_created_idx");
+        plan.NodeTypes.ShouldNotContain(type => type.Contains("Sort", StringComparison.Ordinal), "the index order is the read order");
         plan.SeqScans.ShouldNotContain("release_run");
     }
 
@@ -89,10 +90,16 @@ public sealed class ReleaseDecisionIndexPlanTests
                    gen_random_uuid(), '[]'::jsonb, 'incomplete', 'INCONCLUSIVE', '{Empty}',
                    'sha256:' || lpad(to_hex(g), 64, '0'), now() - make_interval(secs => g)
               from generate_series(1, 30000) g;
-            insert into public.release_run (id, org_id, release_id, run_id, component_key)
-            select gen_random_uuid(), '{world.Org}', case when g <= 3 then '{release}'::uuid else gen_random_uuid() end,
-                   gen_random_uuid(), 'web'
+            insert into public.run (id, org_id, project_id, manifest_id, suite_revision_id, environment_revision_id,
+                                    collection_deadline_at, late_window_minutes, ref_kind, ref_name)
+            select gen_random_uuid(), '{world.Org}', '{world.Project}', '{world.ManifestId}', '{world.SuiteRevision}',
+                   '{world.EnvironmentRevision}', now() + interval '1 hour' + (g * interval '1 second'), 1440, 'branch',
+                   'bulk-run-' || g
               from generate_series(1, 30000) g;
+            insert into public.release_run (id, org_id, release_id, run_id, component_key)
+            select gen_random_uuid(), '{world.Org}', case when n.rn <= 3 then '{release}'::uuid else gen_random_uuid() end,
+                   n.id, 'web'
+              from (select id, row_number() over () as rn from public.run where org_id = '{world.Org}') n;
             insert into public.evaluation
               (id, org_id, run_id, evidence_revision, policy_revision_id, policy_hash, manifest_hash, completeness,
                missing, outcome, decision, reasons, evaluator_version, mode, exceptions_hash, exceptions_as_of)
@@ -100,7 +107,7 @@ public sealed class ReleaseDecisionIndexPlanTests
                    'sha256:' || repeat('b', 64), 'sha256:' || repeat('e', 64), 'complete', '{Empty}', 'all_passed', 'PASS',
                    '{Empty}', '1.0.0', 'live', 'sha256:' || repeat('f', 64), now()
               from generate_series(1, 30000) g;
-            analyze public.release_decision; analyze public.release_run; analyze public.evaluation;
+            analyze public.release_decision; analyze public.run; analyze public.release_run; analyze public.evaluation;
             """);
 
         return release;

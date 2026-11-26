@@ -167,6 +167,80 @@ public sealed partial class ReleaseAggregationTests : IClassFixture<TenancyHostP
         delete.SqlState.ShouldBe("23514");
     }
 
+    [Fact]
+    public async Task ReplacementBinding_WithoutVerdict_SupersedesTheStalePass()
+    {
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
+        var release = await ReleaseIntegrationTests.ReleaseWithAsync(world, "rebind", "active", ("web", 'a'));
+        var policy = await PolicyAsync(world, 'c');
+        await BoundRunAsync(world, release, "web", 'a', policy, "PASS");
+        await AggregateAsync(world, release);
+        (await ScalarAsync<string>(world, release, "decision")).ShouldBe("PASS");
+
+        // The newer run has the right digest and no verdict yet: the PASS of the older run must not stay current.
+        var replacement = await RunAsync(world, ("web", 'a'));
+        (await ReleaseIntegrationTests.BindAsync(world, release, replacement)).Status.ShouldBe(HttpStatusCode.Created);
+        await AggregateAsync(world, release);
+
+        (await ScalarAsync<string>(world, release, "decision")).ShouldBe("INCONCLUSIVE");
+        (await ScalarAsync<Guid>(world, release, "policy_revision_id")).ShouldBe(policy);
+        (await ReasonsAsync(world, release)).ShouldBe(["component_not_evaluated"]);
+    }
+
+    [Fact]
+    public async Task ReleaseWithTooManyBindings_StoresAnIncompleteAggregateInsteadOfTruncating()
+    {
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
+        var release = await ReleaseIntegrationTests.ReleaseWithAsync(world, "huge", "active", ("web", 'a'));
+        var policy = await PolicyAsync(world, 'c');
+        await BoundRunAsync(world, release, "web", 'a', policy, "PASS");
+        await AggregateAsync(world, release);
+        (await ScalarAsync<string>(world, release, "decision")).ShouldBe("PASS");
+        await _fixture.ExecuteAsync(
+            world.Database,
+            $"""
+            set session_replication_role = replica;
+            insert into public.run (id, org_id, project_id, manifest_id, suite_revision_id, environment_revision_id,
+                                    collection_deadline_at, late_window_minutes, ref_kind, ref_name)
+            select gen_random_uuid(), '{world.Org}', '{world.Project}', '{world.ManifestId}', '{world.SuiteRevision}',
+                   '{world.EnvironmentRevision}', now() + interval '1 hour' + (g * interval '1 second'), 1440, 'branch',
+                   'bulk-run-' || g
+              from generate_series(1, 2000) g;
+            insert into public.release_run (id, org_id, release_id, run_id, component_key)
+            select gen_random_uuid(), '{world.Org}', '{release}', r.id, 'web'
+              from public.run r where r.org_id = '{world.Org}' and r.ref_name like 'bulk-run-%';
+            """);
+
+        await AggregateAsync(world, release);
+
+        (await ScalarAsync<string>(world, release, "decision")).ShouldBe("INCONCLUSIVE");
+        (await ReasonsAsync(world, release)).ShouldBe(["aggregation_bound_exceeded"]);
+        (await ScalarAsync<Guid>(world, release, "policy_revision_id")).ShouldBe(policy);
+    }
+
+    [Fact]
+    public async Task RunBoundToTooManyReleases_FailsClosedInsteadOfTruncating()
+    {
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
+        var run = await RunAsync(world, ("web", 'a'));
+        await _fixture.ExecuteAsync(
+            world.Database,
+            $"""
+            set session_replication_role = replica;
+            insert into public.release (id, org_id, project_id, name, created_by)
+            select gen_random_uuid(), '{world.Org}', '{world.Project}', 'fan-' || g, 'probe' from generate_series(1, 101) g;
+            insert into public.release_run (id, org_id, release_id, run_id, component_key)
+            select gen_random_uuid(), '{world.Org}', r.id, '{run}', 'web'
+              from public.release r where r.org_id = '{world.Org}' and r.name like 'fan-%';
+            """);
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var scope = await OpenScope(world, cancellationToken);
+        await using var services = world.Api.Services.CreateAsyncScope();
+        var reader = services.ServiceProvider.GetRequiredService<Evidgate.Modules.Orchestrator.Contracts.IReleaseAggregationReader>();
+
+        await Should.ThrowAsync<InvalidOperationException>(() => reader.GetReleaseIdsBoundToRunAsync(run, cancellationToken).AsTask());
+    }
+
     /// <summary>The inputs read and the verdict read are one statement each, whatever the component count.</summary>
     [Fact]
     public async Task BoundedQueryCount()

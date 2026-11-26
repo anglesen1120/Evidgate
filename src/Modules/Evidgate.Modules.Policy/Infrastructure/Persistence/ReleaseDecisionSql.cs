@@ -35,12 +35,28 @@ internal static class ReleaseDecisionSql
     /// </summary>
     internal const string Insert = """
         insert into public.release_decision
-          (id, org_id, release_id, policy_revision_id, component_evaluations, completeness, decision, reasons, inputs_hash)
+          (id, org_id, release_id, policy_revision_id, component_evaluations, completeness, decision, reasons, inputs_hash,
+           created_at)
         values
           (@id, @org_id, @release_id, @policy_revision_id, @component_evaluations::jsonb, @completeness, @decision,
-           string_to_array(@reasons, @array_separator), @inputs_hash)
+           string_to_array(@reasons, @array_separator), @inputs_hash, clock_timestamp())
         on conflict (org_id, release_id, policy_revision_id, inputs_hash) do nothing
         returning id as "Id"
+        """;
+
+    /// <summary>
+    /// Serialises the aggregations of one release until commit, so a later holder reads every verdict an earlier one saw
+    /// and its row sorts after it; <c>created_at</c> is taken from the clock after the lock, not from the task's start.
+    /// </summary>
+    internal const string LockRelease = "select pg_advisory_xact_lock(hashtextextended(@lock_key, 0))";
+
+    /// <summary>The policy revision of the release's newest aggregate, used when no component has a verdict any more.</summary>
+    internal const string LastPolicyRevision = """
+        select d.policy_revision_id
+          from public.release_decision d
+         where d.org_id = @org_id and d.release_id = @release_id
+         order by d.created_at desc, d.id desc
+         limit 1
         """;
 
     /// <summary>The row that already holds this key, read when the insert lost the race.</summary>

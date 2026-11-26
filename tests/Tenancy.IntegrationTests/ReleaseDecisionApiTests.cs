@@ -2,6 +2,9 @@
 // and the permission refusal.
 using System.Net;
 using System.Net.Http.Headers;
+using Evidgate.BuildingBlocks.Persistence.Tenancy;
+using Evidgate.Modules.Policy.Application.Releases;
+using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
 using Xunit;
 
@@ -26,7 +29,7 @@ public sealed class ReleaseDecisionApiTests : IClassFixture<TenancyHostPool>
         var run = await ReleaseIntegrationTests.RunWithAsync(world, ReleaseIntegrationTests.Components(("web", 'a')));
         (await ReleaseIntegrationTests.BindAsync(world, release, run)).Status.ShouldBe(HttpStatusCode.Created);
         await EvaluateAsync(world, run, policy);
-        await AggregateRowAsync(world, release, policy, run);
+        await AggregateAsync(world, release);
 
         var answer = await GetAsync(world, release, world.Admin);
 
@@ -125,16 +128,15 @@ public sealed class ReleaseDecisionApiTests : IClassFixture<TenancyHostPool>
               from public.policy_revision p where p.org_id = '{world.Org}' and p.id = '{policy}'
             """);
 
-    /// <summary>The aggregate row the task would store, written as the owner so the read is the only thing under test.</summary>
-    private Task AggregateRowAsync(RunCreationTests.World world, Guid release, Guid policy, Guid run) =>
-        _fixture.ExecuteAsync(
-            world.Database,
-            $$"""
-            insert into public.release_decision
-              (id, org_id, release_id, policy_revision_id, component_evaluations, completeness, decision, reasons, inputs_hash)
-            values ('{{Guid.CreateVersion7()}}', '{{world.Org}}', '{{release}}', '{{policy}}',
-              '[{"component_id":"web","run_id":"{{run}}","evidence_revision":1,"status":"evaluated","decision":"PASS","reasons":[]},
-                {"component_id":"api","run_id":null,"evidence_revision":null,"status":"missing","decision":null,"reasons":["component_run_unbound"]}]'::jsonb,
-              'incomplete', 'INCONCLUSIVE', array['component_run_unbound'], 'sha256:{{new string('9', 64)}}')
-            """);
+    /// <summary>Runs the production aggregation, so the GET is checked against what the task really stores.</summary>
+    private static async Task AggregateAsync(RunCreationTests.World world, Guid release)
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var scope = await world.Api.Services.GetRequiredService<ITenantScopeFactory>()
+            .BeginAsync(world.Org, cancellationToken: cancellationToken);
+        await using var services = world.Api.Services.CreateAsyncScope();
+        await services.ServiceProvider.GetRequiredService<AggregateReleaseDecisionCommandHandler>()
+            .Handle(new AggregateReleaseDecisionCommand(release), cancellationToken);
+        await scope.CommitAsync(cancellationToken);
+    }
 }

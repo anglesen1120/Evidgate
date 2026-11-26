@@ -11871,6 +11871,7 @@ components:
                 component_not_evaluated,
                 component_failed,
                 component_inconclusive,
+                aggregation_bound_exceeded,
               ]
     ReleaseDecision:
       type: object
@@ -11922,6 +11923,7 @@ components:
                 component_failed,
                 component_inconclusive,
                 mixed_policy_revisions,
+                aggregation_bound_exceeded,
               ]
         components:
           type: [array, 'null']

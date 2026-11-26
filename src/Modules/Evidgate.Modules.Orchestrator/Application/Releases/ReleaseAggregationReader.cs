@@ -36,17 +36,14 @@ internal sealed class ReleaseAggregationReader(ITenantDb db, ITenantScopeAccesso
             new { org_id = orgId, release_id = releaseId, limit = IReleaseAggregationReader.MaxBindings + 1 },
             cancellationToken).ConfigureAwait(false);
 
-        if (bindings.Count > IReleaseAggregationReader.MaxBindings)
-        {
-            throw new InvalidOperationException(
-                $"release {releaseId:D} has more than {IReleaseAggregationReader.MaxBindings} bindings; refusing to aggregate a truncated set");
-        }
-
+        // A truncated set could hide the newest binding, so an over-bound release is reported, never cut.
+        var exceeded = bindings.Count > IReleaseAggregationReader.MaxBindings;
         return new ReleaseAggregationInputs(
             releaseId,
             projectId.Value,
             [.. components.Select(c => new ReleaseAggregationComponent(c.ComponentKey, c.Digest))],
-            [.. bindings.Select(b => new ReleaseAggregationBinding(b.RunId, b.ComponentKey, b.Purpose, b.RunDigest))]);
+            exceeded ? [] : [.. bindings.Select(b => new ReleaseAggregationBinding(b.RunId, b.ComponentKey, b.Purpose, b.RunDigest))],
+            exceeded);
     }
 
     /// <inheritdoc />
@@ -54,8 +51,14 @@ internal sealed class ReleaseAggregationReader(ITenantDb db, ITenantScopeAccesso
     {
         var ids = await db.QueryAsync<Guid>(
             ReleaseAggregationSql.ReleasesOfRun,
-            new { org_id = scopes.Require().OrgId, run_id = runId, limit = IReleaseAggregationReader.MaxReleasesPerRun },
+            new { org_id = scopes.Require().OrgId, run_id = runId, limit = IReleaseAggregationReader.MaxReleasesPerRun + 1 },
             cancellationToken).ConfigureAwait(false);
+        if (ids.Count > IReleaseAggregationReader.MaxReleasesPerRun)
+        {
+            throw new InvalidOperationException(
+                $"run {runId:D} is bound to more than {IReleaseAggregationReader.MaxReleasesPerRun} releases; refusing to aggregate a truncated set");
+        }
+
         return [.. ids];
     }
 

@@ -3,52 +3,126 @@ using System.Text.Json.Serialization;
 namespace Evidgate.Modules.Policy.Domain;
 
 /// <summary>One bound run as the rule sees it: the binding's facts, in binding order, without any I/O type.</summary>
-/// <param name="RunId">The bound run.</param>
-/// <param name="ComponentKey">The release component it is bound for.</param>
-/// <param name="Purpose"><c>regular</c> or <c>replay</c>.</param>
-/// <param name="RunDigest">The digest the run recorded for that key, or null.</param>
-internal sealed record AggregationBinding(Guid RunId, string ComponentKey, string Purpose, string? RunDigest);
+internal sealed class AggregationBinding
+{
+    /// <summary>Creates the value.</summary>
+    public AggregationBinding(Guid runId, string componentKey, string purpose, string? runDigest)
+    {
+        RunId = runId;
+        ComponentKey = componentKey;
+        Purpose = purpose;
+        RunDigest = runDigest;
+    }
+
+    /// <summary>RunId.</summary>
+    public Guid RunId { get; }
+
+    /// <summary>ComponentKey.</summary>
+    public string ComponentKey { get; }
+
+    /// <summary>Purpose.</summary>
+    public string Purpose { get; }
+
+    /// <summary>RunDigest.</summary>
+    public string? RunDigest { get; }
+}
 
 /// <summary>The newest live verdict of one run.</summary>
-/// <param name="RunId">The run judged.</param>
-/// <param name="EvaluationId">The evaluation row the verdict was read from.</param>
-/// <param name="EvidenceRevision">The frozen revision it judged.</param>
-/// <param name="PolicyRevisionId">The policy revision it was reached under.</param>
-/// <param name="Decision"><c>PASS</c>, <c>FAIL</c> or <c>INCONCLUSIVE</c>.</param>
-internal sealed record AggregationVerdict(
-    Guid RunId,
-    Guid EvaluationId,
-    int EvidenceRevision,
-    Guid PolicyRevisionId,
-    string Decision);
+internal sealed class AggregationVerdict
+{
+    /// <summary>Creates the value.</summary>
+    public AggregationVerdict(Guid runId, Guid evaluationId, int evidenceRevision, Guid policyRevisionId, string decision)
+    {
+        RunId = runId;
+        EvaluationId = evaluationId;
+        EvidenceRevision = evidenceRevision;
+        PolicyRevisionId = policyRevisionId;
+        Decision = decision;
+    }
+
+    /// <summary>RunId.</summary>
+    public Guid RunId { get; }
+
+    /// <summary>EvaluationId.</summary>
+    public Guid EvaluationId { get; }
+
+    /// <summary>EvidenceRevision.</summary>
+    public int EvidenceRevision { get; }
+
+    /// <summary>PolicyRevisionId.</summary>
+    public Guid PolicyRevisionId { get; }
+
+    /// <summary>Decision.</summary>
+    public string Decision { get; }
+}
 
 /// <summary>One component of the stored aggregate; the member names are the wire and the stored document's names.</summary>
-/// <param name="ComponentId">The release component key.</param>
-/// <param name="RunId">The run the verdict came from, or null when the component is missing.</param>
-/// <param name="EvidenceRevision">The revision that run's verdict judged, or null.</param>
-/// <param name="Status"><c>evaluated</c> or <c>missing</c>.</param>
-/// <param name="Decision">The run's verdict, or null while the component is missing.</param>
-/// <param name="Reasons">Closed component reason codes, ordinal order.</param>
-internal sealed record ComponentEvaluation(
-    [property: JsonPropertyName("component_id")] string ComponentId,
-    [property: JsonPropertyName("run_id")] Guid? RunId,
-    [property: JsonPropertyName("evidence_revision")] int? EvidenceRevision,
-    [property: JsonPropertyName("status")] string Status,
-    [property: JsonPropertyName("decision")] string? Decision,
-    [property: JsonPropertyName("reasons")] IReadOnlyList<string> Reasons);
+internal sealed class ComponentEvaluation
+{
+    /// <summary>Creates the value.</summary>
+    public ComponentEvaluation(string componentId, Guid? runId, int? evidenceRevision, string status, string? decision, IReadOnlyList<string> reasons)
+    {
+        ComponentId = componentId;
+        RunId = runId;
+        EvidenceRevision = evidenceRevision;
+        Status = status;
+        Decision = decision;
+        Reasons = reasons;
+    }
+
+    /// <summary>ComponentId.</summary>
+    [JsonPropertyName("component_id")]
+    public string ComponentId { get; }
+
+    /// <summary>RunId.</summary>
+    [JsonPropertyName("run_id")]
+    public Guid? RunId { get; }
+
+    /// <summary>EvidenceRevision.</summary>
+    [JsonPropertyName("evidence_revision")]
+    public int? EvidenceRevision { get; }
+
+    /// <summary>Status.</summary>
+    [JsonPropertyName("status")]
+    public string Status { get; }
+
+    /// <summary>Decision.</summary>
+    [JsonPropertyName("decision")]
+    public string? Decision { get; }
+
+    /// <summary>Reasons.</summary>
+    [JsonPropertyName("reasons")]
+    public IReadOnlyList<string> Reasons { get; }
+}
 
 /// <summary>The aggregate the rule computes for one release.</summary>
-/// <param name="PolicyRevisionId">The policy revision the aggregate is stored under, null when no component was evaluated.</param>
-/// <param name="Components">One entry per declared component, in component-key order.</param>
-/// <param name="Completeness"><c>complete</c> only when every component is evaluated.</param>
-/// <param name="Decision"><c>PASS</c>, <c>FAIL</c> or <c>INCONCLUSIVE</c>.</param>
-/// <param name="Reasons">The distinct reason codes of the components plus the release-level ones, ordinal order.</param>
-internal sealed record ReleaseAggregate(
-    Guid? PolicyRevisionId,
-    IReadOnlyList<ComponentEvaluation> Components,
-    string Completeness,
-    string Decision,
-    IReadOnlyList<string> Reasons);
+internal sealed class ReleaseAggregate
+{
+    /// <summary>Creates the value.</summary>
+    public ReleaseAggregate(Guid? policyRevisionId, IReadOnlyList<ComponentEvaluation> components, string completeness, string decision, IReadOnlyList<string> reasons)
+    {
+        PolicyRevisionId = policyRevisionId;
+        Components = components;
+        Completeness = completeness;
+        Decision = decision;
+        Reasons = reasons;
+    }
+
+    /// <summary>PolicyRevisionId.</summary>
+    public Guid? PolicyRevisionId { get; }
+
+    /// <summary>Components.</summary>
+    public IReadOnlyList<ComponentEvaluation> Components { get; }
+
+    /// <summary>Completeness.</summary>
+    public string Completeness { get; }
+
+    /// <summary>Decision.</summary>
+    public string Decision { get; }
+
+    /// <summary>Reasons.</summary>
+    public IReadOnlyList<string> Reasons { get; }
+}
 
 /// <summary>
 /// The release-level rule, pure and deterministic. A component counts only through a binding of a non-replay run whose
@@ -68,16 +142,29 @@ internal static class ReleaseAggregationRules
 
     internal const string NotEvaluated = "component_not_evaluated";
 
+    /// <summary>The release holds more bindings than one aggregation reads.</summary>
+    internal const string BoundExceeded = "aggregation_bound_exceeded";
+
     internal const string Failed = "component_failed";
 
     internal const string Inconclusive = "component_inconclusive";
 
     internal const string MixedPolicyRevisions = "mixed_policy_revisions";
 
+    /// <summary>The aggregate of a release too large to read: every component is missing and nothing can pass.</summary>
+    internal static ReleaseAggregate Exceeded(IReadOnlyList<(string Key, string Digest)> components)
+    {
+        ArgumentNullException.ThrowIfNull(components);
+
+        return new ReleaseAggregate(
+            null,
+            [.. components.Select(c => Gap(c.Key, BoundExceeded))],
+            "incomplete",
+            "INCONCLUSIVE",
+            [BoundExceeded]);
+    }
+
     /// <summary>Aggregates one release.</summary>
-    /// <param name="components">The declared (component key, digest) pairs, ordered by key.</param>
-    /// <param name="bindings">The stored bindings, oldest first.</param>
-    /// <param name="verdicts">The newest live verdict of each bound run that has one.</param>
     internal static ReleaseAggregate Aggregate(
         IReadOnlyList<(string Key, string Digest)> components,
         IReadOnlyList<AggregationBinding> bindings,
@@ -166,7 +253,7 @@ internal static class ReleaseAggregationRules
         var run = bindings[chosen].RunId;
         if (!verdicts.TryGetValue(run, out var verdict))
         {
-            return (Gap(key, NotEvaluated) with { RunId = run }, -1, null);
+            return (new ComponentEvaluation(key, run, null, Missing, null, [NotEvaluated]), -1, null);
         }
 
         string[] reasons = verdict.Decision switch

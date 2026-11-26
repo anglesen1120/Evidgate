@@ -39,33 +39,29 @@ internal sealed class AggregateReleaseDecisionCommandHandler(
         ArgumentNullException.ThrowIfNull(command);
         using var activity = EvidgateTelemetry.StartModuleActivity(ModuleName.Policy, nameof(AggregateReleaseDecisionCommand));
 
+        var orgId = scopes.Require().OrgId;
+        await db.ScalarAsync<int?>(
+            ReleaseDecisionSql.LockRelease,
+            new { lock_key = $"release_decision:{orgId:N}:{command.ReleaseId:N}" },
+            cancellationToken).ConfigureAwait(false);
         var inputs = await releases.GetInputsAsync(command.ReleaseId, cancellationToken).ConfigureAwait(false);
         if (inputs is null)
         {
             return null;
         }
 
-        var orgId = scopes.Require().OrgId;
-        var runIds = inputs.Bindings
-            .Where(b => !string.Equals(b.Purpose, "replay", StringComparison.Ordinal))
-            .Select(b => b.RunId)
-            .Distinct()
-            .ToArray();
-        var verdicts = runIds.Length == 0
-            ? []
-            : (await db.QueryAsync<VerdictRow>(
-                    ReleaseDecisionSql.LiveVerdicts,
-                    new { org_id = orgId, ids = runIds },
-                    cancellationToken).ConfigureAwait(false))
-                .ToDictionary(
-                    v => v.RunId,
-                    v => new AggregationVerdict(v.RunId, v.EvaluationId, v.EvidenceRevision, v.PolicyRevisionId, v.Decision));
-
-        var aggregate = ReleaseAggregationRules.Aggregate(
-            [.. inputs.Components.Select(c => (c.ComponentKey, c.Digest))],
-            [.. inputs.Bindings.Select(b => new AggregationBinding(b.RunId, b.ComponentKey, b.Purpose, b.RunDigest))],
-            verdicts);
-        if (aggregate.PolicyRevisionId is not { } policyRevisionId)
+        var componentFacts = inputs.Components.Select(c => (c.ComponentKey, c.Digest)).ToList();
+        var aggregate = inputs.BindingsExceeded
+            ? ReleaseAggregationRules.Exceeded(componentFacts)
+            : await AggregateAsync(inputs, componentFacts, orgId, cancellationToken).ConfigureAwait(false);
+        // With no verdict left (a replacement run is bound but not evaluated yet) the release keeps the revision of its
+        // last aggregate, so the stale decision is superseded by an incomplete one instead of staying current.
+        var revision = aggregate.PolicyRevisionId
+            ?? await db.QuerySingleOrDefaultAsync<Guid?>(
+                ReleaseDecisionSql.LastPolicyRevision,
+                new { org_id = orgId, release_id = command.ReleaseId },
+                cancellationToken).ConfigureAwait(false);
+        if (revision is not { } policyRevisionId)
         {
             return null;
         }
@@ -100,6 +96,33 @@ internal sealed class AggregateReleaseDecisionCommandHandler(
             cancellationToken).ConfigureAwait(false)
             ?? throw new InvalidOperationException(
                 $"the conflicting release decision of release {command.ReleaseId:D} could not be read back, so the task is retried");
+    }
+
+    private async Task<ReleaseAggregate> AggregateAsync(
+        ReleaseAggregationInputs inputs,
+        IReadOnlyList<(string Key, string Digest)> components,
+        Guid orgId,
+        CancellationToken cancellationToken)
+    {
+        var runIds = inputs.Bindings
+            .Where(b => !string.Equals(b.Purpose, "replay", StringComparison.Ordinal))
+            .Select(b => b.RunId)
+            .Distinct()
+            .ToArray();
+        var verdicts = runIds.Length == 0
+            ? []
+            : (await db.QueryAsync<VerdictRow>(
+                    ReleaseDecisionSql.LiveVerdicts,
+                    new { org_id = orgId, ids = runIds },
+                    cancellationToken).ConfigureAwait(false))
+                .ToDictionary(
+                    v => v.RunId,
+                    v => new AggregationVerdict(v.RunId, v.EvaluationId, v.EvidenceRevision, v.PolicyRevisionId, v.Decision));
+
+        return ReleaseAggregationRules.Aggregate(
+            components,
+            [.. inputs.Bindings.Select(b => new AggregationBinding(b.RunId, b.ComponentKey, b.Purpose, b.RunDigest))],
+            verdicts);
     }
 
     /// <summary>

@@ -777,7 +777,7 @@ export type ReleaseComponentDecision = {
      * Null while the component is missing.
      */
     decision: 'PASS' | 'FAIL' | 'INCONCLUSIVE' | null;
-    reasons: Array<'component_digest_mismatch' | 'component_run_unbound' | 'component_not_evaluated' | 'component_failed' | 'component_inconclusive'>;
+    reasons: Array<'component_digest_mismatch' | 'component_run_unbound' | 'component_not_evaluated' | 'component_failed' | 'component_inconclusive' | 'aggregation_bound_exceeded'>;
 };
 
 /**
@@ -790,7 +790,7 @@ export type ReleaseDecision = {
     id: string | null;
     policy_revision_id: string | null;
     completeness: 'complete' | 'incomplete' | null;
-    reasons: Array<'component_digest_mismatch' | 'component_run_unbound' | 'component_not_evaluated' | 'component_failed' | 'component_inconclusive' | 'mixed_policy_revisions'> | null;
+    reasons: Array<'component_digest_mismatch' | 'component_run_unbound' | 'component_not_evaluated' | 'component_failed' | 'component_inconclusive' | 'mixed_policy_revisions' | 'aggregation_bound_exceeded'> | null;
     components: Array<ReleaseComponentDecision> | null;
     inputs_hash: string | null;
     created_at: string | null;

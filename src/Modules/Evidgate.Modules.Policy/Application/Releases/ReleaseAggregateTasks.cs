@@ -67,7 +67,8 @@ internal sealed class ReleaseAggregateOnEvaluationTaskHandler(IServiceScopeFacto
         await using var services = serviceScopes.CreateAsyncScope();
         var releases = services.ServiceProvider.GetRequiredService<IReleaseAggregationReader>();
         var aggregate = services.ServiceProvider.GetRequiredService<AggregateReleaseDecisionCommandHandler>();
-        foreach (var releaseId in await releases.GetReleaseIdsBoundToRunAsync(payload.RunId, cancellationToken).ConfigureAwait(false))
+        // One global lock order (ascending id) keeps two fan-outs that share releases from waiting on each other.
+        foreach (var releaseId in (await releases.GetReleaseIdsBoundToRunAsync(payload.RunId, cancellationToken).ConfigureAwait(false)).Order())
         {
             await aggregate.Handle(new AggregateReleaseDecisionCommand(releaseId), cancellationToken).ConfigureAwait(false);
         }

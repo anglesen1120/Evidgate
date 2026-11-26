@@ -49,7 +49,7 @@ public sealed partial class EvaluationTaskTests
     }
 
     [Fact]
-    public async Task ReplayRun_NeverBoundNorCounted_ShadowVerdictEnqueuesNothing()
+    public async Task ShadowVerdict_EnqueuesNothing()
     {
         await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var seed = await SeedAsync(world);
@@ -57,6 +57,26 @@ public sealed partial class EvaluationTaskTests
         await EvaluateAsync(world, seed, EvaluationMode.Shadow, TestContext.Current.CancellationToken);
 
         (await AggregateOutboxCountAsync(world)).ShouldBe(0, "only a live verdict can complete a release");
+    }
+
+    [Fact]
+    public async Task ReplayRun_LiveRequest_IsCoercedToShadowAndEnqueuesNothing()
+    {
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
+        var seed = await SeedAsync(world);
+        await _fixture.ExecuteAsync(
+            world.Database,
+            "set session_replication_role = replica; "
+            + $"update public.run set purpose = 'replay', replay_grant_id = '{Guid.CreateVersion7()}' "
+            + $"where org_id = '{world.Org}' and id = '{seed.RunId}'");
+
+        await EvaluateAsync(world, seed, EvaluationMode.Live, TestContext.Current.CancellationToken);
+
+        (await AggregateOutboxCountAsync(world)).ShouldBe(0, "a replay verdict is never the live slot");
+        (await _fixture.ScalarAsync<long>(
+            world.Database,
+            $"select count(*) from public.evaluation where org_id = '{world.Org}' and run_id = '{seed.RunId}' and mode = 'shadow'"))
+            .ShouldBe(1);
     }
 
     [Fact]

@@ -54,7 +54,8 @@ create table if not exists public.release_decision (
     case
       when array_ndims(reasons) is null or array_ndims(reasons) = 1 then
         reasons <@ array['component_digest_mismatch', 'component_run_unbound', 'component_not_evaluated',
-                         'component_failed', 'component_inconclusive', 'mixed_policy_revisions']::text[]
+                         'component_failed', 'component_inconclusive', 'mixed_policy_revisions',
+                         'aggregation_bound_exceeded']::text[]
         and array_position(reasons, null) is null
       else false
     end)
@@ -63,6 +64,11 @@ create table if not exists public.release_decision (
 -- "The latest decision of this release" streams one row from this index: no sort, no scan of the history.
 create index if not exists release_decision_release_created_idx
   on public.release_decision (org_id, release_id, created_at desc, id desc);
+
+-- The aggregation reads one release's bindings in (created_at, id) order under a cap; the binding key ends in
+-- (run_id, component_key) and the run index leads with run_id, so neither can serve that order without a sort.
+create index if not exists release_run_release_created_idx
+  on public.release_run (org_id, release_id, created_at, id);
 
 -- A stored aggregate is evidence: nothing about it may change after the INSERT, for any role. The grants below stop
 -- `evidgate_app` first; the trigger is the backstop for the owner and for any future grant.
