@@ -1313,3 +1313,9 @@ target)` and `session_revoke_audit_append(org, actor, object_type, object_id, me
 - `0128` replaces `evaluation_reasons_check` with the closed list of `0124` plus `flaky_critical_retry_pass` and `flaky_within_budget` (CASE shape of `0059`, one dimension, no NULL element). No column is added: flaky facts are an in-memory input of the verdict and are not stored.
 - No grant, index, policy or trigger changes: `evidgate_app` keeps table-level `SELECT` + `INSERT` on `evaluation`, and no UPDATE or DELETE path exists. Existing rows hold only old tokens, so the check validates in place.
 - Locks: `ACCESS EXCLUSIVE` on `evaluation` for one `alter table` statement (the drop and the add, one scan of the table) in one transaction under a 5 s `lock_timeout`; the table is insert-only and grows one row per evaluation. Numbers `0126` and `0127` belong to sibling changes. Deploy: the migrator before the worker that stores the new reasons. Rollback: restore the `0124` reason list (only valid while no stored row holds a new token).
+
+## Notes on deploy targets (`0131`)
+
+- `0131` adds `public.deploy_target` (a named, ordered release destination per project, optional pinned policy revision) and `unique (org_id, project_id, id)` on `policy_revision` so the pin's composite FK names the target's own project. The unique name index is on `lower(name)`, across `active` and `disabled`.
+- A target is never deleted: the guard trigger refuses `DELETE` for every role and allows only `active` <-> `disabled`; identity columns are immutable. `evidgate_app` may insert six columns and update four; `version` and `updated_at` belong to the shared trigger.
+- Locks: the added unique constraint scans `policy_revision` once under `SHARE` (an append-only table, small), the rest creates new objects. All in one transaction; re-running is a no-op. Numbers `0129` and `0130` belong to sibling changes.
