@@ -824,6 +824,28 @@ public sealed partial class TenantGucTests
             ("entity_id", manualTestCaseId),
             ("batch_id", Guid.CreateVersion7()),
             ("hash", "sha256:" + new string('f', 64)));
+        // The requirement head and its first version: the head number names the version inserted with it.
+        var requirementId = Guid.CreateVersion7();
+        await scope.ExecuteAsync(
+            """
+            insert into public.requirement (id, org_id, project_id, kind, title, feature_node_id, head_version_no)
+            values (@id, @org_id, @project_id, 'user_story', 'Buy a sticker', @feature_node_id, 1)
+            """,
+            ("id", requirementId),
+            ("org_id", orgId),
+            ("project_id", projectId),
+            ("feature_node_id", featureNodeId));
+        await scope.ExecuteAsync(
+            """
+            insert into public.requirement_version
+                (id, org_id, project_id, requirement_id, version_no, body, content_hash, source)
+            values (@id, @org_id, @project_id, @requirement_id, 1, 'probe', @hash, 'manual')
+            """,
+            ("id", Guid.CreateVersion7()),
+            ("org_id", orgId),
+            ("project_id", projectId),
+            ("requirement_id", requirementId),
+            ("hash", "sha256:" + new string('e', 64)));
         await scope.ExecuteAsync(
             """
             insert into public.usage_ledger_entry (id, org_id, project_id, metric, quantity, unit, period, billing_key, occurred_at)

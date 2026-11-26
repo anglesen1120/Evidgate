@@ -6,6 +6,7 @@ using Evidgate.BuildingBlocks.Persistence.Options;
 using Evidgate.BuildingBlocks.Persistence.Secrets;
 using Evidgate.BuildingBlocks.Persistence.Tasks;
 using Evidgate.BuildingBlocks.Pipeline;
+using Evidgate.Modules.Authoring;
 using Evidgate.Modules.Authoring.Infrastructure.Intake.Jobs;
 using Evidgate.Modules.Catalog;
 using Evidgate.Modules.Catalog.Infrastructure.GitHub;
@@ -87,6 +88,8 @@ public static class WorkerHost
         // which composition root resolves it. The extension sends nothing at start-up and an absent App id stays
         // unconfigured rather than failing the boot.
         builder.Services.AddCatalogGitHub(builder.Configuration);
+        // Mediator registers Authoring handlers in both hosts, so their shared writer and validators must resolve here too.
+        builder.Services.AddAuthoringModule();
         builder.Services.AddOrchestratorModule();
         // 06.1.1-T1: the evidence module, so every handler the Api composes resolves here too.
         builder.Services.AddEvidenceModule(builder.Configuration);

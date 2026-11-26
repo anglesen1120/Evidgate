@@ -17,10 +17,10 @@ namespace Evidgate.Modules.Authoring;
 
 /// <summary>
 /// Composition seam of the Authoring module (13.1.1-T1.3/T1.4, 00 §5.5): internal by design and reached through
-/// <c>InternalsVisibleTo</c>, exactly like <c>CatalogModule</c>. The host registration
-/// is <c>ApiHost.CreateBuilder</c> (13.1.1-T2.1, Api only per D-S55-Q1) and its routes are
-/// <c>Endpoints.AuthoringEndpoints.MapAuthoringEndpoints</c> in <c>ApiHost.BuildApp</c>, so a test constructs the
-/// module through this method exactly as the Api does.
+/// <c>InternalsVisibleTo</c>, exactly like <c>CatalogModule</c>. Both hosts register it (<c>ApiHost.CreateBuilder</c>,
+/// <c>WorkerHost.CreateBuilder</c>) because Mediator registers the handlers in each; only the Api maps the routes
+/// (<c>Endpoints.AuthoringEndpoints.MapAuthoringEndpoints</c> in <c>ApiHost.BuildApp</c>), so a test constructs the
+/// module through this method exactly as the hosts do.
 /// </summary>
 internal static class AuthoringModule
 {
