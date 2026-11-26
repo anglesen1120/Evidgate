@@ -496,6 +496,15 @@ public static partial class IsolationRouteCases
             (route, w) => new(route, "own project queues a change answers 201", runner => runner.OwnObjectAsync(
                 route, "own project queues a change answers 201", OrgBAdmin(w),
                 QueueBody(w.Acme2.Projects[0].Id, w.Acme2.Projects[0].AuthoringSecondItemId), expectedStatus: 201))),
+        ProjectBodyCase("POST", "/v1/projects/{p}/authoring/intakes",
+            p => IntakeBody(p.Id, p.AuthoringNodeIds[1]),
+            () => IntakeBody(Guid.CreateVersion7(), Guid.CreateVersion7()),
+            (route, w) => new(route, "own project records a text intake answers 201", runner => runner.OwnObjectAsync(
+                route, "own project records a text intake answers 201", OrgBAdmin(w),
+                IntakeBody(w.Acme2.Projects[0].Id, w.Acme2.Projects[0].AuthoringNodeIds[1]), expectedStatus: 201))),
+        ObjectCaseWith("GET", "/v1/projects/{p}/authoring/intakes/{i}", p => [("recorded intake", p.AuthoringIntakeId)],
+            (id, p) => new(HttpMethod.Get, $"/v1/projects/{p.Id}/authoring/intakes/{id}"), (_, _) => [],
+            own: p => new(HttpMethod.Get, $"/v1/projects/{p.Id}/authoring/intakes/{p.AuthoringIntakeId}")),
         ObjectCaseWith("GET", "/v1/projects/{p}/authoring/changes/{c}", p => [("queued change", p.AuthoringChangeId)],
             (id, p) => new(HttpMethod.Get, $"/v1/projects/{p.Id}/authoring/changes/{id}"), (_, _) => [],
             own: p => new(HttpMethod.Get, $"/v1/projects/{p.Id}/authoring/changes/{p.AuthoringChangeId}")),
@@ -1342,6 +1351,15 @@ public static partial class IsolationRouteCases
             ["change_type"] = "comment",
             ["payload"] = new JsonObject { ["body"] = "intruder comment" },
             ["reason"] = "isolation probe",
+        });
+
+    /// <summary>The intake body: a well-formed text intake on the feature node of the project in the path.</summary>
+    private static ProbeRequest IntakeBody(Guid project, Guid featureNode) =>
+        new(HttpMethod.Post, $"/v1/projects/{project}/authoring/intakes", new JsonObject
+        {
+            ["kind"] = "text",
+            ["feature_node_id"] = featureNode,
+            ["text"] = "intruder requirement text",
         });
 
     /// <summary>

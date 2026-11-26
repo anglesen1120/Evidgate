@@ -168,6 +168,22 @@ and `body_ref` 1–512 characters, `path` relative with no backslash, parent seg
 unique paths, `body_sha` `sha256:<64 hex>`, `base_commit` `^[0-9a-f]{7,64}$`, and a `provenance` object of
 at most 4096 UTF-8 bytes. The list is a keyset page on `(created_at, id)` (`cursor`/`limit`, default 50, max 200) with an optional `status` filter.
 
+The requirement intake pair (`POST /v1/projects/{p}/authoring/intakes`, `authoring:generate`, and `GET
+/v1/projects/{p}/authoring/intakes/{i}`, `authoring:read`) records one input of a project's generation: inline
+`text`, a `docx`/`pdf` artifact of kind `requirement_document`, or an `image` artifact of kind
+`requirement_image`. The server validates the body against `schemas/authoring-generation-intake.v1.json` (the OpenAPI
+`CreateIntakeRequest` union repeats its per-kind members for typed clients, and a contract test keeps the two equal):
+closed per `kind`, capped at
+1 MiB (`x-max-bytes`, `413 payload_too_large`), and deliberately silent on text length and declared sizes — the
+command answers those as `422 request_invalid` with `details[].reason` `empty_input`, `size_limit_exceeded`,
+`media_type_not_allowed` (for text also `invalid_text`, `secret_value_detected`), which a schema refusal could not
+carry. A missing `Idempotency-Key` is `400`, a replay of the same key and body `200`, a second
+intake of the same artifact `409 idempotency_conflict`, another tenant's or project's id `404`. The read answers
+`state` (`received`, `extracting`, `ready`, `rejected`), `eta_class` (`short`, `long`) while it waits, the closed
+`failure_code` of a rejected extraction, the hash and code-point count of the extracted text and the resolved `caps`
+(snake_case; `extraction_timeout` is a `TimeSpan` string such as `00:00:20`) — never the extracted text. The two
+artifact kinds also extend the artifact-kind enum (`CaptureOptionsView.kinds` now has ten rows).
+
 `Idempotency-Key` exemptions (00-grounded, enforced by the spectral
 `evg-mutation-idempotency` rule — keep this list, the function's
 `IDEMPOTENCY_EXEMPT` map and the helper's `IDEM_EXEMPT` in sync):

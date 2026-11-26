@@ -267,7 +267,7 @@ public sealed record ArtifactKindPolicyView(
 /// 200 body of <c>GET /v1/projects/{p}/artifact-kind-policy</c>: every contract kind with its effective capture switch
 /// and declared rules, so a reporter can read the project's policy in one answer instead of one request per kind.
 /// </summary>
-/// <param name="Kinds">The eight kinds, in contract order.</param>
+/// <param name="Kinds">The ten kinds, in contract order.</param>
 public sealed record CaptureOptionsView(
     [property: JsonPropertyName("kinds")] IReadOnlyList<CaptureOptionsKindView> Kinds)
 {
@@ -280,7 +280,7 @@ public sealed record CaptureOptionsView(
 }
 
 /// <summary>One kind's capture options in the read's answer.</summary>
-/// <param name="Kind">One of the eight contract kinds.</param>
+/// <param name="Kind">One of the ten contract kinds.</param>
 /// <param name="CaptureEnabled">The effective switch: the project row, else the kind's default, else false.</param>
 /// <param name="RedactionRules">The kind's declared rules, ordered by type and name.</param>
 public sealed record CaptureOptionsKindView(

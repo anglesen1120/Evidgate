@@ -10,27 +10,23 @@
     <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
   </PropertyGroup>
   <!-- 00 §5.7 P7: server-side process settings only for the long-lived entry points.
-       Server GC stays on for both. InvariantGlobalization is Worker-only since
-       13.1.1-T2 (coordinator decision D-S55-Q1): `Evidgate.Api` composes
-       Evidgate.Modules.Authoring, whose AuthoringText.EnsureNfcSupported() refuses to
-       start when globalization is invariant, because in that mode
-       string.Normalize(FormC) returns its input unchanged and the NFC storage rule
-       (13.1.1 AC14) would be dropped silently instead of failing. The Api image
-       therefore runs on the `-extra` chiseled base that ships ICU
-       (infra/docker/Dockerfile.api), and the explicit `false` keeps the intent in the
-       generated runtimeconfig.json — where scripts/build-images.sh asserts it per
-       image — instead of leaving the setting to whatever base image is picked.
-       06.3.6-T1.2: `Evidgate.Parser` joins the Worker group because it is the Worker's
-       parse child and ships in the same ICU-less chiseled image; the profile sources it
-       links compare and upper-case ASCII byte-wise (MediaSniffer, SafeZipArchive) and use
-       no culture-sensitive formatting, so invariant mode changes nothing it parses. -->
+       Server GC stays on for both. `Evidgate.Api` and `Evidgate.Worker` both store NFC text (authoring
+       writes in the Api, intake extraction in the Worker), and in invariant mode
+       string.Normalize(FormC) returns its input unchanged, so the NFC storage rule (13.1.1 AC14) would be dropped
+       silently instead of failing. Both therefore build with InvariantGlobalization=false and their images run on the
+       `-extra` chiseled base that ships ICU (infra/docker/Dockerfile.api, Dockerfile.worker); the explicit `false`
+       keeps the intent in the generated runtimeconfig.json, where scripts/build-images.sh asserts it per image,
+       instead of leaving the setting to whatever base image is picked.
+       `Evidgate.Parser` (the Worker's parse child, which ships in the Worker image) stays invariant: the profile
+       sources it links compare and upper-case ASCII byte-wise (MediaSniffer, SafeZipArchive) and use no
+       culture-sensitive formatting, so invariant mode changes nothing it parses, and its own runtimeconfig.json
+       declares the property, which is why the parse runner does not need the environment override
+       (ChildEnvironment). -->
   <PropertyGroup Condition="'$(MSBuildProjectName)' == 'Evidgate.Api' or '$(MSBuildProjectName)' == 'Evidgate.Worker'">
     <ServerGarbageCollection>true</ServerGarbageCollection>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(MSBuildProjectName)' == 'Evidgate.Api'">
     <InvariantGlobalization>false</InvariantGlobalization>
   </PropertyGroup>
-  <PropertyGroup Condition="'$(MSBuildProjectName)' == 'Evidgate.Worker' or '$(MSBuildProjectName)' == 'Evidgate.Parser'">
+  <PropertyGroup Condition="'$(MSBuildProjectName)' == 'Evidgate.Parser'">
     <InvariantGlobalization>true</InvariantGlobalization>
   </PropertyGroup>
   <!-- 10.2.1-T1.1 + 00 §11 (server runtime: Linux x64 + arm64): every shipped

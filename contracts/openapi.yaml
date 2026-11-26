@@ -2043,6 +2043,8 @@ paths:
                       a11y_snapshot,
                       patch,
                       ui_hierarchy,
+                      requirement_document,
+                      requirement_image,
                     ]
                 media_type:
                   type: string
@@ -3228,7 +3230,7 @@ paths:
         - $ref: '#/components/parameters/ProjectId'
       responses:
         '200':
-          description: The project's capture options for all eight kinds, in contract order
+          description: The project's capture options for all ten kinds, in contract order
           headers:
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
@@ -7633,6 +7635,114 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '503':
           $ref: '#/components/responses/Unavailable'
+  /projects/{p}/authoring/intakes:
+    post:
+      operationId: createAuthoringIntake
+      tags: [authoring]
+      summary: Record one requirement input (text, DOCX, PDF or image) for generation
+      description: >-
+        `authoring:generate`. The body is `contracts/schemas/authoring-generation-intake.v1.json`,
+        closed per `kind`: `text` needs `feature_node_id` and `text`; `docx` and `pdf` need
+        `feature_node_id` and `artifact_id` (artifact kind `requirement_document`); `image` needs only
+        `artifact_id` (artifact kind `requirement_image`). Answers `201` with the intake in state
+        `received`, or `ready` when a text intake finished in the same call; extraction of a document
+        runs afterwards as a job, so a later refusal is a `rejected` intake with a `failure_code`,
+        never an HTTP error. Request-time refusals write nothing: 422 `request_invalid` with
+        `details[].reason` `empty_input`, `media_type_not_allowed`, `size_limit_exceeded` (for text also
+        `invalid_text`, `secret_value_detected`); text
+        is counted in Unicode code points after NFC normalisation (1..200 000). The artifact must be
+        `ready` and of the kind's artifact kind, else 422 `request_invalid`; a second intake of the
+        same artifact is 409 `idempotency_conflict`. A missing `Idempotency-Key` is 400
+        `request_invalid`; a body over 1 MiB is 413 `payload_too_large`; an unknown, another
+        tenant's or another project's id is 404 `not_found`; a credential scoped to a sibling project
+        is 403 `project_scope_mismatch`. An image is stored as a human reference only and is never
+        sent to a provider.
+      x-permission: authoring:generate
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateIntakeRequest'
+      responses:
+        '200':
+          description: The intake of an earlier call with the same Idempotency-Key and body, replayed unchanged
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateIntakeResponse'
+        '201':
+          description: The recorded intake, its state, the caps it was resolved with and its version
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateIntakeResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/TooLarge'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /projects/{p}/authoring/intakes/{i}:
+    get:
+      operationId: getAuthoringIntake
+      tags: [authoring]
+      summary: One requirement intake with its extraction state
+      description: >-
+        `authoring:read`. The intake's state (`received`, `extracting`, `ready`, `rejected`), the
+        shared `eta_class` vocabulary (`short`, `long`) while it waits, the closed `failure_code` of
+        a rejected extraction, the hash and code-point count of the extracted text, and the resolved
+        caps. The extracted text itself is never returned. Unknown, another tenant's or another
+        project's id is 404 `not_found` with the same body a random id gets; a credential scoped to
+        a sibling project is 403 `project_scope_mismatch`.
+      x-permission: authoring:read
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/AuthoringIntakeId'
+      responses:
+        '200':
+          description: The intake
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IntakeStatusResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
   /projects/{p}/authoring/tree:
     get:
       operationId: listAuthoringTree
@@ -10312,7 +10422,26 @@ components:
       schema:
         type: string
         enum:
-          [trace, video, screenshot, raw_report, dom_snapshot, a11y_snapshot, patch, ui_hierarchy]
+          [
+            trace,
+            video,
+            screenshot,
+            raw_report,
+            dom_snapshot,
+            a11y_snapshot,
+            patch,
+            ui_hierarchy,
+            requirement_document,
+            requirement_image,
+          ]
+    AuthoringIntakeId:
+      name: i
+      in: path
+      required: true
+      description: The requirement intake id.
+      schema:
+        type: string
+        format: uuid
     ProjectId:
       name: p
       in: path
@@ -14953,7 +15082,18 @@ components:
         kind:
           type: string
           enum:
-            [trace, video, screenshot, raw_report, dom_snapshot, a11y_snapshot, patch, ui_hierarchy]
+            [
+              trace,
+              video,
+              screenshot,
+              raw_report,
+              dom_snapshot,
+              a11y_snapshot,
+              patch,
+              ui_hierarchy,
+              requirement_document,
+              requirement_image,
+            ]
         media_type: { type: string }
         state:
           type: string
@@ -15040,7 +15180,18 @@ components:
           type: string
           description: The kind the row belongs to; present on the answer only (the request names it in the path).
           enum:
-            [trace, video, screenshot, raw_report, dom_snapshot, a11y_snapshot, patch, ui_hierarchy]
+            [
+              trace,
+              video,
+              screenshot,
+              raw_report,
+              dom_snapshot,
+              a11y_snapshot,
+              patch,
+              ui_hierarchy,
+              requirement_document,
+              requirement_image,
+            ]
         max_bytes:
           type: integer
           minimum: 1
@@ -15074,8 +15225,8 @@ components:
       properties:
         kinds:
           type: array
-          minItems: 8
-          maxItems: 8
+          minItems: 10
+          maxItems: 10
           items:
             $ref: '#/components/schemas/CaptureOptionsKindView'
     CaptureOptionsKindView:
@@ -15087,7 +15238,18 @@ components:
         kind:
           type: string
           enum:
-            [trace, video, screenshot, raw_report, dom_snapshot, a11y_snapshot, patch, ui_hierarchy]
+            [
+              trace,
+              video,
+              screenshot,
+              raw_report,
+              dom_snapshot,
+              a11y_snapshot,
+              patch,
+              ui_hierarchy,
+              requirement_document,
+              requirement_image,
+            ]
         capture_enabled:
           type: boolean
           description: >-
@@ -15143,6 +15305,131 @@ components:
         node_id: { type: string, format: uuid }
         kind: { type: string, enum: [module, feature, category, sub_category] }
         title: { type: string, maxLength: 200 }
+    AuthoringIntakeCaps:
+      type: object
+      description: >-
+        The limits one intake was resolved with and extracted under, stored on the row and echoed on
+        every read. Keys mirror the server's IntakeCaps in snake_case; `extraction_timeout` is a
+        .NET `TimeSpan` string (`00:00:20`), never a number of seconds.
+      additionalProperties: false
+      required:
+        - max_document_bytes
+        - max_zip_entries
+        - max_compression_ratio
+        - max_pdf_pages
+        - max_extracted_chars
+        - max_text_code_points
+        - extraction_timeout
+        - max_image_bytes
+        - max_concurrent_extractions_per_tenant
+      properties:
+        max_document_bytes: { type: integer, format: int64, minimum: 1 }
+        max_zip_entries: { type: integer, minimum: 1 }
+        max_compression_ratio: { type: integer, minimum: 1 }
+        max_pdf_pages: { type: integer, minimum: 1 }
+        max_extracted_chars: { type: integer, minimum: 1 }
+        max_text_code_points: { type: integer, minimum: 1 }
+        extraction_timeout:
+          type: string
+          pattern: '^(\d+\.)?\d{2}:\d{2}:\d{2}(\.\d{1,7})?$'
+        max_image_bytes: { type: integer, format: int64, minimum: 1 }
+        max_concurrent_extractions_per_tenant: { type: integer, minimum: 1 }
+    CreateIntakeRequest:
+      description: >-
+        The body of `POST /v1/projects/{p}/authoring/intakes`, one closed variant per `kind`. The
+        server validates the body against `schemas/authoring-generation-intake.v1.json`, whose
+        per-kind member sets these variants repeat so a typed client can build only valid bodies; a
+        contract test fails when the two disagree.
+      oneOf:
+        - $ref: '#/components/schemas/CreateIntakeTextRequest'
+        - $ref: '#/components/schemas/CreateIntakeDocumentRequest'
+        - $ref: '#/components/schemas/CreateIntakeImageRequest'
+    CreateIntakeTextRequest:
+      type: object
+      description: Inline requirement text, attached to a feature node.
+      additionalProperties: false
+      required: [kind, feature_node_id, text]
+      properties:
+        kind: { type: string, enum: [text] }
+        feature_node_id: { type: string, format: uuid }
+        text: { type: string }
+        media_type: { type: string, minLength: 1, maxLength: 255 }
+        bytes: { type: integer, format: int64, minimum: 0 }
+        target_language: { type: string, enum: [en, vi] }
+    CreateIntakeDocumentRequest:
+      type: object
+      description: An uploaded DOCX or PDF artifact of kind `requirement_document`, attached to a feature node.
+      additionalProperties: false
+      required: [kind, feature_node_id, artifact_id]
+      properties:
+        kind: { type: string, enum: [docx, pdf] }
+        feature_node_id: { type: string, format: uuid }
+        artifact_id: { type: string, format: uuid }
+        media_type: { type: string, minLength: 1, maxLength: 255 }
+        bytes: { type: integer, format: int64, minimum: 0 }
+        target_language: { type: string, enum: [en, vi] }
+    CreateIntakeImageRequest:
+      type: object
+      description: An uploaded image artifact of kind `requirement_image`; it attaches to no feature node.
+      additionalProperties: false
+      required: [kind, artifact_id]
+      properties:
+        kind: { type: string, enum: [image] }
+        artifact_id: { type: string, format: uuid }
+        media_type: { type: string, minLength: 1, maxLength: 255 }
+        bytes: { type: integer, format: int64, minimum: 0 }
+        target_language: { type: string, enum: [en, vi] }
+    CreateIntakeResponse:
+      type: object
+      description: >-
+        The 201 body of `POST /v1/projects/{p}/authoring/intakes`: the intake, its state, the
+        caps it was resolved with and its row version. The state is `received`, or `ready` when a
+        text intake (or an image, which needs no extraction) finished in the same call.
+      additionalProperties: false
+      required: [intake_id, state, caps, version]
+      properties:
+        intake_id: { type: string, format: uuid }
+        state: { type: string, enum: [received, ready] }
+        caps:
+          $ref: '#/components/schemas/AuthoringIntakeCaps'
+        version: { type: integer, minimum: 1 }
+    IntakeStatusResponse:
+      type: object
+      description: >-
+        The 200 body of `GET /v1/projects/{p}/authoring/intakes/{i}`. Never carries the extracted
+        text itself. `eta_class` is present only while `received` or `extracting`; `failure_code` only
+        in `rejected`; `extracted_text_hash` and `extracted_char_count` only once extraction
+        succeeded; `artifact_id` only for `docx`, `pdf` and `image`. An absent member may also
+        be sent as null.
+      additionalProperties: false
+      required: [intake_id, kind, state, caps, version]
+      properties:
+        intake_id: { type: string, format: uuid }
+        kind: { type: string, enum: [text, docx, pdf, image] }
+        state: { type: string, enum: [received, extracting, ready, rejected] }
+        eta_class: { type: [string, 'null'], enum: [short, long, null] }
+        failure_code:
+          type: [string, 'null']
+          enum:
+            - container_mismatch
+            - macro_present
+            - encryption_unsupported
+            - external_reference_present
+            - archive_limit_exceeded
+            - page_limit_exceeded
+            - char_limit_exceeded
+            - no_extractable_text
+            - extraction_timeout
+            - extraction_failed
+            - null
+        extracted_text_hash:
+          type: [string, 'null']
+          pattern: '^sha256:[0-9a-f]{64}$'
+        extracted_char_count: { type: [integer, 'null'], minimum: 0 }
+        caps:
+          $ref: '#/components/schemas/AuthoringIntakeCaps'
+        artifact_id: { type: [string, 'null'], format: uuid }
+        version: { type: integer, minimum: 1 }
     AuthoringTreeResponse:
       type: object
       description: >-

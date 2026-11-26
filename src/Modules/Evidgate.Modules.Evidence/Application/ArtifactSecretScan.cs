@@ -11,9 +11,10 @@ namespace Evidgate.Modules.Evidence.Application;
 /// are an archive of documents.
 /// <para>
 /// <b>A deflated entry hides its content from a byte scan.</b> The compressed stream holds no readable prefix of an
-/// entry, so scanning a trace or report bundle in place would always answer clean. An object whose declared type is
-/// <c>application/zip</c> — the type the completion sniffed against these very bytes — is therefore read through the
-/// parser profile: every non-directory entry is decompressed under the profile's own caps and scanned, and each class
+/// entry, so scanning a trace, report bundle or DOCX package in place would always answer clean. An object whose
+/// declared type is <c>application/zip</c> (the type the completion sniffed against these very bytes) or the DOCX
+/// type (an OOXML zip whose text lives in a deflated <c>word/document.xml</c>) is therefore read through the parser
+/// profile: every non-directory entry is decompressed under the profile's own caps and scanned, and each class
 /// keeps the sum of its entry counts.
 /// </para>
 /// <para>
@@ -38,8 +39,11 @@ namespace Evidgate.Modules.Evidence.Application;
 /// </summary>
 internal static class ArtifactSecretScan
 {
-    /// <summary>The one archive media type the profile holds a signature for.</summary>
+    /// <summary>The plain archive media type the profile holds a signature for.</summary>
     private const string ZipMediaType = "application/zip";
+
+    /// <summary>The DOCX media type: a zip container the profile sniffs with the same signature.</summary>
+    private const string DocxMediaType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
     /// <summary>
     /// Counts the classes of one stored object: in place when the object is a document, in place and per entry when
@@ -69,14 +73,23 @@ internal static class ArtifactSecretScan
     }
 
     /// <summary>
-    /// True when <paramref name="mediaType"/> is the archive type, ignoring its parameters and letter case — the same
-    /// comparison the completion applies to a declared type.
+    /// True when <paramref name="mediaType"/> is a zip-container type (plain zip or DOCX), ignoring its parameters and
+    /// letter case — the same comparison the completion applies to a declared type.
     /// </summary>
     /// <param name="mediaType">The declared media type, or null when the row carries none.</param>
-    /// <returns>True for <c>application/zip</c> in any casing and with any parameters.</returns>
-    public static bool IsArchive(string? mediaType) =>
-        mediaType is not null
-        && string.Equals(mediaType.Split(';', 2)[0], ZipMediaType, StringComparison.OrdinalIgnoreCase);
+    /// <returns>True for <c>application/zip</c> or the DOCX type in any casing and with any parameters.</returns>
+    public static bool IsArchive(string? mediaType)
+    {
+        if (mediaType is null)
+        {
+            return false;
+        }
+
+        var bare = mediaType.Split(';', 2)[0];
+
+        return string.Equals(bare, ZipMediaType, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(bare, DocxMediaType, StringComparison.OrdinalIgnoreCase);
+    }
 
     /// <summary>
     /// Counts the classes of one archive: its own container bytes, then every entry decompressed under the profile's

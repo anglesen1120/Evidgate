@@ -185,14 +185,23 @@ public sealed record ArchiveEntry(string Name, long CompressedBytes, long Expand
 /// The three caps a caller states for its own file format when it reads an archive through
 /// <see cref="IParsing.ReadArchiveEntries"/> (13.1.1-T5.2; 13.1.1 AC16 passes 1 000 entries, 64 MiB and 20:1 for
 /// XLSX). They are the caller's numbers and not profile defaults: <see cref="IParsing.EnumerateArchive"/> keeps
-/// enforcing <c>ParsingLimits</c>, and the two caps that are not here — the zip-in-zip nesting depth and the parse timeout —
-/// always stay the profile's own, so a caller can tighten or loosen the three size caps it names but never widen
-/// those two guards.
+/// enforcing <c>ParsingLimits</c>, and the parse timeout always stays the profile's own. The nesting depth stays
+/// the profile's <c>ParsingLimits.MaxNesting</c> too, except that a caller whose format never holds an archive
+/// (a DOCX) may only <em>tighten</em> it, through <see cref="RejectNestedArchives"/>: no caller can widen either
+/// guard.
 /// </summary>
 /// <param name="MaxEntries">The most entries the archive may hold; more is <c>entry_count_exceeded</c>.</param>
 /// <param name="MaxExpandedBytes">The most expanded bytes counted across the archive; more is <c>size_exceeded</c>.</param>
 /// <param name="MaxCompressionRatio">The most one entry may expand against the compressed bytes it consumed; more is <c>compression_ratio_exceeded</c>.</param>
-public sealed record ArchiveCaps(int MaxEntries, long MaxExpandedBytes, int MaxCompressionRatio);
+public sealed record ArchiveCaps(int MaxEntries, long MaxExpandedBytes, int MaxCompressionRatio)
+{
+    /// <summary>
+    /// When true, any entry that is itself a zip (by its leading bytes, whatever its name) is refused with
+    /// <c>nesting_exceeded</c> instead of being walked one level deeper. Defaults to false, which keeps the
+    /// profile's own nesting depth.
+    /// </summary>
+    public bool RejectNestedArchives { get; init; }
+}
 
 /// <summary>
 /// The outcome of <see cref="IParsing.ReadArchiveEntries"/>: the metadata of every entry the profile accepted —

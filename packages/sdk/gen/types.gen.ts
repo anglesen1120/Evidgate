@@ -2406,7 +2406,7 @@ export type ArtifactMetadataView = {
     artifact_id: string;
     project_id: string;
     run_id: string;
-    kind: 'trace' | 'video' | 'screenshot' | 'raw_report' | 'dom_snapshot' | 'a11y_snapshot' | 'patch' | 'ui_hierarchy';
+    kind: 'trace' | 'video' | 'screenshot' | 'raw_report' | 'dom_snapshot' | 'a11y_snapshot' | 'patch' | 'ui_hierarchy' | 'requirement_document' | 'requirement_image';
     media_type: string;
     state: 'pending_upload' | 'uploaded' | 'ready' | 'rejected' | 'pending_delete' | 'deleted';
     sensitivity: 'normal' | 'sensitive';
@@ -2464,7 +2464,7 @@ export type ArtifactKindPolicyView = {
     /**
      * The kind the row belongs to; present on the answer only (the request names it in the path).
      */
-    kind?: 'trace' | 'video' | 'screenshot' | 'raw_report' | 'dom_snapshot' | 'a11y_snapshot' | 'patch' | 'ui_hierarchy';
+    kind?: 'trace' | 'video' | 'screenshot' | 'raw_report' | 'dom_snapshot' | 'a11y_snapshot' | 'patch' | 'ui_hierarchy' | 'requirement_document' | 'requirement_image';
     /**
      * The largest artifact of the kind the project accepts.
      */
@@ -2491,6 +2491,8 @@ export type CaptureOptionsView = {
         CaptureOptionsKindView,
         CaptureOptionsKindView,
         CaptureOptionsKindView,
+        CaptureOptionsKindView,
+        CaptureOptionsKindView,
         CaptureOptionsKindView
     ];
 };
@@ -2499,7 +2501,7 @@ export type CaptureOptionsView = {
  * One artifact kind's effective capture switch and the rules the project declared for it.
  */
 export type CaptureOptionsKindView = {
-    kind: 'trace' | 'video' | 'screenshot' | 'raw_report' | 'dom_snapshot' | 'a11y_snapshot' | 'patch' | 'ui_hierarchy';
+    kind: 'trace' | 'video' | 'screenshot' | 'raw_report' | 'dom_snapshot' | 'a11y_snapshot' | 'patch' | 'ui_hierarchy' | 'requirement_document' | 'requirement_image';
     /**
      * The effective switch: the project row's value when it has one, the kind's static default when it has none, and `false` for a kind with neither.
      */
@@ -2544,6 +2546,87 @@ export type AuthoringNodePathEntry = {
     node_id: string;
     kind: 'module' | 'feature' | 'category' | 'sub_category';
     title: string;
+};
+
+/**
+ * The limits one intake was resolved with and extracted under, stored on the row and echoed on every read. Keys mirror the server's IntakeCaps in snake_case; `extraction_timeout` is a .NET `TimeSpan` string (`00:00:20`), never a number of seconds.
+ */
+export type AuthoringIntakeCaps = {
+    max_document_bytes: number;
+    max_zip_entries: number;
+    max_compression_ratio: number;
+    max_pdf_pages: number;
+    max_extracted_chars: number;
+    max_text_code_points: number;
+    extraction_timeout: string;
+    max_image_bytes: number;
+    max_concurrent_extractions_per_tenant: number;
+};
+
+/**
+ * The body of `POST /v1/projects/{p}/authoring/intakes`, one closed variant per `kind`. The server validates the body against `schemas/authoring-generation-intake.v1.json`, whose per-kind member sets these variants repeat so a typed client can build only valid bodies; a contract test fails when the two disagree.
+ */
+export type CreateIntakeRequest = CreateIntakeTextRequest | CreateIntakeDocumentRequest | CreateIntakeImageRequest;
+
+/**
+ * Inline requirement text, attached to a feature node.
+ */
+export type CreateIntakeTextRequest = {
+    kind: 'text';
+    feature_node_id: string;
+    text: string;
+    media_type?: string;
+    bytes?: number;
+    target_language?: 'en' | 'vi';
+};
+
+/**
+ * An uploaded DOCX or PDF artifact of kind `requirement_document`, attached to a feature node.
+ */
+export type CreateIntakeDocumentRequest = {
+    kind: 'docx' | 'pdf';
+    feature_node_id: string;
+    artifact_id: string;
+    media_type?: string;
+    bytes?: number;
+    target_language?: 'en' | 'vi';
+};
+
+/**
+ * An uploaded image artifact of kind `requirement_image`; it attaches to no feature node.
+ */
+export type CreateIntakeImageRequest = {
+    kind: 'image';
+    artifact_id: string;
+    media_type?: string;
+    bytes?: number;
+    target_language?: 'en' | 'vi';
+};
+
+/**
+ * The 201 body of `POST /v1/projects/{p}/authoring/intakes`: the intake, its state, the caps it was resolved with and its row version. The state is `received`, or `ready` when a text intake (or an image, which needs no extraction) finished in the same call.
+ */
+export type CreateIntakeResponse = {
+    intake_id: string;
+    state: 'received' | 'ready';
+    caps: AuthoringIntakeCaps;
+    version: number;
+};
+
+/**
+ * The 200 body of `GET /v1/projects/{p}/authoring/intakes/{i}`. Never carries the extracted text itself. `eta_class` is present only while `received` or `extracting`; `failure_code` only in `rejected`; `extracted_text_hash` and `extracted_char_count` only once extraction succeeded; `artifact_id` only for `docx`, `pdf` and `image`. An absent member may also be sent as null.
+ */
+export type IntakeStatusResponse = {
+    intake_id: string;
+    kind: 'text' | 'docx' | 'pdf' | 'image';
+    state: 'received' | 'extracting' | 'ready' | 'rejected';
+    eta_class?: 'short' | 'long' | null;
+    failure_code?: 'container_mismatch' | 'macro_present' | 'encryption_unsupported' | 'external_reference_present' | 'archive_limit_exceeded' | 'page_limit_exceeded' | 'char_limit_exceeded' | 'no_extractable_text' | 'extraction_timeout' | 'extraction_failed' | null;
+    extracted_text_hash?: string | null;
+    extracted_char_count?: number | null;
+    caps: AuthoringIntakeCaps;
+    artifact_id?: string | null;
+    version: number;
 };
 
 /**
@@ -4276,7 +4359,12 @@ export type RoleId = string;
 /**
  * One of the closed-list artifact kinds.
  */
-export type ArtifactKind = 'trace' | 'video' | 'screenshot' | 'raw_report' | 'dom_snapshot' | 'a11y_snapshot' | 'patch' | 'ui_hierarchy';
+export type ArtifactKind = 'trace' | 'video' | 'screenshot' | 'raw_report' | 'dom_snapshot' | 'a11y_snapshot' | 'patch' | 'ui_hierarchy' | 'requirement_document' | 'requirement_image';
+
+/**
+ * The requirement intake id.
+ */
+export type AuthoringIntakeId = string;
 
 export type ProjectId = string;
 
@@ -5950,7 +6038,7 @@ export type CreateArtifactUploadUrlData = {
         producer_id: string;
         execution_key: string;
         attempt_no: number;
-        kind: 'trace' | 'video' | 'screenshot' | 'raw_report' | 'dom_snapshot' | 'a11y_snapshot' | 'patch' | 'ui_hierarchy';
+        kind: 'trace' | 'video' | 'screenshot' | 'raw_report' | 'dom_snapshot' | 'a11y_snapshot' | 'patch' | 'ui_hierarchy' | 'requirement_document' | 'requirement_image';
         media_type: string;
         bytes: number;
         sha256: string;
@@ -7104,7 +7192,7 @@ export type GetCaptureOptionsError = GetCaptureOptionsErrors[keyof GetCaptureOpt
 
 export type GetCaptureOptionsResponses = {
     /**
-     * The project's capture options for all eight kinds, in contract order
+     * The project's capture options for all ten kinds, in contract order
      */
     200: CaptureOptionsView;
 };
@@ -7124,7 +7212,7 @@ export type SetArtifactKindPolicyOverrideData = {
         /**
          * One of the closed-list artifact kinds.
          */
-        kind: 'trace' | 'video' | 'screenshot' | 'raw_report' | 'dom_snapshot' | 'a11y_snapshot' | 'patch' | 'ui_hierarchy';
+        kind: 'trace' | 'video' | 'screenshot' | 'raw_report' | 'dom_snapshot' | 'a11y_snapshot' | 'patch' | 'ui_hierarchy' | 'requirement_document' | 'requirement_image';
     };
     query?: never;
     url: '/projects/{p}/artifact-kind-policy/{kind}';
@@ -12949,6 +13037,126 @@ export type UpdateDeployTargetResponses = {
 };
 
 export type UpdateDeployTargetResponse = UpdateDeployTargetResponses[keyof UpdateDeployTargetResponses];
+
+export type CreateAuthoringIntakeData = {
+    body: CreateIntakeRequest;
+    headers: {
+        /**
+         * Client-supplied, ≤ 128 chars, unique per `(org_id, project_id, operation)` ≥ 24 h (00 §7/§9.1).
+         */
+        'Idempotency-Key': string;
+        /**
+         * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
+         */
+        'X-XSRF-TOKEN'?: string;
+    };
+    path: {
+        p: string;
+    };
+    query?: never;
+    url: '/projects/{p}/authoring/intakes';
+};
+
+export type CreateAuthoringIntakeErrors = {
+    /**
+     * 400 request_invalid — a malformed or missing request header, e.g. the `Idempotency-Key` every mutating authoring route requires (00 §9.1)
+     */
+    400: ErrorEnvelope;
+    /**
+     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 409 conflict — e.g. `idempotency_conflict`, `run_closed` (00 §9.1/§9.2)
+     */
+    409: ErrorEnvelope;
+    /**
+     * 413 too large (00 §9.2): a request body over its published cap. For the caps that carry numbers (`manifest_bytes`, `run_body_bytes`, and the raw-report byte cap behind `report_bytes`) the one detail names the cap in `path` and carries `limit` and `actual`; `actual` is the declared length when the declaration alone was over, otherwise the bytes counted when the overrun was seen, so a missing or short `Content-Length` never hides it.
+     */
+    413: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type CreateAuthoringIntakeError = CreateAuthoringIntakeErrors[keyof CreateAuthoringIntakeErrors];
+
+export type CreateAuthoringIntakeResponses = {
+    /**
+     * The intake of an earlier call with the same Idempotency-Key and body, replayed unchanged
+     */
+    200: CreateIntakeResponse;
+    /**
+     * The recorded intake, its state, the caps it was resolved with and its version
+     */
+    201: CreateIntakeResponse;
+};
+
+export type CreateAuthoringIntakeResponse = CreateAuthoringIntakeResponses[keyof CreateAuthoringIntakeResponses];
+
+export type GetAuthoringIntakeData = {
+    body?: never;
+    path: {
+        p: string;
+        /**
+         * The requirement intake id.
+         */
+        i: string;
+    };
+    query?: never;
+    url: '/projects/{p}/authoring/intakes/{i}';
+};
+
+export type GetAuthoringIntakeErrors = {
+    /**
+     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type GetAuthoringIntakeError = GetAuthoringIntakeErrors[keyof GetAuthoringIntakeErrors];
+
+export type GetAuthoringIntakeResponses = {
+    /**
+     * The intake
+     */
+    200: IntakeStatusResponse;
+};
+
+export type GetAuthoringIntakeResponse = GetAuthoringIntakeResponses[keyof GetAuthoringIntakeResponses];
 
 export type ListAuthoringTreeData = {
     body?: never;

@@ -1,0 +1,5 @@
+{
+  "schema": "authoring-generation-intake.v1",
+  "valid": true,
+  "comment": "text length is the command's to refuse with a reason, not the schema's"
+}

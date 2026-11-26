@@ -266,6 +266,9 @@ const EXPECTED = [
   ['/projects/{p}/authoring/changes/{c}', 'get', 'authoring:read', 'v1'],
   ['/projects/{p}/authoring/changes/{c}/discard', 'post', 'authoring:write', 'v1'],
   ['/projects/{p}/authoring/changes:apply', 'post', 'authoring:write', 'v1'],
+  // The requirement intake pair: recording one is gated by `authoring:generate`, reading it by `authoring:read`.
+  ['/projects/{p}/authoring/intakes', 'post', 'authoring:generate', 'v1'],
+  ['/projects/{p}/authoring/intakes/{i}', 'get', 'authoring:read', 'v1'],
 ];
 
 const byKey = new Map(ops.map((o) => [`${o.method} ${o.path}`, o]));

@@ -1,0 +1,12 @@
+{
+  "schema": "authoring-generation-intake.v1",
+  "valid": false,
+  "errors": [
+    {
+      "index": null,
+      "path": "/text",
+      "reason": "required"
+    }
+  ],
+  "comment": "a text intake without its text is not an intake"
+}

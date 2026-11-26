@@ -15,7 +15,7 @@ namespace Evidgate.Modules.Evidence.Infrastructure.Parsing.Runner;
 /// it (AC2);</item>
 /// <item><c>TMPDIR</c> — this run's private temp directory;</item>
 /// <item><c>DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1</c> — only when the child's runtimeconfig does not already
-/// carry <c>System.Globalization.Invariant</c> (<c>Evidgate.Parser</c> is in the Worker group of
+/// carry <c>System.Globalization.Invariant</c> (<c>Evidgate.Parser</c> has its own invariant group in
 /// <c>Directory.Build.props</c>, so its generated runtimeconfig does; a fake child in a test carries none).</item>
 /// </list>
 /// <c>HOME</c>, <c>PATH</c> and everything else stay unset.

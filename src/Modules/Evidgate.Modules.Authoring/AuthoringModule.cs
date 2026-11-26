@@ -3,6 +3,7 @@ using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.Modules.Authoring.Application;
 using Evidgate.Modules.Authoring.Application.Commands;
 using Evidgate.Modules.Authoring.Application.Import;
+using Evidgate.Modules.Authoring.Application.Intake;
 using Evidgate.Modules.Authoring.Contracts;
 using Evidgate.Modules.Authoring.Domain;
 using Evidgate.Modules.Authoring.Infrastructure.Persistence;
@@ -10,6 +11,7 @@ using Evidgate.Modules.Evidence.Contracts;
 using FluentValidation;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Options;
 
 namespace Evidgate.Modules.Authoring;
 
@@ -28,9 +30,9 @@ internal static class AuthoringModule
     {
         ArgumentNullException.ThrowIfNull(services);
 
-        // 00 §5.7 P7: a host running with InvariantGlobalization=true (the Worker; D-S55-Q1 keeps ICU only in the Api) has string.Normalize(FormC) as a
-        // silent no-op — every authoring text column would then store whatever spelling the caller sent, and AC14's
-        // composed-equals-decomposed rule would silently stop holding. Fail at composition, not at the first write.
+        // A host running with InvariantGlobalization=true has string.Normalize(FormC) as a silent no-op — every
+        // authoring text column would then store whatever spelling the caller sent, and the composed-equals-decomposed
+        // rule would silently stop holding. Fail at composition, not at the first write.
         AuthoringText.EnsureNfcSupported();
 
         // 13.1.1-T1.3: the EF Core 10 write model of the five tables of migration 0039 (00 §5.5 C4).
@@ -72,6 +74,13 @@ internal static class AuthoringModule
         // JSON imports; in such a host — and in one whose parser refuses the archive — an XLSX upload answers the 422
         // `unsupported_format` the route already has for an unknown token, never a 500 and never a silent CSV reading.
         services.TryAddSingleton(provider => new Lazy<IParsing?>(() => provider.GetService<IParsing>()));
+
+        // The requirement intake: the planner judges a request before any write, the resolver reads the caps section
+        // (absent members keep the decided defaults, an out-of-range member stops the host at start).
+        services.AddOptions<IntakeCapsOptions>().BindConfiguration(IntakeCapsOptions.SectionName).ValidateOnStart();
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IValidateOptions<IntakeCapsOptions>, IntakeCapsOptionsValidator>());
+        services.TryAddSingleton<IntakeCapsResolver>();
+        services.TryAddScoped<IntakePlanner>();
 
         return services;
     }

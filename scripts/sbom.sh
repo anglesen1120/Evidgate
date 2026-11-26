@@ -19,7 +19,7 @@
 # from that image's entry-point project, plus the SBOM↔packages.lock.json
 # consistency check (scripts/check-image-sbom-lock.py) that fails when the two
 # disagree. The image adds nothing but the digest-pinned chiseled aspnet runtime
-# (the Api's `-extra` variant ships ICU + tzdata as OS packages, which CycloneDX
+# (the Api's and Worker's `-extra` variant ships ICU + tzdata as OS packages, which CycloneDX
 # does not enumerate — `infra/README.md` §Pins records them with their licences),
 # so the NuGet graph of the published project is what a reviewer has to compare
 # with the lock files.
@@ -148,7 +148,7 @@ check_bom "$DOTNET_BOM"
 # --- per-image SBOMs (10.2.1-T1.3, AC3) --------------------------------------
 # One CycloneDX document per published entry point, generated from that entry
 # point's project: the image adds nothing but the digest-pinned chiseled
-# aspnet runtime (pinned in infra/docker/Dockerfile.*; the Api pins the `-extra`
+# aspnet runtime (pinned in infra/docker/Dockerfile.*; the Api and Worker pin the `-extra`
 # variant, whose ICU + tzdata are OS packages CycloneDX does not list), so the
 # published project's NuGet graph is what a reviewer compares with the lock files. `-st Container`
 # marks the metadata component as the image, `-rs` walks the ProjectReferences,

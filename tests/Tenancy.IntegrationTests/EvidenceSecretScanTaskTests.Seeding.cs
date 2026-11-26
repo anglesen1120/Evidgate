@@ -24,7 +24,16 @@ public sealed partial class EvidenceSecretScanTaskTests
     /// The project the row names, or null for the run's own: no key ties the two columns together, so a row of another
     /// project lets a case prove which one the read asks about.
     /// </param>
-    private async Task<Seeded> SeedAsync(World world, string state, byte[] body, bool storeBody, Guid? projectId = null)
+    /// <param name="kind">The row's artifact kind.</param>
+    /// <param name="mediaType">The row's declared media type.</param>
+    private async Task<Seeded> SeedAsync(
+        World world,
+        string state,
+        byte[] body,
+        bool storeBody,
+        Guid? projectId = null,
+        string kind = ArtifactKind.RawReport,
+        string mediaType = XmlType)
     {
         var artifactId = Guid.CreateVersion7();
         var owner = projectId ?? world.Project;
@@ -40,30 +49,35 @@ public sealed partial class EvidenceSecretScanTaskTests
             world.Database,
             "insert into public.artifact (id, org_id, project_id, run_id, execution_key, attempt_no, kind, object_key, media_type, checksum, sensitivity, scan_state, state, bytes, failure_code) "
             + $"values ('{artifactId:D}', '{world.Org:D}', '{owner:D}', '{world.RunId:D}', "
-            + $"'{ExecutionKey}', 1, '{ArtifactKind.RawReport}', '{key}', '{XmlType}', "
+            + $"'{ExecutionKey}', 1, '{kind}', '{key}', '{mediaType}', "
             + $"'{checksum}', 'normal', 'pending', '{state}', {body.LongLength}, null)");
 
         return new Seeded(artifactId, key);
     }
 
     /// <summary>
-    /// One <c>artifact_kind_policy</c> row for <c>raw_report</c>, so the handler's cap and its rejection switch are the
-    /// row's: the resolution takes the lower of row and default for the cap and the row's flag for the policy.
+    /// One <c>artifact_kind_policy</c> row (<c>raw_report</c> unless a kind is named), so the handler's cap and its
+    /// rejection switch are the row's: the resolution takes the lower of row and default for the cap and the row's flag
+    /// for the policy.
     /// </summary>
     /// <param name="world">The tenant the policy belongs to.</param>
     /// <param name="rejectOnSecret">The project's switch.</param>
     /// <param name="projectId">The project the row names, or null for the run's own.</param>
     /// <param name="maxBytes">The row's cap.</param>
+    /// <param name="kind">The kind the row governs.</param>
+    /// <param name="mediaType">The one media type the row allows.</param>
     private Task SeedKindPolicyAsync(
         World world,
         bool rejectOnSecret,
         Guid? projectId = null,
-        long maxBytes = 1024 * 1024) =>
+        long maxBytes = 1024 * 1024,
+        string kind = ArtifactKind.RawReport,
+        string mediaType = XmlType) =>
         _fixture.ExecuteAsync(
             world.Database,
             "insert into public.artifact_kind_policy (id, org_id, project_id, kind, max_bytes, media_types, default_sensitivity, reject_on_secret) "
-            + $"values ('{Guid.CreateVersion7():D}', '{world.Org:D}', '{projectId ?? world.Project:D}', '{ArtifactKind.RawReport}', "
-            + $"{maxBytes.ToString(CultureInfo.InvariantCulture)}, array['{XmlType}'], 'normal', "
+            + $"values ('{Guid.CreateVersion7():D}', '{world.Org:D}', '{projectId ?? world.Project:D}', '{kind}', "
+            + $"{maxBytes.ToString(CultureInfo.InvariantCulture)}, array['{mediaType}'], 'normal', "
             + $"{rejectOnSecret.ToString().ToLowerInvariant()})");
 
     /// <summary>The final key the row's own coordinates mint, rendered as <c>ArtifactKeyMinter.Mint</c> does.</summary>

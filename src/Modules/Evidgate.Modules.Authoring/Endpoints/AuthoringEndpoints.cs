@@ -62,6 +62,9 @@ public static class AuthoringEndpoints
         // 13.1.1-T5: route 25, the import/export pair (its own file because it takes and answers files, not DTOs).
         AuthoringImportEndpoints.MapAuthoringImportEndpoints(authoring);
 
+        // Requirement intake: create one and read where it stands.
+        AuthoringIntakeEndpoints.MapAuthoringIntakeEndpoints(authoring);
+
         return group;
     }
 }

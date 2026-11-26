@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "authoring-generation-intake.v1.json",
+  "title": "Authoring generation intake v1",
+  "description": "The body of POST /v1/projects/{p}/authoring/intakes: one requirement input of a project, discriminated by `kind`. Each kind has its own closed member set, so a member that belongs to another kind is refused rather than ignored. `text` carries inline requirement text and a target feature node; `docx` and `pdf` name an already uploaded artifact of kind `requirement_document` and a target feature node; `image` names an artifact of kind `requirement_image` and nothing else. `bytes` and `media_type` are optional declarations the command checks against the stored artifact. Text length (empty, or above 200 000 code points after NFC normalisation), the declared byte count against the resolved cap and the media type allow-list are not expressed here on purpose: the command answers them with a `details[].reason` (`empty_input`, `size_limit_exceeded`, `media_type_not_allowed`) that a schema refusal could not carry.",
+  "x-max-bytes": 1048576,
+  "type": "object",
+  "required": ["kind"],
+  "properties": {
+    "kind": {
+      "type": "string",
+      "enum": ["text", "docx", "pdf", "image"],
+      "description": "The intake kind; it selects which of the other members are required and which are refused."
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "kind": { "const": "text" } }, "required": ["kind"] },
+      "then": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "feature_node_id", "text"],
+        "properties": {
+          "kind": { "$ref": "#/$defs/kind" },
+          "feature_node_id": { "$ref": "#/$defs/feature_node_id" },
+          "text": {
+            "type": "string",
+            "description": "The inline requirement. Not bounded here: the command normalises to NFC and refuses empty or oversized text with a reason."
+          },
+          "media_type": { "$ref": "#/$defs/media_type" },
+          "bytes": { "$ref": "#/$defs/bytes" },
+          "target_language": { "$ref": "#/$defs/target_language" }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "kind": { "enum": ["docx", "pdf"] } }, "required": ["kind"] },
+      "then": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "feature_node_id", "artifact_id"],
+        "properties": {
+          "kind": { "$ref": "#/$defs/kind" },
+          "feature_node_id": { "$ref": "#/$defs/feature_node_id" },
+          "artifact_id": { "$ref": "#/$defs/artifact_id" },
+          "media_type": { "$ref": "#/$defs/media_type" },
+          "bytes": { "$ref": "#/$defs/bytes" },
+          "target_language": { "$ref": "#/$defs/target_language" }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "kind": { "const": "image" } }, "required": ["kind"] },
+      "then": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "artifact_id"],
+        "properties": {
+          "kind": { "$ref": "#/$defs/kind" },
+          "artifact_id": { "$ref": "#/$defs/artifact_id" },
+          "media_type": { "$ref": "#/$defs/media_type" },
+          "bytes": { "$ref": "#/$defs/bytes" },
+          "target_language": { "$ref": "#/$defs/target_language" }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "kind": {
+      "type": "string",
+      "enum": ["text", "docx", "pdf", "image"]
+    },
+    "feature_node_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "The feature node the generated drafts attach to."
+    },
+    "artifact_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "The uploaded artifact (kind `requirement_document` for `docx`/`pdf`, `requirement_image` for `image`)."
+    },
+    "media_type": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 255,
+      "description": "The declared media type; the command compares it with the artifact's stored type and the kind's allow-list."
+    },
+    "bytes": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "The declared byte count; the command compares it with the artifact's stored size and the resolved cap."
+    },
+    "target_language": {
+      "type": "string",
+      "enum": ["en", "vi"],
+      "description": "The language the requirement is written in, one of the two G1 locales."
+    }
+  }
+}

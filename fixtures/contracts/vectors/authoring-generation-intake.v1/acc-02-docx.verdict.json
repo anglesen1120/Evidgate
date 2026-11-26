@@ -1,0 +1,5 @@
+{
+  "schema": "authoring-generation-intake.v1",
+  "valid": true,
+  "comment": "a document intake names an artifact and may declare its type and size"
+}

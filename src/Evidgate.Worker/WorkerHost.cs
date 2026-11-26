@@ -6,6 +6,7 @@ using Evidgate.BuildingBlocks.Persistence.Options;
 using Evidgate.BuildingBlocks.Persistence.Secrets;
 using Evidgate.BuildingBlocks.Persistence.Tasks;
 using Evidgate.BuildingBlocks.Pipeline;
+using Evidgate.Modules.Authoring.Infrastructure.Intake.Jobs;
 using Evidgate.Modules.Catalog;
 using Evidgate.Modules.Catalog.Infrastructure.GitHub;
 using Evidgate.Modules.Evidence;
@@ -104,6 +105,8 @@ public static class WorkerHost
         builder.Services.AddUsageModule();
         // 08.6.3-T1: the healing module, so every handler the Api composes resolves here too.
         builder.Services.AddHealingModule(builder.Configuration, builder.Environment);
+        // The requirement-intake extraction handler: it claims `extract_intake` tasks, so only the Worker composes it.
+        builder.Services.AddAuthoringIntakeJobs();
 
         // 01.5.1-T1.2/T1.4: the durable task queue — claim loops per queue and the
         // cron schedule runner. Both are registered in every worker; the unique fire

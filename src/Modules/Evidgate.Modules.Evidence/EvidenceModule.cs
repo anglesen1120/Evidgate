@@ -9,6 +9,7 @@ using Evidgate.Modules.Evidence.Infrastructure.Parsing;
 using Evidgate.Modules.Evidence.Infrastructure.Parsing.Junit;
 using Evidgate.Modules.Evidence.Infrastructure.Persistence;
 using Evidgate.Modules.Evidence.Application;
+using Evidgate.Modules.Evidence.Application.Intake;
 using Evidgate.Modules.Evidence.Infrastructure.Parsing.Runner;
 using Evidgate.Modules.Ingestion.Contracts;
 using FluentValidation;
@@ -144,6 +145,11 @@ internal static class EvidenceModule
         // The read side of a frozen revision for the evaluator: the revision row and the latest attempt each execution
         // key had when it froze. Scoped like every other module service and bound to the ambient tenant scope.
         services.TryAddScoped<IFrozenEvidence, FrozenEvidence>();
+
+        // The metadata read and the bounded object fetch of a requirement intake's artifact. A singleton because the
+        // extraction handler (itself a singleton that opens its own scopes) holds it; it keeps no state, takes the
+        // ambient scope through ITenantDb for the read, and the fetch needs none.
+        services.TryAddSingleton<IIntakeArtifactReader, IntakeArtifactReader>();
 
         // The out-of-process parse runner is deliberately NOT registered here: it spawns processes, so only the
         // Worker composes it (ParseRunnerServiceCollectionExtensions.AddParseRunner). This registration is shared by
