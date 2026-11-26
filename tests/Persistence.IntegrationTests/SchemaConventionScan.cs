@@ -182,6 +182,10 @@ internal static class SchemaConventionScan
             SchemaRule.AuditColumns | SchemaRule.VersionTrigger,
             "Append-only fixture versions (03.3.1-T1; migration 0074): the app role holds SELECT + INSERT, UPDATE/DELETE are revoked and `fixture_revision_immutable` raises 23514 for every role, so a revision is written once and keeps created_at only — no updated_at/version and no version trigger. Identical content is answered by `fixture_revision_hash_key` instead of a version bump. Its tenant key, composite FK (fixture, project and key in one key) and RLS are NOT exempt."),
         new SchemaExemption(
+            "public.requirement_version",
+            SchemaRule.AuditColumns | SchemaRule.VersionTrigger,
+            "Append-only requirement versions (migration 0132): the app role holds SELECT + INSERT, UPDATE/DELETE are revoked and the `requirement_version_immutable` trigger refuses UPDATE for every role and DELETE for every role but `evidgate_owner`, so the row keeps created_at only — no updated_at/version and no version trigger. Its tenant key, composite FKs and RLS are NOT exempt."),
+        new SchemaExemption(
             "public.raw_report",
             SchemaRule.CompositeForeignKey | SchemaRule.AuditColumns | SchemaRule.VersionTrigger,
             "Append-only parse records: the app role holds SELECT + INSERT, UPDATE/DELETE/TRUNCATE are revoked and `raw_report_immutable` raises 23514 for every role, so a parse is written once and keeps created_at only — no updated_at/version and no version trigger. Its reference to `report_parser` is deliberately `(parser_id, parser_version) -> (parser_id, version)`: a built-in parser row carries `org_id IS NULL`, so the composite tenant key could never match one, and the registry is written only by the migration and the owner role, so no tenant can register a release a row names. Its tenant key, its composite run and artifact FKs and RLS are NOT exempt."),
