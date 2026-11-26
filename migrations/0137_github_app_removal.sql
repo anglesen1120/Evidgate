@@ -21,7 +21,7 @@
 -- ADD COLUMN is metadata-only; the CHECK on the new, all-null column may scan the table once while the lock is
 -- held, and the migrator applies the script in one transaction, so the lock lasts until commit.
 --
--- Part 2 (GitHub App removal) is appended below.
+-- Part 2 (GitHub App removal) also retires the unused CI-binding permission and all its role grants.
 
 set local lock_timeout = '5s';
 
@@ -48,6 +48,8 @@ $$;
 -- `github_installation`; their indexes and guard triggers/functions; `evidgate_resolve.installation_by_id(bigint)`;
 -- `evidgate.purge_expired_github_install_state(integer)`. `platform_sweep_audit` is append-only history and keeps the
 -- earlier `github_installation.resolve` / `github_install_state.purge` rows.
+-- `ci_binding:write` and its built-in and tenant role grants are removed; `ingest_token:write` and historical
+-- `audit_log` action text are unchanged. The grant-to-permission foreign key requires deleting grants first.
 --
 -- Order: definers and grants first, then `catalog_sync` before `git_repo_binding` (the sync table holds the foreign
 -- key), then the other tables, then the guard functions their triggers used. No CASCADE.
@@ -103,3 +105,7 @@ drop function if exists public.git_repo_binding_guard();
 drop function if exists public.webhook_delivery_guard();
 drop function if exists public.github_install_state_guard();
 drop function if exists public.github_installation_guard();
+
+-- Grants first (foreign key `role_permission_permission_fk`), then the catalogue row. A re-run finds nothing to delete.
+delete from public.role_permission where permission_code = 'ci_binding:write';
+delete from public.permission where code = 'ci_binding:write';

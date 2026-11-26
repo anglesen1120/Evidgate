@@ -135,15 +135,6 @@
         "tenant_assignable": true
       },
       {
-        "code": "ci_binding:write",
-        "resource": "ci_binding",
-        "action": "write",
-        "description": "Create, change or disable a project CI binding, including the one-time repository challenge (02.4.1).",
-        "sensitive": false,
-        "reserved": false,
-        "tenant_assignable": true
-      },
-      {
         "code": "decision:read",
         "resource": "decision",
         "action": "read",

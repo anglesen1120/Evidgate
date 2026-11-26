@@ -55,7 +55,6 @@ const DEFAULT_GRANTS = [
   'authoring:write',
   'case:read',
   'case:write',
-  'ci_binding:write',
   'decision:read',
 ] as const;
 

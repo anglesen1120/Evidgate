@@ -9,7 +9,7 @@ namespace Migrator.IntegrationTests;
 /// <summary>
 /// The GitHub App half of <c>0137_github_app_removal.sql</c>: the installation store, the repository binding, the
 /// inbound webhook ledger and the catalog sync queue are gone together with their definers and grants, while the
-/// login identity rows, the catalog suites, the sweep-audit history and the outbound Policy webhook tables stay.
+/// login identity rows, the catalog suites, ingest-token grants and audit history stay; the unused CI permission is retired.
 /// </summary>
 [Collection(MigratorPostgresSuite.Name)]
 [Trait("Category", "Docker")]
@@ -94,6 +94,8 @@ public sealed class GithubAppRemovalMigrationTests(PostgresMigratorFixture fixtu
         migrations.CopyReal(FileName);
         var applied = MigratorHarness.Run(migrations.Path, fixture.OwnerConnectionString(database));
         applied.ExitCode.ShouldBe(MigratorExitCodes.Success, applied.Transcript);
+        await AssertRetiredAsync(database);
+        (await ReadSurvivorsAsync(connection)).ShouldBe(survivors);
         await AssertIngestRoleProbesAsync(connection);
 
         var cancellation = TestContext.Current.CancellationToken;
@@ -146,6 +148,12 @@ public sealed class GithubAppRemovalMigrationTests(PostgresMigratorFixture fixtu
         before.ExitCode.ShouldBe(MigratorExitCodes.Success, before.Transcript);
         await using var connection = await fixture.OpenSuperuserAsync(database);
         await SeedAsync(connection);
+        (await fixture.ScalarAsync<long>(
+            database, "select count(*) from public.permission where code = 'ci_binding:write'")).ShouldBe(1);
+        (await fixture.ScalarAsync<long>(
+            database, $"select count(*) from public.role_permission where org_id = '{Org}' and permission_code = 'ci_binding:write'")).ShouldBe(1);
+        (await fixture.ScalarAsync<long>(
+            database, "select count(*) from public.role_permission where org_id is null and permission_code = 'ci_binding:write'")).ShouldBeGreaterThan(0);
         return database;
     }
 
@@ -160,6 +168,9 @@ public sealed class GithubAppRemovalMigrationTests(PostgresMigratorFixture fixtu
             ("user_identity", $"user_id = '{User}'"),
             ("ingest_token", $"org_id = '{Org}'"),
             ("suite", $"org_id = '{Org}'"),
+            ("role", $"org_id = '{Org}'"),
+            ("role_permission", "permission_code = 'ingest_token:write'"),
+            ("audit_log", $"org_id = '{Org}' and action = 'ci_binding.create'"),
         })
         {
             var snapshot = await PostgresMigratorFixture.ScalarAsync<string>(connection, $"""
@@ -181,6 +192,16 @@ public sealed class GithubAppRemovalMigrationTests(PostgresMigratorFixture fixtu
         values (gen_random_uuid(), '{User}', 'github', '42', 'survivor@example.com');
         insert into public.ingest_token (id, org_id, project_id, name, prefix, token_hmac, pepper_version, scopes)
         values ('{Token}', '{Org}', '{Project}', 'survivor', 'AAAAAAAAAAAA', decode(repeat('01', 32), 'hex'), 1, array['run:create']);
+        insert into public.role (id, org_id, code, name, is_builtin, kind)
+        values (gen_random_uuid(), '{Org}', 'installer', 'Installer', false, 'member');
+        insert into public.role_permission (id, org_id, role_id, permission_code)
+        select gen_random_uuid(), r.org_id, r.id, p.code
+          from public.role r
+          cross join (values ('ci_binding:write'), ('ingest_token:write')) p(code)
+         where r.org_id = '{Org}' and r.code = 'installer';
+        insert into public.audit_log (id, org_id, seq, actor_type, actor_id, action, prev_hash, entry_hash)
+        values (gen_random_uuid(), '{Org}', 1, 'system', 'upgrade', 'ci_binding.create',
+            decode(repeat('00', 32), 'hex'), decode(repeat('01', 32), 'hex'));
         insert into public.suite (id, org_id, project_id, name, slug)
         values ('{Suite}', '{Org}', '{Project}', 'survivor', 'survivor');
         insert into public.github_installation (id, org_id, installation_id, account_login, permissions, installed_by)
@@ -234,6 +255,12 @@ public sealed class GithubAppRemovalMigrationTests(PostgresMigratorFixture fixtu
         }
 
         (await fixture.ScalarAsync<long>(database, RetiredDefinerScan)).ShouldBe(0);
+        (await fixture.ScalarAsync<long>(
+            database, "select count(*) from public.permission where code = 'ci_binding:write'")).ShouldBe(0);
+        (await fixture.ScalarAsync<long>(
+            database, "select count(*) from public.role_permission where permission_code = 'ci_binding:write'")).ShouldBe(0);
+        (await fixture.ScalarAsync<long>(
+            database, "select count(*) from public.permission where code = 'ingest_token:write'")).ShouldBe(1);
     }
 
     private static async Task AssertIngestRoleProbesAsync(NpgsqlConnection connection)

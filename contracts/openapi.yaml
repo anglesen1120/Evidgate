@@ -4473,7 +4473,7 @@ paths:
       description: >-
         The token is bound to this one project and carries exactly the requested `permissions`: each must
         be held by the creator at creation time and none may be in the deny set (`membership:*`, `role:*`,
-        `organization:write`, `project:create`, `project:write`, `ci_binding:write`, `api_token:*`,
+        `organization:write`, `project:create`, `project:write`, `api_token:*`,
         `ingest_token:write`, `service_identity:*`, `sso:*`, `support:*`, `billing:*`, `healing:approve`,
         `healing:revoke`, `healing:configure`, `policy:write`, `artifact:read_sensitive`, `audit:read`,
         `security_event:read`, `webhook:write`). The row keeps the 12-character prefix, an
