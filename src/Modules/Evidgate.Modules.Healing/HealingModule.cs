@@ -1,3 +1,5 @@
+using Evidgate.BuildingBlocks.Persistence.Idempotency;
+using Evidgate.BuildingBlocks.Persistence.Outbox;
 using Evidgate.BuildingBlocks.Persistence.Tasks;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.BuildingBlocks.SharedKernel.Secrets;
@@ -5,6 +7,7 @@ using Evidgate.Modules.Healing.Application;
 using Evidgate.Modules.Healing.Contracts;
 using Evidgate.Modules.Healing.Infrastructure;
 using Evidgate.Modules.Healing.Infrastructure.Persistence;
+using Evidgate.Modules.Orchestrator.Contracts;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -45,6 +48,7 @@ internal static class HealingModule
         services.TryAddScoped<IIncidentRecorder, IncidentRecorder>();
         services.TryAddScoped<RecordIncidentsForEvidenceRevisionHandler>();
         services.TryAddScoped<HealingSwitchStore>();
+        services.TryAddScoped<IncidentReadStore>();
 
         // The Contracts seam other modules resolve to ask "may healing act for this project?".
         services.TryAddScoped<IHealingAvailabilityResolver, HealingAvailabilityResolver>();
@@ -55,6 +59,13 @@ internal static class HealingModule
 
         // The operator's only writer of the platform row, resolved by the operator ingress route.
         services.TryAddSingleton<HealingSystemSwitchWriter>();
+
+        // Verified failures become incidents off the request path: the dispatcher hands this module its own delivery of
+        // the frozen-evidence event, whose consumer enqueues one record_incidents task per revision.
+        services.AddEvidgateIdempotency();
+        services.AddOutboxSubscription(EvidenceRevisionFrozenContract.OutboxTaskType, IncidentTasks.EvidenceRevisionFrozen);
+        services.AddTaskHandler<EvidenceRevisionFrozenPayload, IncidentFreezeTaskHandler>();
+        services.AddTaskHandler<RecordIncidentsPayload, RecordIncidentsTaskHandler>();
 
         AddHealingLlmGateway(services, configuration, environment);
 

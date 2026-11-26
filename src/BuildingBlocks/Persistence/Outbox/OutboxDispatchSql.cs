@@ -8,7 +8,8 @@ namespace Evidgate.BuildingBlocks.Persistence.Outbox;
 /// statements per batch — rather than on a copy that could drift.
 /// </summary>
 /// <remarks>
-/// One batch is exactly three data statements in one transaction: a batch claim,
+/// One batch is exactly three data statements in one transaction (four when outbox subscriptions are registered,
+/// the fourth being one <c>insert … select</c> of the subscribers' tasks): a batch claim,
 /// one <c>insert … select</c> over the outbox rows that claim locked, and one
 /// update that stamps them. The number of statements is constant in the batch
 /// size — the 00 §5.7 P2 contract ("the dispatcher inserts task rows as one
@@ -84,6 +85,35 @@ public static class OutboxDispatchSql
             on r.task_type = o.task_type
          on conflict do nothing
          returning id as "Id"
+        """;
+
+    /// <summary>
+    /// The subscribers' delivery tasks for the same claimed batch: one row per (outbox row, subscription whose source
+    /// type matches). Issued only when a module registered a subscription, so a deployment without one keeps the three
+    /// statements per batch. The key is <c>'outbox:' || id || ':' || delivery type</c>, distinct from the primary
+    /// task's <c>'outbox:' || id</c> and from every other subscriber's, so each delivery dedupes on its own and a
+    /// re-dispatch is a silent no-op. Task ids are the application's UUIDv7s, laid out row-major (row n, subscription m
+    /// takes element (n - 1) * count + m).
+    /// </summary>
+    public const string EnqueueSubscriptionTasks = """
+        insert into public.task
+          (id, org_id, queue, task_type, payload, idempotency_key, available_at)
+        select (@task_ids::uuid[])[((g.n - 1) * @subscription_count::int + s.n)::int],
+               o.org_id,
+               coalesce(r.queue, @default_queue),
+               s.delivery_task_type,
+               o.payload,
+               'outbox:' || o.id::text || ':' || s.delivery_task_type,
+               now()
+          from unnest(@outbox_ids::uuid[]) with ordinality as g(outbox_id, n)
+          join public.outbox o
+            on o.id = g.outbox_id
+          join unnest(@source_task_types::text[], @delivery_task_types::text[]) with ordinality
+               as s(source_task_type, delivery_task_type, n)
+            on s.source_task_type = o.task_type
+          left join unnest(@route_task_types::text[], @route_queues::text[]) as r(task_type, queue)
+            on r.task_type = s.delivery_task_type
+         on conflict do nothing
         """;
 
     /// <summary>
