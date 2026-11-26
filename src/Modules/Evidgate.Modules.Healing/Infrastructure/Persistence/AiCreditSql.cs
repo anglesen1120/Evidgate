@@ -38,6 +38,13 @@ internal static class AiCreditSql
          where org_id = @org_id and id = @id
         """;
 
+    /// <summary>The reserve and the settlements already written for one call.</summary>
+    internal const string CallEntries = """
+        select kind, amount_micro as AmountMicro
+          from public.ai_credit_entry
+         where org_id = @org_id and call_id = @call_id and kind in ('reserve', 'consume', 'refund')
+        """;
+
     /// <summary>Stores the balance the math produced, on the row this transaction already holds locked.</summary>
     internal const string UpdateAccount = """
         update public.ai_credit_account

@@ -205,20 +205,20 @@ public sealed class AiCreditWriterTests
     }
 
     [Theory]
-    [InlineData(CreditEntryKind.Grant, 0L, "k", null)]
-    [InlineData(CreditEntryKind.Grant, -1L, "k", null)]
-    [InlineData(CreditEntryKind.Adjust, 0L, "k", null)]
-    [InlineData(CreditEntryKind.Adjust, long.MinValue, "k", null)]
-    [InlineData(CreditEntryKind.Grant, 1L, null, null)]
-    [InlineData(CreditEntryKind.Grant, 1L, "", null)]
-    [InlineData(CreditEntryKind.Grant, 1L, "nul\0", null)]
-    [InlineData(CreditEntryKind.Grant, 1L, "k", "")]
-    [InlineData(CreditEntryKind.Grant, 1L, "k", "nul\0reason")]
-    public async Task InvalidRequests_AreRefusedBeforeAnyWrite(CreditEntryKind kind, long amount, string? key, string? reason)
+    [InlineData((int)CreditEntryKind.Grant, 0L, "k", null)]
+    [InlineData((int)CreditEntryKind.Grant, -1L, "k", null)]
+    [InlineData((int)CreditEntryKind.Adjust, 0L, "k", null)]
+    [InlineData((int)CreditEntryKind.Adjust, long.MinValue, "k", null)]
+    [InlineData((int)CreditEntryKind.Grant, 1L, null, null)]
+    [InlineData((int)CreditEntryKind.Grant, 1L, "", null)]
+    [InlineData((int)CreditEntryKind.Grant, 1L, "nul\0", null)]
+    [InlineData((int)CreditEntryKind.Grant, 1L, "k", "")]
+    [InlineData((int)CreditEntryKind.Grant, 1L, "k", "nul\0reason")]
+    public async Task InvalidRequests_AreRefusedBeforeAnyWrite(int kind, long amount, string? key, string? reason)
     {
         await using var world = await AiCreditTestWorld.StartAsync(_fixture);
 
-        var refused = await world.AppendAsync(new CreditEntryRequest(kind, amount, null, key, reason));
+        var refused = await world.AppendAsync(new CreditEntryRequest((CreditEntryKind)kind, amount, null, key, reason));
 
         refused.Error!.Status.ShouldBe(422);
         (await world.CountAsync("ai_credit_account")).ShouldBe(0);
@@ -268,6 +268,51 @@ public sealed class AiCreditWriterTests
 
         refused.IsSuccess.ShouldBeFalse();
         (await world.CountAsync("ai_credit_entry")).ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task Consume_AndRefund_CanOnlyDrawOnTheirOwnCallsReserve()
+    {
+        await using var world = await AiCreditTestWorld.StartAsync(_fixture);
+        var a = await world.SeedCallAsync();
+        var b = await world.SeedCallAsync();
+        await world.AppendedAsync(CallLess(CreditEntryKind.Grant, 1_000));
+        await world.AppendedAsync(ForCall(CreditEntryKind.Reserve, 100, a));
+        await world.AppendedAsync(ForCall(CreditEntryKind.Reserve, 100, b));
+
+        // Call b holds reserve too, so the account-wide reserved total would cover all of these; its own reserve must not.
+        (await world.AppendAsync(ForCall(CreditEntryKind.Consume, 101, a))).IsSuccess.ShouldBeFalse();
+        (await world.AppendAsync(ForCall(CreditEntryKind.Consume, 60, a))).IsSuccess.ShouldBeTrue();
+        (await world.AppendAsync(ForCall(CreditEntryKind.Refund, 41, a))).IsSuccess.ShouldBeFalse();
+        (await world.AppendAsync(ForCall(CreditEntryKind.Refund, 40, a))).IsSuccess.ShouldBeTrue();
+        (await world.AppendAsync(ForCall(CreditEntryKind.Consume, 1, await world.SeedCallAsync()))).IsSuccess.ShouldBeFalse();
+
+        (await _fixture.ScalarAsync<string>(
+            world.Database,
+            $"select balance_micro || '|' || reserved_micro from public.ai_credit_account where org_id = '{world.Org:D}'")).ShouldBe("840|100");
+    }
+
+    [Fact]
+    public async Task Replay_BindsTheProject_AndTheExactAmount()
+    {
+        await using var world = await AiCreditTestWorld.StartAsync(_fixture);
+        var big = 9_007_199_254_740_992L;
+        var request = new CreditEntryRequest(CreditEntryKind.Grant, big, null, "p", null, world.Project);
+        await world.AppendedAsync(request);
+
+        (await world.AppendedAsync(request)).Replayed.ShouldBeTrue();
+        (await world.AppendAsync(request with { ProjectId = null })).Error!.Code.ShouldBe(AiCreditWriter.KeyConflictCode);
+        (await world.AppendAsync(request with { AmountMicro = big + 1 })).Error!.Code.ShouldBe(AiCreditWriter.KeyConflictCode);
+    }
+
+    [Fact]
+    public async Task Reason_IsBoundedInCodePoints_AsTheColumnCheckCountsThem()
+    {
+        await using var world = await AiCreditTestWorld.StartAsync(_fixture);
+
+        var fits = new string('a', 250) + string.Concat(Enumerable.Repeat("\U0001F600", 250));
+        (await world.AppendAsync(CallLess(CreditEntryKind.Grant, 1, reason: fits))).IsSuccess.ShouldBeTrue();
+        (await world.AppendAsync(CallLess(CreditEntryKind.Grant, 1, reason: fits + "a"))).IsSuccess.ShouldBeFalse();
     }
 
     private sealed class ThrowingLedger : IUsageLedger

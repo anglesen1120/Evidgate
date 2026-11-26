@@ -84,17 +84,17 @@ public class CreditMathTests
     }
 
     [Theory]
-    [InlineData(CreditEntryKind.Grant, 0, false)]
-    [InlineData(CreditEntryKind.Grant, -5, false)]
-    [InlineData(CreditEntryKind.Reserve, 0, false)]
-    [InlineData(CreditEntryKind.Consume, -1, false)]
-    [InlineData(CreditEntryKind.Adjust, 0, false)]
-    [InlineData(CreditEntryKind.Adjust, long.MinValue, false)]
-    [InlineData(CreditEntryKind.Adjust, -7, true)]
-    [InlineData(CreditEntryKind.Adjust, 7, true)]
-    [InlineData(CreditEntryKind.Grant, long.MaxValue, true)]
-    public void IsValidAmount_FollowsTheKind(CreditEntryKind kind, long amount, bool expected) =>
-        CreditMath.IsValidAmount(kind, amount).ShouldBe(expected);
+    [InlineData((int)CreditEntryKind.Grant, 0, false)]
+    [InlineData((int)CreditEntryKind.Grant, -5, false)]
+    [InlineData((int)CreditEntryKind.Reserve, 0, false)]
+    [InlineData((int)CreditEntryKind.Consume, -1, false)]
+    [InlineData((int)CreditEntryKind.Adjust, 0, false)]
+    [InlineData((int)CreditEntryKind.Adjust, long.MinValue, false)]
+    [InlineData((int)CreditEntryKind.Adjust, -7, true)]
+    [InlineData((int)CreditEntryKind.Adjust, 7, true)]
+    [InlineData((int)CreditEntryKind.Grant, long.MaxValue, true)]
+    public void IsValidAmount_FollowsTheKind(int kind, long amount, bool expected) =>
+        CreditMath.IsValidAmount((CreditEntryKind)kind, amount).ShouldBe(expected);
 
     [Fact]
     public void Grant_AtTheTopOfTheRange_IsRefusedInsteadOfWrapping()

@@ -3,7 +3,7 @@ using System.Text;
 namespace Evidgate.Modules.Healing.Domain;
 
 /// <summary>The kinds of AI credit entry; <see cref="CreditMath.Wire"/> maps each to its column value.</summary>
-public enum CreditEntryKind
+internal enum CreditEntryKind
 {
     /// <summary>Credit added to the available balance.</summary>
     Grant,
@@ -136,4 +136,8 @@ internal static class CreditMath
 
         return true;
     }
+
+    /// <summary>The length the column checks count: Unicode code points, not UTF-16 units. Call it on storable text.</summary>
+    /// <param name="value">The candidate text.</param>
+    internal static int CodePointLength(string value) => value.EnumerateRunes().Count();
 }

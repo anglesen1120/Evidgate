@@ -22,8 +22,9 @@
 -- row keeps its call, so a purge deletes the entries of a call before the call (owner erasure order).
 --
 -- The metric check of `usage_ledger_entry`, `usage_rollup`, `usage_price` and `quota_counter` gains 'ai_credit'. Each
--- widening adds the new constraint NOT VALID (no table scan under the lock) and validates it afterwards, which takes
--- only SHARE UPDATE EXCLUSIVE.
+-- widening adds the new constraint NOT VALID and validates it. The migrator runs one script in one transaction, so
+-- the ACCESS EXCLUSIVE lock of the ADD is held through the validation scan and until commit (the same one-scan-under-
+-- lock cost as 0094); `lock_timeout` bounds only the wait for the lock, not the scan.
 --
 -- Role grants: the operator and the sweep role hold nothing here; no policy admits them.
 
@@ -57,7 +58,7 @@ create table if not exists public.ai_credit_entry (
   payload_hash text not null,
   reason text,
   actor text not null,
-  created_at timestamptz not null default now(),
+  created_at timestamptz not null default clock_timestamp(),
   constraint ai_credit_entry_pkey primary key (id),
   constraint ai_credit_entry_org_id_key unique (org_id, id),
   constraint ai_credit_entry_billing_key_key unique (org_id, billing_key),

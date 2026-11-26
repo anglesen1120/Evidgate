@@ -46,7 +46,17 @@ public sealed class AiCreditSchemaTests
                 .SqlState.ShouldBe(PostgresErrorCodes.InsufficientPrivilege);
         }
 
+        // A role that holds the privilege but is not the owner reaches the trigger and is refused; the owner may erase.
+        var superuserDelete = await Should.ThrowAsync<PostgresException>(() =>
+            _fixture.ExecuteAsync(world.Database, $"delete from public.ai_credit_entry where id = '{id}'"));
+        superuserDelete.SqlState.ShouldBe(PostgresErrorCodes.CheckViolation);
         (await world.CountAsync("ai_credit_entry")).ShouldBe(1);
+
+        await using (var owner = await TenantScope.BeginAsync(_fixture.OwnerConnectionString(world.Database), world.Org))
+        {
+            (await owner.ExecuteAsync($"delete from public.ai_credit_entry where id = '{id}'")).ShouldBe(1);
+        }
+
         (await _fixture.HasTablePrivilegeAsync(world.Database, "evidgate_app", "ai_credit_entry", "UPDATE")).ShouldBeFalse();
         (await _fixture.HasTablePrivilegeAsync(world.Database, "evidgate_app", "ai_credit_entry", "DELETE")).ShouldBeFalse();
         (await _fixture.HasTablePrivilegeAsync(world.Database, "evidgate_app", "ai_credit_account", "DELETE")).ShouldBeFalse();

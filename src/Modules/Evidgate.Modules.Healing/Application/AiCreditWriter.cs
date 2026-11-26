@@ -139,6 +139,12 @@ internal sealed class AiCreditWriter(
         Guid? projectId,
         CancellationToken cancellationToken)
     {
+        if (request.CallId is { } call && request.Kind is CreditEntryKind.Consume or CreditEntryKind.Refund
+            && !await FitsTheReserveAsync(orgId, call, request, cancellationToken).ConfigureAwait(false))
+        {
+            return Refuse(request.Kind);
+        }
+
         if (!CreditMath.TryApply(new CreditBalance(account.BalanceMicro, account.ReservedMicro), request.Kind, request.AmountMicro, out var next))
         {
             return Refuse(request.Kind);
@@ -185,14 +191,44 @@ internal sealed class AiCreditWriter(
         return Result.Success(new CreditAppendOutcome(entryId, false, next.AvailableMicro, next.ReservedMicro));
     }
 
-    /// <summary>What an entry means, as the digest a replay must reproduce; the actor and the time are not part of it.</summary>
+    /// <summary>
+    /// What an entry means, as the digest a replay must reproduce; the actor and the time are not part of it. The amount
+    /// is hashed as text because the canonical form of a JSON number is a binary64, which cannot tell two large amounts apart.
+    /// </summary>
     internal static string PayloadHash(CreditEntryRequest request) => CanonicalHash.Compute(JsonSerializer.Serialize(new
     {
         kind = CreditMath.Wire(request.Kind),
-        amount_micro = request.AmountMicro,
+        amount_micro = request.AmountMicro.ToString(CultureInfo.InvariantCulture),
         call_id = request.CallId,
+        project_id = request.CallId is null ? request.ProjectId : null,
         reason = request.Reason,
     }));
+
+    /// <summary>
+    /// A settlement may only draw on its own call's reserve: the account-wide reserved total is shared by every call, so
+    /// without this a retry of one call would consume another call's hold. Runs under the account lock.
+    /// </summary>
+    private async ValueTask<bool> FitsTheReserveAsync(Guid orgId, Guid callId, CreditEntryRequest request, CancellationToken cancellationToken)
+    {
+        var rows = await db.QueryAsync<CallEntryRow>(AiCreditSql.CallEntries, new { org_id = orgId, call_id = callId }, cancellationToken)
+            .ConfigureAwait(false);
+
+        decimal reserved = 0;
+        decimal settled = request.AmountMicro;
+        foreach (var row in rows)
+        {
+            if (row.Kind == CreditMath.Wire(CreditEntryKind.Reserve))
+            {
+                reserved += row.AmountMicro;
+            }
+            else
+            {
+                settled += row.AmountMicro;
+            }
+        }
+
+        return settled <= reserved;
+    }
 
     private static Result<CreditAppendOutcome>? Validate(CreditEntryRequest request)
     {
@@ -212,13 +248,13 @@ internal sealed class AiCreditWriter(
         }
 
         if (request.IdempotencyKey is { } key
-            && (key.Length is 0 or > CreditMath.MaxIdempotencyKeyLength || !CreditMath.IsStorable(key)))
+            && (!CreditMath.IsStorable(key) || CreditMath.CodePointLength(key) is 0 or > CreditMath.MaxIdempotencyKeyLength))
         {
             return Invalid("/idempotency_key", "the replay key must be 1 to 150 storable characters");
         }
 
         if (request.Reason is { } reason
-            && (reason.Length is 0 or > CreditMath.MaxReasonLength || !CreditMath.IsStorable(reason)))
+            && (!CreditMath.IsStorable(reason) || CreditMath.CodePointLength(reason) is 0 or > CreditMath.MaxReasonLength))
         {
             return Invalid("/reason", "the reason must be 1 to 500 storable characters");
         }
@@ -289,6 +325,13 @@ internal sealed class AiCreditWriter(
         public long BalanceMicro { get; set; }
 
         public long ReservedMicro { get; set; }
+    }
+
+    private sealed class CallEntryRow
+    {
+        public string Kind { get; set; } = string.Empty;
+
+        public long AmountMicro { get; set; }
     }
 
     private sealed class EntryRow
