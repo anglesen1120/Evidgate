@@ -58,6 +58,9 @@ public static class OperatorEndpoints
         // envelope, same exclusion from the served document; the routes own the org segment because an operator read
         // is not scoped to one tenant by the request pipeline.
         app.MapUsageOperatorEndpoints();
+
+        // The dead-letter replay of outbound webhook deliveries, same gate and envelope.
+        app.MapWebhookOperatorEndpoints();
     }
 
     /// <summary>

@@ -147,6 +147,14 @@ const EXPECTED = [
   ['/projects/{p}/api-tokens', 'post', 'api_token:write', 'v1'],
   ['/projects/{p}/api-tokens', 'get', 'api_token:read', 'v1'],
   ['/api-tokens/{t}', 'delete', 'api_token:write', 'v1'],
+  // 07.6.3: outbound webhook endpoints and their delivery log — the writes carry `webhook:write`,
+  // the reads `webhook:read`; the signing secret is returned once by the create and never read again.
+  ['/projects/{p}/webhook-endpoints', 'post', 'webhook:write', 'v1'],
+  ['/projects/{p}/webhook-endpoints', 'get', 'webhook:read', 'v1'],
+  ['/projects/{p}/webhook-endpoints/{e}', 'get', 'webhook:read', 'v1'],
+  ['/projects/{p}/webhook-endpoints/{e}', 'patch', 'webhook:write', 'v1'],
+  ['/projects/{p}/webhook-endpoints/{e}', 'delete', 'webhook:write', 'v1'],
+  ['/projects/{p}/webhook-deliveries', 'get', 'webhook:read', 'v1'],
   ['/orgs/{o}/audit', 'get', 'audit:read', 'v1'],
   ['/orgs/{o}/audit/export', 'get', 'audit:read', 'v1'],
   ['/support-grants', 'post', 'support:grant', 'v1'],
@@ -356,6 +364,9 @@ const IDEM_EXEMPT = new Set([
   'post /auth/logout',
   'post /dev/session',
   'patch /me',
+  'post /projects/{p}/webhook-endpoints',
+  'patch /projects/{p}/webhook-endpoints/{e}',
+  'delete /projects/{p}/webhook-endpoints/{e}',
 ]);
 for (const { path, method, op } of ops) {
   for (const prm of op.parameters ?? []) {

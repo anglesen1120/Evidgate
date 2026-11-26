@@ -54,6 +54,8 @@ public sealed class IsolationProject
     /// <summary>The project's API tokens (<c>{t}</c>), the second one revoked through <c>DELETE /v1/api-tokens/{t}</c>.</summary>
     public required IReadOnlyList<Guid> ApiTokenIds { get; init; }
 
+    public required Guid WebhookEndpointId { get; init; }
+
     /// <summary>A real <c>ci_producer</c> JWT bound to this org and project (<c>POST /v1/ci/token</c>).</summary>
     public required string CiProducerJwt { get; init; }
 
@@ -825,6 +827,11 @@ public sealed class IsolationWorld
             var revokedApiTokenId = revokedApiToken.GetProperty("id").GetGuid();
             await SendAsync(HttpMethod.Delete, $"/v1/api-tokens/{revokedApiTokenId}", admin, org, body: null, HttpStatusCode.NoContent).ConfigureAwait(false);
 
+            // Registration does not contact a literal address; the real endpoint id makes a foreign 404 meaningful.
+            var webhookEndpoint = await SendAsync(
+                HttpMethod.Post, $"/v1/projects/{project}/webhook-endpoints", admin, org,
+                new { url = "https://93.184.216.34/isolation" }, HttpStatusCode.Created).ConfigureAwait(false);
+
             var secret = active.GetProperty("secret").GetString()
                 ?? throw new InvalidOperationException($"seed: ingest token of project {project} returned no secret");
             var exchanged = await SendAsync(
@@ -1057,6 +1064,7 @@ public sealed class IsolationWorld
                 RevokedTokenSecret = revokedToken.GetProperty("secret").GetString()
                     ?? throw new InvalidOperationException($"seed: revoked ingest token of project {project} returned no secret"),
                 ApiTokenIds = [apiToken.GetProperty("id").GetGuid(), revokedApiTokenId],
+                WebhookEndpointId = webhookEndpoint.GetProperty("id").GetGuid(),
                 CiProducerJwt = exchanged.GetProperty("token").GetString()
                     ?? throw new InvalidOperationException($"seed: the ci/token exchange of project {project} returned no token"),
                 OidcProducerJwt = oidcExchanged.GetProperty("token").GetString()

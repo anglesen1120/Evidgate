@@ -128,6 +128,8 @@ export const KNOWN_API_SEGMENTS: ReadonlySet<string> = new Set<string>([
   'users',
   'versions',
   'waivers',
+  'webhook-deliveries',
+  'webhook-endpoints',
   'webhooks',
 ]);
 

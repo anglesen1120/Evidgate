@@ -236,6 +236,12 @@ at most 4096 UTF-8 bytes. The list is a keyset page on `(created_at, id)` (`curs
   values, so a replay would write the same state, and the `If-Match` version makes
   a retry that re-sends the already-applied version answer `412
 precondition_failed` instead of applying twice (02.3.1-T3).
+- `POST /v1/projects/{p}/webhook-endpoints` — the `201` carries the endpoint's signing secret, so like the other
+  one-time-secret creates it is never replayed and no key is honoured; a retry registers a second endpoint or is
+  refused `409 endpoint_url_taken`. `PATCH /v1/projects/{p}/webhook-endpoints/{e}` is guarded by `If-Match` (the
+  endpoint `version`, also its `ETag`), so a replay of the applied version answers `412`.
+  `DELETE /v1/projects/{p}/webhook-endpoints/{e}` — a soft delete (`state: deleted`, history kept): a repeat finds no
+  live row, answers `404 not_found` and writes no second audit row (07.6.3).
 
 ## Validation corpus (`fixtures/contracts/`, 01.3.2-T2)
 

@@ -49,6 +49,8 @@ tags:
     description: CI bindings and ingest tokens (02)
   - name: api-tokens
     description: Project API tokens for automation (02.4.4)
+  - name: webhook-endpoints
+    description: Outbound webhook endpoints and their delivery log (07.6)
   - name: audit
     description: Tenant-visible audit log (02, 11)
   - name: support
@@ -4899,6 +4901,256 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '503':
           $ref: '#/components/responses/Unavailable'
+  /projects/{p}/webhook-endpoints:
+    post:
+      operationId: createWebhookEndpoint
+      tags: [webhook-endpoints]
+      summary: Register an outbound webhook endpoint; the signing secret is returned once (07.6.3)
+      description: >-
+        The endpoint is created `active` and receives the project's `evaluation.created` events. `url` must be
+        https on port 443 with no userinfo, and every address its host resolves to must be public; a target the
+        guard refuses is 422 `endpoint_url_blocked` with the closed reason in `error.details[0].reason`
+        (`scheme`, `userinfo`, `port`, `host`, `address` or `resolution`). `event_types` is optional and defaults to
+        every supported type. A project holds at most 20 live endpoints (409 `endpoint_limit_reached`) and one live
+        endpoint per URL (409 `endpoint_url_taken`). The caller must be an active member of the org (403
+        `no_membership`). The signing secret (`secret`) is shown in this answer only: the row keeps ciphertext, every
+        later read carries just `secret_hint` and `secret_version`, and the audit row names the endpoint and never the
+        secret. The answer is `Cache-Control: no-store` and is never replayed, so this route takes no
+        `Idempotency-Key` (README): a retried create is a second endpoint or is refused as a duplicate URL.
+      x-permission: webhook:write
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/XsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateWebhookEndpointRequest'
+      responses:
+        '201':
+          description: Endpoint registered; the signing secret is returned once and can never be read again
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookEndpointSecretResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    get:
+      operationId: listWebhookEndpoints
+      tags: [webhook-endpoints]
+      summary: Cursor page of the live webhook endpoints of a project, never the secret (07.6.3)
+      description: >-
+        Keyset-ordered on `(created_at, id)` ascending. Each item carries `secret_hint` and `secret_version`
+        and nothing that could reconstruct the secret. A deleted endpoint is not listed. An unknown project, or
+        one of another org, is 404; a malformed `cursor` or an out-of-range `limit` is 422.
+      x-permission: webhook:read
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Page of endpoints; never the secret or its ciphertext
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookEndpointListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /projects/{p}/webhook-endpoints/{e}:
+    get:
+      operationId: getWebhookEndpoint
+      tags: [webhook-endpoints]
+      summary: One webhook endpoint, never the secret; the ETag is its version (07.6.3)
+      description: >-
+        An unknown id, a deleted endpoint, or one of another org or project is 404.
+      x-permission: webhook:read
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/WebhookEndpointId'
+      responses:
+        '200':
+          description: The endpoint
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookEndpointView'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    patch:
+      operationId: updateWebhookEndpoint
+      tags: [webhook-endpoints]
+      summary: Change a webhook endpoint's URL, event types or state under If-Match (07.6.3)
+      description: >-
+        Omitted members are unchanged and at least one must be present. A new `url` passes the same guard as a
+        registration (422 `endpoint_url_blocked`; 409 `endpoint_url_taken` when another live endpoint of the project
+        has it). `state` moves between `active` and `disabled`; `deleted` is reached only by `DELETE`. A missing
+        `If-Match` is 422; a stale or malformed one is 412 `precondition_failed` and nothing is written. The secret
+        is never part of the body or the answer; rotating it is a separate route.
+      x-permission: webhook:write
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/WebhookEndpointId'
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/XsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateWebhookEndpointRequest'
+      responses:
+        '200':
+          description: The endpoint in its new state
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookEndpointView'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    delete:
+      operationId: deleteWebhookEndpoint
+      tags: [webhook-endpoints]
+      summary: Delete a webhook endpoint; its delivery history is kept (07.6.3)
+      description: >-
+        A soft delete: the row turns `deleted` and is never removed, so no new delivery is created for it, a delivery
+        still in flight is recorded as `endpoint_disabled`, and the delivery log stays readable. The URL becomes free
+        for a new endpoint. A repeat finds no live row and answers 404 `not_found` without a second audit event, so
+        the route takes no `Idempotency-Key` (README).
+      x-permission: webhook:write
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/WebhookEndpointId'
+        - $ref: '#/components/parameters/XsrfToken'
+      responses:
+        '204':
+          description: Endpoint deleted
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /projects/{p}/webhook-deliveries:
+    get:
+      operationId: listWebhookDeliveries
+      tags: [webhook-endpoints]
+      summary: Cursor page of a project's outbound webhook deliveries, newest first (07.6.2)
+      description: >-
+        Keyset-ordered on `(created_at, id)` descending and served by the delivery list indexes; `state` narrows the
+        page to one delivery state (`queued`, `sending`, `delivered`, `retrying` or `dead_letter`; any other value is
+        422). A row carries the attempt count, the next attempt time, the closed `last_error` code and the last HTTP
+        status — never a response body or an address. Deliveries of a deleted endpoint stay listed. An unknown
+        project, or one of another org, is 404. Dead-lettered deliveries are replayed by the operator route
+        `POST /internal/operator/webhook-deliveries/{event_id}/replay?org_id=` (not part of this document, like every
+        `/internal/*` route): it requeues the event's dead-lettered deliveries of active endpoints and answers 404
+        when the org has no delivery for the event, 409 `delivery_not_dead_letter` when none is dead-lettered.
+      x-permission: webhook:read
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/WebhookDeliveryState'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Page of deliveries
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookDeliveryListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
   /orgs/{o}/audit:
     get:
       operationId: listAudit
@@ -9240,6 +9492,24 @@ components:
       schema:
         type: string
         format: uuid
+    WebhookEndpointId:
+      name: e
+      in: path
+      required: true
+      description: >-
+        The webhook endpoint's id. An id of another org or project, or of a deleted endpoint, is 404, exactly as an
+        unknown one is (02.9.1).
+      schema:
+        type: string
+        format: uuid
+    WebhookDeliveryState:
+      name: state
+      in: query
+      required: false
+      description: Only deliveries in this state (07.6.2); any other value is a 422.
+      schema:
+        type: string
+        enum: [queued, sending, delivered, retrying, dead_letter]
     ProviderPath:
       name: provider
       in: path
@@ -13546,6 +13816,177 @@ components:
           type: string
           format: date-time
           description: Mandatory; in the future and at most the configured maximum lifetime.
+    WebhookEndpointView:
+      type: object
+      description: A registered outbound webhook endpoint; never the secret, its ciphertext or any earlier secret.
+      required:
+        [
+          id,
+          project_id,
+          url,
+          event_types,
+          state,
+          secret_hint,
+          secret_version,
+          version,
+          created_at,
+          updated_at,
+        ]
+      properties:
+        id:
+          type: string
+          format: uuid
+        project_id:
+          type: string
+          format: uuid
+        url:
+          type: string
+          maxLength: 2048
+          description: The https target in the normalised form the SSRF guard accepted.
+        event_types:
+          type: array
+          minItems: 1
+          items:
+            type: string
+            enum: [evaluation.created]
+        state:
+          type: string
+          enum: [active, disabled]
+        secret_hint:
+          type: string
+          description: The last four characters of the signing secret, enough to tell two secrets apart.
+        secret_version:
+          type: integer
+          minimum: 1
+        version:
+          type: integer
+          minimum: 1
+          description: The concurrency token; the `ETag` is its quoted form and `PATCH` sends it back in `If-Match`.
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    WebhookEndpointSecretResponse:
+      description: The registration answer — the endpoint plus the signing secret, shown this once.
+      allOf:
+        - $ref: '#/components/schemas/WebhookEndpointView'
+        - type: object
+          required: [secret]
+          properties:
+            secret:
+              type: string
+              description: >-
+                The plaintext signing secret (`HMAC-SHA256` key of the `Evidgate-Signature` header). Returned only
+                by this answer and never readable again; store it now.
+    CreateWebhookEndpointRequest:
+      type: object
+      required: [url]
+      properties:
+        url:
+          type: string
+          maxLength: 2048
+          description: https on port 443, no userinfo, every resolved address public; otherwise 422 `endpoint_url_blocked`.
+        event_types:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            type: string
+            enum: [evaluation.created]
+          description: The event types to receive; omitted means every supported type.
+    UpdateWebhookEndpointRequest:
+      type: object
+      minProperties: 1
+      properties:
+        url:
+          type: string
+          maxLength: 2048
+          description: A new target, checked by the same guard as a registration.
+        event_types:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            type: string
+            enum: [evaluation.created]
+        state:
+          type: string
+          enum: [active, disabled]
+          description: '`deleted` is reached only by `DELETE`.'
+    WebhookEndpointListResponse:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/WebhookEndpointView'
+        next_cursor:
+          type: [string, 'null']
+    WebhookDeliveryView:
+      type: object
+      description: One delivery of one event to one endpoint; never the payload, the signature, a response body or an address.
+      required:
+        [
+          id,
+          endpoint_id,
+          event_type,
+          event_id,
+          state,
+          attempts,
+          next_attempt_at,
+          last_error,
+          last_status_code,
+          created_at,
+          updated_at,
+        ]
+      properties:
+        id:
+          type: string
+          format: uuid
+        endpoint_id:
+          type: string
+          format: uuid
+        event_type:
+          type: string
+          enum: [evaluation.created]
+        event_id:
+          type: string
+          format: uuid
+          description: The evaluation id; also sent to the receiver as `Evidgate-Event-Id`.
+        state:
+          type: string
+          enum: [queued, sending, delivered, retrying, dead_letter]
+        attempts:
+          type: integer
+          minimum: 0
+        next_attempt_at:
+          type: [string, 'null']
+          format: date-time
+        last_error:
+          type: [string, 'null']
+          description: The closed code of the last failed attempt, one of `http_error`, `timeout`, `connection_error`, `dns_rebinding_blocked`, `redirect_not_followed`, `endpoint_disabled` or `secret_unreadable`.
+        last_status_code:
+          type: [integer, 'null']
+          description: The HTTP status of the last attempt, when the endpoint answered.
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    WebhookDeliveryListResponse:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/WebhookDeliveryView'
+        next_cursor:
+          type: [string, 'null']
     CiTokenRequest:
       type: object
       properties:

@@ -9,6 +9,7 @@ using Evidgate.Modules.Policy.Application.Expiry;
 using Evidgate.Modules.Policy.Application.Queries;
 using Evidgate.Modules.Policy.Contracts;
 using Evidgate.Modules.Policy.Infrastructure.Persistence;
+using Evidgate.Modules.Policy.Webhooks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -79,6 +80,11 @@ internal static class PolicyModule
         services.TryAddSingleton<ExceptionExpiryStore>();
         services.AddTaskHandler<SweepExpiredExceptionsCommand, SweepExpiredExceptionsTaskHandler>();
         services.AddTaskSchedule(ExpirySweeps.Expire);
+
+        // Outbound webhooks: endpoint registry and API, then the fan-out and signed delivery handlers.
+        services.AddWebhookCore();
+        services.AddWebhookEndpoints();
+        services.AddWebhookDelivery();
 
         return services;
     }

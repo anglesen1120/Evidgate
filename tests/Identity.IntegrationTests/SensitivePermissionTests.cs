@@ -306,6 +306,7 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
 
         var token = await CreateIngestTokenAsync(client, project);
         var apiToken = await CreateApiTokenAsync(client, project);
+        var webhook = await CreateWebhookEndpointAsync(client, project);
         var binding = await CreateCiBindingAsync(client, project);
 
         IngestTokenShape().IsMatch(token.Secret).ShouldBeTrue(
@@ -330,6 +331,7 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
             exchanged,
             apiToken.Secret,
             apiToken.Secret[^43..],
+            webhook.Secret,
         ];
 
         // The routes whose path names a resource the identity routes do not create:
@@ -345,7 +347,7 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
 
         served.ShouldNotBeEmpty("the host must serve GET routes for the scan to mean anything");
 
-        var callable = CallableGetRoutes(org, project, membership, seeded);
+        var callable = CallableGetRoutes(org, project, membership, webhook.Id, seeded);
 
         var unclassified = served
             .Where(template => !callable.ContainsKey(template) && !SkippedGetRoutes.Contains(template, StringComparer.Ordinal))
@@ -388,6 +390,7 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
         // above, so the clean scan is a statement about real data, not empty pages.
         answered.ShouldContain("/v1/projects/{p}/ingest-tokens");
         answered.ShouldContain("/v1/projects/{p}/api-tokens");
+        answered.ShouldContain("/v1/projects/{p}/webhook-deliveries");
         answered.ShouldContain("/v1/projects/{p}/ci-bindings");
         answered.ShouldContain("/v1/permissions");
         answered.ShouldContain("/v1/roles");
@@ -397,6 +400,8 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
         // id the scan addressed it with, so none of them answered an empty page.
         (string Template, Guid Id)[] seededRoutes =
         [
+            ("/v1/projects/{p}/webhook-endpoints", webhook.Id),
+            ("/v1/projects/{p}/webhook-endpoints/{e}", webhook.Id),
             ("/v1/cases/{c}", seeded.CaseId),
             ("/v1/cases/{c}/revisions", seeded.CaseRevisionId),
             ("/v1/suites/{s}", seeded.SuiteId),
@@ -477,6 +482,7 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
         Guid org,
         Guid project,
         Guid membership,
+        Guid webhookEndpointId,
         SeededResources seeded) =>
         new(StringComparer.Ordinal)
         {
@@ -505,6 +511,9 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
             // The API-token list: one row was created above, so the scan is not vacuous, and the route answers
             // metadata only — the plaintext and the HMAC are never selected.
             ["/v1/projects/{p}/api-tokens"] = $"/v1/projects/{project}/api-tokens",
+            ["/v1/projects/{p}/webhook-endpoints"] = $"/v1/projects/{project}/webhook-endpoints",
+            ["/v1/projects/{p}/webhook-endpoints/{e}"] = $"/v1/projects/{project}/webhook-endpoints/{webhookEndpointId}",
+            ["/v1/projects/{p}/webhook-deliveries"] = $"/v1/projects/{project}/webhook-deliveries",
             // 03.6.1's draft page: a draft is a path, a body hash and a body reference — no secret among them.
             ["/v1/projects/{p}/drafts"] = $"/v1/projects/{project}/drafts",
             // 03.5.1's template page: this host seeds no template row, so the scan reads an empty page; a row is a
@@ -1012,6 +1021,20 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
         return new CreatedToken(root.GetProperty("id").GetGuid(), secret);
     }
 
+    private static async Task<CreatedToken> CreateWebhookEndpointAsync(HttpClient client, Guid project)
+    {
+        // A public IP literal passes registration without a DNS lookup or a delivery.
+        using var response = await client.PostAsJsonAsync(
+            $"/v1/projects/{project}/webhook-endpoints", new { url = "https://93.184.216.34/secret-scan" }, Token);
+        response.StatusCode.ShouldBe(HttpStatusCode.Created);
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync(Token));
+        var endpoint = document.RootElement;
+        var secret = endpoint.GetProperty("secret").GetString()!;
+        (secret.StartsWith("whsec_", StringComparison.Ordinal) && secret.Length == 49).ShouldBeTrue();
+        (endpoint.GetProperty("secret_hint").GetString() == secret[^4..]).ShouldBeTrue();
+        return new CreatedToken(endpoint.GetProperty("id").GetGuid(), secret);
+    }
+
     /// <summary>Creates a CI binding through the real route and captures the one-time challenge.</summary>
     private static async Task<CreatedBinding> CreateCiBindingAsync(HttpClient client, Guid project)
     {
@@ -1339,7 +1362,8 @@ internal static partial class SecretScanner
             case JsonValueKind.Object:
                 foreach (var property in element.EnumerateObject())
                 {
-                    if (IsForbidden(property.Name) && !IsBuildDigestExemption(routeTemplate, property))
+                    if (IsForbidden(property.Name) && !IsBuildDigestExemption(routeTemplate, property)
+                        && !IsWebhookMetadata(routeTemplate, property))
                     {
                         violations.Add($"a JSON member named '{property.Name}' is on the secret deny-list");
                     }
@@ -1390,7 +1414,7 @@ internal static partial class SecretScanner
         && DenyTerms.Any(term => member.Contains(term, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
-    /// The one path-scoped exemption from the deny list: <c>GET /v1/releases/{id}</c> returns each component's build
+    /// A path-scoped exemption from the deny list: <c>GET /v1/releases/{id}</c> returns each component's build
     /// digest, which is <c>sha256:</c> + 64 lower-case hex over a build — an identifier that already appears in CI
     /// logs, never key material. It is narrower than <see cref="AllowedMembers"/> on purpose: the member must be
     /// <c>digest</c>, on that route only, and its value must be exactly that shape (the create route's
@@ -1401,6 +1425,16 @@ internal static partial class SecretScanner
         && property.Name.Equals("digest", StringComparison.OrdinalIgnoreCase)
         && property.Value.ValueKind == JsonValueKind.String
         && BuildDigest().IsMatch(property.Value.GetString()!);
+
+    private static bool IsWebhookMetadata(string? routeTemplate, JsonProperty property) =>
+        routeTemplate is ("/v1/projects/{p}/webhook-endpoints" or "/v1/projects/{p}/webhook-endpoints/{e}")
+        && property.Name switch
+        {
+            "secret_hint" => property.Value.ValueKind == JsonValueKind.String && property.Value.GetString() is { Length: 4 } hint
+                && hint.All(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_'),
+            "secret_version" => property.Value.ValueKind == JsonValueKind.Number && property.Value.TryGetInt32(out var version) && version >= 1,
+            _ => false,
+        };
 
     /// <summary>A build digest: <c>sha256:</c> + 64 lower-case hex, the shape the create route stores.</summary>
     [GeneratedRegex(
@@ -1508,5 +1542,19 @@ public sealed class SecretScannerTests
 
         SecretScanner.Scan("""{"digest":"not a digest"}""", [], "/v1/releases/{id}")
             .ShouldNotBeEmpty("a digest member carrying any other value is on the deny list as before");
+    }
+
+    [Fact]
+    public void Scan_WebhookMetadata_OnlyAcceptsBoundedValuesOnEndpointReads()
+    {
+        const string detail = "/v1/projects/{p}/webhook-endpoints/{e}";
+        const string metadata = """{"secret_hint":"A-_9","secret_version":1}""";
+        SecretScanner.Scan(metadata, [], detail).ShouldBeEmpty();
+        SecretScanner.Scan(metadata, [], "/v1/projects/{p}/webhook-endpoints").ShouldBeEmpty();
+        SecretScanner.Scan(metadata, [], "/v1/projects/{p}/webhook-deliveries").ShouldNotBeEmpty();
+        SecretScanner.Scan("""{"secret_hint":"plaintext"}""", [], detail).ShouldNotBeEmpty();
+        SecretScanner.Scan("""{"secret_version":"plaintext"}""", [], detail).ShouldNotBeEmpty();
+        SecretScanner.Scan("""{"secret_ciphertext":"AQID"}""", [], detail).ShouldNotBeEmpty();
+        SecretScanner.Scan("""{"secret":"plaintext"}""", [], detail).ShouldNotBeEmpty();
     }
 }
