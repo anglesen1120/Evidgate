@@ -75,7 +75,7 @@ public sealed partial class ReleaseIntegrationTests : IClassFixture<TenancyHostP
     }
 
     /// <summary>One <c>GET /v1/releases/{id}</c> as the caller.</summary>
-    private static async Task<ApiAnswer> GetReleaseAsync(
+    internal static async Task<ApiAnswer> GetReleaseAsync(
         RunCreationTests.World world,
         Guid releaseId,
         Action<HttpRequestHeaders>? caller = null,

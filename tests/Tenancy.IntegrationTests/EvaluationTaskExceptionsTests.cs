@@ -242,7 +242,8 @@ public sealed partial class EvaluationTaskTests
             provider.GetRequiredService<Evidgate.Evaluation.IPolicyEvaluator>(),
             provider.GetRequiredService<ITenantDb>(),
             provider.GetRequiredService<ITenantScopeAccessor>(),
-            clock);
+            clock,
+            provider.GetRequiredService<Evidgate.BuildingBlocks.Persistence.Outbox.IOutboxWriter>());
 
     private sealed class CountingClock(DateTimeOffset instant) : TimeProvider
     {
