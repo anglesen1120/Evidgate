@@ -1,8 +1,15 @@
 #pragma warning disable CA1861
 using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
-using Evidgate.BuildingBlocks.Pipeline.Authorization;
+using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Time.Testing;
+using Microsoft.IdentityModel.JsonWebTokens;
+using Microsoft.IdentityModel.Tokens;
 using Shouldly;
 using Xunit;
 using static Tenancy.IntegrationTests.IngestEventBatchTests;
@@ -11,10 +18,11 @@ using static Tenancy.IntegrationTests.RegistryApi;
 namespace Tenancy.IntegrationTests;
 
 /// <summary>
-/// 02.11.1 slot ownership through the real events and finalize routes: a producer slot is owned by the stable id of
-/// the ingest token that bound it, so a renewed token (new <c>jti</c>, same token id) keeps the slot while another
-/// ingest token, another project's token and a caller without a token id cannot take it. Each refusal is asserted
-/// beside the positive control that the owner still succeeds, so a denial is never an artefact of a broken request.
+/// Producer slot ownership through the real credential path: an ingest token is exchanged for a bearer, the bearer is
+/// sent to the events and finalize routes, and the slot is owned by the stable id of the ingest token that bound it.
+/// A bearer that expired is refused, and exchanging the same ingest token again (a new <c>jti</c>, the same token id)
+/// keeps the slot; another ingest token, another project's token and a bearer without a token id cannot take it. Each
+/// refusal sits beside the positive control that the owner still succeeds.
 /// </summary>
 [Trait("Category", "Docker")]
 public sealed class ProducerOwnershipRenewalTests : IClassFixture<TenancyHostPool>
@@ -29,17 +37,90 @@ public sealed class ProducerOwnershipRenewalTests : IClassFixture<TenancyHostPoo
 
     private static string NewTokenId() => Guid.CreateVersion7().ToString("D");
 
-    /// <summary>A host that carries <paramref name="principal"/>: a freshly exchanged token of that ingest token.</summary>
-    private TenancyApiFactory HostFor(IngestTestWorld world, RequestPrincipal principal) =>
-        _hosts.WithPrincipal(world.Database, world.Org, world.Project, principal);
+    /// <summary>
+    /// A running run with one producer slot, plus a CI host over the same database that authenticates bearers against
+    /// a clock the test moves. The world's own principal host is never used: every request here carries a bearer.
+    /// </summary>
+    private sealed class Scene(IngestTestWorld world, TenancyApiFactory origin, WebApplicationFactory<Program> host, FakeTimeProvider clock)
+        : IAsyncDisposable
+    {
+        internal IngestTestWorld World { get; } = world;
 
-    private static Task<string> OwnerAsync(IngestTestWorld world, Guid? runId = null) =>
+        internal WebApplicationFactory<Program> Host { get; } = host;
+
+        internal FakeTimeProvider Clock { get; } = clock;
+
+        internal HttpClient Anonymous { get; } = host.CreateClient();
+
+        internal Action<HttpRequestHeaders> Admin => TenancyApiFactory.Resolved(user: World.User, orgHeader: World.Org);
+
+        public async ValueTask DisposeAsync()
+        {
+            Anonymous.Dispose();
+            try
+            {
+                await Host.DisposeAsync();
+            }
+            finally
+            {
+                try
+                {
+                    await origin.DisposeAsync();
+                }
+                finally
+                {
+                    await World.DisposeAsync();
+                }
+            }
+        }
+    }
+
+    private async Task<Scene> StartSceneAsync()
+    {
+        var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer(NewTokenId()), hosts: _hosts);
+        TenancyApiFactory? origin = null;
+
+        try
+        {
+            await world.SetRunStateAsync("running");
+            var clock = new FakeTimeProvider(TimeProvider.System.GetUtcNow());
+            origin = TenancyApiFactory.Ci(_fixture.AppConnectionString(world.Database), IngestBearer.ShortLived);
+            var host = origin.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<TimeProvider>();
+                services.AddSingleton<TimeProvider>(clock);
+            }));
+
+            return new Scene(world, origin, host, clock);
+        }
+        catch
+        {
+            if (origin is not null)
+            {
+                await origin.DisposeAsync();
+            }
+
+            await world.DisposeAsync();
+            throw;
+        }
+    }
+
+    private static Task<(string Secret, Guid TokenId)> NewTokenAsync(Scene scene, string name, Guid? project = null) =>
+        IngestBearer.CreateTokenAsync(scene.Anonymous, scene.Admin, project ?? scene.World.Project, name);
+
+    private static Task<HttpClient> BearerAsync(Scene scene, string secret) =>
+        IngestBearer.BearerClientAsync(scene.Host, scene.Anonymous, secret);
+
+    private static Task<string> OwnerAsync(IngestTestWorld world) =>
         world.ScalarAsync<string>(
-            $"select bound_token_jti from public.producer_slot where run_id = '{runId ?? world.RunId:D}' and producer_id = '{Producer}'");
+            $"select bound_token_jti from public.producer_slot where run_id = '{world.RunId:D}' and producer_id = '{Producer}'");
 
     private static Task<bool> ClosedAsync(IngestTestWorld world) =>
         world.ScalarAsync<bool>(
             $"select closed_at is not null from public.producer_slot where run_id = '{world.RunId:D}' and producer_id = '{Producer}'");
+
+    private static Task<long> EventCountAsync(IngestTestWorld world) =>
+        world.CountAsync("event", $"org_id = '{world.Org:D}' and run_id = '{world.RunId:D}'");
 
     private static async Task<ApiAnswer> FinalizeAsync(IngestTestWorld world, HttpClient client)
     {
@@ -67,117 +148,165 @@ public sealed class ProducerOwnershipRenewalTests : IClassFixture<TenancyHostPoo
     private static object OneEvent(IngestTestWorld world) =>
         Batch(Event(Guid.CreateVersion7(), KeyOf(world, 0), sequence: 1));
 
-    [Fact]
-    public async Task Ownership_RenewedTokenSameTokenId_KeepsTheSlotThroughEventsAndFinalize()
+    private static object SecondEvent(IngestTestWorld world) =>
+        Batch(Event(Guid.CreateVersion7(), KeyOf(world, 1), sequence: 2));
+
+    /// <summary>A correctly signed <c>ci_producer</c> bearer of the scene's project, with or without the token id claim.</summary>
+    private static string Mint(Scene scene, Guid? ingestTokenId)
     {
-        var tokenId = NewTokenId();
-        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer(tokenId), hosts: _hosts);
-        await world.SetRunStateAsync("running");
+        var world = scene.World;
+        var now = scene.Clock.GetUtcNow();
+        var claims = new Dictionary<string, object>(StringComparer.Ordinal)
+        {
+            ["sub"] = $"ci:{world.Project:D}",
+            ["jti"] = Guid.CreateVersion7().ToString("D"),
+            ["token_use"] = "ci_producer",
+            ["org_id"] = world.Org.ToString("D"),
+            ["project_id"] = world.Project.ToString("D"),
+            ["perm"] = new[] { Evidgate.BuildingBlocks.SharedKernel.Authorization.Permissions.Event.Write },
+        };
+        if (ingestTokenId is { } id)
+        {
+            claims["ingest_token_id"] = id.ToString("D");
+        }
 
-        var first = await PostEventsAsync(world, OneEvent(world));
+        return new JsonWebTokenHandler().CreateToken(new SecurityTokenDescriptor
+        {
+            Issuer = CiTestKeys.Issuer,
+            Audience = CiTestKeys.Audience,
+            IssuedAt = now.UtcDateTime,
+            NotBefore = now.UtcDateTime,
+            Expires = now.AddMinutes(1).UtcDateTime,
+            Claims = claims,
+            SigningCredentials = new SigningCredentials(
+                new SymmetricSecurityKey(TenancyApiFactory.Keys.SigningKey), SecurityAlgorithms.HmacSha256),
+        });
+    }
+
+    [Fact]
+    public async Task Ownership_BearerExpiresAndTheSameIngestTokenIsExchangedAgain_StillFinalizesTheSlotItBound()
+    {
+        await using var scene = await StartSceneAsync();
+        var world = scene.World;
+        var (secret, tokenId) = await NewTokenAsync(scene, "alpha");
+
+        var first = await IngestBearer.ExchangeAsync(scene.Anonymous, secret);
         first.Status.ShouldBe(HttpStatusCode.OK, first.ErrorMessage);
-        (await OwnerAsync(world)).ShouldBe(tokenId, "the slot is owned by the token id, never by a minted jti");
+        var firstBearer = first.Text("token")!;
+        using var producer = IngestBearer.WithBearer(scene.Host, firstBearer);
 
-        // Renewal is another exchange of the same ingest token: a different jti, the same token id.
-        await using var renewed = HostFor(world, IngestTestWorld.Writer(tokenId, world.Project));
-        using var renewedClient = renewed.CreateClient();
-        var answer = await FinalizeAsync(world, renewedClient);
+        // The first batch binds the slot to the ingest token id, never to the bearer's jti.
+        var bound = await PostEventsAsync(world, OneEvent(world), client: producer);
+        bound.Status.ShouldBe(HttpStatusCode.OK, bound.ErrorMessage);
+        (await OwnerAsync(world)).ShouldBe(tokenId.ToString("D"));
 
-        answer.Status.ShouldBe(HttpStatusCode.Accepted, answer.ErrorMessage);
+        // The bearer lives one minute, so two minutes later it is refused on both routes and changes nothing.
+        scene.Clock.Advance(IngestBearer.PastLifetime);
+        (await PostEventsAsync(world, SecondEvent(world), client: producer)).Status.ShouldBe(HttpStatusCode.Unauthorized);
+        (await FinalizeAsync(world, producer)).Status.ShouldBe(HttpStatusCode.Unauthorized);
+        (await ClosedAsync(world)).ShouldBeFalse();
+        (await EventCountAsync(world)).ShouldBe(1);
+
+        // Renewal is another exchange of the same ingest token: a new jti, the same ingest_token_id.
+        var renewed = await IngestBearer.ExchangeAsync(scene.Anonymous, secret);
+        renewed.Status.ShouldBe(HttpStatusCode.OK, renewed.ErrorMessage);
+        var before = new JsonWebToken(firstBearer);
+        var after = new JsonWebToken(renewed.Text("token")!);
+        after.Id.ShouldNotBeNullOrEmpty();
+        after.Id.ShouldNotBe(before.Id);
+        before.GetPayloadValue<string>("ingest_token_id").ShouldBe(tokenId.ToString("D"));
+        after.GetPayloadValue<string>("ingest_token_id").ShouldBe(tokenId.ToString("D"));
+
+        // A second ingest token of the same project, with a valid bearer of its own, cannot close the bound slot.
+        var (otherSecret, _) = await NewTokenAsync(scene, "bravo");
+        using var other = await BearerAsync(scene, otherSecret);
+        var taken = await FinalizeAsync(world, other);
+        taken.Status.ShouldBe(HttpStatusCode.Forbidden);
+        taken.ErrorCode.ShouldBe("producer_slot_taken");
+        (await ClosedAsync(world)).ShouldBeFalse();
+
+        // The renewed bearer is the owner and finalizes the slot the first bearer bound.
+        using var renewedProducer = IngestBearer.WithBearer(scene.Host, renewed.Text("token")!);
+        var finalized = await FinalizeAsync(world, renewedProducer);
+        finalized.Status.ShouldBe(HttpStatusCode.Accepted, finalized.ErrorMessage);
         (await ClosedAsync(world)).ShouldBeTrue();
-        (await OwnerAsync(world)).ShouldBe(tokenId);
+        (await OwnerAsync(world)).ShouldBe(tokenId.ToString("D"));
     }
 
     [Fact]
     public async Task Ownership_OtherIngestTokenOfTheSameProject_CannotPostOrFinalizeTheBoundSlot()
     {
-        var owner = NewTokenId();
-        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer(owner), hosts: _hosts);
-        await world.SetRunStateAsync("running");
-        (await PostEventsAsync(world, OneEvent(world))).Status.ShouldBe(HttpStatusCode.OK);
+        await using var scene = await StartSceneAsync();
+        var world = scene.World;
+        var (ownerSecret, ownerId) = await NewTokenAsync(scene, "alpha");
+        var (otherSecret, _) = await NewTokenAsync(scene, "bravo");
+        using var owner = await BearerAsync(scene, ownerSecret);
+        using var other = await BearerAsync(scene, otherSecret);
+        (await PostEventsAsync(world, OneEvent(world), client: owner)).Status.ShouldBe(HttpStatusCode.OK);
 
-        await using var other = HostFor(world, IngestTestWorld.Writer(NewTokenId(), world.Project));
-        using var otherClient = other.CreateClient();
-        var posted = await PostEventsAsync(
-            world, Batch(Event(Guid.CreateVersion7(), KeyOf(world, 1), sequence: 2)), client: otherClient);
-        var finalized = await FinalizeAsync(world, otherClient);
+        var posted = await PostEventsAsync(world, SecondEvent(world), client: other);
+        var finalized = await FinalizeAsync(world, other);
 
         posted.Status.ShouldBe(HttpStatusCode.Forbidden);
         posted.ErrorCode.ShouldBe("producer_slot_taken");
         finalized.Status.ShouldBe(HttpStatusCode.Forbidden);
         finalized.ErrorCode.ShouldBe("producer_slot_taken");
-        (await OwnerAsync(world)).ShouldBe(owner);
+        (await OwnerAsync(world)).ShouldBe(ownerId.ToString("D"));
         (await ClosedAsync(world)).ShouldBeFalse();
-        (await world.CountAsync("event", $"org_id = '{world.Org:D}' and run_id = '{world.RunId:D}'")).ShouldBe(1);
+        (await EventCountAsync(world)).ShouldBe(1);
 
-        // Positive control: the same request shape from the owner is accepted.
-        var accepted = await FinalizeAsync(world, world.Client);
+        // Positive control: the same finalize request from the owner is accepted.
+        var accepted = await FinalizeAsync(world, owner);
         accepted.Status.ShouldBe(HttpStatusCode.Accepted, accepted.ErrorMessage);
-    }
-
-    [Fact]
-    public async Task Ownership_FirstTokenToBind_KeepsTheSlotFromTheNextToken()
-    {
-        var first = NewTokenId();
-        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer(NewTokenId()), hosts: _hosts);
-        await world.SetRunStateAsync("running");
-
-        // The first token to present the slot owns it, so identical declared metadata gives the second token nothing.
-        await using var firstHost = HostFor(world, IngestTestWorld.Writer(first, world.Project));
-        using var firstClient = firstHost.CreateClient();
-        (await PostEventsAsync(world, OneEvent(world), client: firstClient)).Status.ShouldBe(HttpStatusCode.OK);
-
-        var late = await FinalizeAsync(world, world.Client);
-
-        late.Status.ShouldBe(HttpStatusCode.Forbidden);
-        late.ErrorCode.ShouldBe("producer_slot_taken");
-        (await OwnerAsync(world)).ShouldBe(first);
-        (await FinalizeAsync(world, firstClient)).Status.ShouldBe(HttpStatusCode.Accepted);
     }
 
     [Fact]
     public async Task Ownership_TokenScopedToAnotherProject_CannotBindOrCloseTheSlot()
     {
-        var tokenId = NewTokenId();
-        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer(tokenId), hosts: _hosts);
+        await using var scene = await StartSceneAsync();
+        var world = scene.World;
         using var setup = world.Api.CreateClient();
         var otherProject = await CreateProjectAsync(setup, world.User, world.Org, "other");
-        var otherRun = await world.SeedRunInProjectAsync(otherProject);
-        await IngestTestWorld.SeedSlotsAsync(_fixture, world.Database, world.Org, otherRun.RunId, 1, boundOwnerId: null);
+        var (foreignSecret, _) = await NewTokenAsync(scene, "foreign", otherProject);
+        var (ownSecret, ownId) = await NewTokenAsync(scene, "alpha");
+        using var foreign = await BearerAsync(scene, foreignSecret);
 
-        var denied = await PostEventsAsync(
-            world,
-            Batch(Event(Guid.CreateVersion7(), otherRun.Executions[0].ExecutionKey, sequence: 1)),
-            runId: otherRun.RunId);
+        var posted = await PostEventsAsync(world, OneEvent(world), client: foreign);
+        var finalized = await FinalizeAsync(world, foreign);
 
-        denied.Status.ShouldBe(HttpStatusCode.Forbidden);
-        denied.ErrorCode.ShouldBe("project_scope_mismatch");
-        (await OwnerAsync(world, otherRun.RunId)).ShouldBeNull("the foreign project's slot was never bound");
+        posted.Status.ShouldBe(HttpStatusCode.Forbidden);
+        posted.ErrorCode.ShouldBe("project_scope_mismatch");
+        finalized.Status.ShouldBe(HttpStatusCode.Forbidden);
+        finalized.ErrorCode.ShouldBe("project_scope_mismatch");
+        (await OwnerAsync(world)).ShouldBeNull("the foreign project's token never bound the slot");
+        (await ClosedAsync(world)).ShouldBeFalse();
+        (await EventCountAsync(world)).ShouldBe(0);
 
-        // Positive control: the same token binds a slot of its own project.
-        await world.SetRunStateAsync("running");
-        (await PostEventsAsync(world, OneEvent(world))).Status.ShouldBe(HttpStatusCode.OK);
-        (await OwnerAsync(world)).ShouldBe(tokenId);
+        // Positive control: a token of the run's own project binds the same slot with the same request.
+        using var own = await BearerAsync(scene, ownSecret);
+        (await PostEventsAsync(world, OneEvent(world), client: own)).Status.ShouldBe(HttpStatusCode.OK);
+        (await OwnerAsync(world)).ShouldBe(ownId.ToString("D"));
     }
 
     [Fact]
-    public async Task Ownership_CallerWithoutATokenId_FailsClosedAndBindsNothing()
+    public async Task Ownership_SignedBearerWithoutAnIngestTokenId_IsRefusedAndBindsNothing()
     {
-        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer(NewTokenId()), hosts: _hosts);
-        await world.SetRunStateAsync("running");
+        await using var scene = await StartSceneAsync();
+        var world = scene.World;
+        using var anonymous = IngestBearer.WithBearer(scene.Host, Mint(scene, ingestTokenId: null));
 
-        await using var anonymous = HostFor(
-            world, RequestPrincipal.Service(world.Project, [Evidgate.BuildingBlocks.SharedKernel.Authorization.Permissions.Event.Write], credentialId: null));
-        using var anonymousClient = anonymous.CreateClient();
-        var posted = await PostEventsAsync(world, OneEvent(world), client: anonymousClient);
-        var finalized = await FinalizeAsync(world, anonymousClient);
+        var posted = await PostEventsAsync(world, OneEvent(world), client: anonymous);
+        var finalized = await FinalizeAsync(world, anonymous);
 
         posted.Status.ShouldBe(HttpStatusCode.Unauthorized);
         finalized.Status.ShouldBe(HttpStatusCode.Unauthorized);
         (await OwnerAsync(world)).ShouldBeNull();
         (await ClosedAsync(world)).ShouldBeFalse();
 
-        // Positive control: a caller that has a token id binds the same slot with the same request.
-        (await PostEventsAsync(world, OneEvent(world))).Status.ShouldBe(HttpStatusCode.OK);
+        // Positive control: the same signed bearer with the claim binds the slot to that id.
+        var tokenId = Guid.CreateVersion7();
+        using var claimed = IngestBearer.WithBearer(scene.Host, Mint(scene, tokenId));
+        (await PostEventsAsync(world, OneEvent(world), client: claimed)).Status.ShouldBe(HttpStatusCode.OK);
+        (await OwnerAsync(world)).ShouldBe(tokenId.ToString("D"));
     }
 }

@@ -31,9 +31,9 @@ namespace Evidgate.Modules.Orchestrator.Application.Runs;
 /// </param>
 /// <param name="IsFork">True only when the body says so; a fork run stays advisory-only and never binds to a release.</param>
 /// <param name="UnverifiedRef">
-/// True when at least one stored identity value was declared by the producer: the run carries an identity no
-/// credential verified, so it is advisory input, never a gating one (05.2.2 §8, 07). False when the request
-/// carried no identity at all (all fields null).
+/// True when any ref member was supplied: all stored identity values are producer-declared. False without identity.
+/// A declared non-fork default-branch or configured release-branch-glob match may gate;
+/// declared forks are advisory-only and never bind to a release.
 /// </param>
 internal sealed record RunIdentity(
     string? RefKind,
@@ -64,9 +64,9 @@ internal sealed record RunRefInput(
 /// The run-identity rules of 05.2.2-T1.3 as pure functions, so the trust policy is unit-testable without a database:
 /// parse the body's <c>ref</c> block (shape only, AC4) and resolve it to the identity a run stores.
 /// <para>
-/// Trust policy: every member comes from the producer's body, so <c>unverified_ref</c> is true exactly when
-/// any member is stored, and false when the request carried no identity at all. A declared identity is advisory
-/// input, never a gating one (05.2.2 §8, 07).
+/// Every supplied ref member is producer-declared, so <c>unverified_ref</c> records provenance, not gate eligibility.
+/// A declared non-fork default-branch or configured release-branch-glob match may gate;
+/// declared forks are advisory-only and never bind to a release.
 /// </para>
 /// </summary>
 internal static class RunIdentityRules

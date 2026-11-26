@@ -16,6 +16,16 @@ public sealed class IdentityGithubRemovalMigrationTests(PostgresMigratorFixture 
     private const string Org = "01980000-0000-7000-8000-000000000001";
     private const string Project = "01980000-0000-7000-8000-000000000002";
     private const string Token = "01980000-0000-7000-8000-000000000003";
+    private const string User = "01980000-0000-7000-8000-000000000004";
+    private const string Suite = "01980000-0000-7000-8000-000000000005";
+    private const string SuiteRevision = "01980000-0000-7000-8000-000000000006";
+    private const string EnvironmentId = "01980000-0000-7000-8000-000000000007";
+    private const string EnvironmentRevision = "01980000-0000-7000-8000-000000000008";
+    private const string Manifest = "01980000-0000-7000-8000-000000000009";
+    private const string Run = "01980000-0000-7000-8000-000000000010";
+    private const string EmptyJson = "{}";
+    private const string NoShards = """{"kind":"none"}""";
+    private const string NoRetries = """{"max_retries":0}""";
     private const string SharedGrants = """
         select jsonb_agg(to_jsonb(rp) order by rp.id)::text from public.role_permission rp
          where rp.permission_code in ('ci_binding:write', 'ingest_token:write')
@@ -25,14 +35,11 @@ public sealed class IdentityGithubRemovalMigrationTests(PostgresMigratorFixture 
     [Fact]
     public async Task Upgrade_WithPopulatedLegacyTables_RollsBackOnContentionThenPreservesIngestAndHistory()
     {
-        var database = await fixture.CreateDatabaseAsync();
         using var migrations = TempMigrations.Create();
-        migrations.CopyReal([.. PostgresMigratorFixture.RealMigrationFileNames.Where(name => string.CompareOrdinal(name, FileName) < 0)]);
+        var database = await SeedPreviousHeadAsync(migrations);
         var owner = fixture.OwnerConnectionString(database);
-        var before = MigratorHarness.Run(migrations.Path, owner);
-        before.ExitCode.ShouldBe(MigratorExitCodes.Success, before.Transcript);
         await using var connection = await fixture.OpenSuperuserAsync(database);
-        await SeedAsync(connection);
+        var survivors = await ReadSurvivorsAsync(connection);
         var grants = await fixture.ScalarAsync<string>(database, SharedGrants);
         var audit = await fixture.ScalarAsync<string>(database, AuditHistory);
         grants.ShouldContain("ci_binding:write", Case.Sensitive, "seeded precondition: the shared permission is held");
@@ -47,6 +54,7 @@ public sealed class IdentityGithubRemovalMigrationTests(PostgresMigratorFixture 
         await AssertRoleProbesAsync(connection);
         (await fixture.ScalarAsync<string>(database, SharedGrants)).ShouldBe(grants);
         (await fixture.ScalarAsync<string>(database, AuditHistory)).ShouldBe(audit);
+        (await ReadSurvivorsAsync(connection)).ShouldBe(survivors);
         (await fixture.ScalarAsync<long>(
             database,
             "select count(*) from public.permission where code in ('ci_binding:write', 'ingest_token:write')")).ShouldBe(2);
@@ -56,9 +64,86 @@ public sealed class IdentityGithubRemovalMigrationTests(PostgresMigratorFixture 
         repeated.Result.AppliedNow.ShouldBeEmpty();
     }
 
+    [Fact]
+    public async Task Migration_DirectSqlReplay_PreservesIdentityRunEvidenceAndIngestResolver()
+    {
+        using var migrations = TempMigrations.Create();
+        var database = await SeedPreviousHeadAsync(migrations);
+        await using var connection = await fixture.OpenSuperuserAsync(database);
+        var survivors = await ReadSurvivorsAsync(connection);
+        migrations.CopyReal(FileName);
+        var applied = MigratorHarness.Run(migrations.Path, fixture.OwnerConnectionString(database));
+        applied.ExitCode.ShouldBe(MigratorExitCodes.Success, applied.Transcript);
+        applied.Result.AppliedNow.ShouldBe([FileName]);
+        (await ReadSurvivorsAsync(connection)).ShouldBe(survivors);
+        await AssertRoleProbesAsync(connection);
+
+        var cancellation = TestContext.Current.CancellationToken;
+        await using var owner = new NpgsqlConnection(fixture.OwnerConnectionString(database));
+        await owner.OpenAsync(cancellation);
+        await using var transaction = await owner.BeginTransactionAsync(cancellation);
+        await using var replay = owner.CreateCommand();
+        replay.Transaction = transaction;
+        replay.CommandText = await File.ReadAllTextAsync(
+            Path.Combine(PostgresMigratorFixture.RepoMigrationsPath, FileName), cancellation);
+        await replay.ExecuteNonQueryAsync(cancellation);
+        await transaction.CommitAsync(cancellation);
+
+        await AssertRetiredAsync(database);
+        await AssertRoleProbesAsync(connection);
+        (await ReadSurvivorsAsync(connection)).ShouldBe(survivors);
+    }
+
+    private async Task<string> SeedPreviousHeadAsync(TempMigrations migrations)
+    {
+        var database = await fixture.CreateDatabaseAsync();
+        migrations.CopyReal([.. PostgresMigratorFixture.RealMigrationFileNames.Where(name => string.CompareOrdinal(name, FileName) < 0)]);
+        var before = MigratorHarness.Run(migrations.Path, fixture.OwnerConnectionString(database));
+        before.ExitCode.ShouldBe(MigratorExitCodes.Success, before.Transcript);
+        await using var connection = await fixture.OpenSuperuserAsync(database);
+        await SeedAsync(connection);
+        await SeedRunEvidenceAsync(connection);
+        return database;
+    }
+
+    private static async Task<string[]> ReadSurvivorsAsync(NpgsqlConnection connection)
+    {
+        var rows = new List<string>();
+        foreach (var (table, predicate) in new[]
+        {
+            ("organization", $"id = '{Org}'"),
+            ("project", $"org_id = '{Org}'"),
+            ("\"user\"", $"id = '{User}'"),
+            ("user_identity", $"user_id = '{User}'"),
+            ("membership", $"org_id = '{Org}'"),
+            ("membership_role", $"org_id = '{Org}'"),
+            ("role", $"org_id = '{Org}'"),
+            ("role_permission", $"org_id = '{Org}'"),
+            ("ingest_token", $"org_id = '{Org}'"),
+            ("run", $"org_id = '{Org}'"),
+            ("evidence_revision", $"org_id = '{Org}'"),
+            ("audit_log", $"org_id = '{Org}'"),
+        })
+        {
+            var snapshot = await PostgresMigratorFixture.ScalarAsync<string>(connection, $"""
+                select coalesce(jsonb_agg(to_jsonb(r) order by r.id), '[]'::jsonb)::text
+                  from public.{table} r where {predicate}
+                """);
+            snapshot.ShouldNotBe("[]", table);
+            rows.Add(snapshot);
+        }
+
+        return rows.ToArray();
+    }
+
     private static Task SeedAsync(NpgsqlConnection connection) => PostgresMigratorFixture.ExecuteAsync(connection, $"""
         insert into public.organization (id, name, slug) values ('{Org}', 'upgrade', 'upgrade');
         insert into public.project (id, org_id, name, slug) values ('{Project}', '{Org}', 'upgrade', 'upgrade');
+        insert into public."user" (id, email, display_name) values ('{User}', 'survivor@example.com', 'Survivor');
+        insert into public.user_identity (id, user_id, provider, subject, email_at_provider)
+        values (gen_random_uuid(), '{User}', 'github', '42', 'survivor@example.com');
+        insert into public.membership (id, org_id, user_id, invited_email, status)
+        values (gen_random_uuid(), '{Org}', '{User}', 'survivor@example.com', 'active');
         insert into public.ci_binding (id, org_id, project_id, provider, repository_id, repository_full_name,
             allowed_ref_patterns, allowed_workflow_refs, status)
         values (gen_random_uuid(), '{Org}', '{Project}', 'github_actions', 42, 'org/repo', array['main'], array['job'], 'active');
@@ -72,9 +157,37 @@ public sealed class IdentityGithubRemovalMigrationTests(PostgresMigratorFixture 
         values (gen_random_uuid(), '{Org}', 'installer', 'Installer', false, 'member');
         insert into public.role_permission (id, org_id, role_id, permission_code)
         select gen_random_uuid(), org_id, id, 'ci_binding:write' from public.role where org_id = '{Org}' and code = 'installer';
+        insert into public.membership_role (id, org_id, membership_id, role_id)
+        select gen_random_uuid(), m.org_id, m.id, r.id from public.membership m
+        join public.role r on r.org_id = m.org_id and r.code = 'installer' where m.org_id = '{Org}';
         insert into public.audit_log (id, org_id, seq, actor_type, actor_id, action, prev_hash, entry_hash)
         values (gen_random_uuid(), '{Org}', 1, 'system', 'upgrade', 'ci_binding.create',
             decode(repeat('00', 32), 'hex'), decode(repeat('01', 32), 'hex'));
+        """);
+
+    private static Task SeedRunEvidenceAsync(NpgsqlConnection connection) => PostgresMigratorFixture.ExecuteAsync(connection, $"""
+        insert into public.suite (id, org_id, project_id, name, slug)
+        values ('{Suite}', '{Org}', '{Project}', 'survivor', 'survivor');
+        insert into public.suite_revision (id, org_id, suite_id, revision_no, revision_hash, shard_strategy, retry_policy)
+        values ('{SuiteRevision}', '{Org}', '{Suite}', 1, 'sha256:' || repeat('a', 64), '{NoShards}', '{NoRetries}');
+        insert into public.environment (id, org_id, project_id, environment_key, name)
+        values ('{EnvironmentId}', '{Org}', '{Project}', 'staging', 'Staging');
+        insert into public.environment_revision (id, org_id, project_id, environment_id, revision_no,
+            base_urls, dependency_versions, revision_hash, created_by)
+        values ('{EnvironmentRevision}', '{Org}', '{Project}', '{EnvironmentId}', 1,
+            '{EmptyJson}', '{EmptyJson}', 'sha256:' || repeat('b', 64), 'upgrade');
+        insert into public.manifest (id, org_id, project_id, manifest_hash, schema_version, suite_revision_id,
+            environment_revision_id, shard_plan, matrix, env_needs, planned_count, document, verified_by)
+        values ('{Manifest}', '{Org}', '{Project}', 'sha256:' || repeat('c', 64), 1, '{SuiteRevision}',
+            '{EnvironmentRevision}', '{EmptyJson}', '{EmptyJson}', '{EmptyJson}', 0, '{EmptyJson}', 'upgrade');
+        insert into public.run (id, org_id, project_id, manifest_id, suite_revision_id, environment_revision_id,
+            collection_deadline_at, late_window_minutes, ref_kind, ref_name, unverified_ref)
+        values ('{Run}', '{Org}', '{Project}', '{Manifest}', '{SuiteRevision}', '{EnvironmentRevision}',
+            now() + interval '2 hours', 1440, 'branch', 'main', true);
+        insert into public.evidence_revision (id, org_id, run_id, revision_no, completeness, missing,
+            event_watermark, manifest_hash)
+        values (gen_random_uuid(), '{Org}', '{Run}', 1, 'incomplete', array['missing_shard'],
+            0, 'sha256:' || repeat('c', 64));
         """);
 
     private async Task AssertBoundedRollbackAsync(string database, TempMigrations migrations, string owner)

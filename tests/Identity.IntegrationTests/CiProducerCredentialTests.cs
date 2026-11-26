@@ -77,6 +77,31 @@ public sealed class CiProducerCredentialTests
         (await Tokens().ValidateAsync(MintRaw(claims))).ShouldNotBeNull();
     }
 
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("not-a-guid")]
+    [InlineData("00000000-0000-0000-0000-000000000000")]
+    public async Task MissingOrMalformedProject_IsRefusedDespiteValidCredential(string? value)
+    {
+        var tokens = Tokens();
+        var claims = BaseClaims();
+        claims["ingest_token_id"] = CredentialId.ToString("D");
+        claims.Remove("project_id");
+        if (value is not null)
+        {
+            claims["project_id"] = value;
+        }
+
+        (await tokens.ValidateAsync(MintRaw(claims))).ShouldBeNull();
+
+        claims["project_id"] = ProjectId.ToString("D");
+        var caller = await tokens.ValidateAsync(MintRaw(claims));
+        caller.ShouldNotBeNull();
+        caller.Principal.ProjectScope.ShouldBe(ProjectId);
+        caller.Principal.CredentialId.ShouldBe(CredentialId.ToString("D"));
+    }
+
     private static CiProducerTokens Tokens()
     {
         var options = Options.Create(AuthOptions());

@@ -33,8 +33,9 @@ namespace Evidgate.Modules.Orchestrator.Contracts;
 /// top of this block, not here.
 /// </param>
 /// <param name="UnverifiedRef">
-/// True when at least one member of <see cref="Ref"/> was declared by the producer, i.e. the identity is advisory
-/// input and never a gating one (05.2.2 §8, AC2). False when the run records no identity at all.
+/// True when any ref member was supplied: all stored identity values are producer-declared. False without identity.
+/// A declared non-fork default-branch or configured release-branch-glob match may gate;
+/// declared forks are advisory-only and never bind to a release.
 /// </param>
 /// <param name="ManifestHash">
 /// The pinned manifest's <c>manifest_hash</c> (F44, S143), joined from <c>manifest</c> through the run's
@@ -227,16 +228,12 @@ public sealed record RunEnvironmentRef(
 /// </param>
 /// <param name="PrNumber">The pull request number of a <c>pull_request</c> identity; null otherwise.</param>
 /// <param name="HeadSha">
-/// The commit the run was built from (<c>^[0-9a-f]{40}([0-9a-f]{24})?$</c>). It is the verified <c>sha</c> claim for a
-/// branch or tag; for a pull-request ref GitHub's claim is the test-merge commit, so that value is not used and this is
-/// null unless the body supplied it.
+/// The commit the producer declares the run was built from (<c>^[0-9a-f]{40}([0-9a-f]{24})?$</c>).
 /// </param>
 /// <param name="BaseSha">The base commit; only the request body can supply one.</param>
 /// <param name="TriggerEvent"><c>push</c>, <c>pull_request</c>, <c>schedule</c>, <c>manual</c> or <c>dispatch</c>; only the request body can supply one.</param>
 /// <param name="IsFork">
-/// True only when the request body said so (a fork PR cannot exchange a token, so a verified caller is never a fork).
-/// Derived <c>advisory_only</c> is 05.2.2-T3.2's, and a fork run is never bound to a release nor counted by a gating
-/// policy (AC7, AC8).
+/// True when the producer declares a fork; advisory-only and never bound to a release or counted by a gating policy.
 /// </param>
 public sealed record RunRef(
     string? Kind,
