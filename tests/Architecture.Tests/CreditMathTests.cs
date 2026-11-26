@@ -140,8 +140,15 @@ public class CreditMathTests
     [InlineData("plain", true)]
     [InlineData("emoji \U0001F600 pair", true)]
     [InlineData("nul\0inside", false)]
-    [InlineData("lone \uD83D high", false)]
-    [InlineData("lone \uDE00 low", false)]
     public void IsStorable_RefusesNulAndUnpairedSurrogates(string text, bool expected) =>
         CreditMath.IsStorable(text).ShouldBe(expected);
+
+    [Fact]
+    public void IsStorable_RefusesAnUnpairedSurrogate_InEitherPosition()
+    {
+        // Built at run time: a test-data string carrying a lone surrogate is rewritten to U+FFFD on its way to the runner.
+        CreditMath.IsStorable("lone " + (char)0xD83D + " high").ShouldBeFalse();
+        CreditMath.IsStorable("lone " + (char)0xDE00 + " low").ShouldBeFalse();
+        CreditMath.IsStorable("ends " + (char)0xD83D).ShouldBeFalse();
+    }
 }
