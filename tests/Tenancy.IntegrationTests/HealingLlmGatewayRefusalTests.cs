@@ -146,6 +146,7 @@ public sealed class HealingLlmGatewayRefusalTests
             new HealingLlmTransactions((ITenantScopeFactory)scopes),
             Options.Create(new HealingProviderOptions { Kind = kind, Provider = kind.ToString().ToLowerInvariant() }),
             Options.Create(new HealingLlmOptions()),
+            new RedactionPipeline(),
             NullLogger<HealingLlmGateway>.Instance);
 
     private static (ITenantDb Db, ITenantScopeAccessor Scopes) Database()
