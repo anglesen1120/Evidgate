@@ -50,6 +50,9 @@ internal static class HealingModule
         services.TryAddScoped<HealingSwitchStore>();
         services.TryAddScoped<IncidentReadStore>();
 
+        // The one writer of an AI credit balance: entry, account and usage ledger row in the caller's transaction.
+        services.TryAddScoped<AiCreditWriter>();
+
         // The Contracts seam other modules resolve to ask "may healing act for this project?".
         services.TryAddScoped<IHealingAvailabilityResolver, HealingAvailabilityResolver>();
 

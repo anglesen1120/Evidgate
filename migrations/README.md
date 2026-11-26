@@ -1366,6 +1366,14 @@ target)` and `session_revoke_audit_append(org, actor, object_type, object_id, me
 - Locks: `ACCESS EXCLUSIVE` on both tables until commit, 5 s `lock_timeout`. Only the removed exchange wrote them: stop the previous API and Worker before applying, then deploy the release without the exchange. A blocked file rolls back whole and is not journalled.
 - Rollback: restore from backup; the tables and their rows are not recreated by a later migration. Numbering: the migrator refuses a gap, so apply only on a tree that holds `0133`.
 
+## Notes on the AI credit tables (`0135`)
+
+- `0135` adds `public.ai_credit_account` (one row per organization: `balance_micro` available and `reserved_micro` held, both `>= 0`) and `public.ai_credit_entry` (append-only log: `kind` grant|reserve|consume|refund|expire|adjust, `amount_micro` magnitude (signed only for `adjust`), optional `call_id`, `billing_key`, `payload_hash`, reason, actor). Both have `unique (org_id, id)`, FORCE RLS with `TO evidgate_app` and `TO evidgate_owner` policies. The usage `metric` checks of `usage_ledger_entry`, `usage_rollup`, `usage_price` and `quota_counter` also accept `ai_credit`.
+- Keys: `ai_credit_entry` references `ai_credit_account (org_id, id)` and `healing_llm_call (org_id, id)` (no cascade). `unique (org_id, billing_key)` is the replay guard and equals the usage ledger billing key of the entry's ledger row; a partial unique index on `(org_id, call_id, kind)` allows one entry of each kind per call.
+- Guards (SQLSTATE `23514`): `ai_credit_entry_immutable` refuses every UPDATE of an entry and any DELETE except by `evidgate_owner`. The app role holds SELECT + INSERT on entries and SELECT + INSERT + UPDATE of the two balance columns on accounts; operator and sweep roles hold nothing.
+- Purge order (owner erasure): delete `ai_credit_entry` rows before `healing_llm_call` rows or the project; the call key has no cascade and fails with `23503`.
+- Locks: new tables; the four metric checks are re-added `NOT VALID`, validated, then swapped; `lock_timeout` is 5 s. Numbering: the migrator refuses a gap, so apply only on a tree that holds `0134`. Rollback: forward-only; stop the writer and keep both tables and the widened checks, because ledger rows with metric `ai_credit` and the credit balances must survive.
+
 ## Notes on healing redaction reports (`0136`)
 
 - `0136` adds `public.healing_redaction_report` (one row per provider call: `purpose`, `rule_version`, the `report` jsonb of rule ids, field paths and counts, and its `report_hash`) and widens `healing_llm_call`: the status check gains `blocked_leak`, `redaction_report_hash` must be a `sha256:` digest, and a `blocked_leak` row must name its report. The report never holds a value; the hash is the RFC 8785 digest of the report JSON.
