@@ -25,23 +25,26 @@
 -- another transaction are skipped (`for update skip locked`) and picked up by the next call. Rows that were
 -- locked but fell outside the limit stay locked until the caller's transaction ends.
 --
--- Indexes: none are added. Both statements filter `org_id`, `state` and `expires_at`, which the existing
--- `waiver_state_expiry_idx` (0027) and `quarantine_entry_state_expiry_idx` (0030) cover as
--- `(org_id, project_id, state, expires_at)`; the probe reads them without an org prefix and the sweep with one.
--- Both tables hold human-made rows, so an hourly pass stays small, and a new partial index could take the plan
--- away from the per-project due queries those indexes are pinned for.
+-- Indexes: the per-project indexes put project_id before expires_at, so they cannot supply org-wide due order.
+-- The partial (org_id, expires_at, id) indexes order eligible rows for the per-org sweep and also serve the
+-- cross-org probe's org_id cursor without indexing terminal rows.
 --
--- Idempotent: `create or replace function` and re-stated `revoke`/`grant`; a rerun of the sweep returns nothing.
+-- Idempotent: `create index if not exists`, `create or replace function` and re-stated `revoke`/`grant`.
 -- One file runs in one transaction.
 --
--- Locks: function DDL and `GRANT`/`REVOKE` take ACCESS SHARE plus a catalogue ACL update, under the 5 s
--- `lock_timeout`; the functions take row locks only when called.
+-- Locks: `create index` takes a SHARE lock on each small table of human-created entries, blocking writes
+-- until commit. Lock acquisition is bounded by the 5 s `lock_timeout`. The sweep takes row locks when called.
 --
 -- Rollback: `drop function if exists evidgate.sweep_expired_exceptions(uuid, integer);` and
--- `drop function if exists evidgate.exception_expiry_org_ids(uuid, integer);`. Rows already expired stay expired
--- (the guards allow no way back).
+-- `drop function if exists evidgate.exception_expiry_org_ids(uuid, integer);`, then
+-- `drop index if exists public.waiver_org_due_idx, public.quarantine_entry_org_due_idx;`. Already-expired rows stay expired.
 
 set local lock_timeout = '5s';
+
+create index if not exists waiver_org_due_idx
+  on public.waiver (org_id, expires_at, id) where state = 'approved';
+create index if not exists quarantine_entry_org_due_idx
+  on public.quarantine_entry (org_id, expires_at, id) where state = 'active';
 
 create or replace function evidgate.exception_expiry_org_ids(p_after uuid, p_limit integer) returns setof uuid
   language sql
@@ -124,10 +127,10 @@ create or replace function evidgate.sweep_expired_exceptions(p_org_id uuid, p_li
   end
   $$;
 
--- lint: audit-deferred expiry-sweep-caller-audit evidgate.exception_expiry_org_ids, evidgate.sweep_expired_exceptions
--- The projection spans orgs and `audit_log.org_id` is NOT NULL, so no audit row can belong to it (the 0076
--- precedent). The sweep returns the rows it moved and its only caller writes one `waiver.expire` /
--- `quarantine.expire` audit row per returned row in the same tenant transaction, so the per-call row lives there.
+-- lint: audit-deferred tenant-task-audit evidgate.exception_expiry_org_ids, evidgate.sweep_expired_exceptions
+-- The cross-org probe has no single org to audit. The sweep definer cannot write the per-org audit chain:
+-- the task handler writes one audit row per returned row in the same tenant transaction. A direct SQL call
+-- by evidgate_app bypasses that handler but can only expire rows already due in its current org.
 revoke all on function evidgate.exception_expiry_org_ids(uuid, integer) from public;
 grant execute on function evidgate.exception_expiry_org_ids(uuid, integer) to evidgate_worker_sched;
 

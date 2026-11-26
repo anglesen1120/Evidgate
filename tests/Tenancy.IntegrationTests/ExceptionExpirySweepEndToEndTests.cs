@@ -39,13 +39,14 @@ public sealed partial class EvaluationTaskTests
         var asOf = DateTimeOffset.UtcNow + SnapshotAge;
         var prior = await EvaluateAtAsync(world, seed, EvaluationMode.Live, asOf, token);
         prior.ExceptionsHash.ShouldBe(ExceptionsSnapshotResolver.HashOf(
-            [rows.DueWaiver, rows.FutureWaiver], [rows.DueQuarantine, rows.FutureQuarantine]));
+            [.. new[] { rows.DueWaiver, rows.FutureWaiver }.OrderBy(id => id.ToString("D"), StringComparer.Ordinal)],
+            [.. new[] { rows.DueQuarantine, rows.FutureQuarantine }.OrderBy(id => id.ToString("D"), StringComparer.Ordinal)]));
         var priorRow = await StoredRowTextAsync(world, prior.Id);
 
         await SweepAsync(world, token);
 
         var afterSweep = await StatesAsync(world);
-        afterSweep.ToDictionary(pair => pair.Key, pair => pair.Value.State).ShouldBe(new Dictionary<Guid, string>
+        Sorted(afterSweep.ToDictionary(pair => pair.Key, pair => pair.Value.State)).ShouldBe(Sorted(new Dictionary<Guid, string>
         {
             [rows.DueWaiver] = "expired",
             [rows.DueQuarantine] = "expired",
@@ -54,7 +55,7 @@ public sealed partial class EvaluationTaskTests
             [rows.RequestedWaiver] = "requested",
             [rows.RevokedWaiver] = "revoked",
             [rows.RemovedQuarantine] = "removed",
-        });
+        }));
         (await AuditRowsAsync(world)).ShouldBe(
             [
                 $"quarantine.expire|quarantine|{rows.DueQuarantine:D}|system|system",
@@ -64,7 +65,7 @@ public sealed partial class EvaluationTaskTests
         await VerifyAuditChainAsync(world, seed, token);
 
         await SweepAsync(world, token);
-        (await StatesAsync(world)).ShouldBe(afterSweep, "a re-run finds nothing due, so no row or version moves");
+        Sorted(await StatesAsync(world)).ShouldBe(Sorted(afterSweep), "a re-run finds nothing due, so no row or version moves");
         (await AuditRowsAsync(world)).Count.ShouldBe(2, "and writes no second audit row");
 
         var next = await EvaluateAtAsync(world, seed, EvaluationMode.Shadow, asOf, token);
@@ -165,6 +166,67 @@ public sealed partial class EvaluationTaskTests
             .ShouldBe([.. orgs.Where(org => org != failing).Select(org => org.ToString("D"))]);
     }
 
+    /// <summary>
+    /// A failure writing the audit row, after both transitions succeeded inside the org's transaction, rolls both back:
+    /// the rows keep their state and version, no expiry audit row exists, and the fire throws. With the fault removed a
+    /// retry expires each row exactly once with exactly one audit row each.
+    /// </summary>
+    [Fact]
+    public async Task Expiry_AuditInsertFails_RollsBackBothTransitionsAndRetryExpiresEachOnce()
+    {
+        var token = TestContext.Current.CancellationToken;
+        await using var dedicated = await _fixture.CreateDedicatedDatabaseAsync();
+        await using var world = await RunCreationTests.StartAsync(
+            _fixture, database: dedicated.Name, services: UseSweepRole(dedicated.Name));
+        var seed = await SeedAsync(world);
+        const string due = "now() - interval '1 hour'";
+        var waiver = await InsertWaiverAsync(world, seed, "approved", due);
+        var quarantine = await InsertQuarantineAsync(world, seed, "active", due);
+
+        // Only fail the audit insert if the writer's transaction already sees both transitions.
+        await _fixture.ExecuteAsync(
+            dedicated.Name,
+            $"""
+            create function public.refuse_expiry_audit() returns trigger language plpgsql as $$
+            begin
+              if exists (select from public.waiver where id = '{waiver:D}' and state = 'expired')
+                 and exists (select from public.quarantine_entry where id = '{quarantine:D}' and state = 'expired') then
+                raise exception 'probe: expiry audit refused';
+              end if;
+              return new;
+            end $$;
+            create trigger refuse_expiry_audit before insert on public.audit_log for each row
+              when (new.org_id = '{seed.Org:D}' and new.action in ('waiver.expire', 'quarantine.expire'))
+              execute function public.refuse_expiry_audit();
+            """);
+        try
+        {
+            var error = await Should.ThrowAsync<AggregateException>(() => SweepAsync(world, token));
+            error.InnerExceptions.ShouldHaveSingleItem().GetBaseException().ShouldBeOfType<PostgresException>()
+                .MessageText.ShouldBe("probe: expiry audit refused");
+            var rolledBack = await StatesAsync(world);
+            rolledBack[waiver].ShouldBe(("approved", 1));
+            rolledBack[quarantine].ShouldBe(("active", 1));
+            (await AuditRowsAsync(world)).ShouldBeEmpty();
+        }
+        finally
+        {
+            await _fixture.ExecuteAsync(
+                dedicated.Name,
+                "drop trigger refuse_expiry_audit on public.audit_log; drop function public.refuse_expiry_audit();");
+        }
+
+        await SweepAsync(world, token);
+        var retried = await StatesAsync(world);
+        retried[waiver].ShouldBe(("expired", 2));
+        retried[quarantine].ShouldBe(("expired", 2));
+        (await AuditRowsAsync(world)).ShouldBe(
+            [
+                $"quarantine.expire|quarantine|{quarantine:D}|system|system",
+                $"waiver.expire|waiver|{waiver:D}|system|system",
+            ]);
+    }
+
     private Action<IServiceCollection> UseSweepRole(string database) =>
         services =>
         {
@@ -252,6 +314,10 @@ public sealed partial class EvaluationTaskTests
 
         return [.. ids];
     }
+
+    // Dictionary equality in Shouldly follows enumeration order, which the database does not promise.
+    private static List<string> Sorted<T>(IReadOnlyDictionary<Guid, T> map) =>
+        [.. map.Select(pair => $"{pair.Key:D}|{pair.Value}").Order(StringComparer.Ordinal)];
 
     /// <summary>Every waiver and quarantine entry of the world's org: id to state and version.</summary>
     private async Task<Dictionary<Guid, (string State, int Version)>> StatesAsync(RunCreationTests.World world)
