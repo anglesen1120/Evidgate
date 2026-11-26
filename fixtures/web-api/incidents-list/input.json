@@ -1,0 +1,46 @@
+{
+  "operation_id": "listIncidents",
+  "variant": "ok",
+  "status": 200,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-000000000e50"
+  },
+  "latency_ms": 0,
+  "body": {
+    "items": [
+      {
+        "id": "018f0000-0000-7000-8000-000000000e51",
+        "project_id": "018f0000-0000-7000-8000-000000000011",
+        "run_id": "018f0000-0000-7000-8000-000000000021",
+        "attempt_id": "018f0000-0000-7000-8000-000000000e52",
+        "case_id": "018f0000-0000-7000-8000-000000000e53",
+        "case_revision_id": "018f0000-0000-7000-8000-000000000e54",
+        "execution_key": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "engine": "playwright",
+        "state": "open",
+        "context_state": "pending",
+        "attempt_count": 2,
+        "created_at": "2026-11-20T09:15:00Z",
+        "updated_at": "2026-11-20T09:15:00Z",
+        "version": 1
+      },
+      {
+        "id": "018f0000-0000-7000-8000-000000000e61",
+        "project_id": "018f0000-0000-7000-8000-000000000011",
+        "run_id": "018f0000-0000-7000-8000-000000000021",
+        "attempt_id": "018f0000-0000-7000-8000-000000000e62",
+        "case_id": "018f0000-0000-7000-8000-000000000e63",
+        "case_revision_id": "018f0000-0000-7000-8000-000000000e64",
+        "execution_key": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+        "engine": "playwright",
+        "state": "triaged",
+        "context_state": "complete",
+        "attempt_count": 1,
+        "created_at": "2026-11-19T16:40:00Z",
+        "updated_at": "2026-11-20T08:05:00Z",
+        "version": 3
+      }
+    ],
+    "next_cursor": null
+  }
+}

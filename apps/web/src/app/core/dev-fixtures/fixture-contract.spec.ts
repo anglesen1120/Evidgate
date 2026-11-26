@@ -51,6 +51,29 @@ describe('Fixture contract check (09.1.1-T12.2, AC10)', () => {
     }
   });
 
+  it.each([
+    ['listIncidents', '/projects/{p}/incidents', 'incidents-list', 'ok'],
+    ['listIncidents', '/projects/{p}/incidents', 'incidents-list-empty', 'empty'],
+    ['getIncident', '/incidents/{i}', 'incident-detail', 'ok'],
+  ])('serves %s at GET %s with the %s specimen', (operationId, path, name, variant) => {
+    expect(FIXTURE_ROUTES).toContainEqual({ operationId, method: 'GET', path });
+    const document = corpusDocument(name);
+    expect(document).toMatchObject({ operation_id: operationId, status: 200, variant });
+    expect(VALIDATOR.validateResponse(operationId, document.status, document.body).errors).toEqual(
+      [],
+    );
+  });
+
+  it('lists the incident detail alongside a triaged incident and offers an empty page', () => {
+    const detail = corpusDocument('incident-detail').body;
+    expect(detail).toMatchObject({ state: 'open' });
+    expect(corpusDocument('incidents-list').body).toEqual({
+      items: [detail, expect.objectContaining({ state: 'triaged' })],
+      next_cursor: null,
+    });
+    expect(corpusDocument('incidents-list-empty').body).toEqual({ items: [], next_cursor: null });
+  });
+
   it('pins run-detail to the current getRun response without invented manifest data', () => {
     const names = [
       'run-detail',

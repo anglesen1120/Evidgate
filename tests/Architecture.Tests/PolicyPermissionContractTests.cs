@@ -27,6 +27,8 @@ public sealed class PolicyPermissionContractTests
         ("Policy", "removeQuarantineEntry", "RemoveQuarantineEntryCommandHandler", "quarantine:write"),
         ("Policy", "listQuarantineEntries", "ListQuarantineEntriesQueryHandler", "policy:read"),
         ("Policy", "getRunDecision", "GetRunDecisionQueryHandler", "decision:read"),
+        ("Healing", "listIncidents", "ListIncidentsQueryHandler", "healing:triage"),
+        ("Healing", "getIncident", "GetIncidentQueryHandler", "healing:triage"),
 
         // 13.1.1-T2.4: the sixteen authoring operations of 13.1.1-T2 (13.1.1 §5) — four reads on authoring:read,
         // twelve writes on authoring:write (the split §5's permission column states).

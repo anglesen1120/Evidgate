@@ -28,6 +28,7 @@ public static class HealingEndpoints
         ArgumentNullException.ThrowIfNull(routes);
 
         var group = routes.MapGroup("/v1").WithTags("healing");
+        group.MapIncidentEndpoints();
 
         group.MapGet("/healing/switch", GetHealingSwitchAsync)
             .Produces<HealingSwitchResolutionView>(StatusCodes.Status200OK)

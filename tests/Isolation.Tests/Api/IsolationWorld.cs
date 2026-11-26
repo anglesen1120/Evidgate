@@ -107,6 +107,9 @@ public sealed class IsolationProject
     /// <summary>The first run (<c>{r}</c> of <c>/v1/runs/{r}</c>), created from <see cref="ManifestId"/> (05.3.1); <see cref="RunIds"/>[0].</summary>
     public Guid RunId => RunIds[0];
 
+    /// <summary>Incidents from the second run, ordered by id within their shared creation instant.</summary>
+    public required IReadOnlyList<Guid> IncidentIds { get; init; }
+
     /// <summary>The project's waivers (<c>{w}</c> of <c>/v1/waivers/{w}/…</c>), in seeding order; at least two, so the list pages.</summary>
     public required IReadOnlyList<Guid> WaiverIds { get; init; }
 
@@ -1069,6 +1072,7 @@ public sealed class IsolationWorld
                 ManifestId = manifest,
                 ReleaseId = release,
                 RunIds = runs,
+                IncidentIds = await IncidentReadSeed.SeedAsync(ownerConnectionString, org, project, runs[1], cancellationToken).ConfigureAwait(false),
                 WaiverIds = waivers,
                 QuarantineIds = quarantines,
                 AuthoringNodeIds = authoringNodes,

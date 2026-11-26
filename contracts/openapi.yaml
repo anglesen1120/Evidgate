@@ -6269,6 +6269,8 @@ paths:
         - $ref: '#/components/parameters/ProjectId'
         - $ref: '#/components/parameters/Cursor'
         - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/IncidentStateFilter'
+        - $ref: '#/components/parameters/IncidentExecutionKey'
       responses:
         '200':
           description: Page of incidents
@@ -6278,13 +6280,15 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CursorList'
+                $ref: '#/components/schemas/IncidentPage'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
         '429':
           $ref: '#/components/responses/RateLimited'
         '503':
@@ -6304,6 +6308,10 @@ paths:
           headers:
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Incident'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -9901,6 +9909,22 @@ components:
       schema:
         type: string
         format: uuid
+    IncidentStateFilter:
+      name: state
+      in: query
+      required: false
+      description: One of `open`, `triaged`, `closed`; blank, repeated or any other value is 422 `request_invalid`.
+      schema:
+        type: string
+        enum: [open, triaged, closed]
+    IncidentExecutionKey:
+      name: execution_key
+      in: query
+      required: false
+      description: Exact execution key, 64 lowercase hex; blank, repeated or any other value is 422 `request_invalid`.
+      schema:
+        type: string
+        pattern: '^[0-9a-f]{64}$'
     JobId:
       name: j
       in: path
@@ -10482,6 +10506,59 @@ components:
           type: array
           items:
             type: object
+        next_cursor:
+          type: [string, 'null']
+    Incident:
+      type: object
+      additionalProperties: false
+      description: >-
+        One incident: a failing planned execution of a run that a frozen evidence revision verified (08.1.1).
+        Carries no attempt payload and no error text. `attempt_count` is the first failing attempt plus its
+        recorded retries.
+      required:
+        [
+          id,
+          project_id,
+          run_id,
+          attempt_id,
+          case_id,
+          case_revision_id,
+          execution_key,
+          engine,
+          state,
+          context_state,
+          attempt_count,
+          created_at,
+          updated_at,
+          version,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        project_id: { type: string, format: uuid }
+        run_id: { type: string, format: uuid }
+        attempt_id: { type: string, format: uuid }
+        case_id: { type: string, format: uuid }
+        case_revision_id: { type: string, format: uuid }
+        execution_key:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
+        engine: { type: string, minLength: 1, maxLength: 64 }
+        state: { type: string, enum: [open, triaged, closed] }
+        context_state: { type: string, enum: [pending, complete, partial] }
+        attempt_count: { type: integer, minimum: 1 }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        version: { type: integer, minimum: 1 }
+    IncidentPage:
+      type: object
+      additionalProperties: false
+      description: 00 §9.1 cursor page of incidents, newest first (`created_at` desc, `id` asc); `next_cursor` is null on the last page.
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Incident'
         next_cursor:
           type: [string, 'null']
     RunStateDto:
