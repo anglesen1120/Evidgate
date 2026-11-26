@@ -5,7 +5,7 @@
 // here with `node:fs` — the same read-only, offline approach as
 // `../core/dev-fixtures/fixture-contract.spec.ts` — and every code is checked twice: it exists, and
 // it is `tenant_assignable` (a code a member can never hold would hide its entry forever, because
-// the V1 catalogue source can only grant assignable codes, D-S68-Q1).
+// a member's grants only ever hold assignable codes).
 //
 // The area table is checked against the filesystem too: `app.routes.ts` mounts
 // `features/<area>/<area>.routes.ts` for every entry, so an area without that module is a route the
@@ -172,7 +172,7 @@ describe('NAV_ENTRIES (09.1.1-T4.1)', () => {
     }
   });
 
-  it('uses only codes a member principal can hold, so the V1 catalogue can grant them', () => {
+  it('uses only codes a member principal can hold, so the member grants can hold them', () => {
     for (const entry of NAV_ENTRIES) {
       expect(CATALOGUE_BY_CODE.get(entry.permission)?.tenant_assignable).toBe(true);
     }

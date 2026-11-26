@@ -12,10 +12,12 @@
 
 import { inject, Injectable } from '@angular/core';
 import {
+  getMyPermissions,
   getMyProfile,
   listMyOrganizations,
   listPermissions,
   listProjects,
+  type MyPermissionsResponse,
   type OrganizationSummaryDto,
   type PermissionView,
   type ProjectDto,
@@ -42,9 +44,7 @@ export class IdentityDataService {
   /**
    * The whole permission catalogue (`GET /v1/permissions`, 02.2.1), every page.
    *
-   * This is not the caller's grants: no V1 endpoint returns those (D-S68-Q1). The shell's
-   * permission source builds its convenience set from this catalogue; the API's own `403` remains
-   * the only real gate.
+   * This is the catalogue of codes that exist, not the caller's grants (`getMyPermissions`).
    */
   listPermissions(): Promise<readonly PermissionView[]> {
     return this.readAllPages<PermissionView>('the permission catalogue', async (cursor) => {
@@ -53,6 +53,17 @@ export class IdentityDataService {
       );
       return [page.items, page.next_cursor];
     });
+  }
+
+  /**
+   * The caller's own roles and effective permission codes in `orgId` (`GET /v1/me/permissions`).
+   * The org is named explicitly because the generated operation requires the tenant header; a
+   * non-member is refused with `403` and surfaces as the typed failure like any other read.
+   */
+  getMyPermissions(orgId: string): Promise<MyPermissionsResponse> {
+    return this.gateway.call((client) =>
+      getMyPermissions({ client, headers: { 'X-Evidgate-Org': orgId } }),
+    );
   }
 
   /**
