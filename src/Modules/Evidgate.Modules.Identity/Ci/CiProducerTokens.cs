@@ -1,6 +1,3 @@
-using System.Globalization;
-using System.Security.Claims;
-using System.Text.Json;
 using Evidgate.BuildingBlocks.Pipeline.Authorization;
 using Evidgate.Modules.Identity.Options;
 using Microsoft.Extensions.Options;
@@ -9,32 +6,16 @@ using Microsoft.IdentityModel.Tokens;
 
 namespace Evidgate.Modules.Identity.Ci;
 
-/// <summary>What an exchange asks the minter to put into a <c>ci_producer</c> token (AC6, T88).</summary>
+/// <summary>The authenticated project credential and scopes for a short-lived producer token.</summary>
 /// <param name="OrgId">The tenant.</param>
 /// <param name="ProjectId">The one project the token is scoped to.</param>
-/// <param name="BindingId">The binding or ingest token that authorised it.</param>
-/// <param name="Provider"><c>github_actions</c> or <c>ingest_token</c>.</param>
+/// <param name="IngestTokenId">The stable id of the ingest token whose secret was verified.</param>
 /// <param name="Permissions">The permission set, a subset of the service ceiling.</param>
-/// <param name="Jti">A fresh unique id.</param>
-/// <param name="Run">The CI run claims of a GitHub exchange, or null for an ingest token.</param>
 internal sealed record CiProducerRequest(
     Guid OrgId,
     Guid ProjectId,
-    Guid BindingId,
-    string Provider,
-    IReadOnlyList<string> Permissions,
-    string Jti,
-    CiRunClaims? Run);
-
-/// <summary>The T88 claims copied from the verified GitHub token into the minted one.</summary>
-internal sealed record CiRunClaims(
-    long RepositoryId,
-    string Repository,
-    string Ref,
-    string Sha,
-    long RunId,
-    int RunAttempt,
-    string JobWorkflowRef);
+    Guid IngestTokenId,
+    string[] Permissions);
 
 /// <summary>A minted token and when it stops being valid.</summary>
 /// <param name="Token">The compact JWT.</param>
@@ -44,14 +25,11 @@ internal sealed record MintedCiToken(string Token, DateTimeOffset ExpiresAt);
 /// <summary>
 /// Mints and validates the platform's own <c>ci_producer</c> JWT (D7): HS256 over the configured
 /// signing key, our issuer and audience, at most 60 minutes of life, never refreshed (a job that
-/// outlives it exchanges again with a fresh OIDC token).
+/// outlives it exchanges its ingest token again).
 /// </summary>
 internal sealed class CiProducerTokens(IOptions<CiAuthOptions> options, CiSecrets secrets, TimeProvider clock)
 {
     internal const string TokenUse = "ci_producer";
-
-    /// <summary>The provider of a token minted from a verified GitHub Actions OIDC token (T88).</summary>
-    private const string GithubActionsProvider = "github_actions";
 
     private static readonly JsonWebTokenHandler Handler = new() { MapInboundClaims = false };
 
@@ -65,38 +43,26 @@ internal sealed class CiProducerTokens(IOptions<CiAuthOptions> options, CiSecret
     /// <summary>Whether a signing key is configured (otherwise the exchange is off).</summary>
     public bool Enabled => secrets.SigningKey is not null;
 
-    /// <summary>Mints the token. The permission set is intersected with the service ceiling, so a caller cannot widen it.</summary>
+    /// <summary>Mints a bearer token for the verified ingest token and its permitted scopes.</summary>
     /// <param name="request">What to put into it.</param>
     public MintedCiToken Mint(CiProducerRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var key = secrets.SigningKey ?? throw new InvalidOperationException("no signing key is configured");
+        var key = _securityKey.Value ?? throw new InvalidOperationException("no signing key is configured");
         var now = clock.GetUtcNow();
         var expires = now.AddMinutes(_options.TokenLifetimeMinutes);
 
         var claims = new Dictionary<string, object>(StringComparer.Ordinal)
         {
             ["sub"] = $"ci:{request.ProjectId:D}",
-            ["jti"] = request.Jti,
+            ["jti"] = Guid.CreateVersion7().ToString("D"),
             ["token_use"] = TokenUse,
             ["org_id"] = request.OrgId.ToString("D"),
             ["project_id"] = request.ProjectId.ToString("D"),
-            ["binding_id"] = request.BindingId.ToString("D"),
-            ["provider"] = request.Provider,
-            ["perm"] = request.Permissions.ToArray(),
+            ["ingest_token_id"] = request.IngestTokenId.ToString("D"),
+            ["perm"] = request.Permissions,
         };
-
-        if (request.Run is { } run)
-        {
-            claims["repository_id"] = run.RepositoryId;
-            claims["repository"] = run.Repository;
-            claims["ref"] = run.Ref;
-            claims["sha"] = run.Sha;
-            claims["run_id"] = run.RunId;
-            claims["run_attempt"] = run.RunAttempt;
-            claims["job_workflow_ref"] = run.JobWorkflowRef;
-        }
 
         var descriptor = new SecurityTokenDescriptor
         {
@@ -106,7 +72,7 @@ internal sealed class CiProducerTokens(IOptions<CiAuthOptions> options, CiSecret
             NotBefore = now.UtcDateTime,
             Expires = expires.UtcDateTime,
             Claims = claims,
-            SigningCredentials = new SigningCredentials(_securityKey.Value!, SecurityAlgorithms.HmacSha256),
+            SigningCredentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256),
         };
 
         return new MintedCiToken(Handler.CreateToken(descriptor), expires);
@@ -135,7 +101,7 @@ internal sealed class CiProducerTokens(IOptions<CiAuthOptions> options, CiSecret
     /// <param name="token">The compact JWT.</param>
     public async ValueTask<AuthenticatedCaller?> ValidateAsync(string token)
     {
-        if (secrets.SigningKey is not { } key || string.IsNullOrEmpty(token) || token.Length > 4096)
+        if (!Enabled || string.IsNullOrEmpty(token) || token.Length > 4096)
         {
             return null;
         }
@@ -155,33 +121,15 @@ internal sealed class CiProducerTokens(IOptions<CiAuthOptions> options, CiSecret
         if (!TryGetString(jwt, "token_use", out var use) || use != TokenUse
             || !TryGetGuid(jwt, "org_id", out var org)
             || !TryGetGuid(jwt, "project_id", out var project)
-            || !TryGetString(jwt, "jti", out var jti)
+            || !TryGetGuid(jwt, "ingest_token_id", out var credentialId)
+            || !TryGetString(jwt, "jti", out _)
             || !jwt.TryGetPayloadValue<string[]>("perm", out var permissions)
             || permissions.Any(permission => !PermissionEvaluatorCeiling.Contains(permission)))
         {
             return null;
         }
 
-        return new AuthenticatedCaller(RequestPrincipal.Service(project, permissions, jti, TryGetCiRun(jwt)), org, project);
-    }
-
-    /// <summary>
-    /// The CI run claims of a GitHub-minted token (T88), or null when the token is not a
-    /// <c>github_actions</c> one or any of the four claims is missing or malformed. The ids
-    /// are read tolerantly (JSON string or number), matching the minter and
-    /// <see cref="GitHubOidcValidator"/>; nothing here is taken from request input.
-    /// </summary>
-    private static CiRunReference? TryGetCiRun(JsonWebToken jwt)
-    {
-        if (!TryGetString(jwt, "provider", out var provider) || provider != GithubActionsProvider
-            || !TryGetLong(jwt, "repository_id", out var repositoryId) || repositoryId <= 0
-            || !TryGetLong(jwt, "run_id", out var runId) || runId <= 0
-            || !TryGetInt(jwt, "run_attempt", out var runAttempt) || runAttempt < 1)
-        {
-            return null;
-        }
-
-        return new CiRunReference(provider, repositoryId, runId, runAttempt);
+        return new AuthenticatedCaller(RequestPrincipal.Service(project, permissions, credentialId.ToString("D")), org, project);
     }
 
     private static bool TryGetString(JsonWebToken jwt, string name, out string value)
@@ -202,44 +150,7 @@ internal sealed class CiProducerTokens(IOptions<CiAuthOptions> options, CiSecret
     {
         value = default;
 
-        return TryGetString(jwt, name, out var text) && Guid.TryParse(text, out value);
-    }
-
-    /// <summary>
-    /// Reads a numeric claim as a <see cref="long"/>. The minter writes numbers, but a
-    /// string is accepted too (GitHub sends ids as JSON strings), matching
-    /// <see cref="GitHubOidcValidator"/>'s reader.
-    /// </summary>
-    private static bool TryGetLong(JsonWebToken jwt, string name, out long value)
-    {
-        value = 0;
-
-        if (jwt.TryGetPayloadValue<string>(name, out var text))
-        {
-            return long.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out value);
-        }
-
-        if (jwt.TryGetPayloadValue<JsonElement>(name, out var element) && element.ValueKind == JsonValueKind.Number)
-        {
-            return element.TryGetInt64(out value);
-        }
-
-        return false;
-    }
-
-    /// <summary>Reads a numeric claim as an <see cref="int"/>, refusing anything outside its range.</summary>
-    private static bool TryGetInt(JsonWebToken jwt, string name, out int value)
-    {
-        value = 0;
-
-        if (!TryGetLong(jwt, name, out var wide) || wide is < int.MinValue or > int.MaxValue)
-        {
-            return false;
-        }
-
-        value = (int)wide;
-
-        return true;
+        return TryGetString(jwt, name, out var text) && Guid.TryParseExact(text, "D", out value) && value != Guid.Empty;
     }
 }
 

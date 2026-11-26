@@ -28,8 +28,6 @@ public sealed class EvidenceCompleteQaTests(PostgresTenancyFixture fixture, Seaw
 
     private const string ZipType = "application/zip";
 
-    private const string Jti = "jti-complete-qa-1";
-
     private const string ProducerId = "shard-1";
 
     /// <summary>The kind-policy cap every seeded policy row carries; the happy-path body is exactly this size.</summary>
@@ -65,8 +63,8 @@ public sealed class EvidenceCompleteQaTests(PostgresTenancyFixture fixture, Seaw
         }
     }
 
-    private static RequestPrincipal Writer(string jti = Jti) =>
-        RequestPrincipal.Service(projectScope: null, [Permissions.Artifact.Write], credentialId: jti);
+    private static RequestPrincipal Writer() =>
+        RequestPrincipal.Service(projectScope: null, [Permissions.Artifact.Write], credentialId: IngestTestWorld.OwnerId);
 
     private async Task<World> StartAsync(RequestPrincipal principal)
     {
@@ -403,7 +401,7 @@ public sealed class EvidenceCompleteQaTests(PostgresTenancyFixture fixture, Seaw
         await InsertKindPolicyAsync(world);
         var (artifactId, _, finalKey) = await MintAndUploadAsync(world, runId, GoodBody);
 
-        var viewer = RequestPrincipal.Service(projectScope: null, Array.Empty<string>(), credentialId: "jti-viewer-qa");
+        var viewer = RequestPrincipal.Service(projectScope: null, Array.Empty<string>(), credentialId: IngestTestWorld.OtherOwnerId);
         await using var viewerHost = _hosts.WithPrincipal(
             world.Database, world.Org, world.Project, viewer, _store.Configuration());
         using var viewerClient = viewerHost.CreateClient();

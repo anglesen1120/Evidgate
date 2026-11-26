@@ -35,8 +35,6 @@ public sealed class EvidenceCompleteRaceTests(PostgresTenancyFixture fixture, Se
 
     private const string ZipType = "application/zip";
 
-    private const string Jti = "jti-complete-race-1";
-
     private const string ProducerId = "shard-1";
 
     /// <summary>The kind-policy cap every seeded policy row carries; the happy-path body is exactly this size.</summary>
@@ -67,8 +65,8 @@ public sealed class EvidenceCompleteRaceTests(PostgresTenancyFixture fixture, Se
         public ValueTask DisposeAsync() => WorldDisposal.DisposeAsync(Client, Owned, Host, Api);
     }
 
-    private static RequestPrincipal Writer(string jti = Jti) =>
-        RequestPrincipal.Service(projectScope: null, [Permissions.Artifact.Write], credentialId: jti);
+    private static RequestPrincipal Writer() =>
+        RequestPrincipal.Service(projectScope: null, [Permissions.Artifact.Write], credentialId: IngestTestWorld.OwnerId);
 
     private Task<World> StartAsync(RequestPrincipal principal) =>
         _fixture.StartDedicatedAsync(async owned =>

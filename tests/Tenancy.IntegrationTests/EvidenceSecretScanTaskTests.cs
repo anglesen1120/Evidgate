@@ -311,7 +311,7 @@ public sealed partial class EvidenceSecretScanTaskTests(PostgresTenancyFixture f
             project = await CreateProjectAsync(setup, user, org, Unique.Slug("checkout"));
         }
 
-        var principal = RequestPrincipal.Service(projectScope: null, [Permissions.Artifact.Write], credentialId: "jti-scan-1");
+        var principal = RequestPrincipal.Service(projectScope: null, [Permissions.Artifact.Write], credentialId: IngestTestWorld.OwnerId);
         // Queue consumers carry per-test registrations and poll their dedicated database.
         var host = services is null
             ? hosts.WithPrincipalConfigured(database, org, project, principal, _store.Configuration())

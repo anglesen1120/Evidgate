@@ -1587,7 +1587,7 @@ public sealed partial class ReconcileRunTests : IClassFixture<TenancyHostPool>
         for (var index = 0; index < 20; index++)
         {
             var otherRunId = await RunRowSeeder.SeedRunAsync(_fixture, world.Database, world.Org);
-            await IngestTestWorld.SeedSlotsAsync(_fixture, world.Database, world.Org, otherRunId, 1, boundJti: null);
+            await IngestTestWorld.SeedSlotsAsync(_fixture, world.Database, world.Org, otherRunId, 1, boundOwnerId: null);
             await StoreBulkEventsAsync(world, otherRunId, count: 2500);
         }
 

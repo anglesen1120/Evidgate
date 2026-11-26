@@ -24,10 +24,6 @@ internal static class ProducerSlotArguments
         && value.Length <= maxLength
         && IsStorableText(value);
 
-    /// <summary>True when <paramref name="value"/> is null or 1..<paramref name="maxLength"/> characters.</summary>
-    internal static bool IsWithinOrNull(string? value, int maxLength) =>
-        value is null || IsWithin(value, maxLength);
-
     /// <summary>True when every character is storable: no control character and no lone surrogate.</summary>
     private static bool IsStorableText(string value)
     {

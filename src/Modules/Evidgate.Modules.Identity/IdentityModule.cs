@@ -156,11 +156,6 @@ internal static class IdentityModule
         services.TryAddSingleton<ISessionRequestAuthenticator, SessionRequestAuthenticator>();
         services.TryAddEnumerable(ServiceDescriptor.Singleton<ICallerAuthenticator, SessionCallerAuthenticator>());
 
-        // 02.4.1-T4.1: the daily purge of the OIDC replay cache. Registered in both hosts like every module
-        // piece; only the Worker runs a consumer and a schedule runner.
-        services.AddTaskHandler<CiTokenIssuePurgePayload, CiTokenIssuePurgeTaskHandler>();
-        services.AddTaskSchedule(CiTokenIssueSweeps.Purge);
-
         // 02.3.2-T2.1 (§7): the daily session sweeper — the `expired_at` stamp for reporting and the 30-day hard
         // delete of rows past their last deadline, both inside the owner-owned definers of 0048 that the store
         // calls; a platform task, so it takes no tenant scope.
@@ -256,7 +251,7 @@ internal static class IdentityModule
         return services;
     }
 
-    /// <summary>02.4.1/02.4.2: key material, token minting and validation, the GitHub OIDC validator and the pre-tenant resolvers.</summary>
+    /// <summary>Project ingest-token exchange and producer bearer authentication.</summary>
     private static IServiceCollection AddCiAuthentication(this IServiceCollection services, IConfiguration configuration)
     {
         services
@@ -284,31 +279,11 @@ internal static class IdentityModule
         services.TryAddSingleton<CiProducerTokens>();
         services.TryAddSingleton<ExchangeRateLimiter>();
         services.TryAddSingleton<ICiResolver, NpgsqlCiResolver>();
-        services.TryAddSingleton<GitHubOidcValidator>();
-
-        // The JWKS client: a typed HttpClient with a hard timeout and a bounded response (S4, P6).
-        services.AddHttpClient<IGitHubJwksProvider, HttpGitHubJwksProvider>(client => client.Timeout = TimeSpan.FromSeconds(5))
-            .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
-            {
-                // A redirect would leave the issuer's host (S4); a long-lived singleton client must still follow DNS.
-                AllowAutoRedirect = false,
-                PooledConnectionLifetime = TimeSpan.FromMinutes(5),
-            })
-            .AddTypedClient<IGitHubJwksProvider>((http, provider) =>
-                new HttpGitHubJwksProvider(http, provider.GetRequiredService<IOptions<CiAuthOptions>>(), provider.GetRequiredService<TimeProvider>()));
-
         // `ci_producer` bearer tokens authenticate service callers for the tenant routes.
         services.AddSingleton<ICallerAuthenticator, CiProducerAuthenticator>();
 
-        foreach (var validator in new (Type Message, Type Impl)[]
-                 {
-                     (typeof(CreateCiBindingCommand), typeof(CreateCiBindingCommandValidator)),
-                     (typeof(UpdateCiBindingCommand), typeof(UpdateCiBindingCommandValidator)),
-                     (typeof(CreateIngestTokenCommand), typeof(CreateIngestTokenCommandValidator)),
-                 })
-        {
-            services.TryAddEnumerable(ServiceDescriptor.Singleton(typeof(IValidator<>).MakeGenericType(validator.Message), validator.Impl));
-        }
+        services.TryAddEnumerable(
+            ServiceDescriptor.Singleton<IValidator<CreateIngestTokenCommand>, CreateIngestTokenCommandValidator>());
 
         return services;
     }

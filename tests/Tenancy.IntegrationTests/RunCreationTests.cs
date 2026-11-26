@@ -433,38 +433,20 @@ public sealed class RunCreationTests(PostgresTenancyFixture fixture, TenancyHost
     // ------------------------------------------------------------------ AC11
 
     [Fact]
-    public async Task CreateRun_CiRunRef_FromOidcClaims()
+    public async Task CreateRun_CiRunRef_IsNeverWritten()
     {
+        // No credential carries a CI run reference any more, so the column stays null for every new run.
         await using var world = await StartAsync(_fixture, hosts: _hosts);
-        var principal = RequestPrincipal.Service(
-            world.Project,
-            ["run:create"],
-            credentialId: "jti-1",
-            ciRun: new CiRunReference("github_actions", 987_654_321L, 42_424_242L, 3));
+        var principal = RequestPrincipal.Service(world.Project, ["run:create"], credentialId: Guid.CreateVersion7().ToString("D"));
 
         var result = await RunCreationSeams.SendDirectAsync(world.Api, world.Org, world.Project, principal, RunBody(world.ManifestId));
 
         result.IsSuccess.ShouldBeTrue(result.Error?.Message);
-        var runId = result.Value.RunId;
-        // jsonb does not preserve key order, so each claim is read separately; the key count pins the exact shape.
-        (await _fixture.ScalarAsync<long>(world.Database, $"select (select count(*) from jsonb_object_keys(ci_run_ref)) from public.run where id = '{runId}'")).ShouldBe(4);
-        (await _fixture.ScalarAsync<string>(world.Database, $"select ci_run_ref ->> 'provider' from public.run where id = '{runId}'")).ShouldBe("github_actions");
-        (await _fixture.ScalarAsync<long>(world.Database, $"select (ci_run_ref ->> 'repository_id')::bigint from public.run where id = '{runId}'")).ShouldBe(987_654_321L);
-        (await _fixture.ScalarAsync<long>(world.Database, $"select (ci_run_ref ->> 'run_id')::bigint from public.run where id = '{runId}'")).ShouldBe(42_424_242L);
-        (await _fixture.ScalarAsync<int>(world.Database, $"select (ci_run_ref ->> 'run_attempt')::int from public.run where id = '{runId}'")).ShouldBe(3);
-    }
-
-    [Fact]
-    public async Task CreateRun_CiRunRef_NoClaims_Null()
-    {
-        await using var world = await StartAsync(_fixture, hosts: _hosts);
-        var principal = RequestPrincipal.Service(world.Project, ["run:create"], credentialId: "jti-2");
-
-        var result = await RunCreationSeams.SendDirectAsync(world.Api, world.Org, world.Project, principal, RunBody(world.ManifestId));
-
-        result.IsSuccess.ShouldBeTrue(result.Error?.Message);
-        (await _fixture.ScalarAsync<string>(world.Database, $"select ci_run_ref::text from public.run where id = '{result.Value.RunId}'"))
-            .ShouldBeNull();
+        // A missing row would also read back as null, so the row's existence is asserted first.
+        (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.run where id = '{result.Value.RunId}'"))
+            .ShouldBe(1);
+        (await _fixture.ScalarAsync<bool>(world.Database, $"select ci_run_ref is null from public.run where id = '{result.Value.RunId}'"))
+            .ShouldBeTrue();
     }
 
     // ------------------------------------------------------------------ AC12

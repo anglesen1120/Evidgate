@@ -74,8 +74,7 @@ internal static class SessionsServiceCollectionExtensions
 
         // 02.3.2-T2.1: the session routes and the cleanup sweep. The route statements run as the
         // app role; the cleanup batch runs as `evidgate_worker_sched`, because EXECUTE on
-        // `evidgate.session_cleanup` is granted to the sweep role alone (TL T80, the
-        // `CiTokenIssuePurge` posture). `WorkerSchedDataSource` is itself the fail-closed seam: without
+        // `evidgate.session_cleanup` is granted to the sweep role alone. `WorkerSchedDataSource` fails closed: without
         // `TasksOptions.SweepConnectionString` it holds no source and refuses at `OpenAsync` with the key
         // named, so the Api (which serves the routes and never sweeps) resolves this registration
         // harmlessly, and a Worker that calls `AddEvidgateTasks` keeps its own instance through TryAdd.

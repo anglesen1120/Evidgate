@@ -9,9 +9,8 @@ namespace Tenancy.IntegrationTests;
 /// The shared world of the ingest suite: a migrated database private to each world (its suites count whole
 /// tables and read one run's event sequence, so they cannot share), the registry host used to create the org and
 /// the project, a host whose every request carries the caller's service principal (the same seam
-/// <see cref="EvidenceUploadUrlTests"/> uses, because a service principal with a <c>CredentialId</c> — the slot-binding
-/// identity, T9 — and a project scope cannot be expressed through request headers), the seeded run with its planned
-/// executions and producer slots, and the reads the tests assert on.
+/// <see cref="EvidenceUploadUrlTests"/> uses because request headers cannot carry the authenticated ingest-token
+/// identity), the seeded run with its planned executions and producer slots, and the reads the tests assert on.
 /// <para>
 /// The app role writes the seeded <c>producer_slot</c> rows inside a tenant scope (0029 grants it INSERT and the
 /// FORCE-RLS policy admits the row); the run, its catalogue parents and its planned executions come from
@@ -20,11 +19,8 @@ namespace Tenancy.IntegrationTests;
 /// </summary>
 internal sealed class IngestTestWorld : IAsyncDisposable
 {
-    /// <summary>The caller's token id: the slot-binding identity every seeded slot is bound to (T9).</summary>
-    internal const string Jti = "jti-ingest-1";
-
-    /// <summary>Another identity's token id, for the <c>producer_slot_taken</c> case.</summary>
-    internal const string OtherJti = "jti-ingest-2";
+    internal const string OwnerId = "b995af20-8840-40c4-b97d-bf7887346fa2";
+    internal const string OtherOwnerId = "b307c251-0d00-42ff-ace8-a5f83b549c14";
 
     /// <summary>The producer id of the seeded shard (05.2.1 registers <c>shard-N</c> per manifest shard).</summary>
     internal const string ProducerId = "shard-1";
@@ -76,13 +72,12 @@ internal sealed class IngestTestWorld : IAsyncDisposable
 
     internal PlannedExecutionSeeder.SeededRun Plan { get; }
 
-    /// <summary>The caller's service principal: <c>event:write</c>, scoped to the run's project, bound to <see cref="Jti"/>.</summary>
-    internal static RequestPrincipal Writer(string? jti = null, Guid? projectScope = null) =>
-        RequestPrincipal.Service(projectScope, [Permissions.Event.Write], credentialId: jti ?? Jti);
+    internal static RequestPrincipal Writer(string? ownerId = null, Guid? projectScope = null) =>
+        RequestPrincipal.Service(projectScope, [Permissions.Event.Write], credentialId: ownerId ?? OwnerId);
 
     /// <summary>A service principal without <c>event:write</c> (the denied-permission case).</summary>
     internal static RequestPrincipal Reader() =>
-        RequestPrincipal.Service(projectScope: null, [Permissions.Run.Read], credentialId: Jti);
+        RequestPrincipal.Service(projectScope: null, [Permissions.Run.Read], credentialId: OwnerId);
 
     /// <summary>
     /// A fresh org (unique slug) and its first project (real registry routes) in the shared database, or in
@@ -95,7 +90,7 @@ internal sealed class IngestTestWorld : IAsyncDisposable
         RequestPrincipal principal,
         int planned = 2,
         int slots = 1,
-        string? boundJti = null,
+        string? boundOwnerId = null,
         int? planCount = null,
         IReadOnlyList<(int Parent, int Child)>? edges = null,
         Action<IServiceCollection>? services = null,
@@ -119,7 +114,7 @@ internal sealed class IngestTestWorld : IAsyncDisposable
         // The events route keys its burst budget on the token's project scope, so a world's own
         // writer always carries the project it writes into; another scope stays as the caller set it.
         principal = principal is { Kind: PrincipalKind.ServicePrincipal, ProjectScope: null, CredentialId: { Length: > 0 } } unscoped
-            ? RequestPrincipal.Service(project, unscoped.ClaimedPermissions, unscoped.CredentialId, unscoped.CiRun)
+            ? RequestPrincipal.Service(project, unscoped.ClaimedPermissions, unscoped.CredentialId)
             : principal;
 
         var host = hosts is null
@@ -130,7 +125,7 @@ internal sealed class IngestTestWorld : IAsyncDisposable
         try
         {
             var plan = await PlannedExecutionSeeder.SeedPlanAsync(fixture, database, org, planCount ?? planned, edges: edges);
-            await SeedSlotsAsync(fixture, database, org, plan.RunId, slots, boundJti);
+            await SeedSlotsAsync(fixture, database, org, plan.RunId, slots, boundOwnerId);
 
             return new IngestTestWorld(
                 fixture, api, host, host.CreateClient(), database, user, org, project, plan.RunId, plan);
@@ -153,7 +148,7 @@ internal sealed class IngestTestWorld : IAsyncDisposable
         Guid org,
         Guid runId,
         int count,
-        string? boundJti)
+        string? boundOwnerId)
     {
         await using var scope = await TenantScope.BeginAsync(fixture.AppConnectionString(database), org);
 
@@ -161,9 +156,9 @@ internal sealed class IngestTestWorld : IAsyncDisposable
         {
             (await scope.ExecuteAsync(
                 "insert into public.producer_slot (id, org_id, run_id, shard_index, producer_id, bound_token_jti) "
-                + "values (@id, @org_id, @run_id, @shard_index, @producer_id, @jti)",
+                + "values (@id, @org_id, @run_id, @shard_index, @producer_id, @owner_id)",
                 ("id", Guid.CreateVersion7()), ("org_id", org), ("run_id", runId), ("shard_index", i),
-                ("producer_id", $"shard-{i}"), ("jti", (object?)boundJti ?? DBNull.Value))).ShouldBe(1);
+                ("producer_id", $"shard-{i}"), ("owner_id", (object?)boundOwnerId ?? DBNull.Value))).ShouldBe(1);
         }
 
         await scope.CommitAsync();

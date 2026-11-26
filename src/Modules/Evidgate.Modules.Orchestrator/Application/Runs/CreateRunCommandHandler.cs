@@ -47,16 +47,10 @@ namespace Evidgate.Modules.Orchestrator.Application.Runs;
 /// every replay request 422 (<c>replay_release_not_allowed</c> first, then <c>replay_grant_invalid</c>) and adds no
 /// reader of its own; the columns (<c>run.purpose</c>, <c>run.replay_grant_id</c>, migration 0031) stay at their
 /// defaults and are immutable because the app role holds no UPDATE on them (05.3.1 owns the read model and MUST NOT
-/// grant UPDATE on <c>purpose</c>/<c>replay_grant_id</c>). [DECISION] the verified identity of a run is the caller's
-/// <c>ci_token_issue</c> row — written by the 02.4.1 exchange from a token it already verified — read by the run
-/// reference the minted token carries (<c>repository_id</c>, <c>run_id</c>, <c>run_attempt</c>) inside this same
-/// tenant transaction, and only when the principal carries a <see cref="CiRunReference"/>; the newest row for the
-/// attempt wins because its <c>ref</c>/<c>sha</c> are fixed per attempt (owner decision D-S45-Q2, T1.3). A missing or
-/// foreign-project row means the caller is not verified, so body values are stored and labelled rather than trusted
-/// (05.2.2 AC1–AC3). [DECISION] a member a verified claim covers
-/// is ignored in the body rather than refused (AC3), the claim's <c>ref</c> shape is re-checked here so a value the
-/// column CHECKs refuse is dropped instead of surfacing as a 500, and <c>ref_name</c>/the shas are never logged (only
-/// the run id and <c>ref_kind</c>, 05.2.2 §8).
+/// grant UPDATE on <c>purpose</c>/<c>replay_grant_id</c>). [DECISION] a run's ref identity is the body's declared
+/// <c>ref</c> block alone: every stored member is labelled <c>unverified_ref</c> (05.2.2 AC1–AC3), the effective
+/// values are shape-checked before any write, and <c>ref_name</c>/the shas are never logged (only the run id and
+/// <c>ref_kind</c>, 05.2.2 §8).
 /// </remarks>
 [AuditedAction("run.create")]
 [Permission(Permissions.Run.Create)]
@@ -230,8 +224,8 @@ internal sealed partial class CreateRunCommandHandler(
         }
 
         // (1c) the run-identity block (05.2.2-T1.3, AC4): shape-checked here — before the database reads below and long
-        // before the write — whether or not a verified claim later overrides one of its members. An invalid member is
-        // 422 request_invalid naming its pointer, exactly like the rest of this body parse.
+        // before the write. An invalid member is 422 request_invalid naming its pointer, exactly like the rest of
+        // this body parse.
         var (bodyRef, refErrors) = RunIdentityRules.ParseBodyRef(body);
         if (refErrors.Count > 0)
         {
@@ -305,16 +299,11 @@ internal sealed partial class CreateRunCommandHandler(
             : options.Value.DefaultCollectionTimeout;
         var lateWindowMinutes = activePolicy?.LateWindowMinutes ?? options.Value.DefaultLateWindowMinutes;
 
-        // (5b) the identity this run records (05.2.2-T1.3, AC1–AC3, T1.4). The only VERIFIED source is the
-        // ci_token_issue row the 02.4.1 exchange wrote from the GitHub OIDC token it had already verified, found by the
-        // run reference the minted token carries (repository/run/attempt) rather than by the token's jti, which the
-        // exchange mints fresh and unrelated: reachable only for a principal that carries a CiRunReference, so a member
-        // or an ingest-token caller can never be verified. The read is one statement inside this same tenant
-        // transaction; a missing row (purged, another project's, or another run attempt's) leaves the caller unverified
-        // rather than trusted. Reads only — nothing is written before the identity passes the effective-value check.
-        var principal = principals.Current;
-        var claim = await ReadVerifiedClaimAsync(principal, command.ProjectId, orgId, cancellationToken).ConfigureAwait(false);
-        var identity = RunIdentityRules.Resolve(bodyRef, claim);
+        // (5b) the identity this run records (05.2.2-T1.3, AC4). Every ref member a producer supplies is only
+        // declared, never verified: the credential carries no ref claim, so the body is the sole source and
+        // `unverified_ref` is set whenever any member is stored. Reads only — nothing is written before the
+        // identity passes the effective-value check.
+        var identity = RunIdentityRules.Resolve(bodyRef);
         if (RunIdentityRules.EffectiveViolation(identity) is { } violation)
         {
             // The body-only path: a `pull_request` kind without a number is not a usable identity (AC4).
@@ -341,7 +330,6 @@ internal sealed partial class CreateRunCommandHandler(
 
         // (6) the writes, all inside the one C2 tenant transaction.
         var runId = Guid.CreateVersion7();
-        var ciRun = principal?.CiRun;
 
         await db.ExecuteAsync(
             OrchestratorSql.InsertRun,
@@ -354,15 +342,6 @@ internal sealed partial class CreateRunCommandHandler(
                 policy_revision_id = activePolicy?.PolicyRevisionId,
                 suite_revision_id = manifest.SuiteRevisionId,
                 environment_revision_id = environmentRevisionId,
-                ci_run_ref = ciRun is null
-                    ? null
-                    : JsonSerializer.Serialize(new
-                    {
-                        provider = ciRun.Provider,
-                        repository_id = ciRun.RepositoryId,
-                        run_id = ciRun.RunId,
-                        run_attempt = ciRun.RunAttempt,
-                    }),
                 components = components?.GetRawText() ?? "{}",
                 collection_timeout = collectionTimeout,
                 late_window_minutes = lateWindowMinutes,

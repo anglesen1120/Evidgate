@@ -130,7 +130,7 @@ public sealed partial class ReconcileRunTests
         for (var index = 0; index < 40; index++)
         {
             var otherRun = await RunRowSeeder.SeedRunAsync(_fixture, world.Database, world.Org);
-            await IngestTestWorld.SeedSlotsAsync(_fixture, world.Database, world.Org, otherRun, 1, boundJti: null);
+            await IngestTestWorld.SeedSlotsAsync(_fixture, world.Database, world.Org, otherRun, 1, boundOwnerId: null);
             await StoreBulkEventsAsync(world, otherRun, count: 2000);
         }
 

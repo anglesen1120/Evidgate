@@ -1,7 +1,3 @@
-// 06.1.2-T2 review fixes: the completion is bound to the artifact's run (S-F1) and a replay answers the
-// stored outcome whatever the project's status since (C-F4), through the real host, a real PostgreSQL and a
-// real SeaweedFS S3 container (Testcontainers; never the shared dev stack). Expectations come from the review
-// findings and the plan (06.1.2 §2 AC3/AC5/AC8, §5, §6), not from the current behaviour.
 #pragma warning disable CA1861
 using System.Net;
 using System.Security.Cryptography;
@@ -15,14 +11,7 @@ using static Tenancy.IntegrationTests.RegistryApi;
 
 namespace Tenancy.IntegrationTests;
 
-/// <summary>
-/// 06.1.2-T2: the two guards the review asked for — <c>complete</c> is bound to the artifact's run's CI
-/// reference (S-F1), so a service token minted for another CI run of the same project gets the same 404 an
-/// unknown id gets and can never force a terminal verdict on an upload in flight; and the stored
-/// <c>ready</c>/<c>rejected</c> outcome is returned before the project-deleting guard (C-F4), so a replay
-/// after the project is deleted answers the stored 200 while a still-pending row is refused 409
-/// <c>project_deleting</c>.
-/// </summary>
+/// <summary>A completed upload replays its stored outcome after project deletion; a pending upload is refused.</summary>
 [Trait("Category", "Docker")]
 public sealed class EvidenceCompleteBindingTests(PostgresTenancyFixture fixture, SeaweedFsStore store, TenancyHostPool hosts)
     : IClassFixture<SeaweedFsStore>, IClassFixture<TenancyHostPool>
@@ -36,15 +25,6 @@ public sealed class EvidenceCompleteBindingTests(PostgresTenancyFixture fixture,
 
     /// <summary>The kind-policy cap every seeded policy row carries; the happy-path body is exactly this size.</summary>
     private const long Cap = 1024;
-
-    /// <summary>The CI reference the seeded run is created from (T88); the minting token carries the same one.</summary>
-    private const string RunCiRunRef = """{"provider":"github_actions","repository_id":1,"run_id":7,"run_attempt":2}""";
-
-    /// <summary>The minting producer token's CI reference: <c>{repository_id}/{run_id}/{run_attempt}</c>.</summary>
-    private static readonly CiRunReference MintingCiRun = new("github_actions", 1L, 7L, 2);
-
-    /// <summary>Another CI run of the same repository: a different <c>ci_producer</c> token of the same project.</summary>
-    private static readonly CiRunReference ForeignCiRun = new("github_actions", 1L, 8L, 2);
 
     /// <summary>The uploaded body: a zip signature then filler, exactly <see cref="Cap"/> bytes (the declared type is <c>application/zip</c>, 06.3.1-T2.2).</summary>
     private static readonly byte[] GoodBody = [0x50, 0x4B, 0x03, 0x04, .. Encoding.UTF8.GetBytes(new string('A', (int)Cap - 4))];
@@ -72,13 +52,6 @@ public sealed class EvidenceCompleteBindingTests(PostgresTenancyFixture fixture,
         }
     }
 
-    /// <summary>
-    /// A service principal holding <c>artifact:write</c>, a token id (the slot-binding identity, T9) and,
-    /// when it is a CI producer, the CI run its token was minted for (T88).
-    /// </summary>
-    private static RequestPrincipal Writer(string jti, CiRunReference? ciRun = null) =>
-        RequestPrincipal.Service(projectScope: null, [Permissions.Artifact.Write], credentialId: jti, ciRun: ciRun);
-
     private async Task<World> StartAsync(RequestPrincipal principal)
     {
         var database = await _fixture.SharedDatabaseAsync();
@@ -100,7 +73,7 @@ public sealed class EvidenceCompleteBindingTests(PostgresTenancyFixture fixture,
     }
 
     /// <summary>One committed run, one planned execution and one unbound producer slot (as the T1/T2 suites seed).</summary>
-    private async Task<Guid> SeedRunAsync(World world, string? ciRunRef = null)
+    private async Task<Guid> SeedRunAsync(World world)
     {
         var runId = await RunRowSeeder.SeedRunAsync(_fixture, world.Database, world.Org);
 
@@ -121,13 +94,6 @@ public sealed class EvidenceCompleteBindingTests(PostgresTenancyFixture fixture,
                 ("id", Guid.CreateVersion7()), ("org_id", world.Org), ("run_id", runId), ("producer_id", ProducerId))).ShouldBe(1);
 
             await scope.CommitAsync();
-        }
-
-        if (ciRunRef is not null)
-        {
-            // The run's CI reference (T88), written as the migration role: the app role has no UPDATE on `run`.
-            await _fixture.ExecuteAsync(
-                world.Database, $"update public.run set ci_run_ref = '{ciRunRef}'::jsonb where id = '{runId:D}'");
         }
 
         return runId;
@@ -226,7 +192,8 @@ public sealed class EvidenceCompleteBindingTests(PostgresTenancyFixture fixture,
     [Fact]
     public async Task Complete_ReplayAfterProjectDeleted_ReturnsStoredOutcome_AndPendingIs409()
     {
-        await using var world = await StartAsync(Writer("jti-binding-cf4"));
+        var principal = RequestPrincipal.Service(projectScope: null, [Permissions.Artifact.Write], credentialId: IngestTestWorld.OwnerId);
+        await using var world = await StartAsync(principal);
         var runId = await SeedRunAsync(world);
         await InsertKindPolicyAsync(world);
 
@@ -253,46 +220,5 @@ public sealed class EvidenceCompleteBindingTests(PostgresTenancyFixture fixture,
         (await ArtifactColumnAsync(world, pendingId, "state")).ShouldBe("pending_upload");
         (await _store.ExistsAsync(pendingFinalKey)).ShouldBeFalse(
             "a refused completion must not reach the storage calls");
-    }
-
-    // ------------------------------------------------------------------ S-F1: complete is bound to the artifact's run
-
-    /// <summary>
-    /// S-F1: a service token minted for another CI run of the same project gets the identical 404 an unknown id
-    /// gets and cannot force a terminal verdict on the upload in flight — the artifact stays <c>pending_upload</c>
-    /// and nothing is promoted — while the minting producer still completes it. Expected to FAIL if <c>complete</c>
-    /// is not bound to the artifact's run.
-    /// </summary>
-    [Fact]
-    public async Task Complete_ForeignCiRun_404_ArtifactUntouched_AndMintingProducerSucceeds()
-    {
-        var minting = Writer("jti-binding-mint", MintingCiRun);
-        await using var world = await StartAsync(minting);
-        var runId = await SeedRunAsync(world, RunCiRunRef);
-        await InsertKindPolicyAsync(world);
-
-        var (artifactId, _, finalKey) = await MintAndUploadAsync(world, runId, GoodBody);
-
-        // Another ci_producer token of the same project, minted for a different CI run (T88): authorized for
-        // artifact:write, but not the identity the artifact's run was created from.
-        var foreign = Writer("jti-binding-foreign", ForeignCiRun);
-        // Two principal hosts must be live at once, so both stay unpooled: the pool holds one host per variant.
-        await using var foreignHost = TenancyApiFactory.WithPrincipal(
-            _fixture.AppConnectionString(world.Database), world.Org, world.Project, foreign, _store.Configuration());
-        using var foreignClient = foreignHost.CreateClient();
-
-        var refused = await foreignClient.SendAsync(
-            HttpMethod.Post, $"/v1/artifacts/{artifactId:D}/complete", _ => { }, null, NewKey());
-
-        refused.Status.ShouldBe(HttpStatusCode.NotFound, refused.ErrorMessage);
-        refused.ErrorCode.ShouldBe("artifact_not_found");
-        (await ArtifactColumnAsync(world, artifactId, "state")).ShouldBe("pending_upload");
-        (await _store.ExistsAsync(finalKey)).ShouldBeFalse(
-            "a foreign CI run must never reach the storage calls");
-
-        var accepted = await CompleteAsync(world, artifactId, NewKey());
-        accepted.Status.ShouldBe(HttpStatusCode.OK, accepted.ErrorMessage);
-        accepted.Text("state").ShouldBe("ready");
-        (await _store.ExistsAsync(finalKey)).ShouldBeTrue();
     }
 }

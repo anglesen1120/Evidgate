@@ -22,7 +22,6 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Evidgate.BuildingBlocks.Pipeline.Authorization;
-using Evidgate.BuildingBlocks.SharedKernel.Authorization;
 using Shouldly;
 using Xunit;
 using static Tenancy.IntegrationTests.RegistryApi;
@@ -38,7 +37,7 @@ public sealed partial class FinalizeEndpointTests : IClassFixture<TenancyHostPoo
     /// <summary>The transition's outbox task type (<c>RunStateTransitionContract.OutboxTaskType</c>).</summary>
     private const string StateChangedTaskType = "orchestrator.run.state_changed";
 
-    /// <summary>The seeded shard, bound to <see cref="IngestTestWorld.Jti"/> in most worlds.</summary>
+    /// <summary>The seeded shard, bound to <see cref="IngestTestWorld.OwnerId"/> in most worlds.</summary>
     private const string Producer = IngestTestWorld.ProducerId;
 
     /// <summary>A well-formed <c>sha256:</c> hash that is not the seeded manifest's (<c>RunRowSeeder</c> hashes 'd').</summary>
@@ -93,13 +92,6 @@ public sealed partial class FinalizeEndpointTests : IClassFixture<TenancyHostPoo
             ["count"] = count,
             ["manifest_hash"] = manifestHash ?? await ManifestHashAsync(world),
         };
-
-    /// <summary>
-    /// A service principal with <c>event:write</c>, a project scope and a claimed CI run reference (T88) — the
-    /// <see cref="IngestTestWorld.Writer"/> seam plus the CI claims the headers cannot carry.
-    /// </summary>
-    private static RequestPrincipal CiWriter(string jti, Guid? projectScope, CiRunReference? ciRun) =>
-        RequestPrincipal.Service(projectScope, [Permissions.Event.Write], credentialId: jti, ciRun: ciRun);
 
     /// <summary>A host whose requests carry <paramref name="principal"/> for the world's org and project.</summary>
     private TenancyApiFactory HostFor(IngestTestWorld world, RequestPrincipal principal) =>
@@ -165,7 +157,7 @@ public sealed partial class FinalizeEndpointTests : IClassFixture<TenancyHostPoo
             $"select version from public.producer_slot where run_id = '{world.RunId:D}' and producer_id = '{producerId}'");
 
     /// <summary>The bound token id; empty while the slot is unbound.</summary>
-    private static Task<string> SlotBoundJtiAsync(IngestTestWorld world, string producerId = Producer) =>
+    private static Task<string> SlotBoundOwnerIdAsync(IngestTestWorld world, string producerId = Producer) =>
         world.ScalarAsync<string>(
             $"select coalesce(bound_token_jti, '') from public.producer_slot where run_id = '{world.RunId:D}' and producer_id = '{producerId}'");
 

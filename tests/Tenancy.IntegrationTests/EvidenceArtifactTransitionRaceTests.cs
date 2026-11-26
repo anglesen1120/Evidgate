@@ -25,8 +25,6 @@ public sealed class EvidenceArtifactTransitionRaceTests(PostgresTenancyFixture f
 
     private const string ZipType = "application/zip";
 
-    private const string Jti = "jti-artifact-transition-race";
-
     private const long Cap = 1024;
 
     /// <summary>The uploaded body: a zip signature then filler, exactly <see cref="Cap"/> bytes.</summary>
@@ -55,7 +53,7 @@ public sealed class EvidenceArtifactTransitionRaceTests(PostgresTenancyFixture f
     }
 
     private static RequestPrincipal Writer() =>
-        RequestPrincipal.Service(projectScope: null, WritePermission, credentialId: Jti);
+        RequestPrincipal.Service(projectScope: null, WritePermission, credentialId: IngestTestWorld.OwnerId);
 
     private Task<World> StartAsync(RequestPrincipal principal) =>
         _fixture.StartDedicatedAsync(async owned =>

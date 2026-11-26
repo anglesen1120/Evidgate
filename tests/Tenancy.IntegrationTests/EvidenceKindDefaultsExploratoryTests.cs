@@ -18,7 +18,6 @@ public sealed class EvidenceKindDefaultsExploratoryTests(PostgresTenancyFixture 
 {
     private const string ExecutionKey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
     private const string Checksum = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
-    private const string Jti = "jti-kind-defaults-qa";
     private const string ProducerId = "shard-1";
 
     private sealed record World(
@@ -38,8 +37,8 @@ public sealed class EvidenceKindDefaultsExploratoryTests(PostgresTenancyFixture 
         }
     }
 
-    private static RequestPrincipal Writer(string jti = Jti) =>
-        RequestPrincipal.Service(projectScope: null, [Permissions.Artifact.Write], credentialId: jti);
+    private static RequestPrincipal Writer() =>
+        RequestPrincipal.Service(projectScope: null, [Permissions.Artifact.Write], credentialId: IngestTestWorld.OwnerId);
 
     private async Task<World> StartAsync()
     {

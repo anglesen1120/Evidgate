@@ -11,7 +11,8 @@ namespace Tenancy.IntegrationTests;
 
 public sealed partial class ProducerSlotTests
 {
-    // ------------------------------------------------------------------ (e) binding (T9)
+    private const string OwnerA = "0192ee53-41fe-7000-8000-000000000001";
+    private const string OwnerB = "0192ee53-41fe-7000-8000-000000000002";
 
     [Fact]
     public async Task BindOrCheck_UnknownProducer_422()
@@ -19,7 +20,7 @@ public sealed partial class ProducerSlotTests
         await using var world = await StartAsync();
 
         var result = await InScopeAsync(world, world.Org, registry =>
-            registry.BindOrCheckAsync(Guid.CreateVersion7(), "shard-1", "jti-a", null, TestContext.Current.CancellationToken));
+            registry.BindOrCheckAsync(Guid.CreateVersion7(), "shard-1", OwnerA, TestContext.Current.CancellationToken));
 
         result.IsSuccess.ShouldBeFalse();
         result.Error!.Code.ShouldBe(ApiErrorCode.UnknownProducer);
@@ -27,16 +28,16 @@ public sealed partial class ProducerSlotTests
     }
 
     [Fact]
-    public async Task BindOrCheck_FirstBind_SetsJti_ThenSameIdentityIsIdempotent()
+    public async Task BindOrCheck_FirstBind_PersistsOwnerAndSameOwnerRetryIsIdempotent()
     {
         await using var world = await StartAsync();
         var runId = await CreateRunAsync(world);
         await InScopeAsync(world, world.Org, registry => registry.RegisterSlotsAsync(runId, 1, TestContext.Current.CancellationToken));
 
         var first = await InScopeAsync(world, world.Org, registry =>
-            registry.BindOrCheckAsync(runId, "shard-1", "jti-a", "1/7/2", TestContext.Current.CancellationToken));
+            registry.BindOrCheckAsync(runId, "shard-1", OwnerA, TestContext.Current.CancellationToken));
         var second = await InScopeAsync(world, world.Org, registry =>
-            registry.BindOrCheckAsync(runId, "shard-1", "jti-a", "1/7/2", TestContext.Current.CancellationToken));
+            registry.BindOrCheckAsync(runId, "shard-1", OwnerA, TestContext.Current.CancellationToken));
 
         first.IsSuccess.ShouldBeTrue(first.Error?.Message);
         first.Value.Bound.ShouldBeTrue();
@@ -44,68 +45,70 @@ public sealed partial class ProducerSlotTests
         second.Value.Bound.ShouldBeFalse();
 
         await using var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org);
-        (await scope.ScalarAsync<string>("select bound_token_jti from public.producer_slot")).ShouldBe("jti-a");
-        (await scope.ScalarAsync<string>("select bound_ci_run_ref from public.producer_slot")).ShouldBe("1/7/2");
+        (await scope.ScalarAsync<string>("select bound_token_jti from public.producer_slot")).ShouldBe(OwnerA);
+        (await scope.ScalarAsync<bool>("select bound_ci_run_ref is null from public.producer_slot")).ShouldBeTrue();
     }
 
     [Fact]
-    public async Task BindOrCheck_ForeignJti_403()
+    public async Task BindOrCheck_ForeignOwner_Returns403AndKeepsOriginalOwner()
     {
         await using var world = await StartAsync();
         var runId = await CreateRunAsync(world);
         await InScopeAsync(world, world.Org, registry => registry.RegisterSlotsAsync(runId, 1, TestContext.Current.CancellationToken));
-        await InScopeAsync(world, world.Org, registry =>
-            registry.BindOrCheckAsync(runId, "shard-1", "jti-a", null, TestContext.Current.CancellationToken));
+        var first = await InScopeAsync(world, world.Org, registry =>
+            registry.BindOrCheckAsync(runId, "shard-1", OwnerA, TestContext.Current.CancellationToken));
+        first.IsSuccess.ShouldBeTrue(first.Error?.Message);
+        first.Value.Bound.ShouldBeTrue();
 
         var foreign = await InScopeAsync(world, world.Org, registry =>
-            registry.BindOrCheckAsync(runId, "shard-1", "jti-b", null, TestContext.Current.CancellationToken));
+            registry.BindOrCheckAsync(runId, "shard-1", OwnerB, TestContext.Current.CancellationToken));
 
         foreign.IsSuccess.ShouldBeFalse();
         foreign.Error!.Code.ShouldBe(ApiErrorCode.ProducerSlotTaken);
         foreign.Error.Status.ShouldBe(403);
         await using var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org);
-        (await scope.ScalarAsync<string>("select bound_token_jti from public.producer_slot")).ShouldBe("jti-a");
+        (await scope.ScalarAsync<string>("select bound_token_jti from public.producer_slot")).ShouldBe(OwnerA);
     }
 
     [Fact]
-    public async Task binds_then_foreign_identity_403()
+    public async Task BindAndClose_LegacyReferencePresent_OnlyStoredOwnerCanRetryAndClose()
     {
-        // The plan's AC3 row: the FIRST write binds the slot to the caller's jti, and a foreign jti is then
-        // refused with 403 producer_slot_taken - the same answer a foreign CI run gets (T88), so neither
-        // learns more than that code about the slot (T9).
         await using var world = await StartAsync();
         var runId = await CreateRunAsync(world);
-        await InScopeAsync(world, world.Org, registry => registry.RegisterSlotsAsync(runId, 1, TestContext.Current.CancellationToken));
+        await using (var seed = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org))
+        {
+            // Rows written before owner-only binding can retain the unused reference.
+            (await seed.ExecuteAsync(
+                """
+                insert into public.producer_slot (id, org_id, run_id, shard_index, producer_id, bound_token_jti, bound_ci_run_ref)
+                values (@id, @org, @run, 1, 'shard-1', @owner, '1/7/2')
+                """,
+                ("id", Guid.CreateVersion7()), ("org", world.Org), ("run", runId), ("owner", OwnerA))).ShouldBe(1);
+            await seed.CommitAsync();
+        }
 
-        var bound = await InScopeAsync(world, world.Org, registry =>
-            registry.BindOrCheckAsync(runId, "shard-1", "jti-a", null, TestContext.Current.CancellationToken));
-        var foreign = await InScopeAsync(world, world.Org, registry =>
-            registry.BindOrCheckAsync(runId, "shard-1", "jti-b", null, TestContext.Current.CancellationToken));
-
-        bound.IsSuccess.ShouldBeTrue(bound.Error?.Message);
-        bound.Value.Bound.ShouldBeTrue();
+        var ct = TestContext.Current.CancellationToken;
+        var retry = await InScopeAsync(world, world.Org, registry => registry.BindOrCheckAsync(runId, "shard-1", OwnerA, ct));
+        retry.IsSuccess.ShouldBeTrue(retry.Error?.Message);
+        retry.Value.Bound.ShouldBeFalse();
+        var foreign = await InScopeAsync(world, world.Org, registry => registry.BindOrCheckAsync(runId, "shard-1", OwnerB, ct));
         foreign.IsSuccess.ShouldBeFalse();
         foreign.Error!.Code.ShouldBe(ApiErrorCode.ProducerSlotTaken);
         foreign.Error.Status.ShouldBe(403);
-        await using var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org);
-        (await scope.ScalarAsync<string>("select bound_token_jti from public.producer_slot")).ShouldBe("jti-a");
-    }
 
-    [Fact]
-    public async Task BindOrCheck_CiRunRefMismatch_403()
-    {
-        await using var world = await StartAsync();
-        var runId = await CreateRunAsync(world);
-        await InScopeAsync(world, world.Org, registry => registry.RegisterSlotsAsync(runId, 1, TestContext.Current.CancellationToken));
-        await InScopeAsync(world, world.Org, registry =>
-            registry.BindOrCheckAsync(runId, "shard-1", "jti-a", "1/7/2", TestContext.Current.CancellationToken));
-
-        var mismatch = await InScopeAsync(world, world.Org, registry =>
-            registry.BindOrCheckAsync(runId, "shard-1", "jti-a", "1/7/3", TestContext.Current.CancellationToken));
-
-        mismatch.IsSuccess.ShouldBeFalse();
-        mismatch.Error!.Code.ShouldBe(ApiErrorCode.ProducerSlotTaken);
-        mismatch.Error.Status.ShouldBe(403);
+        var denied = await InScopeAsync(world, world.Org, registry => registry.CloseSlotAsync(runId, "shard-1", OwnerB, 3, 2, ct));
+        denied.IsSuccess.ShouldBeFalse();
+        denied.Error!.Code.ShouldBe(ApiErrorCode.ProducerSlotTaken);
+        denied.Error.Status.ShouldBe(403);
+        var closed = await InScopeAsync(world, world.Org, registry => registry.CloseSlotAsync(runId, "shard-1", OwnerA, 3, 2, ct));
+        closed.IsSuccess.ShouldBeTrue(closed.Error?.Message);
+        closed.Value.Closed.ShouldBeTrue();
+        var replay = await InScopeAsync(world, world.Org, registry => registry.CloseSlotAsync(runId, "shard-1", OwnerA, 8, 7, ct));
+        replay.IsSuccess.ShouldBeTrue(replay.Error?.Message);
+        replay.Value.Closed.ShouldBeFalse();
+        replay.Value.ClosedAt.ShouldBe(closed.Value.ClosedAt);
+        replay.Value.DeclaredLastSequence.ShouldBe(3);
+        replay.Value.DeclaredCount.ShouldBe(2);
     }
 
     [Fact]
@@ -115,17 +118,19 @@ public sealed partial class ProducerSlotTests
         var runId = await CreateRunAsync(world);
         await InScopeAsync(world, world.Org, registry => registry.RegisterSlotsAsync(runId, 1, TestContext.Current.CancellationToken));
 
-        // Two first writers race for the same unbound slot: the conditional UPDATE is the arbiter, so
-        // exactly one binds and the other is told the slot is taken (T9).
+        // A losing conditional update must not replace the winner's owner ID.
         var first = InScopeAsync(world, world.Org, registry =>
-            registry.BindOrCheckAsync(runId, "shard-1", "jti-a", null, TestContext.Current.CancellationToken));
+            registry.BindOrCheckAsync(runId, "shard-1", OwnerA, TestContext.Current.CancellationToken));
         var second = InScopeAsync(world, world.Org, registry =>
-            registry.BindOrCheckAsync(runId, "shard-1", "jti-b", null, TestContext.Current.CancellationToken));
+            registry.BindOrCheckAsync(runId, "shard-1", OwnerB, TestContext.Current.CancellationToken));
 
         var results = await Task.WhenAll(first, second);
 
         results.Count(result => result.IsSuccess && result.Value.Bound).ShouldBe(1);
         results.Count(result => !result.IsSuccess && result.Error!.Code == ApiErrorCode.ProducerSlotTaken).ShouldBe(1);
+        var winner = results[0].IsSuccess ? OwnerA : OwnerB;
+        await using var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org);
+        (await scope.ScalarAsync<string>("select bound_token_jti from public.producer_slot")).ShouldBe(winner);
     }
 
     [Fact]
@@ -135,7 +140,7 @@ public sealed partial class ProducerSlotTests
         var runId = await CreateRunAsync(world);
         await InScopeAsync(world, world.Org, registry => registry.RegisterSlotsAsync(runId, 2, TestContext.Current.CancellationToken));
         await InScopeAsync(world, world.Org, registry =>
-            registry.BindOrCheckAsync(runId, "shard-2", "jti-a", null, TestContext.Current.CancellationToken));
+            registry.BindOrCheckAsync(runId, "shard-2", OwnerA, TestContext.Current.CancellationToken));
 
         var slots = await InScopeAsync(
             world, world.Org, registry => registry.GetRunProducerSlotsAsync(runId, TestContext.Current.CancellationToken));
@@ -168,9 +173,7 @@ public sealed partial class ProducerSlotTests
     [Fact]
     public async Task WriteModel_RoundTripsThroughEfAndRawSql()
     {
-        // T4.1: the entity and its configuration are the module's mapping of migration 0029, so a row
-        // written through the EF context must read back identically through EF and through raw SQL -
-        // the version default, the trigger-owned timestamps and the nullable binding columns included.
+        // Read back from PostgreSQL rather than using the instance saved in the context.
         await using var world = await StartAsync();
         var runId = await CreateRunAsync(world);
         var id = Guid.CreateVersion7();
@@ -185,13 +188,12 @@ public sealed partial class ProducerSlotTests
             await context.ProducerSlots.AddAsync(new ProducerSlot(id, world.Org, runId, 1, "shard-1"), TestContext.Current.CancellationToken);
             (await context.SaveChangesAsync(TestContext.Current.CancellationToken)).ShouldBe(1);
 
-            var read = await context.ProducerSlots.SingleAsync(row => row.Id == id, TestContext.Current.CancellationToken);
+            var read = await context.ProducerSlots.AsNoTracking().SingleAsync(row => row.Id == id, TestContext.Current.CancellationToken);
             read.ShardIndex.ShouldBe(1);
             read.ProducerId.ShouldBe("shard-1");
             read.Version.ShouldBe(1);
             read.LastSequence.ShouldBe(0);
-            read.BoundTokenJti.ShouldBeNull();
-            read.BoundCiRunRef.ShouldBeNull();
+            read.BoundOwnerId.ShouldBeNull();
             read.ClosedAt.ShouldBeNull();
             read.CreatedAt.ShouldNotBe(default);
 

@@ -164,8 +164,8 @@ describe('dev-token exchange through CLI entry points', () => {
 
   it.each([
     [401, 'token_invalid', 1],
-    [403, 'binding_pending', 1],
-    [409, 'binding_conflict', 1],
+    [403, 'forbidden', 1],
+    [400, 'request_invalid', 1],
     [500, 'internal_error', 1],
     [502, 'upstream_failed', 1],
     [503, 'unavailable', 2],

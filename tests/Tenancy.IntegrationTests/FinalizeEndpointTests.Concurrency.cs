@@ -1,8 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
-using Evidgate.BuildingBlocks.Pipeline.Authorization;
-using Evidgate.BuildingBlocks.SharedKernel.Authorization;
 using Shouldly;
 using Xunit;
 using static Tenancy.IntegrationTests.RegistryApi;
@@ -17,7 +15,7 @@ public sealed partial class FinalizeEndpointTests
     public async Task Finalize_ConcurrentSameSlot_OneCloseOneOutboxRow()
     {
         await using var world = await IngestTestWorld.StartAsync(
-            _fixture, IngestTestWorld.Writer(), boundJti: IngestTestWorld.Jti, hosts: _hosts);
+            _fixture, IngestTestWorld.Writer(), boundOwnerId: IngestTestWorld.OwnerId, hosts: _hosts);
         await world.SetRunStateAsync("running");
 
         // Two finalizes of the same slot at once, each declaring DIFFERENT values: one wins the close, the other is
@@ -43,7 +41,7 @@ public sealed partial class FinalizeEndpointTests
     public async Task Finalize_ConcurrentWithEventBatch_NoDeadlock()
     {
         await using var world = await IngestTestWorld.StartAsync(
-            _fixture, IngestTestWorld.Writer(), boundJti: IngestTestWorld.Jti, hosts: _hosts);
+            _fixture, IngestTestWorld.Writer(), boundOwnerId: IngestTestWorld.OwnerId, hosts: _hosts);
 
         // The deadlock-prone path is a run that is still QUEUED: both handlers may take queued -> running
         // (FOR NO KEY UPDATE) and then read the run FOR SHARE, so one that shared-locked first and upgraded second
@@ -53,7 +51,7 @@ public sealed partial class FinalizeEndpointTests
         {
             var plan = await PlannedExecutionSeeder.SeedPlanAsync(_fixture, world.Database, world.Org, 2);
             await IngestTestWorld.SeedSlotsAsync(
-                _fixture, world.Database, world.Org, plan.RunId, 1, IngestTestWorld.Jti);
+                _fixture, world.Database, world.Org, plan.RunId, 1, IngestTestWorld.OwnerId);
             await SetRunStateAsync(world, plan.RunId, "queued");
 
             var body = new Dictionary<string, object?>(StringComparer.Ordinal)

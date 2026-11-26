@@ -12,15 +12,15 @@ namespace Tenancy.IntegrationTests;
 /// The producer-slot facts of <c>GET /v1/runs/{r}</c>: one item per stored <c>producer_slot</c> row, in
 /// <c>shard_index</c> order, carrying the slot's binding and finalize state and the counts of the event rows recorded
 /// against it. Each test seeds the columns — the read has no writer for most of them — and asserts the served value
-/// against the stored one, so a hard-coded or missing member fails. The binding values themselves (the token's id and
-/// the CI run reference) must never reach the body.
+/// against the stored one, so a hard-coded or missing member fails. The binding values themselves (the owner id and
+/// the legacy CI run reference column) must never reach the body.
 /// </summary>
 public sealed partial class GetRunDetailFieldsTests
 {
-    /// <summary>The bound token id every slot of a binding test stores; it must never appear in a body.</summary>
-    private const string SlotJti = "jti-probe-secret-4f1";
+    /// <summary>The bound owner id every slot of a binding test stores; it must never appear in a body.</summary>
+    private const string SlotOwnerId = "7d5e7f2a-3f56-4b0a-9a64-1d0f1b7c8e21";
 
-    /// <summary>The CI run reference of the same tests; it must never appear in a body either.</summary>
+    /// <summary>A pre-existing CI run reference on a slot row; it must never appear in a body either.</summary>
     private const string SlotCiRunRef = "gh-run-probe-secret-9c2";
 
     /// <summary>
@@ -36,7 +36,7 @@ public sealed partial class GetRunDetailFieldsTests
         var runId = await NewRunAsync(world);
         await _fixture.ExecuteAsync(world.Database, $"""
             update public.producer_slot
-               set bound_token_jti = '{SlotJti}', last_sequence = 4
+               set bound_token_jti = '{SlotOwnerId}', last_sequence = 4
              where run_id = '{runId:D}' and producer_id = 'shard-1'
             """);
         await _fixture.ExecuteAsync(world.Database, $"""
@@ -92,11 +92,11 @@ public sealed partial class GetRunDetailFieldsTests
     }
 
     /// <summary>
-    /// A slot whose token identity and CI run reference were written by the one bind reports <c>bound</c>, a slot
-    /// with neither reports <c>unbound</c>, and neither binding value is served — only the state derived from them.
+    /// A slot whose owner id was written by the one bind reports <c>bound</c>, a slot without one reports
+    /// <c>unbound</c>, and no binding value is served — only the state derived from them.
     /// </summary>
     [Fact]
-    public async Task GetRun_ProducerSlots_TokenIdentityBoundsAndTheBindingIsNeverServed()
+    public async Task GetRun_ProducerSlots_OwnerBoundsAndTheBindingIsNeverServed()
     {
         await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var manifest = RunCreationTests.Manifest(world.SuiteRevision, world.Cases, variants: 3, shards: 3);
@@ -106,7 +106,7 @@ public sealed partial class GetRunDetailFieldsTests
         created.Status.ShouldBe(HttpStatusCode.Created, created.ErrorMessage);
         var runId = created.Id("run_id");
         await _fixture.ExecuteAsync(world.Database, $"""
-            update public.producer_slot set bound_token_jti = '{SlotJti}', bound_ci_run_ref = '{SlotCiRunRef}'
+            update public.producer_slot set bound_token_jti = '{SlotOwnerId}', bound_ci_run_ref = '{SlotCiRunRef}'
              where run_id = '{runId:D}' and producer_id = 'shard-1'
             """);
 
@@ -117,7 +117,7 @@ public sealed partial class GetRunDetailFieldsTests
             .ShouldBe(["shard-1", "shard-2", "shard-3"]);
         SlotFacts(answer).Select(item => item.GetProperty("identity_state").GetString()!)
             .ShouldBe(["bound", "unbound", "unbound"]);
-        answer.Body.GetRawText().ShouldNotContain(SlotJti, Case.Sensitive);
+        answer.Body.GetRawText().ShouldNotContain(SlotOwnerId, Case.Sensitive);
         answer.Body.GetRawText().ShouldNotContain(SlotCiRunRef, Case.Sensitive);
     }
 
@@ -203,7 +203,7 @@ public sealed partial class GetRunDetailFieldsTests
         await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var runId = await NewRunAsync(world);
         await _fixture.ExecuteAsync(world.Database, $"""
-            update public.producer_slot set bound_token_jti = '{SlotJti}'
+            update public.producer_slot set bound_token_jti = '{SlotOwnerId}'
              where run_id = '{runId:D}' and producer_id = 'shard-1'
             """);
 
@@ -220,7 +220,7 @@ public sealed partial class GetRunDetailFieldsTests
         foreign.Status.ShouldBe(HttpStatusCode.NotFound);
         foreign.ErrorCode.ShouldBe("not_found");
         foreign.Body.TryGetProperty("producers", out _).ShouldBeFalse();
-        foreign.Body.GetRawText().ShouldNotContain(SlotJti, Case.Sensitive);
+        foreign.Body.GetRawText().ShouldNotContain(SlotOwnerId, Case.Sensitive);
     }
 
     /// <summary>One API-created run of the world's manifest; returns its id.</summary>

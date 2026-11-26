@@ -90,7 +90,7 @@ public sealed class EvidenceParseRetryTests(PostgresTenancyFixture fixture, Seaw
             _fixture.AppConnectionString(database),
             org,
             project,
-            RequestPrincipal.Service(projectScope: null, [Permissions.Artifact.Write], credentialId: "jti-parse-retry"),
+            RequestPrincipal.Service(projectScope: null, [Permissions.Artifact.Write], credentialId: IngestTestWorld.OwnerId),
             settings,
             services =>
             {

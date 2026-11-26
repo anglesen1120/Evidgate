@@ -33,9 +33,8 @@ namespace Evidgate.Modules.Orchestrator.Contracts;
 /// top of this block, not here.
 /// </param>
 /// <param name="UnverifiedRef">
-/// True when at least one member of <see cref="Ref"/> came from the request body rather than a verified GitHub OIDC
-/// claim, i.e. the identity is advisory input and never a gating one (05.2.2 §8, AC2). False when every value was
-/// verified, and false when the run records no identity at all.
+/// True when at least one member of <see cref="Ref"/> was declared by the producer, i.e. the identity is advisory
+/// input and never a gating one (05.2.2 §8, AC2). False when the run records no identity at all.
 /// </param>
 /// <param name="ManifestHash">
 /// The pinned manifest's <c>manifest_hash</c> (F44, S143), joined from <c>manifest</c> through the run's

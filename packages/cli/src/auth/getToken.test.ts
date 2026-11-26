@@ -42,7 +42,7 @@ async function cacheEntries(cacheDir: string): Promise<string[]> {
 }
 
 // The dev token is guarded, then exchanged like an ingest token; an
-// OIDC/ingest source reuses a fresh cached token, refreshes within the 60 s margin and
+// ingest source reuses a fresh cached token, refreshes within the 60 s margin and
 // purges the entry on a 401/403.
 describe('getToken', () => {
   let cacheDir: string;
@@ -131,34 +131,34 @@ describe('getToken', () => {
     expect(redact('bearer ci-token')).toBe(`bearer ${redacted}`);
   });
 
-  it('does not use the dev token when an OIDC source is set (AC8)', async () => {
+  it('does not use the dev token when an ingest source is set (AC8)', async () => {
     const config = configFor({
       EVIDGATE_ENV: 'dev',
       EVIDGATE_DEV_TOKEN: 'dev-token-value',
-      EVIDGATE_OIDC_TOKEN: 'oidc-jwt',
+      EVIDGATE_INGEST_TOKEN: 'ingest-credential',
     });
     exchangeMock.exchangeAndPurge.mockResolvedValue({
       token: 'ci-token',
       expiresAt: iso(20 * 60_000),
       projectId,
-      source: 'oidc',
+      source: 'ingest',
     });
 
     const result = await getToken(config, { now: () => now });
 
-    expect(result).toEqual({ token: 'ci-token', source: 'oidc', expiresAt: iso(20 * 60_000) });
+    expect(result).toEqual({ token: 'ci-token', source: 'ingest', expiresAt: iso(20 * 60_000) });
     expect(exchangeMock.exchangeAndPurge).toHaveBeenCalledTimes(1);
   });
 
   it('cache_reuse_and_60s_refresh', async () => {
-    const config = configFor({ EVIDGATE_OIDC_TOKEN: 'oidc-jwt' });
+    const config = configFor({ EVIDGATE_INGEST_TOKEN: 'ingest-credential' });
     const deps = { now: () => now };
 
     // Fresh cache → no exchange.
     await writeCachedToken(config, { token: 'cached-token', expiresAt: iso(10 * 60_000) });
     await expect(getToken(config, deps)).resolves.toEqual({
       token: 'cached-token',
-      source: 'oidc',
+      source: 'ingest',
       expiresAt: iso(10 * 60_000),
     });
     expect(exchangeMock.exchangeAndPurge).not.toHaveBeenCalled();
@@ -169,11 +169,11 @@ describe('getToken', () => {
       token: 'fresh-token',
       expiresAt: iso(20 * 60_000),
       projectId,
-      source: 'oidc',
+      source: 'ingest',
     });
     await expect(getToken(config, deps)).resolves.toEqual({
       token: 'fresh-token',
-      source: 'oidc',
+      source: 'ingest',
       expiresAt: iso(20 * 60_000),
     });
     expect(exchangeMock.exchangeAndPurge).toHaveBeenCalledTimes(1);
@@ -192,8 +192,8 @@ describe('getToken', () => {
   // A credential replaced under the same api_url/project must not reuse the cached token: the
   // entry is bound to the credential, so this run exchanges instead of trusting the old one.
   it('forces a fresh exchange when the credential changes for the same destination', async () => {
-    const first = configFor({ EVIDGATE_OIDC_TOKEN: 'oidc-jwt-one' });
-    const refreshed = configFor({ EVIDGATE_OIDC_TOKEN: 'oidc-jwt-two' });
+    const first = configFor({ EVIDGATE_INGEST_TOKEN: 'ingest-credential-one' });
+    const refreshed = configFor({ EVIDGATE_INGEST_TOKEN: 'ingest-credential-two' });
     const deps = { now: () => now };
     await writeCachedToken(first, {
       token: 'old-credential-token',
@@ -203,12 +203,12 @@ describe('getToken', () => {
       token: 'new-credential-token',
       expiresAt: iso(20 * 60_000),
       projectId,
-      source: 'oidc',
+      source: 'ingest',
     });
 
     await expect(getToken(refreshed, deps)).resolves.toEqual({
       token: 'new-credential-token',
-      source: 'oidc',
+      source: 'ingest',
       expiresAt: iso(20 * 60_000),
     });
     expect(exchangeMock.exchangeAndPurge).toHaveBeenCalledTimes(1);
@@ -240,7 +240,7 @@ describe('getToken', () => {
   });
 
   it('propagates an auth error from the exchange', async () => {
-    const config = configFor({ EVIDGATE_OIDC_TOKEN: 'oidc-jwt' });
+    const config = configFor({ EVIDGATE_INGEST_TOKEN: 'ingest-credential' });
     exchangeMock.exchangeAndPurge.mockRejectedValue(
       new ExchangeAuthError('token rejected', { code: 'token_invalid', status: 401 }),
     );
@@ -253,7 +253,7 @@ describe('getToken', () => {
   });
 
   it('keeps the cache on a non-auth failure', async () => {
-    const config = configFor({ EVIDGATE_OIDC_TOKEN: 'oidc-jwt' });
+    const config = configFor({ EVIDGATE_INGEST_TOKEN: 'ingest-credential' });
     await writeCachedToken(config, { token: 'stale-token', expiresAt: iso(30_000) });
     exchangeMock.exchangeAndPurge.mockRejectedValue(
       new CliError('network down', { code: 'transport' }),

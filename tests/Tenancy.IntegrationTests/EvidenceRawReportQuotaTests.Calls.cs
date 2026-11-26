@@ -194,7 +194,7 @@ public sealed partial class EvidenceRawReportQuotaTests
         // state it is seeded in accepts batches, so the race needs no state of its own.
         var ingestRun = await PlannedExecutionSeeder.SeedPlanAsync(_fixture, world.Database, world.Org, 1);
         await IngestTestWorld.SeedSlotsAsync(
-            _fixture, world.Database, world.Org, ingestRun.RunId, 1, IngestTestWorld.Jti);
+            _fixture, world.Database, world.Org, ingestRun.RunId, 1, IngestTestWorld.OwnerId);
         var ingestHost = _hosts.WithPrincipal(
             world.Database,
             world.Org,

@@ -15,7 +15,7 @@ namespace Tenancy.IntegrationTests;
 /// Independent QA of 04.1.2-T4 (migration 0029 <c>producer_slot</c> and <see cref="IProducerRegistry"/>):
 /// boundary, negative, race and privilege cases that the implementer's suite does not cover. Written
 /// against the plan contract (AC2 per-shard registration, AC3 first-write binding, AC4 unknown producer,
-/// T9/T54/T88 in plans/features/README.md), not against the implementation's internals.
+/// T9/T54 in plans/features/README.md), not against the implementation's internals.
 /// </summary>
 [Trait("Category", "Docker")]
 public sealed partial class ProducerSlotQaTests
@@ -23,6 +23,9 @@ public sealed partial class ProducerSlotQaTests
     private readonly PostgresTenancyFixture _fixture;
 
     public ProducerSlotQaTests(PostgresTenancyFixture fixture) => _fixture = fixture;
+
+    private const string OwnerA = "0192ee53-41fe-7000-8000-000000000001";
+    private const string OwnerB = "0192ee53-41fe-7000-8000-000000000002";
 
     private sealed record World(
         TenancyApiFactory Api,
@@ -81,30 +84,32 @@ public sealed partial class ProducerSlotQaTests
     // ------------------------------------------------------------------ boundary: bound CHECKs vs the registry
 
     [Fact]
-    public async Task BindOrCheck_TokenJtiAtMaxLength256_Binds()
+    public async Task BindOrCheck_OwnerIdAtMaxLength_BindsAndCloses()
     {
         await using var world = await StartAsync();
         var run = await CreateRunAsync(world);
         await InScopeAsync(world, r => r.RegisterSlotsAsync(run, 1, TestContext.Current.CancellationToken));
 
-        var jti = new string('j', 256);
-        var result = await InScopeAsync(world, r => r.BindOrCheckAsync(run, "shard-1", jti, null, TestContext.Current.CancellationToken));
+        var owner = new string('o', ProducerSlotLimits.MaxOwnerIdLength);
+        var bind = await InScopeAsync(world, r => r.BindOrCheckAsync(run, "shard-1", owner, TestContext.Current.CancellationToken));
+        var close = await InScopeAsync(world, r => r.CloseSlotAsync(run, "shard-1", owner, 3, 2, TestContext.Current.CancellationToken));
 
-        result.IsSuccess.ShouldBeTrue(result.Error?.Message);
-        result.Value.Bound.ShouldBeTrue();
+        bind.IsSuccess.ShouldBeTrue(bind.Error?.Message);
+        bind.Value.Bound.ShouldBeTrue();
+        close.IsSuccess.ShouldBeTrue(close.Error?.Message);
+        close.Value.Closed.ShouldBeTrue();
     }
 
     [Fact]
-    public async Task BindOrCheck_TokenJtiOver256_ReturnsFailure_NotAnUnhandledDatabaseError()
+    public async Task BindOrCheck_OwnerIdOverMaxLength_ReturnsFailure_NotAnUnhandledDatabaseError()
     {
-        // Plan contract: an invalid identity is refused as a result. The bound CHECK (1..256) must not
-        // surface as an unhandled PostgresException (23514) escaping the registry.
+        // An invalid owner is refused as a result, not as an unhandled 23514 from the bound CHECK.
         await using var world = await StartAsync();
         var run = await CreateRunAsync(world);
         await InScopeAsync(world, r => r.RegisterSlotsAsync(run, 1, TestContext.Current.CancellationToken));
 
-        var jti = new string('j', 257);
-        var result = await InScopeAsync(world, r => r.BindOrCheckAsync(run, "shard-1", jti, null, TestContext.Current.CancellationToken));
+        var owner = new string('o', ProducerSlotLimits.MaxOwnerIdLength + 1);
+        var result = await InScopeAsync(world, r => r.BindOrCheckAsync(run, "shard-1", owner, TestContext.Current.CancellationToken));
 
         result.IsSuccess.ShouldBeFalse();
         result.Error!.Code.ShouldBe(ApiErrorCode.RequestInvalid);
@@ -112,14 +117,13 @@ public sealed partial class ProducerSlotQaTests
     }
 
     [Fact]
-    public async Task BindOrCheck_EmptyTokenJti_ReturnsFailure_NotAnUnhandledDatabaseError()
+    public async Task BindOrCheck_EmptyOwnerId_ReturnsFailure_NotAnUnhandledDatabaseError()
     {
-        // bound_token_jti CHECK requires length >= 1. An empty jti must be refused as a result.
         await using var world = await StartAsync();
         var run = await CreateRunAsync(world);
         await InScopeAsync(world, r => r.RegisterSlotsAsync(run, 1, TestContext.Current.CancellationToken));
 
-        var result = await InScopeAsync(world, r => r.BindOrCheckAsync(run, "shard-1", string.Empty, null, TestContext.Current.CancellationToken));
+        var result = await InScopeAsync(world, r => r.BindOrCheckAsync(run, "shard-1", string.Empty, TestContext.Current.CancellationToken));
 
         result.IsSuccess.ShouldBeFalse();
         result.Error!.Code.ShouldBe(ApiErrorCode.RequestInvalid);
@@ -135,7 +139,7 @@ public sealed partial class ProducerSlotQaTests
         var run = await CreateRunAsync(world);
         await InScopeAsync(world, r => r.RegisterSlotsAsync(run, 1, TestContext.Current.CancellationToken));
 
-        var result = await InScopeAsync(world, r => r.BindOrCheckAsync(run, string.Empty, "jti-a", null, TestContext.Current.CancellationToken));
+        var result = await InScopeAsync(world, r => r.BindOrCheckAsync(run, string.Empty, OwnerA, TestContext.Current.CancellationToken));
 
         result.IsSuccess.ShouldBeFalse();
         result.Error!.Code.ShouldBe(ApiErrorCode.RequestInvalid);
@@ -151,21 +155,21 @@ public sealed partial class ProducerSlotQaTests
         var run = await CreateRunAsync(world);
         await InScopeAsync(world, r => r.RegisterSlotsAsync(run, 1, TestContext.Current.CancellationToken));
 
-        var result = await InScopeAsync(world, r => r.BindOrCheckAsync(run, "shard-1\n", "jti-a", null, TestContext.Current.CancellationToken));
+        var result = await InScopeAsync(world, r => r.BindOrCheckAsync(run, "shard-1\n", OwnerA, TestContext.Current.CancellationToken));
 
         result.IsSuccess.ShouldBeFalse();
         result.Error!.Code.ShouldBe(ApiErrorCode.RequestInvalid);
     }
 
     [Fact]
-    public async Task BindOrCheck_NulInTokenJti_IsRefused()
+    public async Task BindOrCheck_NulInOwnerId_IsRefused()
     {
         // PostgreSQL rejects U+0000 in text (22021), so the validator must refuse it as a result.
         await using var world = await StartAsync();
         var run = await CreateRunAsync(world);
         await InScopeAsync(world, r => r.RegisterSlotsAsync(run, 1, TestContext.Current.CancellationToken));
 
-        var result = await InScopeAsync(world, r => r.BindOrCheckAsync(run, "shard-1", "jti\0a", null, TestContext.Current.CancellationToken));
+        var result = await InScopeAsync(world, r => r.BindOrCheckAsync(run, "shard-1", "owner\0a", TestContext.Current.CancellationToken));
 
         result.IsSuccess.ShouldBeFalse();
         result.Error!.Code.ShouldBe(ApiErrorCode.RequestInvalid);
@@ -173,17 +177,28 @@ public sealed partial class ProducerSlotQaTests
     }
 
     [Fact]
-    public async Task BindOrCheck_NulInCiRunRef_IsRefused()
+    public async Task CloseSlot_InvalidOwnerId_IsRefusedAndLeavesSlotOpen()
     {
         await using var world = await StartAsync();
         var run = await CreateRunAsync(world);
         await InScopeAsync(world, r => r.RegisterSlotsAsync(run, 1, TestContext.Current.CancellationToken));
+        var bound = await InScopeAsync(world, r => r.BindOrCheckAsync(run, "shard-1", OwnerA, TestContext.Current.CancellationToken));
+        bound.IsSuccess.ShouldBeTrue(bound.Error?.Message);
 
-        var result = await InScopeAsync(world, r => r.BindOrCheckAsync(run, "shard-1", "jti-a", "1/7\0/2", TestContext.Current.CancellationToken));
+        var empty = await InScopeAsync(world, r => r.CloseSlotAsync(run, "shard-1", string.Empty, 3, 2, TestContext.Current.CancellationToken));
+        var nul = await InScopeAsync(world, r => r.CloseSlotAsync(run, "shard-1", "owner\0a", 3, 2, TestContext.Current.CancellationToken));
+        var tooLong = await InScopeAsync(world, r => r.CloseSlotAsync(
+            run, "shard-1", new string('o', ProducerSlotLimits.MaxOwnerIdLength + 1), 3, 2, TestContext.Current.CancellationToken));
 
-        result.IsSuccess.ShouldBeFalse();
-        result.Error!.Code.ShouldBe(ApiErrorCode.RequestInvalid);
-        result.Error.Status.ShouldBe(422);
+        foreach (var result in new[] { empty, nul, tooLong })
+        {
+            result.IsSuccess.ShouldBeFalse();
+            result.Error!.Code.ShouldBe(ApiErrorCode.RequestInvalid);
+            result.Error.Status.ShouldBe(422);
+        }
+
+        var slots = await InScopeAsync(world, r => r.GetRunProducerSlotsAsync(run, TestContext.Current.CancellationToken));
+        slots.Single().ClosedAt.ShouldBeNull();
     }
 
     // ------------------------------------------------------------------ shard-count boundary (T54 / ProducerSlotLimits)
@@ -215,8 +230,8 @@ public sealed partial class ProducerSlotQaTests
         await InScopeAsync(world, r => r.RegisterSlotsAsync(runA, 1, TestContext.Current.CancellationToken));
         await InScopeAsync(world, r => r.RegisterSlotsAsync(runB, 1, TestContext.Current.CancellationToken));
 
-        var bindA = await InScopeAsync(world, r => r.BindOrCheckAsync(runA, "shard-1", "jti-a", null, TestContext.Current.CancellationToken));
-        var bindB = await InScopeAsync(world, r => r.BindOrCheckAsync(runB, "shard-1", "jti-b", null, TestContext.Current.CancellationToken));
+        var bindA = await InScopeAsync(world, r => r.BindOrCheckAsync(runA, "shard-1", OwnerA, TestContext.Current.CancellationToken));
+        var bindB = await InScopeAsync(world, r => r.BindOrCheckAsync(runB, "shard-1", OwnerB, TestContext.Current.CancellationToken));
 
         bindA.IsSuccess.ShouldBeTrue();
         bindA.Value.Bound.ShouldBeTrue();

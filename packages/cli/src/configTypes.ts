@@ -20,8 +20,8 @@ export interface ResolveConfigInput {
   readonly homedir?: string;
 }
 
-/** Where the bearer token comes from, in §5 precedence order. */
-export type TokenSource = 'oidc' | 'actions-id-token' | 'ingest' | 'dev';
+/** The dev source is a loopback-only alias for a seeded ingest token. */
+export type TokenSource = 'ingest' | 'dev';
 
 /**
  * The spool surface: the root (optional here — only the spool commands decide it is
@@ -43,12 +43,8 @@ export interface ResolvedConfig {
   /** Absolute token-cache directory; the platform default ends in `evidgate`. */
   readonly cacheDir: string;
   readonly env: string | undefined;
-  readonly oidcToken: string | undefined;
-  readonly actionsIdTokenRequestUrl: string | undefined;
-  readonly actionsIdTokenRequestToken: string | undefined;
   readonly ingestToken: string | undefined;
   readonly devToken: string | undefined;
-  readonly bindingChallenge: string | undefined;
   /**
    * The spool surface, resolved on first call and memoised. `events send` and
    * `runs finalize` force it in their `validateConfig` pre-flight — before the
@@ -64,11 +60,4 @@ export interface ResolvedConfig {
 }
 
 /** The fields `resolveTokenSource` reads; `ResolvedConfig` satisfies it structurally. */
-export type TokenSourceFields = Pick<
-  ResolvedConfig,
-  | 'oidcToken'
-  | 'actionsIdTokenRequestUrl'
-  | 'actionsIdTokenRequestToken'
-  | 'ingestToken'
-  | 'devToken'
->;
+export type TokenSourceFields = Pick<ResolvedConfig, 'ingestToken' | 'devToken'>;

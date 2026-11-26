@@ -18,8 +18,6 @@ public sealed class EvidenceUploadUrlQaTests : IClassFixture<TenancyHostPool>
     private const string ExecutionKey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
     private const string Checksum = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
     private const string ZipType = "application/zip";
-    private const string Jti = "jti-upload-1";
-    private const string OtherJti = "jti-upload-2";
     private const string ProducerId = "shard-1";
     private const long Cap = 1024;
 
@@ -54,10 +52,10 @@ public sealed class EvidenceUploadUrlQaTests : IClassFixture<TenancyHostPool>
         }
     }
 
-    private static RequestPrincipal Writer(string jti = Jti) =>
-        RequestPrincipal.Service(projectScope: null, [Permissions.Artifact.Write], credentialId: jti);
+    private static RequestPrincipal Writer(string ownerId = IngestTestWorld.OwnerId) =>
+        RequestPrincipal.Service(projectScope: null, [Permissions.Artifact.Write], credentialId: ownerId);
 
-    /// <summary>A caller with <c>artifact:write</c> but no token identity (no <c>jti</c> to bind a slot to).</summary>
+    /// <summary>A caller with <c>artifact:write</c> but no token identity (no ingest token ID to bind a slot to).</summary>
     private static RequestPrincipal NoIdentityWriter() =>
         RequestPrincipal.Service(projectScope: null, [Permissions.Artifact.Write], credentialId: null);
 
@@ -383,7 +381,7 @@ public sealed class EvidenceUploadUrlQaTests : IClassFixture<TenancyHostPool>
     // ------------------------------------------------------------------ AC2: identity and slot binding
 
     [Fact]
-    public async Task UploadUrl_TokenWithoutJti_IsForbidden_NoRow_SlotUnbound()
+    public async Task UploadUrl_TokenWithoutOwnerId_IsForbidden_NoRow_SlotUnbound()
     {
         await using var world = await StartAsync(NoIdentityWriter());
         var runId = await SeedRunAsync(world, ExecutionKey);
@@ -399,12 +397,12 @@ public sealed class EvidenceUploadUrlQaTests : IClassFixture<TenancyHostPool>
     [Fact]
     public async Task UploadUrl_TwoIdentitiesRaceForUnboundSlot_ExactlyOneWins()
     {
-        await using var world = await StartAsync(Writer(Jti));
+        await using var world = await StartAsync(Writer(IngestTestWorld.OwnerId));
         var runId = await SeedRunAsync(world, ExecutionKey);
         await InsertKindPolicyAsync(world, "trace");
 
         await using var second = _hosts.WithPrincipal(
-            world.Database, world.Org, world.Project, Writer(OtherJti), ObjectStorage);
+            world.Database, world.Org, world.Project, Writer(IngestTestWorld.OtherOwnerId), ObjectStorage);
         using var secondClient = second.CreateClient();
 
         var answers = await Task.WhenAll(
@@ -421,8 +419,8 @@ public sealed class EvidenceUploadUrlQaTests : IClassFixture<TenancyHostPool>
         answers.Count(a => a.Status == HttpStatusCode.Forbidden && a.ErrorCode == "producer_slot_taken").ShouldBe(1, summary);
         (await ArtifactRowsAsync(world)).ShouldBe(1);
 
-        var winnerJti = answers[0].Status == HttpStatusCode.OK ? Jti : OtherJti;
-        (await SlotBindingAsync(world, runId)).ShouldBe(winnerJti);
+        var winnerOwnerId = answers[0].Status == HttpStatusCode.OK ? IngestTestWorld.OwnerId : IngestTestWorld.OtherOwnerId;
+        (await SlotBindingAsync(world, runId)).ShouldBe(winnerOwnerId);
     }
 
     [Fact]
@@ -430,17 +428,17 @@ public sealed class EvidenceUploadUrlQaTests : IClassFixture<TenancyHostPool>
     {
         // T85/T9: 06.1.2's route is a first-write path of its own - the first accepted upload-url claims the
         // slot through the same BindOrCheckAsync the event batch uses, and the foreign identity is refused.
-        await using var world = await StartAsync(Writer(Jti));
+        await using var world = await StartAsync(Writer(IngestTestWorld.OwnerId));
         var runId = await SeedRunAsync(world, ExecutionKey);
         await InsertKindPolicyAsync(world, "trace");
 
         var accepted = await UploadUrlAsync(world, Body(runId, attemptNo: 1, bytes: Cap), Guid.NewGuid().ToString("N"));
 
         accepted.Status.ShouldBe(HttpStatusCode.OK, accepted.ErrorMessage);
-        (await SlotBindingAsync(world, runId)).ShouldBe(Jti);
+        (await SlotBindingAsync(world, runId)).ShouldBe(IngestTestWorld.OwnerId);
 
         await using var second = _hosts.WithPrincipal(
-            world.Database, world.Org, world.Project, Writer(OtherJti), ObjectStorage);
+            world.Database, world.Org, world.Project, Writer(IngestTestWorld.OtherOwnerId), ObjectStorage);
         using var secondClient = second.CreateClient();
 
         var foreign = await secondClient.SendAsync(
@@ -453,7 +451,7 @@ public sealed class EvidenceUploadUrlQaTests : IClassFixture<TenancyHostPool>
         foreign.Status.ShouldBe(HttpStatusCode.Forbidden, foreign.ErrorMessage);
         foreign.ErrorCode.ShouldBe("producer_slot_taken");
         (await ArtifactRowsAsync(world)).ShouldBe(1);
-        (await SlotBindingAsync(world, runId)).ShouldBe(Jti);
+        (await SlotBindingAsync(world, runId)).ShouldBe(IngestTestWorld.OwnerId);
     }
 
     [Fact]

@@ -49,7 +49,7 @@ public sealed partial class EvidenceUploadUrlTests
             .ShouldBe($"org/{world.Org:D}/project/{world.Project:D}/run/{runId:D}/attempt/{ExecutionKey}/1/{artifactId:D}");
         (await _fixture.ScalarAsync<long>(world.Database, $"select bytes from public.artifact where id = '{artifactId:D}'")).ShouldBe(Cap);
         (await ArtifactColumnAsync(world, artifactId, "scan_state")).ShouldBe("pending");
-        (await SlotBindingAsync(world, runId)).ShouldBe(Jti);
+        (await SlotBindingAsync(world, runId)).ShouldBe(IngestTestWorld.OwnerId);
     }
 
     // ------------------------------------------------------------------ AC2: the slot and the planned pair
@@ -86,7 +86,7 @@ public sealed partial class EvidenceUploadUrlTests
     public async Task UploadUrl_OtherIdentity_403_ProducerSlotTaken()
     {
         await using var world = await StartAsync(Writer());
-        var runId = await SeedRunAsync(world, ExecutionKey, boundJti: OtherJti);
+        var runId = await SeedRunAsync(world, ExecutionKey, boundOwnerId: IngestTestWorld.OtherOwnerId);
         await InsertKindPolicyAsync(world, "trace");
 
         var answer = await UploadUrlAsync(world, Body(runId), NewKey());
@@ -94,7 +94,7 @@ public sealed partial class EvidenceUploadUrlTests
         answer.Status.ShouldBe(HttpStatusCode.Forbidden);
         answer.ErrorCode.ShouldBe("producer_slot_taken");
         (await ArtifactRowsAsync(world)).ShouldBe(0);
-        (await SlotBindingAsync(world, runId)).ShouldBe(OtherJti);
+        (await SlotBindingAsync(world, runId)).ShouldBe(IngestTestWorld.OtherOwnerId);
     }
 
     [Fact]
@@ -111,7 +111,7 @@ public sealed partial class EvidenceUploadUrlTests
         second.Status.ShouldBe(HttpStatusCode.OK, second.ErrorMessage);
         second.Id("artifact_id").ShouldNotBe(first.Id("artifact_id"));
         (await ArtifactRowsAsync(world)).ShouldBe(2);
-        (await SlotBindingAsync(world, runId)).ShouldBe(Jti);
+        (await SlotBindingAsync(world, runId)).ShouldBe(IngestTestWorld.OwnerId);
     }
 
     [Fact]
@@ -252,7 +252,7 @@ public sealed partial class EvidenceUploadUrlTests
         // A second principal of the same project replays the key with the same body: the token identity is part of
         // the idempotency hash (F3), so it is a conflict and never receives the first caller's presigned URL.
         await using var other = _hosts.WithPrincipal(
-            world.Database, world.Org, world.Project, Writer(OtherJti), ObjectStorage);
+            world.Database, world.Org, world.Project, Writer(IngestTestWorld.OtherOwnerId), ObjectStorage);
         using var otherClient = other.CreateClient();
         var conflict = await otherClient.SendAsync(HttpMethod.Post, "/v1/artifacts/upload-url", _ => { }, Body(runId), key);
 

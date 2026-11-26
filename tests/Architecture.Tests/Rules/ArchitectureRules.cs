@@ -248,12 +248,11 @@ public static class ArchitectureRules
     };
 
     /// <summary>
-    /// 02.4.1/02.4.2: the only handlers that may carry <c>[CredentialAuthenticated]</c> instead of a permission — the two
-    /// credential exchanges, whose endpoint verifies the credential before the pipeline runs.
+    /// The only handler that may carry <c>[CredentialAuthenticated]</c> instead of a permission: the ingest-token
+    /// exchange, whose endpoint resolves the token before the pipeline runs and whose handler verifies the secret.
     /// </summary>
     public static readonly IReadOnlySet<string> CredentialAuthenticatedAllowlist = new HashSet<string>(StringComparer.Ordinal)
     {
-        "Evidgate.Modules.Identity.Application.Commands.ExchangeGitHubTokenCommandHandler",
         "Evidgate.Modules.Identity.Application.Commands.ExchangeIngestTokenCommandHandler",
     };
 

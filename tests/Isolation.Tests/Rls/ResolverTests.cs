@@ -35,7 +35,6 @@ public sealed partial class ResolverTests : HarnessTest
         ["evidgate_resolve.member_org"] = ["org_id", "project_id", "binding_id", "status"],
         ["evidgate_resolve.member_orgs"] = ["org_id", "project_id", "binding_id", "status"],
         ["evidgate_resolve.member_organizations"] = ["org_id", "slug", "name", "status"],
-        ["evidgate_resolve.resolve_ci_binding"] = ["org_id", "project_id", "binding_id", "status"],
         ["evidgate_resolve.resolve_ingest_token"] = ["org_id", "project_id", "binding_id", "status"],
         ["evidgate_resolve.resolve_api_token"] = ["org_id", "project_id", "token_id", "status"],
         ["evidgate_resolve.installation_by_id"] = ["org_id", "status"],
@@ -107,8 +106,6 @@ public sealed partial class ResolverTests : HarnessTest
     {
         ["evidgate.purge_expired_idempotency"] = "0007_platform_idempotency_record.sql:137",
         ["evidgate.audit_org_ids"] = "0015_identity_audit_log.sql:132",
-        ["evidgate.purge_expired_ci_token_issue"] =
-            "0017_identity_ci_token_issue.sql:67 (redefined 0019_identity_ci_review_fixes.sql:8)",
         ["evidgate.expire_pending_invites"] = "0043_identity_invite_flow.sql:177",
         ["evidgate.session_cleanup"] = "0048_identity_session_routes.sql:479",
         ["evidgate.healing_switch_set_system"] =
@@ -134,15 +131,12 @@ public sealed partial class ResolverTests : HarnessTest
     };
 
     /// <summary>
-    /// The tables the resolvers read (0014: <c>membership</c>/<c>organization</c>; 0016:
-    /// <c>ci_binding</c>; 0018: <c>ingest_token</c>; 0083: <c>api_token</c>), with the policy predicate that
-    /// keeps a direct read inside one org.
+    /// The tables the resolvers read and the policy predicate that keeps direct reads inside one org.
     /// </summary>
     private static readonly (string Table, string OrgPredicate)[] ResolvedTables =
     [
         ("public.membership", RlsTableCatalog.TenantPredicate),
         ("public.organization", RlsTableCatalog.OrganizationPredicate),
-        ("public.ci_binding", RlsTableCatalog.TenantPredicate),
         ("public.ingest_token", RlsTableCatalog.TenantPredicate),
         ("public.api_token", RlsTableCatalog.TenantPredicate),
         ("public.github_installation", RlsTableCatalog.TenantPredicate),

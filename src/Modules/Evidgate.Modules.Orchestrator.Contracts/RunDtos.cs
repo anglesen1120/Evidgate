@@ -55,8 +55,8 @@ public sealed record RunRefRequest(
 /// <param name="RunId">The created run.</param>
 /// <param name="State">Its state; <c>queued</c> because the producer slots commit in the create transaction (T13).</param>
 /// <param name="UnverifiedRef">
-/// True when the run's recorded identity came from the request body rather than a verified GitHub OIDC claim (05.2.2
-/// AC2, T1): the run is advisory input, never a gating one. False for a caller whose identity was fully verified, and
-/// for a request that carried no identity at all. The wire name is <c>unverified_ref</c>.
+/// True when the run's recorded identity was declared by the producer (05.2.2 AC2, T1): the run is advisory
+/// input, never a gating one. False for a request that carried no identity at all. The wire name is
+/// <c>unverified_ref</c>.
 /// </param>
 public sealed record RunCreated(Guid RunId, string State, bool UnverifiedRef);

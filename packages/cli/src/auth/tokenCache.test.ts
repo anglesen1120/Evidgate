@@ -110,12 +110,10 @@ describe('tokenCache', () => {
     const base = cacheConfig(cacheDir);
     const first = tokenCachePath({ ...base, ingestToken: 'ingest-one' });
     const rotated = tokenCachePath({ ...base, ingestToken: 'ingest-two' });
-    const oidc = tokenCachePath({ ...base, oidcToken: 'oidc-jwt' });
     const dev = tokenCachePath({ ...base, devToken: 'dev-token-value' });
     const asIngest = tokenCachePath({ ...base, ingestToken: 'dev-token-value' });
 
     expect(first).not.toBe(rotated);
-    expect(first).not.toBe(oidc);
     expect(dev).toBe(asIngest);
   });
 

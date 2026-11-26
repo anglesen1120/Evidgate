@@ -215,15 +215,6 @@ public sealed partial class TenantGucTests
             """,
             ("id", Guid.CreateVersion7()),
             ("org_id", orgId));
-        var bindingId = Guid.CreateVersion7();
-        await scope.ExecuteAsync(
-            """
-            insert into public.ci_binding (id, org_id, project_id, provider, repository_id, repository_full_name, allowed_ref_patterns, allowed_workflow_refs)
-            values (@id, @org_id, @project_id, 'github_actions', 1, 'acme/web', array['refs/heads/main'], array['acme/web/.github/workflows/ci.yml@refs/heads/main'])
-            """,
-            ("id", bindingId),
-            ("org_id", orgId),
-            ("project_id", projectId));
         // The commit-registration tables (migration 0106): one binding, one received delivery and one queued
         // sync, all owner-written so the fail-closed-zero assertions below have a row of each to hide.
         var gitBindingId = Guid.CreateVersion7();
@@ -311,15 +302,6 @@ public sealed partial class TenantGucTests
             ("org_id", orgId),
             ("project_id", projectId),
             ("author_membership_id", aiMembership));
-        await scope.ExecuteAsync(
-            """
-            insert into public.ci_token_issue (id, org_id, project_id, binding_id, provider, jti, repository_id, repository_full_name, ref, sha, run_id, run_attempt, job_workflow_ref, expires_at)
-            values (@id, @org_id, @project_id, @binding_id, 'github_actions', 'jti-probe', 1, 'acme/web', 'refs/heads/main', 'abc', 1, 1, 'wf', now() + interval '1 hour')
-            """,
-            ("id", Guid.CreateVersion7()),
-            ("org_id", orgId),
-            ("project_id", projectId),
-            ("binding_id", bindingId));
         await scope.ExecuteAsync(
             """
             insert into public.api_token

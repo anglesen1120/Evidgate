@@ -46,7 +46,7 @@ tags:
   - name: identity
     description: Orgs, projects, memberships (02)
   - name: ci-admin
-    description: CI bindings and ingest tokens (02)
+    description: Project ingest tokens
   - name: api-tokens
     description: Project API tokens for automation (02.4.4)
   - name: webhook-endpoints
@@ -78,26 +78,20 @@ paths:
     post:
       operationId: exchangeCiToken
       tags: [ci]
-      summary: Exchange a GitHub OIDC JWT or project ingest token for a `ci_producer` token (02.4)
+      summary: Exchange a project ingest token for a short-lived `ci_producer` token
       description: >-
-        A pre-tenant route (00 §5.4.8, TL T1): there is no session, the credential is the
-        request. Send a GitHub Actions OIDC token as `Authorization: Bearer …`, or an ingest
-        token as `{"ingest_token": "egt_…"}`. The first exchange of a binding that is still
-        `pending_verification` also carries `binding_challenge`. The reply is a short-lived
-        (at most 60 minutes) `ci_producer` token scoped to exactly one project. Failures:
-        401 `token_invalid` / `token_replayed` / `token_unknown` / `token_revoked` /
-        `token_expired`; 403 `binding_mismatch` / `binding_pending` / `binding_disabled`;
-        409 `binding_conflict`; 429 `rate_limited` (with `Retry-After`); 503 `unavailable`
-        when the deployment has no signing key or the issuer's keys cannot be fetched. A rate-store
-        outage also returns retryable 503 `unavailable`, with `Retry-After: 1`.
-        Idempotency-Key exempt: `jti` single-use is the arbiter (README).
+        Send the project credential as `{"ingest_token": "egt_…"}`. Each exchange returns a
+        new token scoped to that credential's project. A revoked, expired or unknown token
+        is refused. Authorization headers are not accepted, even alongside a valid body.
+        Unknown or duplicate body fields and malformed JSON are rejected. A rate-store
+        outage returns 503 `unavailable` with `Retry-After: 1`. Token responses are never
+        replayed from the idempotency cache.
       x-permission: none
-      x-auth: github_oidc_jwt_or_ingest_token
+      x-auth: ingest_token
       x-version: v1
-      security:
-        - bearerToken: []
+      security: []
       requestBody:
-        required: false
+        required: true
         content:
           application/json:
             schema:
@@ -112,16 +106,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CiTokenResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '409':
-          $ref: '#/components/responses/Conflict'
         '413':
           $ref: '#/components/responses/TooLarge'
-        '422':
-          $ref: '#/components/responses/Unprocessable'
         '429':
           $ref: '#/components/responses/RateLimited'
         '503':
@@ -1439,17 +1429,14 @@ paths:
         a `release_id` is 422 `replay_release_not_allowed`. A refusal writes no run, planned
         execution, producer slot, outbox or audit row, and its failure Result is
         never stored for idempotency (the key stays reusable). The optional
-        `ref` object records the run's branch/tag/PR identity (05.2.2-T1): a
-        verified `ci_producer` caller's OIDC `ref`/`sha` claims win and a
-        conflicting member is ignored, never refused (AC3), while every value
-        taken from the body marks the run `unverified_ref = true` in the 201
-        body. The body block is shape-validated even where a claim later
-        overrides it — an unknown member inside `ref`, a `kind` or
+        `ref` object records producer-declared branch/tag/PR identity. Any stored
+        value from the body marks the run `unverified_ref = true` in the 201 response.
+        An unknown member inside `ref`, a `kind` or
         `trigger_event` outside its enum, a `name` outside 1..255, a
         `head_sha`/`base_sha` outside `^[0-9a-f]{40}([0-9a-f]{24})?$`, a
         `pr_number` below 1 or a non-boolean `is_fork` is 422 `request_invalid`
         with `details[].path`, and `kind: pull_request` without `pr_number` is
-        refused on the values that remain after the claim merge. Three caps refuse
+        refused. Three caps refuse
         a body the schema accepts: a run-create body over its fixed 64 KiB
         transport cap is 413 `payload_too_large` with one detail
         (`path: run_body_bytes`, the `limit` and the counted `actual`), and a
@@ -1568,9 +1555,8 @@ paths:
         `version` (the optimistic-concurrency token a transition echoes in
         `If-Match`) and `purpose` (`regular`/`replay`, T67). The identity block
         `ref` (branch/tag/PR, 05.2.2-T1) is returned with all members present,
-        `null` where unknown, plus `unverified_ref` (`true` when any stored
-        identity value came from the request body rather than a verified CI
-        claim). Since F44 (S143) the same body pins the manifest and its
+        `null` where unknown, plus `unverified_ref` (`true` for producer-declared
+        identity). Since F44 (S143) the same body pins the manifest and its
         release inputs, every member required: `manifest_hash` (joined from
         `manifest` through `run.manifest_id`), `suite_revision_id` and
         `policy_revision_id` (`policy_revision_id` is `null` until a revision
@@ -4340,156 +4326,6 @@ paths:
           $ref: '#/components/responses/PreconditionFailed'
         '422':
           $ref: '#/components/responses/Unprocessable'
-        '429':
-          $ref: '#/components/responses/RateLimited'
-        '503':
-          $ref: '#/components/responses/Unavailable'
-  /projects/{p}/ci-bindings:
-    post:
-      operationId: createCiBinding
-      tags: [ci-admin]
-      summary: Bind a repository to a project; the response carries the one-time challenge (02.4.1)
-      description: >-
-        Creates the binding `pending_verification` and returns `binding_challenge` once. Set it
-        as the repository variable `EVIDGATE_BINDING_CHALLENGE`; the first OIDC exchange that
-        presents it activates the binding (T70). The challenge is stored only as an HMAC and the
-        response is never replayed, so this route takes no `Idempotency-Key` (README).
-        Without an `X-Evidgate-Org` header the org is the caller's only choice, so send it.
-      x-permission: ci_binding:write
-      x-version: v1
-      parameters:
-        - $ref: '#/components/parameters/ProjectId'
-        - $ref: '#/components/parameters/XsrfToken'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CreateCiBindingRequest'
-      responses:
-        '201':
-          description: CI binding created
-          headers:
-            X-Request-Id:
-              $ref: '#/components/headers/XRequestId'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CiBindingCreatedResponse'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '409':
-          $ref: '#/components/responses/Conflict'
-        '422':
-          $ref: '#/components/responses/Unprocessable'
-        '429':
-          $ref: '#/components/responses/RateLimited'
-        '503':
-          $ref: '#/components/responses/Unavailable'
-    get:
-      operationId: listCiBindings
-      tags: [ci-admin]
-      summary: Cursor page of a project's CI bindings (02.4.1)
-      x-permission: project:read
-      x-version: v1
-      parameters:
-        - $ref: '#/components/parameters/ProjectId'
-        - $ref: '#/components/parameters/Cursor'
-        - $ref: '#/components/parameters/Limit'
-      responses:
-        '200':
-          description: Page of bindings; the challenge is never listed
-          headers:
-            X-Request-Id:
-              $ref: '#/components/headers/XRequestId'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CiBindingListResponse'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '422':
-          $ref: '#/components/responses/Unprocessable'
-        '429':
-          $ref: '#/components/responses/RateLimited'
-        '503':
-          $ref: '#/components/responses/Unavailable'
-  /ci-bindings/{b}:
-    patch:
-      operationId: updateCiBinding
-      tags: [ci-admin]
-      summary: Edit allowlists, disable or re-enable a binding under If-Match (02.4.1)
-      x-permission: ci_binding:write
-      x-version: v1
-      parameters:
-        - $ref: '#/components/parameters/BindingId'
-        - $ref: '#/components/parameters/IfMatch'
-        - $ref: '#/components/parameters/IdempotencyKey'
-        - $ref: '#/components/parameters/XsrfToken'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/UpdateCiBindingRequest'
-      responses:
-        '200':
-          description: The binding in its new state
-          headers:
-            X-Request-Id:
-              $ref: '#/components/headers/XRequestId'
-            ETag:
-              $ref: '#/components/headers/ETag'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CiBindingView'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '409':
-          $ref: '#/components/responses/Conflict'
-        '412':
-          $ref: '#/components/responses/PreconditionFailed'
-        '422':
-          $ref: '#/components/responses/Unprocessable'
-        '429':
-          $ref: '#/components/responses/RateLimited'
-        '503':
-          $ref: '#/components/responses/Unavailable'
-    delete:
-      operationId: disableCiBinding
-      tags: [ci-admin]
-      summary: Disable a CI binding (02.4.1)
-      x-permission: ci_binding:write
-      x-version: v1
-      parameters:
-        - $ref: '#/components/parameters/BindingId'
-        - $ref: '#/components/parameters/IdempotencyKey'
-        - $ref: '#/components/parameters/XsrfToken'
-      responses:
-        '204':
-          description: Binding disabled
-          headers:
-            X-Request-Id:
-              $ref: '#/components/headers/XRequestId'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
         '429':
           $ref: '#/components/responses/RateLimited'
         '503':
@@ -9695,13 +9531,6 @@ components:
       name: X-Hub-Signature-256
       description: HMAC signature on inbound GitHub webhook deliveries (00 §9.3).
   parameters:
-    BindingId:
-      name: b
-      in: path
-      required: true
-      schema:
-        type: string
-        format: uuid
     IngestTokenId:
       name: t
       in: path
@@ -11195,9 +11024,7 @@ components:
         unverified_ref:
           type: boolean
           description: >-
-            True when at least one stored identity value came from the request
-            body instead of a verified CI claim (05.2.2-T1); false for a
-            verified CI caller and for a run with no identity at all.
+            True for producer-declared identity, false when no identity was supplied.
         advisory_only:
           type: boolean
           description: >-
@@ -11438,9 +11265,7 @@ components:
         unverified_ref:
           type: boolean
           description: >-
-            True when at least one stored identity value came from the request
-            body instead of a verified CI claim (05.2.2-T1); false for a
-            verified CI caller and for a run with no identity at all.
+            True for producer-declared identity, false when no identity was supplied.
         completeness:
           type: [string, 'null']
           enum: [complete, incomplete, null]
@@ -12025,16 +11850,12 @@ components:
         unverified_ref:
           type: boolean
           description: >-
-            True when the stored identity block carries at least one
-            body-supplied value (05.2.2-T1); false for a verified CI caller and
-            for a run created without an identity.
+            True when the run stores producer-declared identity.
     RunRefRequest:
       type: object
       additionalProperties: false
       description: >-
-        Optional run identity supplied by the caller (00 §7/§8.1, 05.2.2-T1).
-        A verified CI caller's OIDC claims always win and a conflicting member
-        is ignored, never rejected (AC3); every value stored from here marks
+        Optional producer-declared run identity. Every value stored from this block marks
         the run `unverified_ref = true`. An unknown member is 422
         `request_invalid` (`details[].path` `/ref/<member>`, reason
         `additional_properties`), like every other shape failure of this body.
@@ -12043,14 +11864,13 @@ components:
           type: string
           enum: [branch, tag, pull_request]
           description: >-
-            `pull_request` requires `pr_number`, checked on the values after
-            the verified-claim merge → 422 `request_invalid`.
+            `pull_request` requires `pr_number`; omitting it is 422 `request_invalid`.
         name:
           type: string
           minLength: 1
           maxLength: 255
           description: >-
-            Branch or tag name; for a PR the GITHUB_REF_NAME form `<N>/merge`.
+            Branch, tag or pull request ref name.
         pr_number:
           type: integer
           minimum: 1
@@ -12068,20 +11888,13 @@ components:
           type: boolean
           default: false
           description: >-
-            Only a body value can set this: a verified CI caller is never a
-            fork (02.4.1 refuses a fork exchange 403).
+            A declared fork is advisory-only even when uploaded by a trusted job.
     RunRef:
       type: object
       additionalProperties: false
       description: >-
-        The run's stored identity block (00 §7/§8.1, 05.2.2-T1). Every member is
-        present, `null` where unknown; an existing run created before 05.2.2 has
-        all members null and `is_fork` false. A verified `ci_producer` caller's
-        `ref`/`sha` claims win over the request body; the remaining values are
-        body-supplied and the run carries `unverified_ref = true`. `head_sha` is
-        only ever the verified `sha` claim of a `branch` or `tag` ref: for a
-        `pull_request` ref that claim is GitHub's test-merge commit and is not
-        stored.
+        Stored run identity, with null members where unknown. For new runs the values
+        are producer-declared; a run without an identity has `is_fork` false.
       required: [kind, name, pr_number, head_sha, base_sha, trigger_event, is_fork]
       properties:
         kind:
@@ -13781,120 +13594,6 @@ components:
         environment_requirements:
           { oneOf: [{ $ref: '#/components/schemas/SuiteDelta' }, { type: 'null' }] }
         taxonomy: { oneOf: [{ $ref: '#/components/schemas/SuiteDelta' }, { type: 'null' }] }
-    CiBindingView:
-      type: object
-      description: A CI binding as listed and read; never carries the challenge or its hash.
-      required:
-        [
-          id,
-          project_id,
-          provider,
-          repository_id,
-          repository_full_name,
-          allowed_ref_patterns,
-          allowed_workflow_refs,
-          status,
-          created_at,
-          version,
-        ]
-      properties:
-        id:
-          type: string
-          format: uuid
-        project_id:
-          type: string
-          format: uuid
-        provider:
-          type: string
-          enum: [github_actions]
-        repository_id:
-          type: integer
-          format: int64
-        repository_full_name:
-          type: string
-        allowed_ref_patterns:
-          type: array
-          items:
-            type: string
-        allowed_workflow_refs:
-          type: array
-          items:
-            type: string
-        status:
-          type: string
-          enum: [pending_verification, active, disabled]
-        activated_at:
-          type: [string, 'null']
-          format: date-time
-        created_at:
-          type: string
-          format: date-time
-        version:
-          type: integer
-    CiBindingCreatedResponse:
-      type: object
-      required: [binding, binding_challenge]
-      properties:
-        binding:
-          $ref: '#/components/schemas/CiBindingView'
-        binding_challenge:
-          type: string
-          description: Shown once. Set as the repository variable `EVIDGATE_BINDING_CHALLENGE`.
-    CiBindingListResponse:
-      type: object
-      required: [items, next_cursor]
-      properties:
-        items:
-          type: array
-          items:
-            $ref: '#/components/schemas/CiBindingView'
-        next_cursor:
-          type: [string, 'null']
-    CreateCiBindingRequest:
-      type: object
-      required:
-        [provider, repository_id, repository_full_name, allowed_ref_patterns, allowed_workflow_refs]
-      properties:
-        provider:
-          type: string
-          enum: [github_actions]
-        repository_id:
-          type: integer
-          format: int64
-          minimum: 1
-        repository_full_name:
-          type: string
-          description: '`owner/repo`'
-        allowed_ref_patterns:
-          type: array
-          minItems: 1
-          maxItems: 32
-          items:
-            type: string
-          description: 'Git refs allowed to mint, e.g. `refs/heads/main`, `refs/tags/v*` (`*` is the only wildcard).'
-        allowed_workflow_refs:
-          type: array
-          minItems: 1
-          maxItems: 32
-          items:
-            type: string
-          description: 'Allowed `job_workflow_ref` values, e.g. `acme/web/.github/workflows/ci.yml@refs/heads/main`.'
-    UpdateCiBindingRequest:
-      type: object
-      properties:
-        allowed_ref_patterns:
-          type: [array, 'null']
-          maxItems: 32
-          items:
-            type: string
-        allowed_workflow_refs:
-          type: [array, 'null']
-          maxItems: 32
-          items:
-            type: string
-        status:
-          type: [string, 'null']
-          enum: [disabled, active, null]
     IngestTokenView:
       type: object
       description: An ingest token's metadata; never the secret or its hash.
@@ -14303,13 +14002,12 @@ components:
           type: [string, 'null']
     CiTokenRequest:
       type: object
+      additionalProperties: false
+      required: [ingest_token]
       properties:
         ingest_token:
-          type: [string, 'null']
-          description: The `egt_…` token (the GitHub grant sends its OIDC JWT as a bearer instead).
-        binding_challenge:
-          type: [string, 'null']
-          description: The one-time challenge, presented by the first exchange of a pending binding.
+          type: string
+          description: The project ingest credential.
     CiTokenResponse:
       type: object
       required: [token, expires_at, project_id, permission_set]

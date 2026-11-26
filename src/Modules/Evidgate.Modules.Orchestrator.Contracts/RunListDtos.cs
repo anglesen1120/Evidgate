@@ -12,8 +12,8 @@ namespace Evidgate.Modules.Orchestrator.Contracts;
 /// present, the ones no source supplied are null, and <see cref="RunRef.IsFork"/> is always a boolean.
 /// </param>
 /// <param name="UnverifiedRef">
-/// True when at least one member of <see cref="Ref"/> came from the request body rather than a verified GitHub OIDC
-/// claim, i.e. the identity is advisory input and never a gating one (05.2.2 §8, AC2).
+/// True when at least one member of <see cref="Ref"/> was declared by the producer, i.e. the identity is advisory
+/// input and never a gating one (05.2.2 §8, AC2).
 /// </param>
 /// <param name="Completeness">
 /// The <c>evidence_revision.completeness</c> (<c>complete</c> or <c>incomplete</c>) of the revision

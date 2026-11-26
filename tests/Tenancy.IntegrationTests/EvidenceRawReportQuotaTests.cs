@@ -245,7 +245,7 @@ public sealed partial class EvidenceRawReportQuotaTests(PostgresTenancyFixture f
             database,
             org,
             project,
-            RequestPrincipal.Service(projectScope: null, [Permissions.Artifact.Write], credentialId: "jti-report-quota"),
+            RequestPrincipal.Service(projectScope: null, [Permissions.Artifact.Write], credentialId: IngestTestWorld.OwnerId),
             _store.Configuration(),
             services);
 

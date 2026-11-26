@@ -92,7 +92,7 @@ public sealed partial class IngestDedupeTests
         var (otherOrg, otherProject) = await world.CreateOtherOrgAsync(Unique.Slug("globex"));
         var otherRun = await world.SeedOtherRunAsync(otherOrg);
         await RunStateWalk.MoveAsync(_fixture, world.Database, otherRun.RunId, "running");
-        await IngestTestWorld.SeedSlotsAsync(_fixture, world.Database, otherOrg, otherRun.RunId, count: 1, boundJti: null);
+        await IngestTestWorld.SeedSlotsAsync(_fixture, world.Database, otherOrg, otherRun.RunId, count: 1, boundOwnerId: null);
 
         await using var otherHost = TenancyApiFactory.WithPrincipal(
             _fixture.AppConnectionString(world.Database), otherOrg, otherProject,
@@ -149,7 +149,7 @@ public sealed partial class IngestDedupeTests
         // `created`, so neither batch drives a state transition.
         var secondRun = await world.SeedOtherRunAsync(world.Org, planned: 1);
         await IngestTestWorld.SeedSlotsAsync(
-            _fixture, world.Database, world.Org, secondRun.RunId, count: 1, boundJti: null);
+            _fixture, world.Database, world.Org, secondRun.RunId, count: 1, boundOwnerId: null);
 
         // One envelope shape for both runs; only the run-scoped execution key differs, because each run plans its own.
         object Body(string executionKey) => IngestQaRequests.Batch(IngestQaRequests.Event(

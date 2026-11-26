@@ -1,6 +1,6 @@
 // The one bounded-retry path the idempotent commands share: replaying is safe only when the
 // request carries an `Idempotency-Key`, and the unkeyed token exchange may retry only the
-// answers the server gives before it mints a single-use token.
+// answers the server gives before it mints a new token.
 import { setTimeout as delay } from 'node:timers/promises';
 
 import { attemptSignal, backoffDelay, isRetryable, retryAfter } from './sender.js';

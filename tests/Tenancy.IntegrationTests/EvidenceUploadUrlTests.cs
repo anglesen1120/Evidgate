@@ -14,11 +14,9 @@ namespace Tenancy.IntegrationTests;
 /// <c>(execution_key, attempt_no)</c>, the kind policy, the minted <c>pending/</c> staging key and the signed
 /// <c>Content-Length</c> + checksum headers. The object-store adapter is CPU-only (presigning is SigV4
 /// arithmetic), so no storage container is needed; the endpoint is configured with an unreachable local
-/// endpoint and the two credentials through the same in-memory configuration the CI-key tests use.
+/// endpoint and test credentials supplied through the host configuration.
 /// <para>
-/// The caller is published by a test startup filter (the same seam <see cref="TenancyApiFactory"/> uses for its
-/// header stand-in), because a service principal with a <c>CredentialId</c> (the slot-binding identity, T9) and
-/// an optional <see cref="CiRunReference"/> cannot be expressed through request headers.
+/// A test startup filter supplies the authenticated ingest token ID because the header stand-in cannot carry it.
 /// </para>
 /// </summary>
 [Trait("Category", "Docker")]
@@ -34,12 +32,6 @@ public sealed partial class EvidenceUploadUrlTests : IClassFixture<TenancyHostPo
     private const string Checksum = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
 
     private const string ZipType = "application/zip";
-
-    /// <summary>The caller's token id (the slot-binding identity, T9).</summary>
-    private const string Jti = "jti-upload-1";
-
-    /// <summary>Another identity's token id, for the <c>producer_slot_taken</c> case.</summary>
-    private const string OtherJti = "jti-upload-2";
 
     private const string ProducerId = "shard-1";
 
@@ -83,12 +75,12 @@ public sealed partial class EvidenceUploadUrlTests : IClassFixture<TenancyHostPo
     }
 
     /// <summary>A service principal holding <c>artifact:write</c> and a token id (the slot-binding identity).</summary>
-    private static RequestPrincipal Writer(string jti = Jti) =>
-        RequestPrincipal.Service(projectScope: null, [Permissions.Artifact.Write], credentialId: jti);
+    private static RequestPrincipal Writer(string ownerId = IngestTestWorld.OwnerId) =>
+        RequestPrincipal.Service(projectScope: null, [Permissions.Artifact.Write], credentialId: ownerId);
 
     /// <summary>A service principal without <c>artifact:write</c>.</summary>
     private static RequestPrincipal Reader() =>
-        RequestPrincipal.Service(projectScope: null, [Permissions.Artifact.Read], credentialId: Jti);
+        RequestPrincipal.Service(projectScope: null, [Permissions.Artifact.Read], credentialId: IngestTestWorld.OwnerId);
 
     /// <summary>
     /// One migrated database with an org and a project created through the real registry routes, plus a host
@@ -134,7 +126,7 @@ public sealed partial class EvidenceUploadUrlTests : IClassFixture<TenancyHostPo
         string executionKey,
         Guid? org = null,
         string producerId = ProducerId,
-        string? boundJti = null,
+        string? boundOwnerId = null,
         Guid? project = null)
     {
         var owningOrg = org ?? world.Org;
@@ -157,9 +149,9 @@ public sealed partial class EvidenceUploadUrlTests : IClassFixture<TenancyHostPo
 
         (await scope.ExecuteAsync(
             "insert into public.producer_slot (id, org_id, run_id, shard_index, producer_id, bound_token_jti) "
-            + "values (@id, @org_id, @run_id, 1, @producer_id, @jti)",
+            + "values (@id, @org_id, @run_id, 1, @producer_id, @owner_id)",
             ("id", Guid.CreateVersion7()), ("org_id", owningOrg), ("run_id", runId), ("producer_id", producerId),
-            ("jti", (object?)boundJti ?? DBNull.Value))).ShouldBe(1);
+            ("owner_id", (object?)boundOwnerId ?? DBNull.Value))).ShouldBe(1);
 
         await scope.CommitAsync();
 

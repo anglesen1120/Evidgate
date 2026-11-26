@@ -114,8 +114,8 @@ describe('main', () => {
     expect(text).toContain('evidgate: error missing_config:');
     expect(text).toContain('EVIDGATE_API_URL (or --api-url)');
     expect(text).toContain('EVIDGATE_PROJECT (or --project)');
-    expect(text).toContain('EVIDGATE_OIDC_TOKEN');
-    expect(text).toContain('ACTIONS_ID_TOKEN_REQUEST_URL + ACTIONS_ID_TOKEN_REQUEST_TOKEN');
+    expect(text).not.toContain('EVIDGATE_OIDC_TOKEN');
+    expect(text).not.toContain('ACTIONS_ID_TOKEN_REQUEST_URL');
     expect(text).toContain('EVIDGATE_INGEST_TOKEN');
     expect(text).toContain('EVIDGATE_DEV_TOKEN');
   });

@@ -257,8 +257,8 @@ public sealed partial class ReleaseIntegrationTests
     }
 
     /// <summary>
-    /// One run whose recorded identity says fork: the create body carries <c>ref.is_fork</c> and the caller has no
-    /// verified CI claim, which is the only path that stores it (a verified claim forces <c>false</c>).
+    /// One run whose recorded identity says fork: the create body carries <c>ref.is_fork</c>, which is stored as the
+    /// producer declared it.
     /// </summary>
     /// <param name="world">The suite's tenant.</param>
     private static async Task<Guid> RunWithForkIdentityAsync(RunCreationTests.World world)
