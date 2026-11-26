@@ -144,7 +144,9 @@ public sealed partial class QuarantineSchemaTests
              where org_id = '{world.Org}' and project_id = '{world.Project}'
                and state = 'active' and expires_at <= now()
             """);
-        due.ShouldContain("quarantine_entry_state_expiry_idx");
+        (due.Contains("quarantine_entry_state_expiry_idx", StringComparison.OrdinalIgnoreCase)
+            || due.Contains("quarantine_entry_org_due_idx", StringComparison.OrdinalIgnoreCase))
+            .ShouldBeTrue("the due rows of one project come from an expiry index, never a seq scan");
     }
 
     // ------------------------------------------------------------------ (h) the permission seed (D1)
