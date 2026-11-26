@@ -16,6 +16,7 @@ internal sealed class PdfStreamBoundary
 
     private long direct = -1;
     private int reference = -1;
+    private int noMarkedEndFrom = int.MaxValue;
     private Dictionary<int, long>? integerObjects;
 
     /// <summary>True for the PDF white-space bytes.</summary>
@@ -74,8 +75,18 @@ internal sealed class PdfStreamBoundary
         return FindMarkedEnd(bytes, bodyStart);
     }
 
-    private static int FindMarkedEnd(ReadOnlySpan<byte> bytes, int bodyStart)
+    /// <summary>
+    /// The first <c>endstream</c> at or after <paramref name="bodyStart"/> that starts a line and precedes <c>endobj</c>.
+    /// Validity does not depend on where the search starts, so a failed search is remembered and the rest of the file
+    /// is never scanned twice.
+    /// </summary>
+    private int FindMarkedEnd(ReadOnlySpan<byte> bytes, int bodyStart)
     {
+        if (bodyStart >= noMarkedEndFrom)
+        {
+            return -1;
+        }
+
         var from = bodyStart;
 
         while (bytes[from..].IndexOf(EndStream) is var relative and >= 0)
@@ -83,13 +94,15 @@ internal sealed class PdfStreamBoundary
             var at = from + relative;
             var end = at + EndStream.Length;
 
-            if ((at == bodyStart || bytes[at - 1] is 10 or 13) && StartsWithEndObject(bytes, end))
+            if (bytes[at - 1] is 10 or 13 && StartsWithEndObject(bytes, end))
             {
                 return end;
             }
 
             from = at + 1;
         }
+
+        noMarkedEndFrom = bodyStart;
 
         return -1;
     }

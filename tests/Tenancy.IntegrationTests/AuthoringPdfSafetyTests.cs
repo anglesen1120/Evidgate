@@ -156,9 +156,19 @@ public sealed class AuthoringPdfSafetyTests
         ShouldBeRefused(ExtractPdf(Fx.Pdf(["hello"], catalogExtra: "/Other << /S /Launch >>", indirectLengths: true)), IntakeFailureCode.MacroPresent);
     }
 
-    private static void Probe(string raw)
+    [Fact]
+    public void ProbeRaw_ManyStreamKeywordsWithoutAnEnd_FinishesInsideTheBudget()
     {
-        using var deadline = new ExtractionDeadline(IntakeCaps.Default.ExtractionTimeout, CancellationToken.None);
+        var noEnd = string.Concat(Enumerable.Repeat("stream\n", 400_000));
+        var lookalikeEnds = string.Concat(Enumerable.Repeat("stream\n", 50_000)) + string.Concat(Enumerable.Repeat("\nendstream x", 200_000));
+
+        Should.NotThrow(() => Probe(noEnd, TimeSpan.FromSeconds(3)));
+        Should.NotThrow(() => Probe(lookalikeEnds, TimeSpan.FromSeconds(3)));
+    }
+
+    private static void Probe(string raw, TimeSpan? budget = null)
+    {
+        using var deadline = new ExtractionDeadline(budget ?? IntakeCaps.Default.ExtractionTimeout, CancellationToken.None);
 
         PdfActionScan.ProbeRaw(System.Text.Encoding.ASCII.GetBytes(raw), deadline);
     }

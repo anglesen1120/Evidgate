@@ -6,7 +6,7 @@ namespace Evidgate.Modules.Authoring.Application.Intake;
 
 /// <summary>
 /// Refuses a PDF that is encrypted, runs code or carries other files, from its structure alone and before any
-/// page content is decoded. Two passes: a lexical probe of the raw bytes that runs before the parser sees the file,
+/// page content is decoded. Two passes: a lexical probe of the raw bytes that runs first and reads name tokens only,
 /// and a walk of every object reachable from the catalog, which is the authoritative check and sees objects
 /// packed in object streams. Both decode <c>#xx</c> escapes in names.
 /// <para>
@@ -17,7 +17,7 @@ namespace Evidgate.Modules.Authoring.Application.Intake;
 /// <para>
 /// Mapping (a name is matched as a dictionary key or as a name value, e.g. <c>/S /Launch</c>):
 /// <list type="table">
-/// <item><term><c>/Encrypt</c></term><description><c>encryption_unsupported</c>: no password is ever tried.</description></item>
+/// <item><term><c>/Encrypt</c></term><description><c>encryption_unsupported</c>: an encrypted file is refused and no password is supplied.</description></item>
 /// <item><term><c>/JavaScript</c>, <c>/JS</c>, <c>/OpenAction</c>, <c>/AA</c>, <c>/Launch</c>, <c>/RichMedia</c></term>
 /// <description><c>macro_present</c>: content that runs or starts a program when the file is opened or used.</description></item>
 /// <item><term><c>/EmbeddedFile</c>, <c>/EmbeddedFiles</c>, <c>/EF</c>, <c>/FileAttachment</c>, <c>/Filespec</c>, <c>/GoToR</c>, <c>/GoToE</c>, <c>/ImportData</c>, <c>/SubmitForm</c></term>
@@ -57,8 +57,8 @@ internal static class PdfActionScan
     private static readonly byte[] StreamKeyword = "stream"u8.ToArray();
 
     /// <summary>
-    /// Looks for a forbidden name among the name tokens of the raw bytes, so the file is refused before any parser
-    /// reads it. Encryption wins over a macro, a macro over an external reference, whatever the file order.
+    /// Looks for a forbidden name among the name tokens of the raw bytes, as an early refusal ahead of the structural
+    /// walk. Encryption wins over a macro, a macro over an external reference, whatever the file order.
     /// </summary>
     /// <param name="document">The PDF bytes.</param>
     /// <param name="deadline">The wall-clock budget.</param>

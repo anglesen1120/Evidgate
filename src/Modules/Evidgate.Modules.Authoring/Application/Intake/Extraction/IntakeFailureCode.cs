@@ -12,7 +12,7 @@ internal static class IntakeFailureCode
     /// <summary>The document carries executable content: a macro package, or a PDF action that runs on open.</summary>
     public const string MacroPresent = "macro_present";
 
-    /// <summary>The PDF is encrypted; no password is ever tried.</summary>
+    /// <summary>The PDF is encrypted and is refused; no password is supplied.</summary>
     public const string EncryptionUnsupported = "encryption_unsupported";
 
     /// <summary>The document points outside itself (DTD or entity, external relationship) or carries an attached file.</summary>
