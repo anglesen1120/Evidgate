@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text.Json;
+using Evidgate.BuildingBlocks.Pipeline.Authorization;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Shouldly;
 using Xunit;
