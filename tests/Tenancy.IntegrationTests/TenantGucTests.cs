@@ -953,6 +953,17 @@ public sealed partial class TenantGucTests
             ("org_id", orgId),
             ("release_id", releaseId),
             ("run_id", runId));
+        await scope.ExecuteAsync(
+            """
+            insert into public.release_decision
+                (id, org_id, release_id, policy_revision_id, component_evaluations, completeness, decision, inputs_hash)
+            values (@id, @org_id, @release_id, @policy_revision_id, '[]'::jsonb, 'incomplete', 'INCONCLUSIVE', @inputs_hash)
+            """,
+            ("id", Guid.CreateVersion7()),
+            ("org_id", orgId),
+            ("release_id", releaseId),
+            ("policy_revision_id", policyRevisionId),
+            ("inputs_hash", "sha256:" + new string('b', 64)));
 
         // The run history (migration 0082): the run inserted above already records its creation row through the
         // trigger on public.run; these two transitions add the edges the state machine allows, so the seed covers real

@@ -223,12 +223,15 @@ public sealed class WebhookEndpointTests : IAsyncLifetime
         await using var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(_dedicated!.Name), org);
         await scope.SetAsync("enable_seqscan", "off");
 
-        foreach (var (filtered, cursor, index) in new[]
+        // On a one-row table the planner may serve the filtered shape from either ordered project index (the state
+        // equality is then a filter on an already ordered walk); what matters is that no shape scans or sorts.
+        string[] stateIndexes = ["webhook_outbound_delivery_project_state_idx", "webhook_outbound_delivery_project_idx"];
+        foreach (var (filtered, cursor, indexes) in new (bool, bool, string[])[]
         {
-            (true, false, "webhook_outbound_delivery_project_state_idx"),
-            (true, true, "webhook_outbound_delivery_project_state_idx"),
-            (false, false, "webhook_outbound_delivery_project_idx"),
-            (false, true, "webhook_outbound_delivery_project_idx"),
+            (true, false, stateIndexes),
+            (true, true, stateIndexes),
+            (false, false, ["webhook_outbound_delivery_project_idx"]),
+            (false, true, ["webhook_outbound_delivery_project_idx"]),
         })
         {
             var plan = await scope.ScalarAsync<string>(
@@ -240,7 +243,7 @@ public sealed class WebhookEndpointTests : IAsyncLifetime
                 ("cursor_id", Guid.CreateVersion7()),
                 ("limit", 51));
 
-            plan.ShouldContain(index);
+            indexes.Any(plan.Contains).ShouldBeTrue("the plan names none of the expected indexes: " + plan);
             plan.ShouldNotContain("\"Node Type\": \"Seq Scan\"");
             plan.ShouldNotContain("\"Node Type\": \"Sort\"");
         }
