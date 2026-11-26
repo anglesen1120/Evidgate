@@ -164,7 +164,7 @@ public sealed partial class IngestQuotaTests
         var plan = await world.SeedRunInProjectAsync(project);
 
         await IngestTestWorld.SeedSlotsAsync(
-            _fixture, world.Database, world.Org, plan.RunId, count: 1, boundJti: null);
+            _fixture, world.Database, world.Org, plan.RunId, count: 1, boundOwnerId: null);
         await counters.SeedCounterAsync(new CounterSeed(
             Guid.CreateVersion7(), project, await PeriodAsync(world), "results", 0m, 100m, WarnRatio, Org: world.Org));
 

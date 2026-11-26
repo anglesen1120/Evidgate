@@ -78,7 +78,7 @@ from rls_policy_lint import Finding, collect, lint_embedded, lint_policies, lint
 # deliberately absent: 0050 has it append its own chain row, and 0051 keeps that.
 DEFINER_AUDIT_EXEMPT = {
     "evidgate.purge_expired_idempotency": "T80 sweep: bounded cross-tenant delete of expired rows; the function writes no audit row itself, the caller IdempotencyPurgeTaskHandler records the removed total of each task fire through evidgate.record_sweep_audit",
-    "evidgate.purge_expired_ci_token_issue": "T7 sweep: bounded delete of expired replay-cache rows, observed via the task row",
+    "evidgate.purge_expired_ci_token_issue": "Historical 0019 purger, dropped by 0134; lint checks each CREATE independently of later DROP statements",
     "evidgate.purge_expired_authoring_changes": (
         "created 0067_authoring_authoring_change.sql (integer): tenancy-free retention sweep — it deletes "
         "discarded authoring proposals after their window across every org, in bounded batches, and the "

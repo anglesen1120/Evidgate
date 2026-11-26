@@ -7,10 +7,6 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import type {
-  CiBindingCreatedResponse,
-  CiBindingListResponse,
-  CiBindingView,
-  CreateCiBindingRequest,
   CreateIngestTokenRequest,
   IngestTokenCreatedResponse,
   IngestTokenListResponse,
@@ -49,28 +45,8 @@ export const PROJECT: ProjectDto = {
 };
 
 export const PROJECT_PAGE: ProjectListResponse = { items: [PROJECT], next_cursor: null };
-export const NO_BINDINGS: CiBindingListResponse = { items: [], next_cursor: null };
 export const NO_TOKENS: IngestTokenListResponse = { items: [], next_cursor: null };
 export const NO_RUNS: RunPage = { items: [], next_cursor: null };
-
-/** The row a create answers: metadata, then the one-time value beside it. */
-export const BINDING_VIEW: CiBindingView = {
-  id: 'b-1',
-  project_id: 'p-1',
-  provider: 'github_actions',
-  repository_id: 42,
-  repository_full_name: 'acme/storefront-web',
-  allowed_ref_patterns: ['refs/heads/main'],
-  allowed_workflow_refs: ['acme/storefront-web/.github/workflows/ci.yml@refs/heads/main'],
-  status: 'pending_verification',
-  created_at: '2026-10-20T10:00:00Z',
-  version: 1,
-};
-
-export const BINDING_CREATED: CiBindingCreatedResponse = {
-  binding: BINDING_VIEW,
-  binding_challenge: 'egc_9f2c1d7b4a6e8f0a',
-};
 
 export const TOKEN_VIEW: IngestTokenView = {
   id: 't-1',
@@ -86,14 +62,6 @@ export const TOKEN_CREATED: IngestTokenCreatedResponse = {
   token: TOKEN_VIEW,
   secret: 'egt_ab12cd34ef56gh78',
   overlap_ends_at: null,
-};
-
-export const BINDING_BODY: CreateCiBindingRequest = {
-  provider: 'github_actions',
-  repository_id: 42,
-  repository_full_name: 'acme/storefront-web',
-  allowed_ref_patterns: ['refs/heads/main'],
-  allowed_workflow_refs: ['acme/storefront-web/.github/workflows/ci.yml@refs/heads/main'],
 };
 
 export const TOKEN_BODY: CreateIngestTokenRequest = { name: 'ci ingest' };

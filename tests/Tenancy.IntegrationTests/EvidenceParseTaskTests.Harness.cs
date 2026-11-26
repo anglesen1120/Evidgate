@@ -51,7 +51,7 @@ public sealed partial class EvidenceParseTaskTests
             database,
             org,
             project,
-            RequestPrincipal.Service(projectScope: null, [Permissions.Artifact.Write], credentialId: "jti-parse-1"),
+            RequestPrincipal.Service(projectScope: null, [Permissions.Artifact.Write], credentialId: IngestTestWorld.OwnerId),
             _store.Configuration());
 
         return new World(host, database, org, project, runId);
@@ -84,7 +84,7 @@ public sealed partial class EvidenceParseTaskTests
             database,
             org,
             project,
-            RequestPrincipal.Service(projectScope: null, [Permissions.Artifact.Write], credentialId: "jti-parse-2"),
+            RequestPrincipal.Service(projectScope: null, [Permissions.Artifact.Write], credentialId: IngestTestWorld.OtherOwnerId),
             _store.Configuration());
 
         return new World(host, database, org, project, runId);

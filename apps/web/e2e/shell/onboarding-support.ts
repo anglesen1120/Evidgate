@@ -44,12 +44,12 @@ export type OnboardingSeed =
  * | seed                      | server state                                    | current step |
  * | ------------------------- | ----------------------------------------------- | ------------ |
  * | `onboarding-empty`        | no project in the org                           | 1            |
- * | `onboarding-project`      | project, no binding/token                       | 2            |
- * | `onboarding-token`        | project + one active `ingest_token`, no binding | 3            |
- * | `onboarding-connected`    | project + one active `ci_binding`, no run       | 3            |
- * | `onboarding-run-complete` | … and a `complete` run without an evidence      | 4            |
- * | `onboarding-evidence`     | … and an evidence revision on that run          | 5            |
- * | `onboarding-enabled`      | … and the activation read answering `200`       | 5, done      |
+ * | `onboarding-project`      | project, no token or run                        | 3            |
+ * | `onboarding-token`        | project + one active ingest token, no run       | 3            |
+ * | `onboarding-connected`    | project + one active ingest token, no run       | 3            |
+ * | `onboarding-run-complete` | project + a complete run without evidence       | 4            |
+ * | `onboarding-evidence`     | project + an evidence revision on that run      | 5            |
+ * | `onboarding-enabled`      | project + evidence + an activation read of 200  | 5, done      |
  *
  * `onboarding-evidence` keeps step 5 open: its activation read is the contract's one `404` (a
  * project that was never activated), so the step renders its panel with the confirm and stays
@@ -59,7 +59,7 @@ export type OnboardingSeed =
  */
 export const SEED_STEP: Readonly<Record<OnboardingSeed, StepNumber>> = {
   'onboarding-empty': 1,
-  'onboarding-project': 2,
+  'onboarding-project': 3,
   'onboarding-token': 3,
   'onboarding-token-used': 3,
   'onboarding-unusable': 3,
@@ -73,23 +73,12 @@ export const SEED_STEP: Readonly<Record<OnboardingSeed, StepNumber>> = {
 // 404; the un-toggled answer is an activated project, which would complete step 5 ahead of steps 1-4.
 const NOT_ACTIVATED = activationReadToggle('not-found');
 
-/**
- * The toggles one seed needs. Every operation the wizard reads is pinned by the seed that makes it
- * decisive. `onboarding-token` (09.2.1-T2) is the one seed whose ingest-token page carries a token
- * — the account created by step 2's token path — and it keeps the binding page empty, so it proves
- * step 2 is satisfied by *either* connect path; every other seed pins the token page empty and is
- * satisfied by the `ci_binding` alone.
- *
- * What no seed can prove is a stateful flow: the fixture backend answers a fixed document per
- * (operation, variant), so a create's answer cannot add a row to the list read that follows it.
- * The step-2 specs therefore split the behaviour — the create answers (the `ok` default of
- * `createCiBinding` / `createIngestToken` / `rotateIngestToken`, no toggle needed) prove the
- * one-shot reveal and its clearing on navigation, and `onboarding-token` proves the resume: the
- * panel re-rendered from server metadata only, with Next enabled because `done[2]` already holds.
- */
+// The fixture backend does not add created tokens to its inventory. Pin one list for the
+// metadata-only resume case and an empty list for projects that reach first run without a token.
 const SEED_TOGGLES: Readonly<Record<OnboardingSeed, readonly string[]>> = {
   'onboarding-empty': [
     'fixture.variant.listProjects=onboarding-empty',
+    'fixture.variant.listRuns=onboarding-project',
     // `getProject` is deliberately NOT pinned here. This seed is only reachable at the org's
     // onboarding root (an org with no project has no project address), and the step-1 create must
     // then resolve the project it just created — a project-scoped pin would answer that read with
@@ -98,50 +87,41 @@ const SEED_TOGGLES: Readonly<Record<OnboardingSeed, readonly string[]>> = {
   ],
   'onboarding-project': [
     'fixture.variant.getProject=onboarding-project',
-    'fixture.variant.listCiBindings=onboarding-project',
     'fixture.variant.listIngestTokens=onboarding-project',
     'fixture.variant.listRuns=onboarding-project',
     NOT_ACTIVATED,
   ],
-  // The token path: one active token, an empty binding page, no run.
+  // The optional credential page has metadata, but the first run has not arrived.
   'onboarding-token': [
     'fixture.variant.getProject=onboarding-project',
-    'fixture.variant.listCiBindings=onboarding-project',
     'fixture.variant.listIngestTokens=onboarding-token',
     'fixture.variant.listRuns=onboarding-project',
     NOT_ACTIVATED,
   ],
-  // 09.2.1-T7: the same position with the token page holding the credential metadata the health
-  // panel derives from — an `active` token that was used (its `last_used_at` recorded) and, for the
-  // other seed, a `revoked` one and an `expired` one. Both stay on step 3, because step 2's
-  // done-condition is presence and health is not part of the derivation.
+  // A recorded token use and a revoked/expired inventory give different health states at the
+  // same first-run step. Neither health nor token presence determines progress.
   'onboarding-token-used': [
     'fixture.variant.getProject=onboarding-project',
-    'fixture.variant.listCiBindings=onboarding-project',
     'fixture.variant.listIngestTokens=onboarding-token-used',
     'fixture.variant.listRuns=onboarding-project',
     NOT_ACTIVATED,
   ],
   'onboarding-unusable': [
     'fixture.variant.getProject=onboarding-project',
-    'fixture.variant.listCiBindings=onboarding-project',
     'fixture.variant.listIngestTokens=onboarding-unusable',
     'fixture.variant.listRuns=onboarding-project',
     NOT_ACTIVATED,
   ],
   'onboarding-connected': [
     'fixture.variant.getProject=onboarding-connected',
-    'fixture.variant.listCiBindings=onboarding-connected',
-    'fixture.variant.listIngestTokens=onboarding-connected',
+    'fixture.variant.listIngestTokens=onboarding-token',
     'fixture.variant.listRuns=onboarding-connected',
     NOT_ACTIVATED,
   ],
-  // Both run seeds share the `onboarding-run` reads (binding + one `complete` run whose recorded
-  // decision is `FAIL`, so the AC6 no-verdict check runs on a failing run) and differ only in
-  // `getRun`: no evidence revision (step 4) versus one (step 5).
+  // A complete run with a failing decision advances the wizard. Its evidence revision, not the
+  // verdict, distinguishes step 4 from step 5.
   'onboarding-run-complete': [
     'fixture.variant.getProject=onboarding-run',
-    'fixture.variant.listCiBindings=onboarding-run',
     'fixture.variant.listIngestTokens=onboarding-run',
     'fixture.variant.listRuns=onboarding-run',
     'fixture.variant.getRun=onboarding-run-complete',
@@ -149,7 +129,6 @@ const SEED_TOGGLES: Readonly<Record<OnboardingSeed, readonly string[]>> = {
   ],
   'onboarding-evidence': [
     'fixture.variant.getProject=onboarding-run',
-    'fixture.variant.listCiBindings=onboarding-run',
     'fixture.variant.listIngestTokens=onboarding-run',
     'fixture.variant.listRuns=onboarding-run',
     'fixture.variant.getRun=onboarding-evidence',
@@ -165,7 +144,6 @@ const SEED_TOGGLES: Readonly<Record<OnboardingSeed, readonly string[]>> = {
   // step's terminal panel is built from that read — no confirm ran on this visit.
   'onboarding-enabled': [
     'fixture.variant.getProject=onboarding-run',
-    'fixture.variant.listCiBindings=onboarding-run',
     'fixture.variant.listIngestTokens=onboarding-run',
     'fixture.variant.listRuns=onboarding-run',
     'fixture.variant.getRun=onboarding-evidence',
@@ -195,33 +173,15 @@ export function seedQueryWith(seed: OnboardingSeed, extra: readonly string[]): s
   return `?${[WIZARD_GRANTS, ...SEED_TOGGLES[seed], ...extra].join('&')}`;
 }
 
-/**
- * The three write operations step 2 performs, named as `contracts/openapi.yaml` names them. Each
- * one's `ok` answer is a `fixtures/web-api/` document (`ci-binding-create`, `ingest-token-create`,
- * `ingest-token-rotate`), so a spec reaches the reveal with no toggle at all: those three answers
- * are the default the backend serves, and step 2's controls are enabled by the wizard grants every
- * seed already carries (`WIZARD_GRANTS` holds `ci_binding:write` and `ingest_token:write`).
- */
-export type StepTwoWrite = 'createCiBinding' | 'createIngestToken' | 'rotateIngestToken';
+/** Fixture variants for the explicit commands on the optional credential page. */
+export type StepTwoWrite = 'createIngestToken' | 'rotateIngestToken';
 
-/**
- * A variant toggle for one step-2 write, to append to a seed's query through `seedQueryWith`. `ok`
- * is what the backend serves by default; the corpus also pins `conflict` for `createCiBinding` and
- * `rotateIngestToken` (`ci-binding-create-conflict`, `ingest-token-rotate-conflict`), so a refused
- * submit is reachable in the browser too. `createIngestToken` has no `conflict`: its operation
- * declares no 409 (contracts/openapi.yaml:2376-2397), so a token create has no refusal document.
- */
+/** `ok` is the default answer; `conflict` (rotate) and `name-invalid` (create) are the refusals. */
 export function writeVariantToggle(write: StepTwoWrite, variant = 'ok'): string {
   return `fixture.variant.${write}=${variant}`;
 }
 
-/**
- * The wizard grants with `ci_binding:write` and `ingest_token:write` removed
- * (`permissions-list-onboarding-no-writes`): step 2's two controls render disabled, with their
- * localized reason, instead of disappearing. It also keeps `policy:write` (the document predates
- * the 09.2.1-T5 split), so the step-5 confirm stays enabled under it. Pass it as an extra toggle to
- * `seedQueryWith`, whose extras come last and therefore override `WIZARD_GRANTS`.
- */
+/** Omits the ingest-token write permission but still allows the wizard to open. */
 export const NO_WRITE_GRANTS_TOGGLE = 'fixture.variant.listPermissions=onboarding-no-writes';
 
 /**
@@ -274,32 +234,19 @@ export function orgRefusalUrl(locale: ShellLocale, failure: OnboardingFailure): 
   return withVariant(onboardingPath(locale), orgRefusalQuery(failure));
 }
 
-/**
- * 09.2.1-T7: a refusal answered by one of step 2's two credential lists rather than by the project
- * read. `listIngestTokens` is the read whose answer carries the token metadata the health panel
- * derives from, so its 403/404 is the case that proves a refused credential read rejects the
- * resume instead of publishing a step with an empty panel.
- */
+/** The token inventory can refuse independently of the project's onboarding reads. */
 export type CredentialListFailure = 'onboarding-forbidden' | 'onboarding-project-not-found';
 
-/**
- * The wizard address whose ingest-token list refuses. The project reads stay on the
- * `onboarding-project` seed, so the only difference to a working step 2 is the one refused list:
- * a shell that renders a step here swallowed a failure it was contracted to report (00 §9.2).
- */
+/** Only the token inventory is refused; the project can still reach its first run. */
 export function credentialListRefusalUrl(
   locale: ShellLocale,
   failure: CredentialListFailure,
   projectId: string,
 ): string {
-  const query = [
-    WIZARD_GRANTS,
-    'fixture.variant.getProject=onboarding-project',
-    'fixture.variant.listCiBindings=onboarding-project',
-    `fixture.variant.listIngestTokens=${failure}`,
-    'fixture.variant.listRuns=onboarding-project',
-  ].join('&');
-  return withVariant(onboardingPath(locale, projectId), `?${query}`);
+  return withVariant(
+    onboardingPath(locale, projectId),
+    seedQueryWith('onboarding-project', [`fixture.variant.listIngestTokens=${failure}`]),
+  );
 }
 
 /**
@@ -313,7 +260,10 @@ export function credentialListRefusalUrl(
  * on.
  */
 export function grantsOnlyUrl(locale: ShellLocale, projectId: string | null = null): string {
-  return withVariant(onboardingPath(locale, projectId), `?${WIZARD_GRANTS}&${NOT_ACTIVATED}`);
+  return withVariant(
+    onboardingPath(locale, projectId),
+    `?${WIZARD_GRANTS}&fixture.variant.listRuns=onboarding-project&${NOT_ACTIVATED}`,
+  );
 }
 
 /** One stepper item of the DOM contract. */
@@ -429,7 +379,7 @@ export async function expectNoStepInStorage(page: Page, context: string): Promis
 // toggles and nothing here is a DOM contract: the confirm is derived from `policy:write`, and the
 // two wizard grant sets differ in exactly that one code, so the enabled and the disabled state are
 // the same seed under a different `listPermissions` variant. `permissions-list-onboarding` (the
-// wizard's default here) holds the seven codes of steps 1–4 and no `policy:write`; step 5's control
+// wizard's default here) holds the grants for steps 1–4 and no `policy:write`; step 5's control
 // is natively disabled under it. `permissions-list-onboarding-enable` is that set plus
 // `policy:write` — the lone org creator's `release_approver` grants (T98) — so the confirm is
 // reachable without a second member.
@@ -482,8 +432,7 @@ export function activationReadToggle(answer: ActivationRead): string {
 /**
  * The `?fixture.latency=` toggle in milliseconds, every operation. `fixture-backend.ts` applies it
  * ahead of a document's own `latency_ms`, which is how a submit can be observed while it is still
- * in flight — the only in-flight seam the fixtures build has, because it answers in process
- * (`HttpBackend`) and exposes no network request to hold or count.
+ * in flight without changing the server response.
  */
 export function latencyToggle(milliseconds: number): string {
   return `fixture.latency=${milliseconds}`;

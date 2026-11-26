@@ -55,9 +55,6 @@ async function close(server: Server): Promise<void> {
   await closed;
 }
 
-// 04.2.1-T1.1 / AC1, AC2, AC4, AC7: the exchange itself — source resolution, the
-// GitHub Actions ID-token fetch, the `binding_challenge` body, the 429 back-off, the
-// refused redirect and the envelope mapping (contracts/cli.md §5).
 describe('exchangeToken', () => {
   const cacheDirs: string[] = [];
   const servers: Server[] = [];
@@ -77,53 +74,66 @@ describe('exchangeToken', () => {
     return dir;
   }
 
-  async function oidcConfig(extra: Record<string, string> = {}) {
+  async function ingestConfig(extra: Record<string, string> = {}) {
     const cacheDir = await tempCacheDir();
     return resolveConfig({
       env: {
         EVIDGATE_API_URL: 'https://api.evidgate.test',
         EVIDGATE_PROJECT: 'proj-1',
         EVIDGATE_CACHE_DIR: cacheDir,
-        EVIDGATE_OIDC_TOKEN: 'jwt-value',
+        EVIDGATE_INGEST_TOKEN: 'ingest-value',
         ...extra,
       },
     });
   }
 
-  it('actions_id_token_fetch_exchanges', async () => {
-    const cacheDir = await tempCacheDir();
-    const idTokenRequests: Array<{ url: string; auth: string | null }> = [];
-    const { fetchImpl, calls } = stubFetch((request) => {
-      if (request.url.startsWith('https://actions.example/oidc')) {
-        idTokenRequests.push({ url: request.url, auth: request.headers.get('authorization') });
-        return jsonResponse(200, { value: 'actions-id-token-value' });
-      }
-      return jsonResponse(200, successBody());
-    });
-    const config = resolveConfig({
-      env: {
-        EVIDGATE_API_URL: 'https://api.evidgate.test',
-        EVIDGATE_PROJECT: 'proj-1',
-        EVIDGATE_CACHE_DIR: cacheDir,
-        ACTIONS_ID_TOKEN_REQUEST_URL: 'https://actions.example/oidc',
-        ACTIONS_ID_TOKEN_REQUEST_TOKEN: 'request-token-value',
-      },
-    });
+  const retiredCredentials = {
+    EVIDGATE_OIDC_TOKEN: 'retired-jwt',
+    ACTIONS_ID_TOKEN_REQUEST_URL: 'https://actions.example/oidc',
+    ACTIONS_ID_TOKEN_REQUEST_TOKEN: 'request-token-value',
+    EVIDGATE_BINDING_CHALLENGE: 'unused-challenge',
+  };
+
+  it('sends only the project ingest token to Evidgate, even with provider credentials', async () => {
+    const config = await ingestConfig(retiredCredentials);
+    const { fetchImpl, calls } = stubFetch(() => jsonResponse(200, successBody()));
 
     const result = await exchangeToken(config, { fetch: fetchImpl });
 
-    expect(result.source).toBe('actions-id-token');
     expect(result.token).toBe('egt_ci_token');
-    expect(idTokenRequests).toHaveLength(1);
-    const idUrl = new URL(idTokenRequests[0]?.url ?? '');
-    expect(idUrl.searchParams.get('audience')).toBe('evidgate');
-    expect(idTokenRequests[0]?.auth).toBe('bearer request-token-value');
-    const exchange = calls.find((call) => call.request.url.endsWith('/ci/token'));
-    expect(exchange?.request.headers.get('authorization')).toBe('Bearer actions-id-token-value');
+    expect(calls.map(({ request }) => request.url)).toEqual([
+      'https://api.evidgate.test/v1/ci/token',
+    ]);
+    expect(calls[0]?.request.headers.get('authorization')).toBeNull();
+    expect(JSON.parse(calls[0]?.body ?? '{}')).toEqual({ ingest_token: 'ingest-value' });
+  });
+
+  it('refuses provider credentials without opening a request when the ingest token is missing', async () => {
+    const config = await ingestConfig({ ...retiredCredentials, EVIDGATE_INGEST_TOKEN: '' });
+    const { fetchImpl, calls } = stubFetch(() => jsonResponse(200, successBody()));
+
+    await expect(exchangeToken(config, { fetch: fetchImpl })).rejects.toMatchObject({
+      code: 'missing_config',
+    });
+    expect(calls).toHaveLength(0);
+  });
+
+  it('propagates refusal of an unknown ingest token without a provider fallback', async () => {
+    const config = await ingestConfig({ ...retiredCredentials, EVIDGATE_INGEST_TOKEN: 'unknown' });
+    const { fetchImpl, calls } = stubFetch(() => jsonResponse(401, envelope('token_invalid')));
+
+    await expect(exchangeToken(config, { fetch: fetchImpl })).rejects.toMatchObject({
+      code: 'token_invalid',
+      status: 401,
+    });
+    expect(calls.map(({ request }) => request.url)).toEqual([
+      'https://api.evidgate.test/v1/ci/token',
+    ]);
+    expect(JSON.parse(calls[0]?.body ?? '{}')).toEqual({ ingest_token: 'unknown' });
   });
 
   it('retry_after_honoured_once', async () => {
-    const config = await oidcConfig();
+    const config = await ingestConfig();
 
     // 429 then 200: one sleep of exactly `Retry-After` seconds, then success.
     let attempt = 0;
@@ -154,7 +164,7 @@ describe('exchangeToken', () => {
   });
 
   it('retry_after_clamped_and_http_date', async () => {
-    const config = await oidcConfig();
+    const config = await ingestConfig();
     const retryOnce = (headers: Record<string, string>) => {
       let attempt = 0;
       return stubFetch(() => {
@@ -187,7 +197,7 @@ describe('exchangeToken', () => {
   });
 
   it('falls back to 1 s for a malformed Retry-After', async () => {
-    const config = await oidcConfig();
+    const config = await ingestConfig();
     for (const value of ['-5', '1.5', 'soon 5']) {
       let attempt = 0;
       const { fetchImpl } = stubFetch(() => {
@@ -205,7 +215,7 @@ describe('exchangeToken', () => {
   });
 
   it('rejects a 200 body whose token carries whitespace', async () => {
-    const config = await oidcConfig();
+    const config = await ingestConfig();
     const { fetchImpl } = stubFetch(() =>
       jsonResponse(200, {
         token: 'egt_ ci',
@@ -221,7 +231,7 @@ describe('exchangeToken', () => {
   });
 
   it('rejects a 200 body whose expires_at is not RFC 3339', async () => {
-    const config = await oidcConfig();
+    const config = await ingestConfig();
     const injected = [
       '2030-01-01T00:00:00Z\n(see https://evil.example)',
       '2030-01-01T00:00:00Z (see https://evil.example)',
@@ -240,7 +250,7 @@ describe('exchangeToken', () => {
   });
 
   it('rejects a 200 body whose project_id is not a UUID', async () => {
-    const config = await oidcConfig();
+    const config = await ingestConfig();
     const { fetchImpl } = stubFetch(() =>
       jsonResponse(200, {
         token: 'egt_ci_token',
@@ -255,29 +265,6 @@ describe('exchangeToken', () => {
     expect(error.message).not.toContain('proj-1');
   });
 
-  it('omits binding_challenge when the env value is empty', async () => {
-    const config = await oidcConfig({ EVIDGATE_BINDING_CHALLENGE: '' });
-    const { fetchImpl, calls } = stubFetch(() => jsonResponse(200, successBody()));
-
-    await exchangeToken(config, { fetch: fetchImpl });
-
-    expect(JSON.parse(calls[0]?.body ?? '{}')).toEqual({});
-  });
-
-  it('binding_challenge_sent', async () => {
-    const withChallenge = stubFetch(() => jsonResponse(200, successBody()));
-    const configWith = await oidcConfig({ EVIDGATE_BINDING_CHALLENGE: 'challenge-value' });
-    await exchangeToken(configWith, { fetch: withChallenge.fetchImpl });
-    expect(JSON.parse(withChallenge.calls[0]?.body ?? '{}')).toEqual({
-      binding_challenge: 'challenge-value',
-    });
-
-    const without = stubFetch(() => jsonResponse(200, successBody()));
-    const configWithout = await oidcConfig();
-    await exchangeToken(configWithout, { fetch: without.fetchImpl });
-    expect(JSON.parse(without.calls[0]?.body ?? '{}')).toEqual({});
-  });
-
   it('redirect_refused', async () => {
     const cacheDir = await tempCacheDir();
     const redirector = createServer((_request, response) => {
@@ -290,7 +277,7 @@ describe('exchangeToken', () => {
         EVIDGATE_API_URL: `http://127.0.0.1:${port}`,
         EVIDGATE_PROJECT: 'proj-1',
         EVIDGATE_CACHE_DIR: cacheDir,
-        EVIDGATE_OIDC_TOKEN: 'jwt-value',
+        EVIDGATE_INGEST_TOKEN: 'ingest-value',
       },
     });
 
@@ -300,7 +287,7 @@ describe('exchangeToken', () => {
   });
 
   it('malformed_server_code_not_echoed', async () => {
-    const config = await oidcConfig();
+    const config = await ingestConfig();
     const { fetchImpl } = stubFetch(() =>
       jsonResponse(409, {
         error: { code: 'Bad Code!', message: 'nope', request_id: 'req-9', retryable: false },
@@ -315,7 +302,7 @@ describe('exchangeToken', () => {
   });
 
   it('raises ExchangeAuthError with the status for 401 and 403', async () => {
-    const config = await oidcConfig();
+    const config = await ingestConfig();
     for (const status of [401, 403]) {
       const { fetchImpl } = stubFetch(() => jsonResponse(status, envelope('token_invalid')));
       const error = await captureCliError(() => exchangeToken(config, { fetch: fetchImpl }));
@@ -325,70 +312,11 @@ describe('exchangeToken', () => {
     }
   });
 
-  it('rejects an actions id-token URL with credentials or a fragment', async () => {
-    const cacheDir = await tempCacheDir();
-    const urls = [
-      'https://user:secret@actions.example/oidc',
-      'https://actions.example/oidc#fragment',
-    ];
-    for (const requestUrl of urls) {
-      const config = resolveConfig({
-        env: {
-          EVIDGATE_API_URL: 'https://api.evidgate.test',
-          EVIDGATE_PROJECT: 'proj-1',
-          EVIDGATE_CACHE_DIR: cacheDir,
-          ACTIONS_ID_TOKEN_REQUEST_URL: requestUrl,
-          ACTIONS_ID_TOKEN_REQUEST_TOKEN: 'request-token-value',
-        },
-      });
-      const { fetchImpl, calls } = stubFetch(() => jsonResponse(200, successBody()));
-
-      const error = await captureCliError(() => exchangeToken(config, { fetch: fetchImpl }));
-
-      expect(error.code).toBe('invalid_config');
-      expect(error.message).not.toContain('secret');
-      expect(error.message).not.toContain('actions.example');
-      expect(calls).toHaveLength(0);
-    }
-  });
-
-  it('cancels the ID-token response body on a non-ok reply', async () => {
-    const cacheDir = await tempCacheDir();
-    let cancelled = false;
-    const body = new ReadableStream<Uint8Array>({
-      start(controller) {
-        controller.enqueue(new TextEncoder().encode('nope'));
-      },
-      cancel() {
-        cancelled = true;
-      },
-    });
-    const { fetchImpl } = stubFetch((request) =>
-      request.url.startsWith('https://actions.example/oidc')
-        ? new Response(body, { status: 500 })
-        : jsonResponse(200, successBody()),
-    );
-    const config = resolveConfig({
-      env: {
-        EVIDGATE_API_URL: 'https://api.evidgate.test',
-        EVIDGATE_PROJECT: 'proj-1',
-        EVIDGATE_CACHE_DIR: cacheDir,
-        ACTIONS_ID_TOKEN_REQUEST_URL: 'https://actions.example/oidc',
-        ACTIONS_ID_TOKEN_REQUEST_TOKEN: 'request-token-value',
-      },
-    });
-
-    const error = await captureCliError(() => exchangeToken(config, { fetch: fetchImpl }));
-
-    expect(error.code).toBe('oidc_request_failed');
-    expect(cancelled).toBe(true);
-  });
-
   it('refuses to start an exchange whose deadline has passed', async () => {
     // `attemptSignal` falls back to the plain per-request timeout once nothing is left, so a
     // refresh that begins after its deadline must not open a socket at all: a hung one would
     // keep the process alive long after the caller has decided its exit code.
-    const config = await oidcConfig();
+    const config = await ingestConfig();
     const stub = stubFetch(() => jsonResponse(200, successBody()));
 
     const error = await captureCliError(() =>
@@ -400,7 +328,7 @@ describe('exchangeToken', () => {
   });
 
   it('exchanges when the deadline has time left', async () => {
-    const config = await oidcConfig();
+    const config = await ingestConfig();
     const stub = stubFetch(() => jsonResponse(200, successBody()));
 
     const result = await exchangeToken(config, {
@@ -414,7 +342,7 @@ describe('exchangeToken', () => {
   });
 
   it('exchangeAndPurge purges the cache on 401', async () => {
-    const config = await oidcConfig();
+    const config = await ingestConfig();
     await writeCachedToken(config, { token: 'stale-token', expiresAt: '2030-01-01T00:00:00Z' });
     const { fetchImpl } = stubFetch(() => jsonResponse(401, envelope('token_invalid')));
 
@@ -425,7 +353,7 @@ describe('exchangeToken', () => {
   });
 
   it('exchangeAndPurge keeps the cache on a non-auth failure', async () => {
-    const config = await oidcConfig();
+    const config = await ingestConfig();
     await writeCachedToken(config, { token: 'stale-token', expiresAt: '2030-01-01T00:00:00Z' });
     const { fetchImpl } = stubFetch(() => jsonResponse(500, envelope('server_error')));
 
@@ -439,7 +367,7 @@ describe('exchangeToken', () => {
   });
 
   it('exchangeAndPurge swallows a purge failure and surfaces the server code', async () => {
-    const config = await oidcConfig();
+    const config = await ingestConfig();
     // A directory at the cache path makes `deleteCachedToken` reject (EISDIR).
     await mkdir(tokenCachePath(config), { recursive: true });
     const { fetchImpl } = stubFetch(() => jsonResponse(401, envelope('token_invalid')));
@@ -481,7 +409,7 @@ describe('exchangeToken', () => {
         EVIDGATE_API_URL: `http://127.0.0.1:${port}`,
         EVIDGATE_PROJECT: 'proj-1',
         EVIDGATE_CACHE_DIR: cacheDir,
-        EVIDGATE_OIDC_TOKEN: 'jwt-value',
+        EVIDGATE_INGEST_TOKEN: 'ingest-value',
       },
     });
 
@@ -491,7 +419,7 @@ describe('exchangeToken', () => {
     expect(received).toHaveLength(1);
     expect(received[0]?.method).toBe('POST');
     expect(received[0]?.url).toBe('/v1/ci/token');
-    expect(received[0]?.auth).toBe('Bearer jwt-value');
-    expect(JSON.parse(received[0]?.body ?? '{}')).toEqual({});
+    expect(received[0]?.auth).toBeUndefined();
+    expect(JSON.parse(received[0]?.body ?? '{}')).toEqual({ ingest_token: 'ingest-value' });
   });
 });

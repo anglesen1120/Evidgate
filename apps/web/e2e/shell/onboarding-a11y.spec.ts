@@ -14,7 +14,7 @@
 // run is the fixture that would expose a client-side badge (FR-09-1/AC6).
 import { expect, test } from '@playwright/test';
 
-import { connectCiPage, revealValue } from './onboarding-connection-support';
+import { connectCiPage, openConnectStep, revealValue } from './onboarding-connection-support';
 import { expectCurrentStep, onboardingUrl, shell } from './onboarding-support';
 import { expectNoA11yViolations } from '../a11y/axe-scan';
 import { currentTheme, LOCALES, seedStoredTheme, THEMES } from './support';
@@ -29,7 +29,7 @@ test.describe('the wizard shell is WCAG 2.2 AA clean (09.1.1 AC6, plan §8)', ()
         await seedStoredTheme(page, theme);
         await page.goto(onboardingUrl(locale, 'onboarding-project'));
         await expect(shell(page)).toBeVisible();
-        await expectCurrentStep(page, 2);
+        await openConnectStep(page);
         await expect(page.locator('[data-testid="onboarding-stepper"]')).toBeVisible();
         // The evidence-panel slot is part of the shell in every state, empty on the steps no page
         // owns yet: its absence would be a missing target, not an invisible one.
@@ -54,6 +54,7 @@ test.describe('the wizard shell is WCAG 2.2 AA clean (09.1.1 AC6, plan §8)', ()
       }) => {
         await seedStoredTheme(page, theme);
         await page.goto(onboardingUrl(locale, 'onboarding-project'));
+        await openConnectStep(page);
         await expect(connectCiPage(page)).toBeVisible();
         expect(await currentTheme(page)).toBe(theme);
 
@@ -129,6 +130,7 @@ test.describe('the wizard shell is WCAG 2.2 AA clean (09.1.1 AC6, plan §8)', ()
 test.describe('the reveal is keyboard-reachable in reading order (§8)', () => {
   test('Tab moves from the value to Copy, then to Dismiss', async ({ page }) => {
     await page.goto(onboardingUrl('en', 'onboarding-project'));
+    await openConnectStep(page);
     await expect(connectCiPage(page)).toBeVisible();
     await page.locator('[data-testid="connect-token-name"]').fill(TOKEN_NAME);
     await page.locator('[data-testid="connect-token-submit"]').click();

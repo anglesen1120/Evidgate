@@ -1,7 +1,7 @@
 using System.Net;
-using System.Net.Http.Headers;
+using Evidgate.Modules.Identity.Ci;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.JsonWebTokens;
-using Microsoft.IdentityModel.Tokens;
 using Shouldly;
 using Xunit;
 using static Tenancy.IntegrationTests.RegistryApi;
@@ -41,12 +41,31 @@ public sealed partial class CiAuthTests
     {
         var (api, client, user, org, project) = await StartAsync();
         await using var _ = api;
-        var secret = (await CreateTokenAsync(client, user, org, project)).Text("secret")!;
+        var created = await CreateTokenAsync(client, user, org, project);
+        var secret = created.Text("secret")!;
+        var credentialId = created.Body.GetProperty("token").GetProperty("id").GetGuid().ToString("D");
 
         var ok = await ExchangeIngestAsync(client, secret);
         ok.Status.ShouldBe(HttpStatusCode.OK);
         ok.Id("project_id").ShouldBe(project);
-        new JsonWebToken(ok.Text("token")!).GetPayloadValue<string>("org_id").ShouldBe(org.ToString("D"));
+        var first = new JsonWebToken(ok.Text("token")!);
+        first.GetPayloadValue<string>("org_id").ShouldBe(org.ToString("D"));
+        first.GetPayloadValue<string>("ingest_token_id").ShouldBe(credentialId);
+        var renewed = await ExchangeIngestAsync(client, secret);
+        renewed.Status.ShouldBe(HttpStatusCode.OK);
+        var second = new JsonWebToken(renewed.Text("token")!);
+        second.GetPayloadValue<string>("ingest_token_id").ShouldBe(credentialId);
+        first.Id.ShouldNotBeNullOrEmpty();
+        second.Id.ShouldNotBeNullOrEmpty();
+        second.Id.ShouldNotBe(first.Id);
+        var authenticator = api.Services.GetRequiredService<CiProducerTokens>();
+        foreach (var response in new[] { ok, renewed })
+        {
+            var caller = (await authenticator.ValidateAsync(response.Text("token")!)).ShouldNotBeNull();
+            caller.Principal.CredentialId.ShouldBe(credentialId);
+            caller.BoundOrgId.ShouldBe(org);
+            caller.BoundProjectId.ShouldBe(project);
+        }
 
         var wrongSecret = await ExchangeIngestAsync(client, secret[..^43] + new string('A', 43));
         var unknownPrefix = await ExchangeIngestAsync(client, "egt_ZZZZZZZZZZZZ_" + new string('A', 43));

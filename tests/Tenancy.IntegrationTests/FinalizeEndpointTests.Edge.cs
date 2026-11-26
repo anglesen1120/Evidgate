@@ -1,8 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
-using Evidgate.BuildingBlocks.Pipeline.Authorization;
-using Evidgate.BuildingBlocks.SharedKernel.Authorization;
 using Shouldly;
 using Xunit;
 using static Tenancy.IntegrationTests.RegistryApi;
@@ -112,7 +110,7 @@ public sealed partial class FinalizeEndpointTests
     public async Task Finalize_MalformedMember_422RequestInvalid_NoEffect(string mutation)
     {
         await using var world = await IngestTestWorld.StartAsync(
-            _fixture, IngestTestWorld.Writer(), boundJti: IngestTestWorld.Jti, hosts: _hosts);
+            _fixture, IngestTestWorld.Writer(), boundOwnerId: IngestTestWorld.OwnerId, hosts: _hosts);
         var runVersion = await RunVersionAsync(world);
         var body = await MutatedBodyAsync(world, mutation);
 
@@ -132,7 +130,7 @@ public sealed partial class FinalizeEndpointTests
     public async Task Finalize_NonObjectBody_422RequestInvalid_NoEffect(string raw)
     {
         await using var world = await IngestTestWorld.StartAsync(
-            _fixture, IngestTestWorld.Writer(), boundJti: IngestTestWorld.Jti, hosts: _hosts);
+            _fixture, IngestTestWorld.Writer(), boundOwnerId: IngestTestWorld.OwnerId, hosts: _hosts);
         var runVersion = await RunVersionAsync(world);
 
         var answer = await FinalizeRawAsync(world.Client, world.RunId.ToString("D"), raw, NewKey());
@@ -152,7 +150,7 @@ public sealed partial class FinalizeEndpointTests
     public async Task Finalize_ProducerIdTrailingNewline_422OnProducerIdPointer_NoEffect()
     {
         await using var world = await IngestTestWorld.StartAsync(
-            _fixture, IngestTestWorld.Writer(), boundJti: IngestTestWorld.Jti, hosts: _hosts);
+            _fixture, IngestTestWorld.Writer(), boundOwnerId: IngestTestWorld.OwnerId, hosts: _hosts);
         var runVersion = await RunVersionAsync(world);
 
         var answer = await FinalizeRawAsync(
@@ -176,7 +174,7 @@ public sealed partial class FinalizeEndpointTests
     public async Task Finalize_ShardAboveMaximum_422OnShardPointer_NoEffect()
     {
         await using var world = await IngestTestWorld.StartAsync(
-            _fixture, IngestTestWorld.Writer(), boundJti: IngestTestWorld.Jti, hosts: _hosts);
+            _fixture, IngestTestWorld.Writer(), boundOwnerId: IngestTestWorld.OwnerId, hosts: _hosts);
         var runVersion = await RunVersionAsync(world);
 
         var answer = await FinalizeRawAsync(
@@ -203,7 +201,7 @@ public sealed partial class FinalizeEndpointTests
     public async Task Finalize_UnstorableText_422RequestInvalid_NoEffect(string raw)
     {
         await using var world = await IngestTestWorld.StartAsync(
-            _fixture, IngestTestWorld.Writer(), boundJti: IngestTestWorld.Jti, hosts: _hosts);
+            _fixture, IngestTestWorld.Writer(), boundOwnerId: IngestTestWorld.OwnerId, hosts: _hosts);
         var runVersion = await RunVersionAsync(world);
 
         var answer = await FinalizeRawAsync(world.Client, world.RunId.ToString("D"), raw, NewKey());
@@ -218,7 +216,7 @@ public sealed partial class FinalizeEndpointTests
     public async Task Finalize_DuplicateMember_422RequestInvalid_NoEffect()
     {
         await using var world = await IngestTestWorld.StartAsync(
-            _fixture, IngestTestWorld.Writer(), boundJti: IngestTestWorld.Jti, hosts: _hosts);
+            _fixture, IngestTestWorld.Writer(), boundOwnerId: IngestTestWorld.OwnerId, hosts: _hosts);
         var runVersion = await RunVersionAsync(world);
         var hash = await ManifestHashAsync(world);
         var raw = $"{{\"producer_id\":\"{Producer}\",\"shard\":1,\"last_sequence\":3,\"last_sequence\":9,\"count\":3,\"manifest_hash\":\"{hash}\"}}";
@@ -235,7 +233,7 @@ public sealed partial class FinalizeEndpointTests
     public async Task Finalize_BodyAtEightKiB_202()
     {
         await using var world = await IngestTestWorld.StartAsync(
-            _fixture, IngestTestWorld.Writer(), boundJti: IngestTestWorld.Jti, hosts: _hosts);
+            _fixture, IngestTestWorld.Writer(), boundOwnerId: IngestTestWorld.OwnerId, hosts: _hosts);
         await world.SetRunStateAsync("running");
         var raw = await PaddedBodyAsync(world, 8 * 1024);
 
@@ -251,7 +249,7 @@ public sealed partial class FinalizeEndpointTests
     public async Task Finalize_BodyOverEightKiB_413PayloadTooLarge_NoEffect()
     {
         await using var world = await IngestTestWorld.StartAsync(
-            _fixture, IngestTestWorld.Writer(), boundJti: IngestTestWorld.Jti, hosts: _hosts);
+            _fixture, IngestTestWorld.Writer(), boundOwnerId: IngestTestWorld.OwnerId, hosts: _hosts);
         var runVersion = await RunVersionAsync(world);
         var raw = await PaddedBodyAsync(world, 8 * 1024 + 1);
 
@@ -270,7 +268,7 @@ public sealed partial class FinalizeEndpointTests
     public async Task Finalize_MissingIdempotencyKey_400RequestInvalid_NoEffect()
     {
         await using var world = await IngestTestWorld.StartAsync(
-            _fixture, IngestTestWorld.Writer(), boundJti: IngestTestWorld.Jti, hosts: _hosts);
+            _fixture, IngestTestWorld.Writer(), boundOwnerId: IngestTestWorld.OwnerId, hosts: _hosts);
         var runVersion = await RunVersionAsync(world);
 
         var answer = await FinalizeRawAsync(
@@ -286,7 +284,7 @@ public sealed partial class FinalizeEndpointTests
     public async Task Finalize_OverlongIdempotencyKey_400RequestInvalid_NoEffect()
     {
         await using var world = await IngestTestWorld.StartAsync(
-            _fixture, IngestTestWorld.Writer(), boundJti: IngestTestWorld.Jti, hosts: _hosts);
+            _fixture, IngestTestWorld.Writer(), boundOwnerId: IngestTestWorld.OwnerId, hosts: _hosts);
         var runVersion = await RunVersionAsync(world);
 
         var answer = await FinalizeRawAsync(
@@ -303,14 +301,14 @@ public sealed partial class FinalizeEndpointTests
     /// <summary>
     /// The stored 202 belongs to the credential that earned it: another identity replaying the same key with the
     /// byte-identical body is 409 <c>idempotency_conflict</c>, never the replay, so the T9 slot check cannot be
-    /// bypassed through the idempotency record (the <c>CreateRunCommand</c> CiRunBinding precedent). The original
+    /// bypassed through the idempotency record. The original
     /// credential's own retry still replays the stored 202.
     /// </summary>
     [Fact]
     public async Task Finalize_SameKeySameBodyOtherCredential_409IdempotencyConflict()
     {
         await using var world = await IngestTestWorld.StartAsync(
-            _fixture, IngestTestWorld.Writer(), boundJti: IngestTestWorld.Jti, hosts: _hosts);
+            _fixture, IngestTestWorld.Writer(), boundOwnerId: IngestTestWorld.OwnerId, hosts: _hosts);
         await world.SetRunStateAsync("running");
         const string key = "finalize-qa-key-shared-across-identities";
         var body = await BodyAsync(world);
@@ -322,13 +320,13 @@ public sealed partial class FinalizeEndpointTests
         replay.Status.ShouldBe(HttpStatusCode.Accepted, replay.ErrorMessage);
 
         // Another credential of the same project with the same key and body: a conflict, not somebody else's 202.
-        await using var other = HostFor(world, IngestTestWorld.Writer(jti: IngestTestWorld.OtherJti));
+        await using var other = HostFor(world, IngestTestWorld.Writer(IngestTestWorld.OtherOwnerId, world.Project));
         using var otherClient = other.CreateClient();
         var foreign = await FinalizeAsync(otherClient, world.RunId, body, key);
 
         foreign.Status.ShouldBe(HttpStatusCode.Conflict, foreign.ErrorMessage);
         foreign.ErrorCode.ShouldBe("idempotency_conflict");
-        (await SlotBoundJtiAsync(world)).ShouldBe(IngestTestWorld.Jti);
+        (await SlotBoundOwnerIdAsync(world)).ShouldBe(IngestTestWorld.OwnerId);
         (await SlotDeclaredLastSequenceAsync(world)).ShouldBe(3L);
         (await ReconcileRowsAsync(world)).ShouldBe(1);
     }
@@ -338,7 +336,7 @@ public sealed partial class FinalizeEndpointTests
     public async Task Finalize_SameKeyDifferentBody_409IdempotencyConflict()
     {
         await using var world = await IngestTestWorld.StartAsync(
-            _fixture, IngestTestWorld.Writer(), boundJti: IngestTestWorld.Jti, hosts: _hosts);
+            _fixture, IngestTestWorld.Writer(), boundOwnerId: IngestTestWorld.OwnerId, hosts: _hosts);
         const string key = "finalize-qa-same-key-diff-body";
 
         var first = await FinalizeAsync(world.Client, world.RunId, await BodyAsync(world, lastSequence: 3, count: 3), key);
@@ -357,7 +355,7 @@ public sealed partial class FinalizeEndpointTests
     public async Task Finalize_RefusedWithKey_ThenCorrectWithSameKey_202()
     {
         await using var world = await IngestTestWorld.StartAsync(
-            _fixture, IngestTestWorld.Writer(), boundJti: IngestTestWorld.Jti, hosts: _hosts);
+            _fixture, IngestTestWorld.Writer(), boundOwnerId: IngestTestWorld.OwnerId, hosts: _hosts);
         await world.SetRunStateAsync("running");
         const string key = "finalize-qa-refused-then-ok";
 
@@ -376,7 +374,7 @@ public sealed partial class FinalizeEndpointTests
     public async Task Finalize_FiveRepeats_MixedKeys_OneTransitionOneOutboxRow()
     {
         await using var world = await IngestTestWorld.StartAsync(
-            _fixture, IngestTestWorld.Writer(), boundJti: IngestTestWorld.Jti, hosts: _hosts);
+            _fixture, IngestTestWorld.Writer(), boundOwnerId: IngestTestWorld.OwnerId, hosts: _hosts);
         await world.SetRunStateAsync("running");
         var body = await BodyAsync(world);
 
@@ -408,14 +406,14 @@ public sealed partial class FinalizeEndpointTests
 
         var refused = await FinalizeAsync(world.Client, world.RunId, await BodyAsync(world, shard: 2));
         refused.Status.ShouldBe(HttpStatusCode.UnprocessableEntity, refused.ErrorMessage);
-        (await SlotBoundJtiAsync(world)).ShouldBe(string.Empty);
+        (await SlotBoundOwnerIdAsync(world)).ShouldBe(string.Empty);
 
-        await using var other = HostFor(world, IngestTestWorld.Writer(jti: IngestTestWorld.OtherJti));
+        await using var other = HostFor(world, IngestTestWorld.Writer(IngestTestWorld.OtherOwnerId, world.Project));
         using var otherClient = other.CreateClient();
         var accepted = await FinalizeAsync(otherClient, world.RunId, await BodyAsync(world));
 
         accepted.Status.ShouldBe(HttpStatusCode.Accepted, accepted.ErrorMessage);
-        (await SlotBoundJtiAsync(world)).ShouldBe(IngestTestWorld.OtherJti);
+        (await SlotBoundOwnerIdAsync(world)).ShouldBe(IngestTestWorld.OtherOwnerId);
     }
 
     /// <summary>The same rollback rule for a hash mismatch: an unbound slot refused on hash stays unbound.</summary>
@@ -428,14 +426,14 @@ public sealed partial class FinalizeEndpointTests
         var refused = await FinalizeAsync(world.Client, world.RunId, await BodyAsync(world, manifestHash: wrongHash));
         refused.Status.ShouldBe(HttpStatusCode.UnprocessableEntity, refused.ErrorMessage);
         refused.ErrorCode.ShouldBe("manifest_invalid");
-        (await SlotBoundJtiAsync(world)).ShouldBe(string.Empty);
+        (await SlotBoundOwnerIdAsync(world)).ShouldBe(string.Empty);
 
-        await using var other = HostFor(world, IngestTestWorld.Writer(jti: IngestTestWorld.OtherJti));
+        await using var other = HostFor(world, IngestTestWorld.Writer(IngestTestWorld.OtherOwnerId, world.Project));
         using var otherClient = other.CreateClient();
         var accepted = await FinalizeAsync(otherClient, world.RunId, await BodyAsync(world));
 
         accepted.Status.ShouldBe(HttpStatusCode.Accepted, accepted.ErrorMessage);
-        (await SlotBoundJtiAsync(world)).ShouldBe(IngestTestWorld.OtherJti);
+        (await SlotBoundOwnerIdAsync(world)).ShouldBe(IngestTestWorld.OtherOwnerId);
     }
 
     /// <summary>Two identities race for one unbound slot: exactly one binds and closes, the other gets 403.</summary>
@@ -443,8 +441,8 @@ public sealed partial class FinalizeEndpointTests
     public async Task Finalize_ConcurrentForeignIdentities_OneWinsOtherRefused403()
     {
         await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer(), hosts: _hosts);
-        await using var first = HostFor(world, IngestTestWorld.Writer());
-        await using var second = HostFor(world, IngestTestWorld.Writer(jti: IngestTestWorld.OtherJti));
+        await using var first = HostFor(world, IngestTestWorld.Writer(projectScope: world.Project));
+        await using var second = HostFor(world, IngestTestWorld.Writer(IngestTestWorld.OtherOwnerId, world.Project));
         using var firstClient = first.CreateClient();
         using var secondClient = second.CreateClient();
         var body = await BodyAsync(world);
@@ -455,8 +453,8 @@ public sealed partial class FinalizeEndpointTests
 
         answers.Count(a => a.Status == HttpStatusCode.Accepted).ShouldBe(1);
         answers.Count(a => a.Status == HttpStatusCode.Forbidden && a.ErrorCode == "producer_slot_taken").ShouldBe(1);
-        var winner = answers[0].Status == HttpStatusCode.Accepted ? IngestTestWorld.Jti : IngestTestWorld.OtherJti;
-        (await SlotBoundJtiAsync(world)).ShouldBe(winner);
+        var winner = answers[0].Status == HttpStatusCode.Accepted ? IngestTestWorld.OwnerId : IngestTestWorld.OtherOwnerId;
+        (await SlotBoundOwnerIdAsync(world)).ShouldBe(winner);
         (await ReconcileRowsAsync(world)).ShouldBe(1);
     }
 
@@ -465,7 +463,7 @@ public sealed partial class FinalizeEndpointTests
     public async Task Finalize_NonGuidRunId_ClientErrorNotServerError()
     {
         await using var world = await IngestTestWorld.StartAsync(
-            _fixture, IngestTestWorld.Writer(), boundJti: IngestTestWorld.Jti, hosts: _hosts);
+            _fixture, IngestTestWorld.Writer(), boundOwnerId: IngestTestWorld.OwnerId, hosts: _hosts);
         var runVersion = await RunVersionAsync(world);
 
         var answer = await FinalizeRawAsync(

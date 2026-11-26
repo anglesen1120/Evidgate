@@ -153,18 +153,11 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
         PropertyNameCaseInsensitive = false,
     };
 
-    /// <summary>The ref patterns the probe binding allows (one entry, so the create body is valid).</summary>
-    private static readonly string[] BindingRefPatterns = ["refs/heads/main"];
-
     /// <summary>The secret reference the probe environment revision names (a reference, never a value).</summary>
     private static readonly string[] EnvironmentSecretRefs = ["secret:db_password"];
 
     /// <summary>The environment key of the probe revision above; the seeded manifest targets it.</summary>
     private const string ProbeEnvironment = "ac5-probe";
-
-    /// <summary>The workflow refs the probe binding allows.</summary>
-    private static readonly string[] BindingWorkflowRefs =
-        ["acme/ac5-probe/.github/workflows/ci.yml@refs/heads/main"];
 
     public SensitivePermissionTests(DatabaseFixture fixture)
         : base(fixture)
@@ -281,15 +274,14 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
     }
 
     /// <summary>
-    /// AC5, second half: a <c>tenant_admin</c> creates a real ingest token and a real
-    /// CI binding through the API, then reads every served GET route it can address.
+    /// A tenant admin creates credentials through the API, then reads every served GET route it can address.
     /// No response body may carry the captured one-time values, the <c>egt_</c>
     /// plaintext, or a JSON member named like a secret — and the create responses must
     /// be the only place the secret appears.
     /// </summary>
     /// <remarks>
     /// The host is the real Api composition with the <c>EVIDGATE:Ci:*</c> key material
-    /// configured: without it the two create routes answer 503 <c>unavailable</c>
+    /// configured: without it the ingest-token create route answers 503 <c>unavailable</c>
     /// ("CI authentication is not configured on this deployment"), so no secret could
     /// be minted and the scan would be vacuous. It publishes the seeded
     /// <c>tenant_admin</c> member for every request that carries no bearer, so the
@@ -315,12 +307,10 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
         var token = await CreateIngestTokenAsync(client, project);
         var apiToken = await CreateApiTokenAsync(client, project);
         var webhook = await CreateWebhookEndpointAsync(client, project);
-        var binding = await CreateCiBindingAsync(client, project);
 
         IngestTokenShape().IsMatch(token.Secret).ShouldBeTrue(
             "the ingest token secret must be the egt_ plaintext (02.4.2); the message must not echo the value");
         apiToken.Secret.ShouldStartWith("evg_", Case.Sensitive, "the API token secret is the evg_ plaintext");
-        binding.Challenge.ShouldNotBeNullOrWhiteSpace("the binding challenge is a one-time value (02.4.1)");
 
         // Two more one-time values a later GET must never carry: the successor the
         // rotate route mints (the old token verifies for 24 h more), and the
@@ -335,7 +325,6 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
             IngestSecretPart(token.Secret),
             rotated,
             IngestSecretPart(rotated),
-            binding.Challenge,
             exchanged,
             apiToken.Secret,
             apiToken.Secret[^43..],
@@ -399,7 +388,6 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
         answered.ShouldContain("/v1/projects/{p}/ingest-tokens");
         answered.ShouldContain("/v1/projects/{p}/api-tokens");
         answered.ShouldContain("/v1/projects/{p}/webhook-deliveries");
-        answered.ShouldContain("/v1/projects/{p}/ci-bindings");
         answered.ShouldContain("/v1/permissions");
         answered.ShouldContain("/v1/roles");
         answered.ShouldContain("/v1/orgs/{o}/memberships");
@@ -448,10 +436,6 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
                 token.Id.ToString(),
                 Case.Sensitive,
                 $"'{template}' must record the created ingest token, or the scan is vacuous");
-            bodies[template].ShouldContain(
-                binding.Id.ToString(),
-                Case.Sensitive,
-                $"'{template}' must record the created CI binding, or the scan is vacuous");
         }
 
         var tokenList = await client.GetStringAsync($"/v1/projects/{project}/ingest-tokens", Token);
@@ -459,12 +443,6 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
             token.Id.ToString(),
             Case.Sensitive,
             "the created ingest token must be listed, or the scan is vacuous");
-
-        var bindingList = await client.GetStringAsync($"/v1/projects/{project}/ci-bindings", Token);
-        bindingList.ShouldContain(
-            binding.Id.ToString(),
-            Case.Sensitive,
-            "the created CI binding must be listed, or the scan is vacuous");
     }
 
     /// <summary>The principal the evaluator sees for a role: a member, a service token, or the operator stub.</summary>
@@ -515,7 +493,6 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
             // type/severity pair, an actor `{kind, id}` and details restricted to ids, hashes and counts, and this
             // org has no events seeded here, so the scan is about the envelope and an empty page being clean.
             ["/v1/orgs/{o}/security-events"] = $"/v1/orgs/{org}/security-events",
-            ["/v1/projects/{p}/ci-bindings"] = $"/v1/projects/{project}/ci-bindings",
             ["/v1/projects/{p}/ingest-tokens"] = $"/v1/projects/{project}/ingest-tokens",
             // The API-token list: one row was created above, so the scan is not vacuous, and the route answers
             // metadata only — the plaintext and the HMAC are never selected.
@@ -1047,38 +1024,6 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
         return new CreatedToken(endpoint.GetProperty("id").GetGuid(), secret);
     }
 
-    /// <summary>Creates a CI binding through the real route and captures the one-time challenge.</summary>
-    private static async Task<CreatedBinding> CreateCiBindingAsync(HttpClient client, Guid project)
-    {
-        using var response = await client.PostAsync(
-            $"/v1/projects/{project}/ci-bindings",
-            JsonContent.Create(
-                new
-                {
-                    Provider = "github_actions",
-                    RepositoryId = 424242L,
-                    RepositoryFullName = "acme/ac5-probe",
-                    AllowedRefPatterns = BindingRefPatterns,
-                    AllowedWorkflowRefs = BindingWorkflowRefs,
-                },
-                options: Wire),
-            Token);
-
-        var body = await response.Content.ReadAsStringAsync(Token);
-
-        (response.StatusCode == HttpStatusCode.Created).ShouldBeTrue(
-            $"the CI binding create route must answer 201, not {(int)response.StatusCode}");
-
-        using var document = JsonDocument.Parse(body);
-        var root = document.RootElement;
-        var challenge = root.GetProperty("binding_challenge").GetString()!;
-
-        body.Contains(challenge, StringComparison.Ordinal).ShouldBeTrue(
-            "the create response is the one place the challenge appears");
-
-        return new CreatedBinding(root.GetProperty("binding").GetProperty("id").GetGuid(), challenge);
-    }
-
     /// <summary>
     /// Rotates the ingest token through the real route and captures the successor's
     /// one-time secret (the old token keeps verifying for 24 h, 02.4.2).
@@ -1150,8 +1095,6 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
     /// <summary>The subset the API-token probe asks for: a read the tenant admin holds and the deny set allows.</summary>
     private static readonly string[] ApiTokenPermissions = ["run:read"];
 
-    /// <summary>A CI binding created through the API: its id and its one-time challenge.</summary>
-    private sealed record CreatedBinding(Guid Id, string Challenge);
 }
 
 /// <summary>

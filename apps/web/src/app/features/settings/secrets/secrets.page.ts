@@ -32,7 +32,6 @@ import { DesktopRequiredNoticeComponent } from '../../../shared/ui/narrow/deskto
 import { NarrowMutationPolicy } from '../../../shared/ui/narrow/narrow-mutation-policy';
 import { RotateRevealDialogComponent } from './rotate-reveal-dialog.component';
 import { SecretsStore } from './secrets.store';
-import { CiBindingListComponent } from './ci-binding-list.component';
 
 type RotationTarget = {
   readonly reference: IngestTokenView;
@@ -48,7 +47,6 @@ type RotationTarget = {
     RetryAfterComponent,
     SecretReferenceListComponent,
     RotateRevealDialogComponent,
-    CiBindingListComponent,
     HlmAlert,
     HlmButton,
     HlmSelectImports,
@@ -87,14 +85,6 @@ export class SecretsPage {
   protected readonly rotationTarget = signal<RotationTarget | null>(null);
   protected readonly selectedProject = signal<string | null>(null);
   protected readonly canWrite = computed(() => this.session.has('ingest_token:write'));
-  protected readonly canReadBindings = computed(() => this.session.has('project:read'));
-  /** Boolean view of the project list, so a re-emitted list cannot re-run the bindings read. */
-  private readonly selectedProjectListed = computed(() => {
-    const id = this.selectedProject();
-    return id !== null && this.session.projects().some((project) => project.id === id);
-  });
-  protected readonly bindingsPaging = signal(false);
-  protected readonly bindingsPagingFailure = signal(false);
   protected readonly visibleRows = computed(() => this.store.rows());
   protected readonly paging = signal(false);
   protected readonly pagingFailure = signal(false);
@@ -139,19 +129,6 @@ export class SecretsPage {
         if (valid) void this.store.load(valid);
       });
     });
-    effect(() => {
-      const id = this.selectedProject();
-      const permitted = this.canReadBindings();
-      // Only the derived boolean is tracked: the project list re-emits on unrelated session
-      // changes, and re-reading bindings for the same project would drop already loaded pages.
-      const listed = this.selectedProjectListed();
-      untracked(() => {
-        this.bindingsPaging.set(false);
-        this.bindingsPagingFailure.set(false);
-        if (id && listed && permitted) void this.store.loadCiBindings(id);
-        else this.store.resetCiBindings();
-      });
-    });
     effect((cleanup) => {
       const seconds = this.store.loadError()?.retryAfterSeconds;
       this.readRetryReady.set(seconds == null || seconds <= 0);
@@ -193,43 +170,6 @@ export class SecretsPage {
     ) {
       this.clearScope();
       void this.store.load(id);
-    }
-  }
-  protected reloadBindings(): void {
-    const id = this.selectedProject();
-    if (
-      !id ||
-      !this.canReadBindings() ||
-      this.bindingsPaging() ||
-      !this.session.projects().some((project) => project.id === id)
-    )
-      return;
-    if (
-      this.store.ciBindings().length &&
-      (this.store.ciBindingsError() || this.bindingsPagingFailure())
-    ) {
-      void this.pageBindings(() => this.store.retryCiBindingsPage());
-    } else {
-      this.bindingsPagingFailure.set(false);
-      void this.store.loadCiBindings(id);
-    }
-  }
-  protected async moreBindings(): Promise<void> {
-    if (
-      !this.canReadBindings() ||
-      this.bindingsPaging() ||
-      !this.store.hasMoreCiBindings() ||
-      this.store.ciBindingsError()?.kind === 'forbidden'
-    )
-      return;
-    const project = this.selectedProject();
-    this.bindingsPaging.set(true);
-    try {
-      await this.store.loadMoreCiBindings();
-    } catch {
-      if (project === this.selectedProject()) this.bindingsPagingFailure.set(true);
-    } finally {
-      if (project === this.selectedProject()) this.bindingsPaging.set(false);
     }
   }
   protected requestRotation(target: { reference: IngestTokenView; opener: HTMLElement }): void {
@@ -319,25 +259,6 @@ export class SecretsPage {
       if (generation === this.generation) this.pagingFailure.set(true);
     } finally {
       if (generation === this.generation) this.paging.set(false);
-    }
-  }
-  protected async previousBindings(): Promise<void> {
-    await this.pageBindings(() => this.store.previousCiBindings());
-  }
-  protected async changeBindingsSize(size: number): Promise<void> {
-    await this.pageBindings(() => this.store.setCiBindingsPageSize(size));
-  }
-  private async pageBindings(action: () => Promise<void>): Promise<void> {
-    if (this.bindingsPaging() || !this.canReadBindings()) return;
-    const project = this.selectedProject();
-    this.bindingsPaging.set(true);
-    this.bindingsPagingFailure.set(false);
-    try {
-      await action();
-    } catch {
-      if (project === this.selectedProject()) this.bindingsPagingFailure.set(true);
-    } finally {
-      if (project === this.selectedProject()) this.bindingsPaging.set(false);
     }
   }
   private clearScope(): void {

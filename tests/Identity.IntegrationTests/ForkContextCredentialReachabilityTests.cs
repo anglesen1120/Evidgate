@@ -421,7 +421,6 @@ public sealed class ForkContextCredentialReachabilityTests(DatabaseFixture fixtu
             select (select count(*) from public.ingest_token where org_id = any(@orgs::uuid[]))
                  + (select count(*) from public.api_token where org_id = any(@orgs::uuid[]))
                  + (select count(*) from public.membership where org_id = any(@orgs::uuid[]))
-                 + (select count(*) from public.ci_token_issue where org_id = any(@orgs::uuid[]))
             """,
             connection);
         command.Parameters.Add(new NpgsqlParameter("orgs", NpgsqlDbType.Array | NpgsqlDbType.Uuid) { Value = orgIds });

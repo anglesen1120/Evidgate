@@ -482,7 +482,7 @@ public sealed class IngestEventBatchTests : IClassFixture<TenancyHostPool>
     public async Task slot_taken_by_other_token_403()
     {
         await using var world = await IngestTestWorld.StartAsync(
-            _fixture, IngestTestWorld.Writer(), boundJti: IngestTestWorld.OtherJti, hosts: _hosts);
+            _fixture, IngestTestWorld.Writer(), boundOwnerId: IngestTestWorld.OtherOwnerId, hosts: _hosts);
 
         var answer = await PostEventsAsync(world, Batch(Event(Guid.CreateVersion7(), KeyOf(world, 0), sequence: 1)));
 
@@ -494,24 +494,21 @@ public sealed class IngestEventBatchTests : IClassFixture<TenancyHostPool>
     [Fact]
     public async Task first_batch_binds_slot_then_foreign_token_403_producer_slot_taken()
     {
-        // AC3 on the event path: the seeded slot starts unbound, the first ACCEPTED batch binds it to the
-        // caller's jti, and a later batch from a different ci_producer identity is then refused 403
-        // producer_slot_taken with no write (T9). Distinct from slot_taken_by_other_token_403, which pre-binds
-        // the slot and never exercises the binding the first batch performs.
+        // Start unbound so this tests ownership established by the first write, rather than a seeded owner.
         await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer(), hosts: _hosts);
 
         var accepted = await PostEventsAsync(world, Batch(Event(Guid.CreateVersion7(), KeyOf(world, 0), sequence: 1)));
 
         accepted.Status.ShouldBe(HttpStatusCode.OK, accepted.ErrorMessage);
         (await world.ScalarAsync<string>($"select bound_token_jti from public.producer_slot where {Scope(world)}"))
-            .ShouldBe(IngestTestWorld.Jti);
+            .ShouldBe(IngestTestWorld.OwnerId);
         (await EventRowsAsync(world)).ShouldBe(1);
 
         // The foreign credential is scoped to the same project on purpose: this case is about the producer
         // slot, and an unscoped token would be refused by the route's budget partition before it.
         await using var foreign = _hosts.WithPrincipal(
             world.Database, world.Org, world.Project,
-            IngestTestWorld.Writer(jti: IngestTestWorld.OtherJti, projectScope: world.Project));
+            IngestTestWorld.Writer(ownerId: IngestTestWorld.OtherOwnerId, projectScope: world.Project));
         using var foreignClient = foreign.CreateClient();
 
         var refused = await PostEventsAsync(

@@ -10,7 +10,7 @@ import {
   viewChild,
   type ElementRef,
 } from '@angular/core';
-import type { CiBindingView, IngestTokenView } from '@evidgate/sdk';
+import type { IngestTokenView } from '@evidgate/sdk';
 import { HlmButton } from '@evidgate/ui/button';
 import { HlmCardImports } from '@evidgate/ui/card';
 
@@ -19,7 +19,6 @@ import cliManifest from '../../../../../../../packages/cli/package.json';
 interface QuickstartInput {
   projectRef: string | null;
   token: Pick<IngestTokenView, 'name' | 'prefix'> | null;
-  binding: Pick<CiBindingView, 'repository_full_name'> | null;
 }
 
 // Metadata only: deliberately pick individual fields rather than serializing credentials.
@@ -35,7 +34,7 @@ function comment(value: string): string {
   return value.replace(UNSAFE_TEXT, ' ');
 }
 
-export function buildQuickstartSnippet({ projectRef, token, binding }: QuickstartInput): string {
+export function buildQuickstartSnippet({ projectRef, token }: QuickstartInput): string {
   const project = shellQuote(projectRef ?? '<project-slug>');
   const lines = [
     `# ${$localize`:@@onboarding.quickstart.variables:Set EVIDGATE_API_URL and EVIDGATE_PROJECT as non-secret CI variables.`}`,
@@ -51,24 +50,13 @@ export function buildQuickstartSnippet({ projectRef, token, binding }: Quickstar
       `# ${$localize`:@@onboarding.quickstart.token-reference:Ingest token: ${name}:TOKEN_NAME: (prefix: ${prefix}:TOKEN_PREFIX:).`}`,
       `# ${$localize`:@@onboarding.quickstart.token-injection:Inject EVIDGATE_INGEST_TOKEN from your CI masked secret store. Never paste its value here.`}`,
     );
-  } else if (binding) {
-    const repository = comment(binding.repository_full_name);
-    lines.push(
-      `# ${$localize`:@@onboarding.quickstart.binding-reference:GitHub OIDC repository: ${repository}:REPOSITORY:.`}`,
-      `# ${$localize`:@@onboarding.quickstart.binding-variable:Pass the EVIDGATE_BINDING_CHALLENGE repository variable by name; keep its value out of this file.`}`,
-      `# ${$localize`:@@onboarding.quickstart.oidc-permission:Grant id-token: write in the CI job so the CLI can request GitHub OIDC credentials.`}`,
-    );
   } else {
     lines.push(
       `# ${$localize`:@@onboarding.quickstart.create-token:Create an ingest token first, then inject EVIDGATE_INGEST_TOKEN from your CI masked secret store.`}`,
     );
   }
 
-  lines.push(
-    '',
-    `npx --yes --package @evidgate/cli@${cliManifest.version} -- evidgate auth login`,
-    `npx --yes --package @evidgate/cli@${cliManifest.version} -- evidgate quickstart --write .github/workflows/evidgate.yml`,
-  );
+  lines.push('', `npx --yes --package @evidgate/cli@${cliManifest.version} -- evidgate auth login`);
   return lines.join('\n');
 }
 
@@ -130,7 +118,6 @@ export class CliQuickstartComponent {
 
   readonly projectRef = input<string | null>(null);
   readonly token = input<QuickstartInput['token']>(null);
-  readonly binding = input<QuickstartInput['binding']>(null);
 
   protected readonly outlineVariant = 'outline';
   protected readonly subsectionHeadingSize = 'subsection' as const;
@@ -143,7 +130,6 @@ export class CliQuickstartComponent {
     buildQuickstartSnippet({
       projectRef: this.projectRef(),
       token: this.token(),
-      binding: this.binding(),
     }),
   );
   protected readonly copying = signal(false);

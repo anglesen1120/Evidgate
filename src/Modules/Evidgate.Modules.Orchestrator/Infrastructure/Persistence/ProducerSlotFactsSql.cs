@@ -4,7 +4,7 @@ namespace Evidgate.Modules.Orchestrator.Infrastructure.Persistence;
 /// The run's producer-slot facts as one column of the statement that selects the run row (aliased <c>r</c>): one item
 /// per stored <c>producer_slot</c> row, with the slot's own state and the counts of the <c>event</c> rows recorded
 /// against it. Beside the run row rather than behind a second read, so the counts and the run's state share one
-/// snapshot. The binding values themselves — the token's <c>jti</c> and the CI run ref — are never selected: the
+/// snapshot. The binding value itself — the owning credential id — is never selected: the
 /// column reports only whether the slot is bound at all.
 /// </summary>
 internal static class ProducerSlotFactsSql

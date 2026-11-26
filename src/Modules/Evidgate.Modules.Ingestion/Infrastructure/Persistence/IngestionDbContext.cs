@@ -50,7 +50,6 @@ internal sealed class ProducerSlotConfiguration : IEntityTypeConfiguration<Produ
         builder.Property(row => row.ShardIndex).HasColumnName("shard_index").IsRequired();
         builder.Property(row => row.ProducerId).HasColumnName("producer_id").IsRequired();
         builder.Property(row => row.BoundTokenJti).HasColumnName("bound_token_jti");
-        builder.Property(row => row.BoundCiRunRef).HasColumnName("bound_ci_run_ref");
         builder.Property(row => row.LastSequence).HasColumnName("last_sequence").HasDefaultValue(0L);
         builder.Property(row => row.ClosedAt).HasColumnName("closed_at");
         builder.Property(row => row.DeclaredLastSequence).HasColumnName("declared_last_sequence");

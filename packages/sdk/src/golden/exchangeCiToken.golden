@@ -1,9 +1,8 @@
-export const exchangeCiToken = <ThrowOnError extends boolean = false>(options?: Options<ExchangeCiTokenData, ThrowOnError>): RequestResult<ExchangeCiTokenResponses, ExchangeCiTokenErrors, ThrowOnError> => (options?.client ?? client).post<ExchangeCiTokenResponses, ExchangeCiTokenErrors, ThrowOnError>({
-    security: [{ scheme: 'bearer', type: 'http' }],
+export const exchangeCiToken = <ThrowOnError extends boolean = false>(options: Options<ExchangeCiTokenData, ThrowOnError>): RequestResult<ExchangeCiTokenResponses, ExchangeCiTokenErrors, ThrowOnError> => (options.client ?? client).post<ExchangeCiTokenResponses, ExchangeCiTokenErrors, ThrowOnError>({
     url: '/ci/token',
     ...options,
     headers: {
         'Content-Type': 'application/json',
-        ...options?.headers
+        ...options.headers
     }
 });

@@ -25,10 +25,9 @@ public sealed record CreateRunRequest(Guid ManifestId, string? Release, JsonElem
 /// for the run. Members are <c>kind</c>, <c>name</c>, <c>pr_number</c>, <c>head_sha</c>, <c>base_sha</c>,
 /// <c>trigger_event</c>, <c>is_fork</c>; every one is optional, and an unknown member is 422 <c>request_invalid</c>
 /// (<c>details[].path</c> <c>/ref/&lt;member&gt;</c>, reason <c>additional_properties</c>) like every other shape
-/// failure of this body. A verified <c>ci_producer</c> caller's OIDC claims always win over the body and a conflicting
-/// member is ignored, not rejected (AC3), but the body is still shape-validated first (AC4) and every value stored from
-/// it marks the run <c>unverified_ref</c> (see <see cref="RunCreated"/>). <c>head_sha</c>/<c>base_sha</c> are 40 hex
-/// digits for a SHA-1 repository and 64 for a SHA-256 one.
+/// failure of this body. Every supplied member is producer-declared and sets <c>unverified_ref</c>;
+/// no OIDC claim overrides it. <c>head_sha</c>/<c>base_sha</c> are 40 hex digits for a SHA-1 repository
+/// and 64 for a SHA-256 one.
 /// <para>
 /// The type documents the wire shape for the served OpenAPI document; the create handler parses the raw body itself
 /// (it must, to validate members this record cannot express and to fold the body into the idempotency hash), so this
@@ -38,10 +37,10 @@ public sealed record CreateRunRequest(Guid ManifestId, string? Release, JsonElem
 /// <param name="Kind"><c>branch</c>, <c>tag</c> or <c>pull_request</c>; a <c>pull_request</c> without <see cref="PrNumber"/> is 422.</param>
 /// <param name="Name">The branch or tag name, or GitHub's <c>GITHUB_REF_NAME</c> token for a pull request; 1..255 characters.</param>
 /// <param name="PrNumber">The pull-request number; required with <c>kind: "pull_request"</c>.</param>
-/// <param name="HeadSha">The built commit; only trusted for a non-fork CI claim (05.2.2-T1).</param>
-/// <param name="BaseSha">The base commit; there is no verified source, so a stored one is always body-supplied.</param>
-/// <param name="TriggerEvent"><c>push</c>, <c>pull_request</c>, <c>schedule</c>, <c>manual</c> or <c>dispatch</c>; body-only.</param>
-/// <param name="IsFork">True only when the body says so; a verified CI caller is never a fork (02.4.1 refuses a fork exchange 403).</param>
+/// <param name="HeadSha">The built commit, as declared by the producer.</param>
+/// <param name="BaseSha">The base commit, as declared by the producer.</param>
+/// <param name="TriggerEvent"><c>push</c>, <c>pull_request</c>, <c>schedule</c>, <c>manual</c> or <c>dispatch</c>; producer-declared.</param>
+/// <param name="IsFork">True when the producer declares a fork; advisory-only and never bound to a release.</param>
 public sealed record RunRefRequest(
     string? Kind,
     string? Name,
@@ -55,8 +54,8 @@ public sealed record RunRefRequest(
 /// <param name="RunId">The created run.</param>
 /// <param name="State">Its state; <c>queued</c> because the producer slots commit in the create transaction (T13).</param>
 /// <param name="UnverifiedRef">
-/// True when the run's recorded identity came from the request body rather than a verified GitHub OIDC claim (05.2.2
-/// AC2, T1): the run is advisory input, never a gating one. False for a caller whose identity was fully verified, and
-/// for a request that carried no identity at all. The wire name is <c>unverified_ref</c>.
+/// True when any ref member was supplied: all stored identity values are producer-declared. False without identity.
+/// A declared non-fork default-branch or configured release-branch-glob match may gate;
+/// declared forks are advisory-only and never bind to a release. The wire name is <c>unverified_ref</c>.
 /// </param>
 public sealed record RunCreated(Guid RunId, string State, bool UnverifiedRef);

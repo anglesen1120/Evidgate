@@ -97,6 +97,8 @@ const FLOWS: readonly CoreFlow[] = [
         await expect(wizard.root).toBeVisible();
       } else {
         await wizard.open(LOCALE, seed);
+        // A project with no credential resumes on the first run; step 2 is one Back away.
+        if (step === 2) await wizard.back.click();
       }
       await expectCurrentStep(page, step);
       await expect(page.locator('#onboarding-step-title')).toBeVisible();

@@ -62,9 +62,6 @@ public static class ApiErrorCode
     /// <summary>401: the CI token is not valid (signature, issuer, audience, lifetime or claims) (02.4.1).</summary>
     public const string TokenInvalid = "token_invalid";
 
-    /// <summary>401: the OIDC token's <c>jti</c> was already exchanged (02.4.1 AC5).</summary>
-    public const string TokenReplayed = "token_replayed";
-
     /// <summary>401: no such ingest token, or its secret is wrong (one code for both, 02.4.2 AC5).</summary>
     public const string TokenUnknown = "token_unknown";
 
@@ -73,15 +70,6 @@ public static class ApiErrorCode
 
     /// <summary>401: the ingest token expired or its rotation overlap ended (02.4.2 AC3).</summary>
     public const string TokenExpired = "token_expired";
-
-    /// <summary>403: no binding admits this repository, ref or workflow (02.4.1 AC3).</summary>
-    public const string BindingMismatch = "binding_mismatch";
-
-    /// <summary>403: the binding has not proven repository control yet (T70).</summary>
-    public const string BindingPending = "binding_pending";
-
-    /// <summary>403: the binding was disabled.</summary>
-    public const string BindingDisabled = "binding_disabled";
 
     /// <summary>409: another org already holds the active binding of this repository (T70).</summary>
     public const string BindingConflict = "binding_conflict";

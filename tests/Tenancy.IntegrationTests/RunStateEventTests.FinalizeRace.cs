@@ -12,7 +12,7 @@ public sealed partial class RunStateEventTests
     {
         await using var database = await _fixture.CreateDedicatedDatabaseAsync();
         await using var world = await IngestTestWorld.StartAsync(
-            _fixture, IngestTestWorld.Writer(), boundJti: IngestTestWorld.Jti, database: database.Name);
+            _fixture, IngestTestWorld.Writer(), boundOwnerId: IngestTestWorld.OwnerId, database: database.Name);
         await world.SetRunStateAsync("running");
         using var admin = world.Api.CreateClient();
         var manifestHash = await world.ScalarAsync<string>(

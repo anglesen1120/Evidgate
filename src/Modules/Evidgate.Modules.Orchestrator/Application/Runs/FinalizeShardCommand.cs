@@ -44,20 +44,14 @@ namespace Evidgate.Modules.Orchestrator.Application.Runs;
 /// </param>
 /// <param name="IdempotencyKey">The client's <c>Idempotency-Key</c> (00 §9.1, at most 128 characters).</param>
 /// <param name="CredentialId">
-/// The caller's credential id (<c>jti</c>), folded into <see cref="BodyHash"/> and never serialized: the replay is
-/// bound to the credential that made the first request (T9).
-/// </param>
-/// <param name="CiRunBinding">
-/// The caller's CI run reference in the <see cref="CiRunReference.ToBindingReference"/> form (T88), or null when the
-/// token carries none. Folded into <see cref="BodyHash"/> beside the credential, so the same key and body from
-/// another CI run attempt conflicts instead of replaying (the <see cref="CreateRunCommand"/> precedent).
+/// The caller's stable credential id, folded into <see cref="BodyHash"/> and never serialized: the replay is
+/// bound to the credential that made the first request (T9), and survives a token renewal.
 /// </param>
 internal sealed record FinalizeShardCommand(
     Guid RunId,
     [property: JsonIgnore] ReadOnlyMemory<byte> Body,
     string IdempotencyKey,
-    [property: JsonIgnore] string? CredentialId = null,
-    [property: JsonIgnore] string? CiRunBinding = null) : ICommand<Result>, IIdempotentCommand
+    [property: JsonIgnore] string? CredentialId = null) : ICommand<Result>, IIdempotentCommand
 {
     /// <summary>The 00 §7 operation the key is claimed for: stable across a rename.</summary>
     string IIdempotentCommand.Operation => "run:finalize";
@@ -69,26 +63,24 @@ internal sealed record FinalizeShardCommand(
     /// replay each other instead of conflicting. Raw bytes on purpose — a byte-identical retry from the same client
     /// is the case that must replay, and no canonical form is needed for that.
     /// <para>
-    /// The caller's identity is folded in beside it, exactly as <see cref="CreateRunCommand"/> folds its
-    /// <c>CiRunBinding</c>: the same key and body replayed by a different credential, or by the same credential under
-    /// another CI run attempt, is 409 <c>idempotency_conflict</c> instead of taking the stored <c>202</c> — a replay
-    /// must never stand in for the T9 slot-identity check of another caller. Both halves are hashed before they enter
-    /// the hashed document, so neither the credential id nor the CI run reference is ever stored or logged.
+    /// The caller's identity is folded in beside it: the same key and body replayed by a different credential
+    /// is 409 <c>idempotency_conflict</c> instead of taking the stored <c>202</c> — a replay must never stand in
+    /// for the T9 slot-identity check of another caller. The id is hashed before it enters the hashed
+    /// document, so it is never stored or logged.
     /// </para>
     /// </summary>
     public string BodyHash => Combine(
         "raw-sha256:" + Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(Body.Span)),
-        CredentialId,
-        CiRunBinding);
+        CredentialId);
 
     /// <summary>
-    /// The digest of one request that carries a caller identity: the RFC 8785 digest of a three-member document
-    /// holding the body's own digest and the digests of the credential id and the CI run reference, so every half is
-    /// covered by a single canonical hash and no raw identity value is ever part of a stored record.
+    /// The digest of one request that carries a caller identity: the RFC 8785 digest of a two-member document
+    /// holding the body's own digest and the digest of the credential id, so no raw identity value is ever part
+    /// of a stored record.
     /// </summary>
-    private static string Combine(string bodyHash, string? credentialId, string? ciRunBinding) =>
+    private static string Combine(string bodyHash, string? credentialId) =>
         CanonicalHash.Compute(
-            $$"""{"body_hash":{{JsonSerializer.Serialize(bodyHash)}},"credential_sha256":{{JsonSerializer.Serialize(Digest(credentialId))}},"ci_run_ref_sha256":{{JsonSerializer.Serialize(Digest(ciRunBinding))}}}""");
+            $$"""{"body_hash":{{JsonSerializer.Serialize(bodyHash)}},"credential_sha256":{{JsonSerializer.Serialize(Digest(credentialId))}}}""");
 
     /// <summary>The SHA-256 of an identity value, so only a digest of it reaches the hashed document.</summary>
     private static string Digest(string? value) => Convert.ToHexStringLower(

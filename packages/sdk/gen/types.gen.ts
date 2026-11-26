@@ -78,7 +78,7 @@ export type RunStateDto = {
     purpose: 'regular' | 'replay';
     ref: RunRef;
     /**
-     * True when at least one stored identity value came from the request body instead of a verified CI claim (05.2.2-T1); false for a verified CI caller and for a run with no identity at all.
+     * True for producer-declared identity, false when no identity was supplied.
      */
     unverified_ref: boolean;
     /**
@@ -215,7 +215,7 @@ export type RunSummary = {
     created_at: string;
     ref: RunRef;
     /**
-     * True when at least one stored identity value came from the request body instead of a verified CI claim (05.2.2-T1); false for a verified CI caller and for a run with no identity at all.
+     * True for producer-declared identity, false when no identity was supplied.
      */
     unverified_ref: boolean;
     /**
@@ -577,21 +577,21 @@ export type RunCreated = {
     run_id: string;
     state: 'queued';
     /**
-     * True when the stored identity block carries at least one body-supplied value (05.2.2-T1); false for a verified CI caller and for a run created without an identity.
+     * True when the run stores producer-declared identity.
      */
     unverified_ref: boolean;
 };
 
 /**
- * Optional run identity supplied by the caller (00 §7/§8.1, 05.2.2-T1). A verified CI caller's OIDC claims always win and a conflicting member is ignored, never rejected (AC3); every value stored from here marks the run `unverified_ref = true`. An unknown member is 422 `request_invalid` (`details[].path` `/ref/<member>`, reason `additional_properties`), like every other shape failure of this body.
+ * Optional producer-declared run identity. Every value stored from this block marks the run `unverified_ref = true`. An unknown member is 422 `request_invalid` (`details[].path` `/ref/<member>`, reason `additional_properties`), like every other shape failure of this body.
  */
 export type RunRefRequest = {
     /**
-     * `pull_request` requires `pr_number`, checked on the values after the verified-claim merge → 422 `request_invalid`.
+     * `pull_request` requires `pr_number`; omitting it is 422 `request_invalid`.
      */
     kind?: 'branch' | 'tag' | 'pull_request';
     /**
-     * Branch or tag name; for a PR the GITHUB_REF_NAME form `<N>/merge`.
+     * Branch, tag or pull request ref name.
      */
     name?: string;
     pr_number?: number;
@@ -602,13 +602,13 @@ export type RunRefRequest = {
     base_sha?: string;
     trigger_event?: 'push' | 'pull_request' | 'schedule' | 'manual' | 'dispatch';
     /**
-     * Only a body value can set this: a verified CI caller is never a fork (02.4.1 refuses a fork exchange 403).
+     * A declared fork is advisory-only even when uploaded by a trusted job.
      */
     is_fork?: boolean;
 };
 
 /**
- * The run's stored identity block (00 §7/§8.1, 05.2.2-T1). Every member is present, `null` where unknown; an existing run created before 05.2.2 has all members null and `is_fork` false. A verified `ci_producer` caller's `ref`/`sha` claims win over the request body; the remaining values are body-supplied and the run carries `unverified_ref = true`. `head_sha` is only ever the verified `sha` claim of a `branch` or `tag` ref: for a `pull_request` ref that claim is GitHub's test-merge commit and is not stored.
+ * Stored run identity, with null members where unknown. For new runs the values are producer-declared; a run without an identity has `is_fork` false.
  */
 export type RunRef = {
     kind: 'branch' | 'tag' | 'pull_request' | null;
@@ -1682,59 +1682,6 @@ export type SuiteRevisionDiff = {
 };
 
 /**
- * A CI binding as listed and read; never carries the challenge or its hash.
- */
-export type CiBindingView = {
-    id: string;
-    project_id: string;
-    provider: 'github_actions';
-    repository_id: number;
-    repository_full_name: string;
-    allowed_ref_patterns: Array<string>;
-    allowed_workflow_refs: Array<string>;
-    status: 'pending_verification' | 'active' | 'disabled';
-    activated_at?: string | null;
-    created_at: string;
-    version: number;
-};
-
-export type CiBindingCreatedResponse = {
-    binding: CiBindingView;
-    /**
-     * Shown once. Set as the repository variable `EVIDGATE_BINDING_CHALLENGE`.
-     */
-    binding_challenge: string;
-};
-
-export type CiBindingListResponse = {
-    items: Array<CiBindingView>;
-    next_cursor: string | null;
-};
-
-export type CreateCiBindingRequest = {
-    provider: 'github_actions';
-    repository_id: number;
-    /**
-     * `owner/repo`
-     */
-    repository_full_name: string;
-    /**
-     * Git refs allowed to mint, e.g. `refs/heads/main`, `refs/tags/v*` (`*` is the only wildcard).
-     */
-    allowed_ref_patterns: Array<string>;
-    /**
-     * Allowed `job_workflow_ref` values, e.g. `acme/web/.github/workflows/ci.yml@refs/heads/main`.
-     */
-    allowed_workflow_refs: Array<string>;
-};
-
-export type UpdateCiBindingRequest = {
-    allowed_ref_patterns?: Array<string> | null;
-    allowed_workflow_refs?: Array<string> | null;
-    status?: 'disabled' | 'active' | null;
-};
-
-/**
  * An ingest token's metadata; never the secret or its hash.
  */
 export type IngestTokenView = {
@@ -1948,13 +1895,9 @@ export type WebhookDeliveryListResponse = {
 
 export type CiTokenRequest = {
     /**
-     * The `egt_…` token (the GitHub grant sends its OIDC JWT as a bearer instead).
+     * The project ingest credential.
      */
-    ingest_token?: string | null;
-    /**
-     * The one-time challenge, presented by the first exchange of a pending binding.
-     */
-    binding_challenge?: string | null;
+    ingest_token: string;
 };
 
 export type CiTokenResponse = {
@@ -4081,8 +4024,6 @@ export type Platform = 'web' | 'api' | 'unit' | 'mobile';
  */
 export type Purpose = 'regression' | 'smoke' | 'release_gate' | 'exploratory';
 
-export type BindingId = string;
-
 export type IngestTokenId = string;
 
 /**
@@ -4625,7 +4566,7 @@ export type GitHubInstallCode = string;
 export type GitHubInstallState = string;
 
 export type ExchangeCiTokenData = {
-    body?: CiTokenRequest;
+    body: CiTokenRequest;
     path?: never;
     query?: never;
     url: '/ci/token';
@@ -4633,25 +4574,17 @@ export type ExchangeCiTokenData = {
 
 export type ExchangeCiTokenErrors = {
     /**
+     * 400 request_invalid — a malformed or missing request header, e.g. the `Idempotency-Key` every mutating authoring route requires (00 §9.1)
+     */
+    400: ErrorEnvelope;
+    /**
      * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
      */
     401: ErrorEnvelope;
     /**
-     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
-     */
-    403: ErrorEnvelope;
-    /**
-     * 409 conflict — e.g. `idempotency_conflict`, `run_closed` (00 §9.1/§9.2)
-     */
-    409: ErrorEnvelope;
-    /**
      * 413 too large (00 §9.2): a request body over its published cap. For the caps that carry numbers (`manifest_bytes`, `run_body_bytes`, and the raw-report byte cap behind `report_bytes`) the one detail names the cap in `path` and carries `limit` and `actual`; `actual` is the declared length when the declaration alone was over, otherwise the bytes counted when the overrun was seen, so a missing or short `Content-Length` never hides it.
      */
     413: ErrorEnvelope;
-    /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
-     */
-    422: ErrorEnvelope;
     /**
      * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
      */
@@ -8536,238 +8469,6 @@ export type UpdateRoleResponses = {
 };
 
 export type UpdateRoleResponse = UpdateRoleResponses[keyof UpdateRoleResponses];
-
-export type ListCiBindingsData = {
-    body?: never;
-    path: {
-        p: string;
-    };
-    query?: {
-        /**
-         * Opaque cursor from `next_cursor`; ordering `(created_at, id)` (00 §9.1).
-         */
-        cursor?: string;
-        limit?: number;
-    };
-    url: '/projects/{p}/ci-bindings';
-};
-
-export type ListCiBindingsErrors = {
-    /**
-     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
-     */
-    401: ErrorEnvelope;
-    /**
-     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
-     */
-    403: ErrorEnvelope;
-    /**
-     * 404 not found — also for other-tenant ids (00 §9.2)
-     */
-    404: ErrorEnvelope;
-    /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
-     */
-    422: ErrorEnvelope;
-    /**
-     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
-     */
-    429: ErrorEnvelope;
-    /**
-     * 503 unavailable — always `Retry-After` (00 §9.2)
-     */
-    503: ErrorEnvelope;
-};
-
-export type ListCiBindingsError = ListCiBindingsErrors[keyof ListCiBindingsErrors];
-
-export type ListCiBindingsResponses = {
-    /**
-     * Page of bindings; the challenge is never listed
-     */
-    200: CiBindingListResponse;
-};
-
-export type ListCiBindingsResponse = ListCiBindingsResponses[keyof ListCiBindingsResponses];
-
-export type CreateCiBindingData = {
-    body: CreateCiBindingRequest;
-    headers?: {
-        /**
-         * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
-         */
-        'X-XSRF-TOKEN'?: string;
-    };
-    path: {
-        p: string;
-    };
-    query?: never;
-    url: '/projects/{p}/ci-bindings';
-};
-
-export type CreateCiBindingErrors = {
-    /**
-     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
-     */
-    401: ErrorEnvelope;
-    /**
-     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
-     */
-    403: ErrorEnvelope;
-    /**
-     * 404 not found — also for other-tenant ids (00 §9.2)
-     */
-    404: ErrorEnvelope;
-    /**
-     * 409 conflict — e.g. `idempotency_conflict`, `run_closed` (00 §9.1/§9.2)
-     */
-    409: ErrorEnvelope;
-    /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
-     */
-    422: ErrorEnvelope;
-    /**
-     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
-     */
-    429: ErrorEnvelope;
-    /**
-     * 503 unavailable — always `Retry-After` (00 §9.2)
-     */
-    503: ErrorEnvelope;
-};
-
-export type CreateCiBindingError = CreateCiBindingErrors[keyof CreateCiBindingErrors];
-
-export type CreateCiBindingResponses = {
-    /**
-     * CI binding created
-     */
-    201: CiBindingCreatedResponse;
-};
-
-export type CreateCiBindingResponse = CreateCiBindingResponses[keyof CreateCiBindingResponses];
-
-export type DisableCiBindingData = {
-    body?: never;
-    headers: {
-        /**
-         * Client-supplied, ≤ 128 chars, unique per `(org_id, project_id, operation)` ≥ 24 h (00 §7/§9.1).
-         */
-        'Idempotency-Key': string;
-        /**
-         * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
-         */
-        'X-XSRF-TOKEN'?: string;
-    };
-    path: {
-        b: string;
-    };
-    query?: never;
-    url: '/ci-bindings/{b}';
-};
-
-export type DisableCiBindingErrors = {
-    /**
-     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
-     */
-    401: ErrorEnvelope;
-    /**
-     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
-     */
-    403: ErrorEnvelope;
-    /**
-     * 404 not found — also for other-tenant ids (00 §9.2)
-     */
-    404: ErrorEnvelope;
-    /**
-     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
-     */
-    429: ErrorEnvelope;
-    /**
-     * 503 unavailable — always `Retry-After` (00 §9.2)
-     */
-    503: ErrorEnvelope;
-};
-
-export type DisableCiBindingError = DisableCiBindingErrors[keyof DisableCiBindingErrors];
-
-export type DisableCiBindingResponses = {
-    /**
-     * Binding disabled
-     */
-    204: void;
-};
-
-export type DisableCiBindingResponse = DisableCiBindingResponses[keyof DisableCiBindingResponses];
-
-export type UpdateCiBindingData = {
-    body: UpdateCiBindingRequest;
-    headers: {
-        /**
-         * ETag for optimistic concurrency; stale → 412 (00 §9.1).
-         */
-        'If-Match': string;
-        /**
-         * Client-supplied, ≤ 128 chars, unique per `(org_id, project_id, operation)` ≥ 24 h (00 §7/§9.1).
-         */
-        'Idempotency-Key': string;
-        /**
-         * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
-         */
-        'X-XSRF-TOKEN'?: string;
-    };
-    path: {
-        b: string;
-    };
-    query?: never;
-    url: '/ci-bindings/{b}';
-};
-
-export type UpdateCiBindingErrors = {
-    /**
-     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
-     */
-    401: ErrorEnvelope;
-    /**
-     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
-     */
-    403: ErrorEnvelope;
-    /**
-     * 404 not found — also for other-tenant ids (00 §9.2)
-     */
-    404: ErrorEnvelope;
-    /**
-     * 409 conflict — e.g. `idempotency_conflict`, `run_closed` (00 §9.1/§9.2)
-     */
-    409: ErrorEnvelope;
-    /**
-     * 412 precondition failed — stale ETag; current revision id in `error.details` (00 §9.1/§9.2)
-     */
-    412: ErrorEnvelope;
-    /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
-     */
-    422: ErrorEnvelope;
-    /**
-     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
-     */
-    429: ErrorEnvelope;
-    /**
-     * 503 unavailable — always `Retry-After` (00 §9.2)
-     */
-    503: ErrorEnvelope;
-};
-
-export type UpdateCiBindingError = UpdateCiBindingErrors[keyof UpdateCiBindingErrors];
-
-export type UpdateCiBindingResponses = {
-    /**
-     * The binding in its new state
-     */
-    200: CiBindingView;
-};
-
-export type UpdateCiBindingResponse = UpdateCiBindingResponses[keyof UpdateCiBindingResponses];
 
 export type StartGitHubInstallData = {
     body?: never;

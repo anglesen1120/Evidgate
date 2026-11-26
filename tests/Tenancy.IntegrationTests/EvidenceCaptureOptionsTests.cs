@@ -33,8 +33,6 @@ public sealed partial class EvidenceCaptureOptionsTests : IClassFixture<TenancyH
 
     private const string ProducerId = "shard-1";
 
-    private const string Jti = "jti-capture-options-1";
-
     /// <summary>The object-store configuration the upload route needs: presigning never connects.</summary>
     private static readonly Dictionary<string, string?> ObjectStorage = new(StringComparer.Ordinal)
     {
@@ -421,7 +419,7 @@ public sealed partial class EvidenceCaptureOptionsTests : IClassFixture<TenancyH
 
         var runId = await SeedRunAsync(world);
         var writer = world.ClientFor(RequestPrincipal.Service(
-            projectScope: null, [Permissions.Artifact.Write], credentialId: Jti));
+            projectScope: null, [Permissions.Artifact.Write], credentialId: IngestTestWorld.OwnerId));
 
         var answer = await writer.SendAsync(
             HttpMethod.Post, "/v1/artifacts/upload-url", NoCaller,
@@ -467,9 +465,9 @@ public sealed partial class EvidenceCaptureOptionsTests : IClassFixture<TenancyH
 
         (await scope.ExecuteAsync(
             "insert into public.producer_slot (id, org_id, run_id, shard_index, producer_id, bound_token_jti) "
-            + "values (@id, @org_id, @run_id, 1, @producer_id, @jti)",
+            + "values (@id, @org_id, @run_id, 1, @producer_id, @owner_id)",
             ("id", Guid.CreateVersion7()), ("org_id", world.Org), ("run_id", runId), ("producer_id", ProducerId),
-            ("jti", Jti))).ShouldBe(1);
+            ("owner_id", IngestTestWorld.OwnerId))).ShouldBe(1);
 
         await scope.CommitAsync();
 

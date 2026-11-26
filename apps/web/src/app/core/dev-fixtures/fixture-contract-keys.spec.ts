@@ -8,12 +8,9 @@ import {
   CATALOG,
   CORPUS,
   FIXTURE_ROUTE_ROWS,
-  STOREFRONT_PROJECT_ID,
-  type CiBindingRowShape,
   type RunRowShape,
   corpusDocument,
   keysetTicks,
-  oneTimeSecretMembers,
   readDocument,
 } from './fixture-contract.corpus';
 import { isRecord } from './fixture-contract.support';
@@ -77,7 +74,7 @@ describe('Fixture contract check (09.1.1-T12.2, AC10)', () => {
     }
   });
 
-  it('pins the cursor-keyed CI-binding and run-list walks to their corpus pages (09.7.1-F15, 09.3.1-T1)', () => {
+  it('pins cursor-keyed routes and run-list walks to their corpus pages', () => {
     // A cursor-keyed route answers the catalog row whose `cursor` equals the request's cursor, so
     // Load more reaches a terminal page in a browser. It is only sound when (a) every keyed row
     // names the contract's cursor parameter, (b) each cursor-declaring row continues a page that
@@ -88,7 +85,7 @@ describe('Fixture contract check (09.1.1-T12.2, AC10)', () => {
     expect(
       keyed.map((route) => route.operationId),
       'each cursor-keyed route needs its own page-continuation pin here',
-    ).toEqual(['listProjectAiSettingsVersions', 'listSecurityEvents', 'listCases', 'listCiBindings', 'listRuns', 'listRunAttempts']);
+    ).toEqual(['listProjectAiSettingsVersions', 'listSecurityEvents', 'listCases', 'listRuns', 'listRunAttempts']);
     for (const route of keyed) {
       expect(
         route.cursorQueryParameter,
@@ -101,94 +98,12 @@ describe('Fixture contract check (09.1.1-T12.2, AC10)', () => {
       paged.map((entry) => entry.name),
       'each cursor-keyed walk has exactly one catalog row declaring the request cursor it answers',
     ).toEqual([
-      'ci-bindings-list-settings-page-2',
       'run-attempts-page-2',
       'run-list-page-2',
       'security-events-list-page-2',
       'catalog-cases-page-2',
       'ai-settings-versions-page-2',
     ]);
-    const secondPageRow = paged.find((entry) => entry.name === 'ci-bindings-list-settings-page-2');
-    if (secondPageRow === undefined || secondPageRow.cursor === undefined) {
-      throw new Error(
-        'the second CI-binding page declares no cursor, so Load more cannot answer it',
-      );
-    }
-    const cursor = secondPageRow.cursor;
-
-    const first = corpusDocument('ci-bindings-list-settings-page-1');
-    const second = corpusDocument('ci-bindings-list-settings-page-2');
-    expect([first.operation_id, first.variant, first.status]).toEqual([
-      'listCiBindings',
-      'settings-page-1',
-      200,
-    ]);
-    expect([second.operation_id, second.variant, second.status]).toEqual([
-      'listCiBindings',
-      'settings-page-2',
-      200,
-    ]);
-
-    const firstBody = first.body as {
-      items: CiBindingRowShape[];
-      next_cursor: string | null;
-    };
-    const secondBody = second.body as {
-      items: CiBindingRowShape[];
-      next_cursor: string | null;
-    };
-    expect(firstBody.items.length, 'the first page holds no binding to click past').toBeGreaterThan(
-      0,
-    );
-    expect(secondBody.items.length, 'the second page holds no binding to append').toBeGreaterThan(
-      0,
-    );
-    expect(
-      firstBody.next_cursor,
-      'the first page must name exactly the cursor the backend answers, or Load more 501s',
-    ).toBe(cursor);
-    expect(secondBody.next_cursor, 'the last page must end the walk').toBeNull();
-
-    // A real keyset cursor over `(created_at, id)` of the row it follows — `<utc ticks>-<uuid>` —
-    // not an opaque string a test made up.
-    const lastOfFirstPage = firstBody.items[firstBody.items.length - 1];
-    if (lastOfFirstPage === undefined) {
-      throw new Error('the first CI-binding page is empty');
-    }
-    expect(cursor, 'the cursor must be the keyset position of the row it follows').toBe(
-      `${keysetTicks(lastOfFirstPage.created_at)}-${lastOfFirstPage.id}`,
-    );
-
-    const rows = [...firstBody.items, ...secondBody.items];
-    const ids = rows.map((item) => item.id);
-    expect(
-      new Set(ids).size,
-      'a binding id appears on both pages, so the store would drop the second copy silently',
-    ).toBe(ids.length);
-    expect(
-      [...new Set(rows.map((item) => item.project_id))],
-      'both pages must belong to the Storefront web project the tab read',
-    ).toEqual([STOREFRONT_PROJECT_ID]);
-    expect(
-      new Set(firstBody.items.map((item) => item.status)),
-      'the first page must still cover every verification state',
-    ).toEqual(new Set(['active', 'pending_verification', 'disabled']));
-    // An activation can never precede the binding's creation: the OIDC handshake that activates a
-    // pending binding happens after it exists. Same-second RFC 3339 UTC instants compare as strings.
-    for (const row of rows) {
-      if (row.activated_at === undefined || row.activated_at === null) {
-        continue;
-      }
-      expect(
-        row.activated_at >= row.created_at,
-        `${row.id} is activated at ${row.activated_at}, before it was created at ${row.created_at}`,
-      ).toBe(true);
-    }
-    expect(oneTimeSecretMembers(second.body)).toEqual([]);
-
-    // 09.3.1-T1: the second cursor-keyed walk. `listRuns` answers `run-list-page-2` for the
-    // `next_cursor` `run-list-page-1` names, so the Runs list's Load more appends a second page
-    // instead of being answered with page 1 again (which the store refuses as a repeated cursor).
     const runSecondPageRow = paged.find((entry) => entry.name === 'run-list-page-2');
     if (runSecondPageRow === undefined || runSecondPageRow.cursor === undefined) {
       throw new Error('the second run-list page declares no cursor, so Load more cannot answer it');
@@ -240,7 +155,6 @@ describe('Fixture contract check (09.1.1-T12.2, AC10)', () => {
       'a run appears on both pages, so the store would drop the second copy silently',
     ).toBe(runIds.length);
 
-    // 09.3.1-T4: the third cursor-keyed walk, the run detail's attempts keyset.
     const attemptsSecondRow = paged.find((entry) => entry.name === 'run-attempts-page-2');
     const attemptsFirst = corpusDocument('run-attempts-page-1').body as RunAttemptPage;
     const attemptsSecond = corpusDocument('run-attempts-page-2').body as RunAttemptPage;

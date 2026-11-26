@@ -35,11 +35,6 @@ namespace Evidgate.Modules.Evidence.Application;
 /// types and the capture switch; the row is passed to the shared resolution whole, so the mint's and the
 /// completion's resolution of one artifact cannot differ.
 /// </param>
-/// <param name="BoundCiRunRef">
-/// The CI reference of the artifact's run in the <see cref="CiRunReference.ToBindingReference"/> form
-/// (<c>{repository_id}/{run_id}/{run_attempt}</c>, T88), or null when the run carries none (a manual or replay
-/// run). It is what a service principal's own CI run is compared with (S-F1).
-/// </param>
 internal sealed record ArtifactFacts(
     string? State,
     long? Bytes,
@@ -53,8 +48,7 @@ internal sealed record ArtifactFacts(
     long? MaxBytes,
     string[]? MediaTypes,
     bool? CaptureEnabled,
-    string? DefaultSensitivity,
-    string? BoundCiRunRef);
+    string? DefaultSensitivity);
 
 /// <summary>
 /// The endpoint-side verification of one completion (06.1.2 §5, T86 steps 1-4), run BEFORE the writer command
@@ -98,11 +92,9 @@ internal sealed partial class ArtifactCompletionVerifier(
     private const string ChecksumPrefix = "sha256:";
 
     /// <summary>
-    /// The row facts of one artifact, the project status, the run's CI reference and the kind policy as one
-    /// statement: the artifact is visible to the scope's org through RLS, the project join also fails for another
-    /// tenant, the run join recovers the CI reference the run was created from (S-F1; the composite
-    /// <c>artifact_run_fk</c> makes it one row), and the policy is left-joined so a project without one is still a
-    /// row (and fails closed later).
+    /// The row facts of one artifact, the project status and the kind policy as one statement: the artifact is
+    /// visible to the scope's org through RLS, the project join also fails for another tenant, and the policy is
+    /// left-joined so a project without one is still a row (and fails closed later).
     /// </summary>
     private const string RowFactsSql = """
         select a.state,
@@ -117,11 +109,9 @@ internal sealed partial class ArtifactCompletionVerifier(
                kp.max_bytes,
                kp.media_types,
                kp.capture_enabled,
-               kp.default_sensitivity,
-               (r.ci_run_ref->>'repository_id') || '/' || (r.ci_run_ref->>'run_id') || '/' || (r.ci_run_ref->>'run_attempt') as bound_ci_run_ref
+               kp.default_sensitivity
           from public.artifact a
           join public.project p on p.id = a.project_id
-          join public.run r on r.org_id = a.org_id and r.id = a.run_id
           left join public.artifact_kind_policy kp
             on kp.org_id = a.org_id
            and kp.project_id = a.project_id
@@ -132,7 +122,7 @@ internal sealed partial class ArtifactCompletionVerifier(
     /// <summary>
     /// Verifies the object of one artifact (06.1.2 §5, T86): 403 when the caller is refused (no project in the
     /// credential, or the C2 <c>artifact:write</c> decision the pipeline would reach), 404 for an artifact that
-    /// does not exist in that project or whose run belongs to another CI run than the caller's (S-F1), 409 for a
+    /// does not exist in that project, 409 for a
     /// project being deleted or a state that allows no completion, and otherwise the verdict the writer commits —
     /// a verified length, or a rejection carrying its reason.
     /// </summary>
@@ -189,21 +179,6 @@ internal sealed partial class ArtifactCompletionVerifier(
         // RLS already hides another tenant's row; the project comparison hides another project's row of the same
         // org, so an unknown, a foreign and a foreign-project id are one answer and never an oracle.
         if (facts is null || facts.ProjectId != projectId)
-        {
-            return Result.Failure<ArtifactCompletionVerdict>(EvidenceErrors.ArtifactNotFound);
-        }
-
-        // S-F1: the completion is bound to the artifact's run. The artifact row names its run; the run row carries
-        // the CI reference it was created from (T88), which is the identity the minting producer's slot was bound
-        // to (T9/T85). A service token minted for another CI run of the same project therefore cannot force a
-        // terminal verdict on an upload in flight — it gets the identical 404 an unknown id gets, so a foreign id
-        // and a foreign CI run are one answer and never an oracle. Only a service principal is bound (a member
-        // carries no CI run), and only when the run has a CI reference to compare: a run created without one (a
-        // manual or replay run) leaves the caller unbound rather than falsely refused. It runs before the stored
-        // outcomes below so a foreign token can never read them back.
-        if (principal.Kind == PrincipalKind.ServicePrincipal
-            && facts.BoundCiRunRef is { } boundCiRun
-            && !string.Equals(boundCiRun, principal.CiRun?.ToBindingReference(), StringComparison.Ordinal))
         {
             return Result.Failure<ArtifactCompletionVerdict>(EvidenceErrors.ArtifactNotFound);
         }

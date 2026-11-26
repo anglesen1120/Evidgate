@@ -187,7 +187,6 @@ public static class EvidenceEndpoints
                 request.Bytes,
                 request.Sha256,
                 principal.CredentialId,
-                principal.CiRun?.ToBindingReference(),
                 IdempotencyKey(context)),
             cancellationToken).ConfigureAwait(false);
     }

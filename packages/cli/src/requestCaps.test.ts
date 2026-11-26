@@ -98,7 +98,7 @@ const sends: Record<string, Send> = {
       bodySerializer: () => body,
     }),
   'POST /ci/token': (client, body) =>
-    exchangeCiToken({ client, body: {}, bodySerializer: () => body }),
+    exchangeCiToken({ client, body: { ingest_token: 'ingest' }, bodySerializer: () => body }),
   'POST /artifacts/upload-url': (client, body) =>
     createArtifactUploadUrl({
       client,
@@ -185,16 +185,15 @@ describe('request body caps', () => {
     });
   });
 
-  it('keeps a real exchange body far under 4096 (the GitHub OIDC JWT travels as a bearer)', async () => {
-    // egt_<12-char prefix>_<43-char base64url secret> plus a 128-char one-time challenge.
+  it('keeps a real project ingest exchange body far under 4096 bytes', async () => {
     const ingest = `egt_${'a'.repeat(12)}_${'b'.repeat(43)}`;
-    const body = JSON.stringify({ ingest_token: ingest, binding_challenge: 'c'.repeat(128) });
+    const body = JSON.stringify({ ingest_token: ingest });
     expect(Buffer.byteLength(body)).toBeLessThan(maxTokenExchangeBytes / 10);
     const transport = recorder();
     const client = createApiClient(config, marker, transport.fetch);
     await exchangeCiToken({
       client,
-      body: { ingest_token: ingest, binding_challenge: 'c'.repeat(128) },
+      body: { ingest_token: ingest },
     });
     expect(transport.calls()).toBe(1);
   });

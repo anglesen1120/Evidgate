@@ -63,13 +63,6 @@ public static partial class IsolationRouteCases
                 Pair(route, "org A project web in {p}", ProbeExpect.ServiceRefused, OrgBService(w),
                     Register(w.Acme.Projects[0].Id, w.Acme.GithubInstallationId, ProbeRepositoryId),
                     Register(Guid.CreateVersion7(), UnownedInstallationId, ProbeRepositoryId)),
-                new(route, "sibling project api of the OIDC token's org", runner => runner.ScopeMismatchAsync(
-                    route, "sibling project api of the OIDC token's org", OrgBServiceOidc(w),
-                    Register(w.Acme2.Projects[1].Id, w.Acme2.GithubInstallationId, ProbeRepositoryId),
-                    requireScopeCode: false)),
-                Pair(route, "org A project web in {p} (OIDC token)", ProbeExpect.ServiceRefused, OrgBServiceOidc(w),
-                    Register(w.Acme.Projects[0].Id, w.Acme.GithubInstallationId, ProbeRepositoryId),
-                    Register(Guid.CreateVersion7(), UnownedInstallationId, ProbeRepositoryId)),
             ]);
     }
 

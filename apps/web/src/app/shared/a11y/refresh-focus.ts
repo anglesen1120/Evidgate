@@ -16,8 +16,6 @@ import { signal } from '@angular/core';
 export interface RefreshFocusHandoff {
   /** The control the press was made with. */
   readonly control: HTMLElement;
-  /** The panel the control belongs to: its heading takes the place when the control is gone. */
-  readonly panel: 'binding' | 'token';
   /** The scope the press was made in; a read that answers another scope moves no focus. */
   readonly version: number;
   /** Set by a focus that moved after the press; that focus belongs to the visitor and is kept. */
@@ -28,22 +26,17 @@ export interface RefreshFocusHandoff {
 /**
  * Records the control a re-read may take away, or `null` when focus is not on one of the page's own
  * controls: nothing of ours was taken away, so nothing is owed.
- *
- * `panelOf` names the panel a control belongs to, because the heading that takes the place back is
- * the one of the panel the control was part of.
  */
 export function captureRefreshFocus(
   document: Document,
   host: HTMLElement,
   version: number,
-  panelOf: (control: HTMLElement) => 'binding' | 'token',
 ): RefreshFocusHandoff | null {
   const active = document.activeElement;
   if (!(active instanceof HTMLElement) || active === document.body) return null;
   if (!host.contains(active)) return null;
   const handoff: RefreshFocusHandoff = {
     control: active,
-    panel: panelOf(active),
     version,
     superseded: false,
     watch: (event: FocusEvent): void => {
@@ -63,14 +56,14 @@ export function releaseRefreshFocus(document: Document, handoff: RefreshFocusHan
 /**
  * Puts the visitor's place back, but only when the re-read took it.
  *
- * `headings` is resolved by the caller so a heading that a render has not mounted yet is simply
+ * The fallback heading is resolved by the caller so a heading that is not mounted is simply
  * absent, and a handoff that answers another scope (`version`) moves nothing.
  */
 export function restoreRefreshFocus(
   document: Document,
   handoff: RefreshFocusHandoff,
   version: number,
-  headings: { readonly binding: HTMLElement | undefined; readonly token: HTMLElement | undefined },
+  fallback: HTMLElement | undefined,
 ): void {
   if (handoff.version !== version) return;
   const active = document.activeElement;
@@ -85,7 +78,7 @@ export function restoreRefreshFocus(
   // Only a focus that moved to another control is the visitor's own; focus still on the control
   // the read made unusable, or dropped on `<body>`, is the place this handoff puts back.
   if (active !== null && active !== document.body && active !== control) return;
-  (handoff.panel === 'token' ? headings.token : headings.binding)?.focus();
+  fallback?.focus();
 }
 
 /**
@@ -99,12 +92,8 @@ export class RefreshFocusSession {
   constructor(private readonly document: Document) {}
 
   /** Records the place the read may take; a read with nothing of the page's focused holds none. */
-  capture(
-    host: HTMLElement,
-    version: number,
-    panelOf: (control: HTMLElement) => 'binding' | 'token',
-  ): void {
-    this.pending = captureRefreshFocus(this.document, host, version, panelOf);
+  capture(host: HTMLElement, version: number): void {
+    this.pending = captureRefreshFocus(this.document, host, version);
   }
 
   /** Moves the held place on to the pass that spends it, once the read has settled. */

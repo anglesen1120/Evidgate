@@ -203,28 +203,10 @@ export async function devEnv(
   };
 }
 
-/**
- * An OIDC source: `getToken` cannot treat the far-future expiry as fresh on the virtual
- * clock, so every call exchanges and the stub can hand out a different token each time.
- */
-export async function oidcEnv(
-  dirs: CacheDirs,
-  extra: Record<string, string> = {},
-): Promise<Record<string, string> & { EVIDGATE_CACHE_DIR: string }> {
-  return {
-    EVIDGATE_API_URL: 'https://api.evidgate.test',
-    EVIDGATE_PROJECT: project,
-    EVIDGATE_OIDC_TOKEN: 'jwt-value',
-    EVIDGATE_CACHE_DIR: await dirs.next(),
-    ...extra,
-  };
-}
-
-/** An ingest source: the only one besides a fresh Actions ID token that may mint twice. */
 export async function ingestEnv(
   dirs: CacheDirs,
   extra: Record<string, string> = {},
-): Promise<Record<string, string>> {
+): Promise<Record<string, string> & { EVIDGATE_CACHE_DIR: string }> {
   return {
     EVIDGATE_API_URL: 'https://api.evidgate.test',
     EVIDGATE_PROJECT: project,

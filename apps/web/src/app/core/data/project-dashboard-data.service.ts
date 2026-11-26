@@ -3,7 +3,6 @@ import {
   listRuns,
   listProjectWaivers,
   listQuarantineEntries,
-  listCiBindings,
   listAuthoringTree,
   listManualCases,
   listAuthoringChanges,
@@ -50,11 +49,6 @@ export class ProjectDashboardDataService {
   quarantine(project: string, signal: AbortSignal) {
     return this.gateway.call((client) =>
       listQuarantineEntries({ client, path: { p: project }, query: { limit: 10 }, signal }),
-    );
-  }
-  bindings(project: string, signal: AbortSignal) {
-    return this.gateway.call((client) =>
-      listCiBindings({ client, path: { p: project }, query: { limit: 10 }, signal }),
     );
   }
   tree(project: string, signal: AbortSignal) {

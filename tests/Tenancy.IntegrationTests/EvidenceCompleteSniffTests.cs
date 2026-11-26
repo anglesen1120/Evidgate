@@ -50,9 +50,6 @@ public sealed partial class EvidenceCompleteSniffTests(PostgresTenancyFixture fi
     /// <summary>A declared type the sniff table does not know (06.3.1-T2.2 fail closed): it can never become evidence.</summary>
     private const string OutOfTableType = "application/octet-stream";
 
-    /// <summary>The caller's token id (the slot-binding identity, T9).</summary>
-    private const string Jti = "jti-complete-sniff-1";
-
     private const string ProducerId = "shard-1";
 
     /// <summary>The kind-policy cap every seeded policy row carries; every uploaded body is well under it.</summary>
@@ -100,8 +97,8 @@ public sealed partial class EvidenceCompleteSniffTests(PostgresTenancyFixture fi
     }
 
     /// <summary>A service principal holding <c>artifact:write</c> and a token id (the slot-binding identity).</summary>
-    private static RequestPrincipal Writer(string jti = Jti) =>
-        RequestPrincipal.Service(projectScope: null, [Permissions.Artifact.Write], credentialId: jti);
+    private static RequestPrincipal Writer() =>
+        RequestPrincipal.Service(projectScope: null, [Permissions.Artifact.Write], credentialId: IngestTestWorld.OwnerId);
 
     /// <summary>
     /// The shared database with this test's own org and a project created through the real registry routes, plus a host

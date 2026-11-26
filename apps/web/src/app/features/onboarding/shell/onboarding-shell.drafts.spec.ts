@@ -1,5 +1,5 @@
 import type { IngestTokenCreatedResponse } from '@evidgate/sdk';
-import { provideZonelessChangeDetection, signal } from '@angular/core';
+import { provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { ActivatedRoute, convertToParamMap, Router, RouterLink } from '@angular/router';
@@ -25,10 +25,6 @@ import {
 } from './onboarding-shell.spec-support';
 
 const DRAFTS: Readonly<Record<string, string>> = {
-  'connect-oidc-repo-id': '123',
-  'connect-oidc-repo-name': 'review-draft/web',
-  'connect-oidc-refs': 'refs/heads/draft',
-  'connect-oidc-workflows': 'review-draft/web/.github/workflows/ci.yml@refs/heads/draft',
   'connect-token-name': 'review-draft token',
 };
 
@@ -48,11 +44,6 @@ describe('onboarding session connection drafts', () => {
         viewStep: 2,
         done: { 1: true, 2: true, 3: true, 4: true, 5: false },
       }),
-      bindings: signal([]),
-      tokens: signal([]),
-      bindingsTruncated: signal(false),
-      tokensTruncated: signal(false),
-      refresh: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
     };
     await TestBed.configureTestingModule({
       imports: [OnboardingShellComponent],
@@ -60,7 +51,13 @@ describe('onboarding session connection drafts', () => {
         provideZonelessChangeDetection(),
         provideDesktopOnboardingViewport(),
         { provide: OnboardingStore, useValue: store },
-        { provide: OnboardingDataService, useValue: { createIngestToken } },
+        {
+          provide: OnboardingDataService,
+          useValue: {
+            createIngestToken,
+            listIngestTokens: vi.fn().mockResolvedValue({ items: [], next_cursor: null }),
+          },
+        },
         {
           provide: SessionStore,
           useValue: {

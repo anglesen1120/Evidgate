@@ -16,7 +16,6 @@ import {
   ingestEnv,
   invoke,
   jsonResponse,
-  oidcEnv,
   project,
   refusal,
   runId,
@@ -119,16 +118,14 @@ describe('gate token refresh', () => {
     expect(out.stderr.join('')).toContain('error token_invalid');
   });
 
-  it('refreshes from an unused OIDC credential when a cached token is refused', async () => {
-    const env = await oidcEnv(dirs);
-    // A cached token proves the JWT the cache was minted from is not spent by this run, so
-    // the refused token can be replaced by a fresh exchange.
+  it('refreshes from the ingest credential when a cached token is refused', async () => {
+    const env = await ingestEnv(dirs);
     await writeCachedToken(
       {
         apiUrl: 'https://api.evidgate.test',
         project,
         cacheDir: env.EVIDGATE_CACHE_DIR,
-        oidcToken: env.EVIDGATE_OIDC_TOKEN,
+        ingestToken: env.EVIDGATE_INGEST_TOKEN,
       },
       // Ten minutes ahead of the virtual clock the command runs on, so the entry reads fresh.
       { token: 'egt-cached', expiresAt: new Date(10 * 60_000).toISOString() },
@@ -154,17 +151,16 @@ describe('gate token refresh', () => {
   });
 
   it('keeps the 401 when the refresh itself is refused', async () => {
-    const env = await oidcEnv(dirs);
+    const env = await ingestEnv(dirs);
     let exchanges = 0;
     const stub = stubFetch((request) => {
       if (!request.url.endsWith('/v1/ci/token')) {
         return refusal(401, 'token_invalid');
       }
       exchanges += 1;
-      // The second exchange replays a single-use JWT, which the server refuses.
       return exchanges === 1
         ? jsonResponse(200, exchangeBody('egt-token-1'))
-        : refusal(403, 'token_replayed', { message: 'this credential was already exchanged' });
+        : refusal(403, 'forbidden', { message: 'the ingest credential is no longer authorized' });
     });
     const out = capture();
 
@@ -173,6 +169,6 @@ describe('gate token refresh', () => {
     expect(code).toBe(3);
     // The decision's refusal explains the failure, not the replay the recovery attempted.
     expect(out.stderr.join('')).toContain('error token_invalid');
-    expect(out.stderr.join('')).not.toContain('token_replayed');
+    expect(out.stderr.join('')).not.toContain('error forbidden');
   });
 });

@@ -6,8 +6,8 @@ namespace Evidgate.Migrator;
 
 /// <summary>
 /// <c>Evidgate.Migrator seed-dev</c>: the minimal synthetic tenant that makes a fresh local stack usable before login
-/// exists — one org, one project, a dev user with the <c>tenant_admin</c> and <c>release_approver</c> roles, and one
-/// active CI binding for the dev repository. It runs as the owner role in one transaction and is idempotent (fixed ids,
+/// exists — one org, one project and a dev user with the <c>tenant_admin</c> and <c>release_approver</c> roles. It
+/// runs as the owner role in one transaction and is idempotent (fixed ids,
 /// <c>on conflict do nothing</c>), so running it twice leaves the same rows.
 /// </summary>
 /// <remarks>
@@ -40,12 +40,6 @@ public static class DevSeed
     /// <summary>The dev user's membership.</summary>
     public static readonly Guid MembershipId = Guid.Parse("0198a000-0000-7000-8000-00000000d004");
 
-    /// <summary>The dev CI binding.</summary>
-    public static readonly Guid BindingId = Guid.Parse("0198a000-0000-7000-8000-00000000d005");
-
-    /// <summary>The synthetic repository id of the dev binding.</summary>
-    public const long DevRepositoryId = 9_000_000_000_001;
-
     /// <summary>The name of the seeded ingest token; the rerun check looks for a live token under exactly this name.</summary>
     public const string TokenName = "dev-seed";
 
@@ -77,14 +71,6 @@ public static class DevSeed
         select case r.code when 'tenant_admin' then @grant_admin else @grant_approver end, @org, @membership, r.id
           from public.role r
          where r.org_id is null and r.code in ('tenant_admin', 'release_approver')
-        on conflict (id) do nothing;
-
-        insert into public.ci_binding (id, org_id, project_id, provider, repository_id, repository_full_name,
-                                       allowed_ref_patterns, allowed_workflow_refs, status, activated_at)
-        values (@binding, @org, @project, 'github_actions', @repository, 'evidgate-dev/sample',
-                array['refs/heads/*', 'refs/tags/*'],
-                array['evidgate-dev/sample/.github/workflows/*@refs/heads/*'],
-                'active', now())
         on conflict (id) do nothing;
         """;
 
@@ -172,8 +158,6 @@ public static class DevSeed
             command.Parameters.AddWithValue("user", UserId);
             command.Parameters.AddWithValue("email", UserEmail);
             command.Parameters.AddWithValue("membership", MembershipId);
-            command.Parameters.AddWithValue("binding", BindingId);
-            command.Parameters.AddWithValue("repository", DevRepositoryId);
             command.Parameters.AddWithValue("grant_admin", Guid.Parse("0198a000-0000-7000-8000-00000000d006"));
             command.Parameters.AddWithValue("grant_approver", Guid.Parse("0198a000-0000-7000-8000-00000000d007"));
             var changed = command.ExecuteNonQuery();
@@ -181,7 +165,7 @@ public static class DevSeed
 
             output.WriteLine(string.Create(
                 CultureInfo.InvariantCulture,
-                $"seed-dev: org dev-org / project dev-project / user {UserId} / binding for repository {DevRepositoryId} ({changed} row(s) written; 0 means already seeded)"));
+                $"seed-dev: org dev-org / project dev-project / user {UserId} ({changed} row(s) written; 0 means already seeded)"));
 
             return MigratorExitCodes.Success;
         }

@@ -38,7 +38,7 @@ import {
   LoadingPatternComponent,
   NotFoundPatternComponent,
 } from '../../../shared/ui/states';
-import type { StepNumber } from '../data/step-derivation';
+import { REQUIRED_STEPS, type StepNumber } from '../data/step-derivation';
 import { OnboardingStore } from '../onboarding.store';
 import { OnboardingRecordDialogComponent } from '../onboarding-record-view.component';
 import { CreateProjectPage } from '../steps/create-project.page';
@@ -100,14 +100,12 @@ export class OnboardingShellComponent {
   protected readonly outlineVariant = 'outline';
   protected readonly sectionHeadingSize = 'section' as const;
   protected readonly loadingLabel = $localize`:@@onboarding.shell.loading:Loading project setup`;
-  protected readonly completedCount = computed(() =>
-    completedStepCount(this.store.done(), this.steps),
-  );
+  /** Credentials are optional, so the count and its total cover the required steps only. */
+  protected readonly requiredTotal = REQUIRED_STEPS.length;
+  protected readonly completedCount = computed(() => completedStepCount(this.store.done()));
   protected readonly progressText = computed(() =>
-    completionSummary(this.completedCount(), this.steps.length),
+    completionSummary(this.completedCount(), this.requiredTotal),
   );
-  protected readonly bindingsMetric = $localize`:@@onboarding.evidence.bindings:CI bindings`;
-  protected readonly tokensMetric = $localize`:@@onboarding.evidence.tokens:Ingest tokens`;
   protected readonly headerFacts = computed(() =>
     [this.store.project()?.name, this.viewedSummary(), this.progressText()]
       .filter(Boolean)

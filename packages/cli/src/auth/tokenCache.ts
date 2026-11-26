@@ -28,7 +28,7 @@ import {
 } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 
-import { resolveTokenSource, type ResolvedConfig } from '../config.js';
+import type { ResolvedConfig } from '../config.js';
 import { CliError, escapeControlCharacters } from '../errors.js';
 import { registerSecret } from '../redact.js';
 
@@ -55,9 +55,6 @@ export interface CachedToken {
  * always keys that credential's own entry.
  */
 export type TokenCacheConfig = Pick<ResolvedConfig, 'apiUrl' | 'project' | 'cacheDir'> & {
-  readonly oidcToken?: string | undefined;
-  readonly actionsIdTokenRequestUrl?: string | undefined;
-  readonly actionsIdTokenRequestToken?: string | undefined;
   readonly ingestToken?: string | undefined;
   readonly devToken?: string | undefined;
 };
@@ -108,32 +105,12 @@ interface CredentialBinding {
   readonly credential: string;
 }
 
-/**
- * Binds the entry to the credential the exchange presents. A dev token keys the ingest kind, so
- * a purge with the raw dev config deletes what the read wrote; an actions ID token is fetched
- * per run, so that source binds to its request URL (stable within a job, distinct per run), and
- * its per-run request token is deliberately not part of the key.
- */
+/** A dev token is a seeded ingest credential, so it must key the same file during a purge. */
 function credentialBinding(config: TokenCacheConfig): CredentialBinding {
-  const source = resolveTokenSource({
-    oidcToken: config.oidcToken,
-    actionsIdTokenRequestUrl: config.actionsIdTokenRequestUrl,
-    actionsIdTokenRequestToken: config.actionsIdTokenRequestToken,
-    ingestToken: config.ingestToken,
-    devToken: config.devToken,
-  });
-  switch (source) {
-    case 'oidc':
-      return { kind: 'oidc', credential: config.oidcToken ?? '' };
-    case 'actions-id-token':
-      return { kind: 'actions-id-token', credential: config.actionsIdTokenRequestUrl ?? '' };
-    case 'ingest':
-      return { kind: 'ingest', credential: config.ingestToken ?? '' };
-    case 'dev':
-      return { kind: 'ingest', credential: config.devToken ?? '' };
-    default:
-      return { kind: 'none', credential: '' };
-  }
+  const credential = config.ingestToken ?? config.devToken;
+  return credential === undefined
+    ? { kind: 'none', credential: '' }
+    : { kind: 'ingest', credential };
 }
 
 /**

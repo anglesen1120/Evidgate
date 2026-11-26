@@ -6,29 +6,15 @@ import type { IngestTokenView } from '@evidgate/sdk';
 
 import type { RevealSlot } from '../../../shared/ui/reveal/one-time-reveal.slot';
 import type { ConnectCiPage } from './connect-ci.page';
-import {
-  BINDING,
-  TOKEN,
-  CHALLENGE,
-  SECRET,
-  createConnectionPageContext,
-} from './connect-ci.page.test-support';
+import { OnboardingRecordDialogComponent } from '../onboarding-record-view.component';
+import { requiredElement } from './step-controls.testing';
+import { TOKEN, SECRET, createConnectionPageContext } from './connect-ci.page.test-support';
 
 registerLocaleData(localeVi);
 
 describe.each(['en-US', 'vi'])('ConnectCiPage health and CLI composition (%s)', (locale) => {
   const context = createConnectionPageContext();
-  const {
-    bindings,
-    tokens,
-    canGoNext,
-    createCiBinding,
-    createIngestToken,
-    rotateIngestToken,
-    refresh,
-    fill,
-    submit,
-  } = context;
+  const { tokens, createIngestToken, rotateIngestToken, refresh, fill, submit } = context;
   let fixture: ComponentFixture<ConnectCiPage>;
   let root: HTMLElement;
   let slot: RevealSlot;
@@ -40,15 +26,14 @@ describe.each(['en-US', 'vi'])('ConnectCiPage health and CLI composition (%s)', 
     root = context.root;
     slot = context.slot;
   });
-  it('derives connection health from the loaded lists and mounts the CLI quickstart', async () => {
-    bindings.set([BINDING]);
+  it('derives connection health from the token inventory and mounts the CLI quickstart', async () => {
     // A token without an expiry stays usable whatever the wall clock says on the test host.
     tokens.set([{ ...TOKEN, expires_at: null }]);
     await fixture.whenStable();
     const health = root.querySelector('[data-testid="connection-health"]');
     expect(health).not.toBeNull();
     expect(health?.getAttribute('data-health-state')).toBe('healthy');
-    expect(root.querySelectorAll('[data-testid="connection-health-credential"]')).toHaveLength(2);
+    expect(root.querySelectorAll('[data-testid="connection-health-credential"]')).toHaveLength(1);
     const quickstart = root.querySelector('[data-testid="cli-quickstart"]');
     expect(quickstart).not.toBeNull();
     const snippet = quickstart?.querySelector('[data-testid="cli-quickstart-snippet"]');
@@ -56,17 +41,28 @@ describe.each(['en-US', 'vi'])('ConnectCiPage health and CLI composition (%s)', 
     expect(snippet?.textContent).toContain('Build upload');
     expect(snippet?.textContent).toContain('egt_prefix');
     expect(snippet?.textContent).toContain('acme-web');
-    expect(createCiBinding).not.toHaveBeenCalled();
     expect(createIngestToken).not.toHaveBeenCalled();
     expect(rotateIngestToken).not.toHaveBeenCalled();
   });
 
-  it('renders credential creation through the shared calendar with seconds and raw provenance', async () => {
+  it('renders the token creation instant in the record with seconds and raw provenance', async () => {
     const supplied = '2026-01-01T00:15:04+07:00';
-    bindings.set([{ ...BINDING, created_at: supplied }]);
+    tokens.set([{ ...TOKEN, created_at: supplied }]);
+    const viewer = TestBed.createComponent(OnboardingRecordDialogComponent);
+    viewer.componentRef.setInput('scope', `org-1:${TOKEN.project_id}`);
+    viewer.componentRef.setInput('progress', null);
+    viewer.componentRef.setInput('step', 2);
+    fixture.componentInstance.viewRecord.subscribe((record) =>
+      viewer.componentInstance.open(record),
+    );
     await fixture.whenStable();
-    const time = root.querySelector(`time[datetime="${supplied}"]`);
-    expect(time?.textContent).toBe(
+    requiredElement<HTMLButtonElement>(
+      root,
+      `[data-testid="connect-token-row"] button[aria-label="View ${TOKEN.name}"]`,
+    ).click();
+    await viewer.whenStable();
+    const time = requiredElement(document.body, `[role="dialog"] time[datetime="${supplied}"]`);
+    expect(time.textContent).toBe(
       locale === 'vi' ? '17:15:04 31/12/2025' : '12/31/2025, 5:15:04\u202fPM',
     );
   });
@@ -121,7 +117,6 @@ describe.each(['en-US', 'vi'])('ConnectCiPage health and CLI composition (%s)', 
         expect(panel.getAttribute('data-health-state')).toBe('unhealthy');
         expect(snippet.textContent).toContain('Create an ingest token first');
         expect(tokens()).toBe(listed);
-        expect(canGoNext()).toBe(true);
         expect(refresh).not.toHaveBeenCalled();
       } finally {
         fixture.destroy();
@@ -173,26 +168,11 @@ describe.each(['en-US', 'vi'])('ConnectCiPage health and CLI composition (%s)', 
     }
   });
 
-  it('references an OIDC binding by repository name when no token is usable', async () => {
-    bindings.set([BINDING]);
-    await fixture.whenStable();
-    expect(
-      root.querySelector('[data-testid="connection-health"]')?.getAttribute('data-health-state'),
-    ).toBe('pending');
-    const snippet = root.querySelector('[data-testid="cli-quickstart-snippet"]');
-    expect(snippet?.textContent).toContain('acme/web');
-    expect(snippet?.textContent).toContain('EVIDGATE_BINDING_CHALLENGE');
-    // The challenge value itself is never in this snippet, only the variable name.
-    expect(snippet?.textContent).not.toContain(CHALLENGE);
-  });
-
-  it('shows an unhealthy connection for a revoked-only project while step 2 stays done', async () => {
+  it('shows an unhealthy connection for a revoked-only project without offering rotation', async () => {
     tokens.set([{ ...TOKEN, status: 'revoked' }]);
     await fixture.whenStable();
     const health = root.querySelector('[data-testid="connection-health"]');
     expect(health?.getAttribute('data-health-state')).toBe('unhealthy');
-    // Presence still completes step 2: the health panel reports, it does not gate.
-    expect(canGoNext()).toBe(true);
     expect(root.querySelector('[data-testid="connect-token-row"]')).not.toBeNull();
     expect(root.querySelector('[data-testid="connect-token-rotate"]')).toBeNull();
     expect(root.querySelector('[data-testid="cli-quickstart"]')?.textContent).toContain(
@@ -206,7 +186,7 @@ describe.each(['en-US', 'vi'])('ConnectCiPage health and CLI composition (%s)', 
       return Promise.resolve();
     });
     await fill({ 'connect-token-name': 'Build upload' });
-    await submit('token');
+    await submit();
     expect(slot.current()).toEqual({ source: 'ingest-token', value: SECRET });
     expect(root.querySelector<HTMLInputElement>('[data-testid="reveal-value"]')?.value).toBe(
       SECRET,

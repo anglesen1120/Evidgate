@@ -24,7 +24,7 @@ namespace Evidgate.Modules.Evidence.Application;
 /// kind policy are checked, then the row is minted and its staging key presigned. <c>org_id</c> and
 /// <c>project_id</c> are never command members — they come from the C2 tenant transaction (00 §5.4.1, T3).
 /// <para>
-/// <paramref name="CredentialId"/> and <paramref name="CiRunRef"/> are the caller's token identity, resolved by the
+/// <paramref name="CredentialId"/> is the caller's stable credential id, resolved by the
 /// endpoint from <c>IRequestPrincipalAccessor</c> and passed in so the handler can bind the producer slot (T9/T85)
 /// without a second principal lookup. They are server-derived, never request input, and are part of the idempotency
 /// hash: a replay of the same <c>Idempotency-Key</c> by a different token identity is a 409
@@ -40,8 +40,7 @@ namespace Evidgate.Modules.Evidence.Application;
 /// <param name="MediaType">The declared media type, 1–255 characters.</param>
 /// <param name="DeclaredBytes">The declared size in bytes, greater than zero.</param>
 /// <param name="Checksum">The declared content address, <c>sha256:&lt;64 lowercase hex&gt;</c>.</param>
-/// <param name="CredentialId">The caller's token id (<c>jti</c>), or null when it has none.</param>
-/// <param name="CiRunRef">The caller's GitHub run reference, or null for a non-CI caller.</param>
+/// <param name="CredentialId">The caller's authenticated credential id, or null when it has none.</param>
 /// <param name="IdempotencyKey">The client's <c>Idempotency-Key</c> (00 §9.1, T92).</param>
 internal sealed record RequestArtifactUploadUrl(
     Guid RunId,
@@ -53,7 +52,6 @@ internal sealed record RequestArtifactUploadUrl(
     long DeclaredBytes,
     string Checksum,
     string? CredentialId,
-    string? CiRunRef,
     string IdempotencyKey)
     : ICommand<Result<UploadUrlResponse>>, IIdempotentCommand;
 
@@ -215,14 +213,13 @@ internal sealed class RequestArtifactUploadUrlHandler(
             return Result.Failure<UploadUrlResponse>(EvidenceErrors.NoTokenIdentity);
         }
 
-        // (4) Bind the producer slot to the caller's token identity on the first accepted write (T9/T85). The
-        // identity is the credential's jti plus the CI run reference. The registry's own error is returned
-        // verbatim (unknown_producer 422, producer_slot_taken 403), and a failure rolls the tenant transaction back.
+        // (4) Bind the producer slot to the caller's credential id on the first accepted write (T9/T85). The
+        // registry's own error is returned verbatim (unknown_producer 422, producer_slot_taken 403), and a
+        // failure rolls the tenant transaction back.
         var binding = await producers.BindOrCheckAsync(
             command.RunId,
             command.ProducerId,
             command.CredentialId,
-            command.CiRunRef,
             cancellationToken).ConfigureAwait(false);
         if (!binding.IsSuccess)
         {

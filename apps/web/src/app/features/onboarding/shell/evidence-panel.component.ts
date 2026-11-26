@@ -1,5 +1,4 @@
-import { LoadingPatternComponent } from '../../../shared/ui/states/loading-pattern.component';
-import { DatePipe, DecimalPipe } from '@angular/common';
+import { DatePipe } from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -25,18 +24,15 @@ import { activationInstantLabel } from '../steps/default-policy';
 interface LedgerRow {
   key: string;
   resource: string;
-  value: string | number;
+  value: string;
   identifier?: string;
-  truncated?: boolean;
   activated?: boolean;
 }
 
 @Component({
   selector: 'app-onboarding-evidence-panel',
   imports: [
-    LoadingPatternComponent,
     DatePipe,
-    DecimalPipe,
     HlmCardImports,
     HlmTableImports,
     OnboardingRecordButtonComponent,
@@ -64,17 +60,8 @@ interface LedgerRow {
       >
         @if (progress(); as resources) {
           @if (resources.project; as createdProject) {
-            <app-loading-pattern
-              [layout]="'table'"
-              [busy]="fetching()"
-              [hasRows]="ledgerRows().length > 0"
-            />
             <div hlmTableContainer class="min-w-0 max-w-full">
-              <table
-                [attr.aria-busy]="fetching()"
-                hlmTable
-                class="[&_th]:whitespace-normal [&_td]:whitespace-normal"
-              >
+              <table hlmTable class="[&_th]:whitespace-normal [&_td]:whitespace-normal">
                 <caption hlmCaption class="caption-top text-start">
                   {{
                     title
@@ -93,14 +80,8 @@ interface LedgerRow {
                       <th hlmTh scope="row" class="font-semibold text-foreground">
                         {{ row.resource }}
                       </th>
-                      <td hlmTd [class.text-end]="typeof row.value === 'number'">
-                        @if (typeof row.value === 'number') {
-                          <span class="tabular-nums"
-                            >{{ row.value | number }}{{ row.truncated ? '+' : '' }}</span
-                          >
-                        } @else {
-                          <bdi>{{ row.value }}</bdi>
-                        }
+                      <td hlmTd>
+                        <bdi>{{ row.value }}</bdi>
                         @if (row.identifier) {
                           <bdi class="block font-mono text-xs text-muted-foreground">{{
                             row.identifier
@@ -121,7 +102,7 @@ interface LedgerRow {
                       </td>
                       <td hlmTd>
                         <app-onboarding-record
-                          [subject]="typeof row.value === 'number' ? row.resource : row.value"
+                          [subject]="row.value"
                           [appOnboardingRecord]="facts"
                           [recordTitle]="copy.resource"
                           [recordId]="row.identifier"
@@ -142,14 +123,10 @@ interface LedgerRow {
                               </dd>
                             </div>
                             @if (row.key !== 'project') {
-                              <div [class.hlm-field-wide]="typeof row.value !== 'number'">
+                              <div class="hlm-field-wide">
                                 <dt>{{ row.resource }}</dt>
                                 <dd>
-                                  @if (typeof row.value === 'number') {
-                                    {{ row.value | number }}{{ row.truncated ? '+' : '' }}
-                                  } @else {
-                                    <bdi class="font-mono">{{ row.value }}</bdi>
-                                  }
+                                  <bdi class="font-mono">{{ row.value }}</bdi>
                                 </dd>
                               </div>
                             }
@@ -168,9 +145,6 @@ interface LedgerRow {
                               </div>
                             }
                           </dl>
-                          @if (refreshFailed()) {
-                            <p>{{ stale }}</p>
-                          }
                         </ng-template>
                       </td>
                     </tr>
@@ -197,15 +171,6 @@ interface LedgerRow {
             {{ unavailable }}
           </p>
         }
-        @if (refreshFailed()) {
-          <p
-            class="m-0 rounded-(--eg-radius-sm) bg-muted p-(--eg-space-4) text-sm text-foreground"
-            role="status"
-            [attr.data-resource-state]="'stale'"
-          >
-            {{ stale }}
-          </p>
-        }
       </div>
     </section>
   `,
@@ -213,9 +178,7 @@ interface LedgerRow {
 export class EvidencePanelComponent {
   protected readonly dateTimeFormat = shortDateFormat(inject(LOCALE_ID), true, 'medium');
 
-  readonly fetching = input(false);
   readonly progress = input<OnboardingProgress | null>(null);
-  readonly refreshFailed = input(false);
   readonly viewRecord = output<OnboardingRecordView>();
   protected readonly copy = RECORD_COPY;
   protected readonly resourceLabel = $localize`:@@onboarding.record.resource-kind:Resource`;
@@ -231,20 +194,6 @@ export class EvidencePanelComponent {
         identifier: data.project.id,
       },
     ];
-    if (data.bindings.length)
-      rows.push({
-        key: 'bindings',
-        resource: this.bindingsLabel,
-        value: data.bindings.length,
-        truncated: data.bindingsTruncated,
-      });
-    if (data.tokens.length)
-      rows.push({
-        key: 'tokens',
-        resource: this.tokensLabel,
-        value: data.tokens.length,
-        truncated: data.tokensTruncated,
-      });
     if (data.sampleRun) {
       rows.push({ key: 'run', resource: this.sampleLabel, value: data.sampleRun.run_id });
       if (data.sampleRun.current_evidence_revision_id)
@@ -277,9 +226,6 @@ export class EvidencePanelComponent {
   protected readonly identifierLabel = $localize`:@@onboarding.evidence.identifier:Project ID`;
   protected readonly empty = $localize`:@@onboarding.evidence.no-resources:No setup resources have been created yet.`;
   protected readonly unavailable = $localize`:@@onboarding.evidence.unavailable:Created resources are unavailable.`;
-  protected readonly stale = $localize`:@@onboarding.evidence.stale:Resources could not be refreshed. Showing the last confirmed resources.`;
-  protected readonly bindingsLabel = $localize`:@@onboarding.evidence.bindings:CI bindings`;
-  protected readonly tokensLabel = $localize`:@@onboarding.evidence.tokens:Ingest tokens`;
   protected readonly sampleLabel = $localize`:@@onboarding.evidence.sample:Sample run ID`;
   protected readonly evidenceLabel = $localize`:@@onboarding.evidence.revision:Evidence revision ID`;
   protected readonly activationLabel = $localize`:@@onboarding.evidence.activation:Activated policy revision`;

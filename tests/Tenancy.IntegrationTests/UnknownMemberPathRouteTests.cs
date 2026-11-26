@@ -157,7 +157,7 @@ public sealed class UnknownMemberPathRouteTests(
     public async Task Finalize_UnknownShortName_422NamesIt_AndTheDeclaredBodyIsAccepted()
     {
         await using var world = await IngestTestWorld.StartAsync(
-            fixture, IngestTestWorld.Writer(), boundJti: IngestTestWorld.Jti, hosts: hosts);
+            fixture, IngestTestWorld.Writer(), boundOwnerId: IngestTestWorld.OwnerId, hosts: hosts);
         await RunStateWalk.MoveAsync(fixture, world.Database, world.RunId, "running");
         var manifestHash = await ManifestHashAsync(world);
 
@@ -174,7 +174,7 @@ public sealed class UnknownMemberPathRouteTests(
     public async Task Finalize_UnsafeOrLongName_AnswersPlaceholderWithinTheBodyBound()
     {
         await using var world = await IngestTestWorld.StartAsync(
-            fixture, IngestTestWorld.Writer(), boundJti: IngestTestWorld.Jti, hosts: hosts);
+            fixture, IngestTestWorld.Writer(), boundOwnerId: IngestTestWorld.OwnerId, hosts: hosts);
         await RunStateWalk.MoveAsync(fixture, world.Database, world.RunId, "running");
         var manifestHash = await ManifestHashAsync(world);
 

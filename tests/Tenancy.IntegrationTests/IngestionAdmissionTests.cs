@@ -60,7 +60,7 @@ public sealed class IngestionAdmissionTests(PostgresTenancyFixture fixture, Tena
         (await IngestQaRequests.PostEventsAsync(world.Client, world.RunId, body)).Status.ShouldBe(HttpStatusCode.OK);
         await using var otherHost = hosts.WithPrincipal(
             world.Database, world.Org, world.Project,
-            IngestTestWorld.Writer(IngestTestWorld.OtherJti, world.Project),
+            IngestTestWorld.Writer(IngestTestWorld.OtherOwnerId, world.Project),
             services: services => services.AddSingleton(limiter));
         using var otherClient = otherHost.CreateClient();
         var otherBody = IngestQaRequests.Batch(IngestQaRequests.Event(
@@ -101,7 +101,7 @@ public sealed class IngestionAdmissionTests(PostgresTenancyFixture fixture, Tena
         using var setup = world.Api.CreateClient();
         var projectB = await RegistryApi.CreateProjectAsync(setup, world.User, world.Org, Unique.Slug("other"));
         var planB = await world.SeedRunInProjectAsync(projectB);
-        await IngestTestWorld.SeedSlotsAsync(fixture, world.Database, world.Org, planB.RunId, 1, boundJti: null);
+        await IngestTestWorld.SeedSlotsAsync(fixture, world.Database, world.Org, planB.RunId, 1, boundOwnerId: null);
         var eventId = Guid.CreateVersion7();
         var body = IngestQaRequests.Batch(IngestQaRequests.Event(eventId, planB.Executions[0].ExecutionKey, sequence: 1));
 

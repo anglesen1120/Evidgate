@@ -175,7 +175,7 @@ public sealed partial class GetRunDetailFieldsTests : IClassFixture<TenancyHostP
         created.Status.ShouldBe(HttpStatusCode.Created, created.ErrorMessage);
         var runId = created.Id("run_id");
         await _fixture.ExecuteAsync(world.Database, $"""
-            update public.producer_slot set bound_token_jti = '{SlotJti}'
+            update public.producer_slot set bound_token_jti = '{SlotOwnerId}'
              where run_id = '{runId:D}' and producer_id = 'shard-1'
             """);
 
@@ -212,7 +212,7 @@ public sealed partial class GetRunDetailFieldsTests : IClassFixture<TenancyHostP
         siblingScope.ErrorCode.ShouldBe(unknown.ErrorCode);
         siblingScope.ErrorMessage.ShouldBe(unknown.ErrorMessage, "the scope mismatch must not become a second answer");
         siblingScope.Body.TryGetProperty("producers", out _).ShouldBeFalse();
-        siblingScope.Body.GetRawText().ShouldNotContain(SlotJti, Case.Sensitive);
+        siblingScope.Body.GetRawText().ShouldNotContain(SlotOwnerId, Case.Sensitive);
     }
 
     /// <summary>Creates one policy revision through <c>POST /v1/projects/{p}/policies</c> (07.1.1-T3); returns its id.</summary>

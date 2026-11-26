@@ -22,9 +22,6 @@ internal sealed class CiKeyMaterial
     /// <summary>The minted token's <c>aud</c>.</summary>
     internal const string Audience = "evidgate-test-aud";
 
-    /// <summary>The GitHub OIDC audience the host expects.</summary>
-    internal const string GithubAudience = "evidgate-github";
-
     private CiKeyMaterial(string signingKey, string pepper)
     {
         SigningKey = signingKey;
@@ -126,7 +123,6 @@ internal sealed class CiProducerJwtFactory : WebApplicationFactory<Program>
                 ["EVIDGATE:Ci:Audience"] = CiKeyMaterial.Audience,
                 ["EVIDGATE:Ci:Pepper"] = _keys.Pepper,
                 ["EVIDGATE:Ci:PepperVersion"] = "2",
-                ["EVIDGATE:Ci:GithubOidcAudience"] = CiKeyMaterial.GithubAudience,
                 ["EVIDGATE:Identity:RateLimits:CiExchangeLimit"] = "1000",
             }));
 

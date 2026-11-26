@@ -15,11 +15,10 @@
 // Missing routes and variants answer `501 fixture_not_found` rather than inventing an empty page.
 //
 // ID-keyed routes answer the document whose declared resource-id field matches the path value.
-// This lets policy comparisons and release selection read distinct bodies. Two are CURSOR-KEYED
-// (`cursorQueryParameter`):
-// `listCiBindings` answers the catalog row whose `cursor` equals the request's cursor, so the
-// Secrets tab's Load more gets a second page from the same backend and the control's terminal state
-// is reachable in a browser; `listRuns` answers the same way for the Runs list (09.3.1-T1). An id no
+// This lets policy comparisons and release selection read distinct bodies. Cursor-keyed routes
+// (`cursorQueryParameter`) answer the catalog row whose `cursor` equals the request's cursor:
+// `listRuns` does so for the Runs list, so its Load more gets a second page from the same backend
+// and the control's terminal state is reachable in a browser. An id no
 // document carries, a cursor no page declares, and every request-agnostic operation still answer by
 // variant alone; `selectEntry` below holds that order and nothing else changes.
 // `getRun` is likewise variant-only: run-detail's ready/404/403/ref-format/null-evidence

@@ -40,9 +40,6 @@ public sealed class EvidenceCompleteSniffFaultTests(PostgresTenancyFixture fixtu
 
     private const string XmlType = "application/xml";
 
-    /// <summary>The caller's token id (the slot-binding identity, T9).</summary>
-    private const string Jti = "jti-complete-sniff-fault-1";
-
     private const string ProducerId = "shard-1";
 
     /// <summary>The kind-policy cap every seeded policy row carries; every uploaded body is well under it.</summary>
@@ -82,7 +79,7 @@ public sealed class EvidenceCompleteSniffFaultTests(PostgresTenancyFixture fixtu
 
     /// <summary>A service principal holding <c>artifact:write</c> and a token id (the slot-binding identity).</summary>
     private static RequestPrincipal Writer() =>
-        RequestPrincipal.Service(projectScope: null, [Permissions.Artifact.Write], credentialId: Jti);
+        RequestPrincipal.Service(projectScope: null, [Permissions.Artifact.Write], credentialId: IngestTestWorld.OwnerId);
 
     /// <summary>
     /// One migrated database with an org and a project created through the real registry routes, plus a host

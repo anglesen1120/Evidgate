@@ -31,14 +31,12 @@ export interface OnboardingRecordView {
 
 export const RECORD_COPY = {
   actions: $localize`:@@onboarding.record.actions:Actions`,
-  binding: $localize`:@@onboarding.record.binding:CI binding details`,
   token: $localize`:@@onboarding.record.token:Ingest token details`,
   health: $localize`:@@onboarding.record.health:Credential health details`,
   resource: $localize`:@@onboarding.record.resource:Resource details`,
   identifier: $localize`:@@onboarding.record.identifier:Identifier`,
   summary: $localize`:@@onboarding.record.summary:Summary`,
   history: $localize`:@@onboarding.record.history:History`,
-  source: $localize`:@@onboarding.record.source:Source`,
   credential: $localize`:@@onboarding.record.credential:Credential`,
   readOnly: $localize`:@@onboarding.record.read-only:Read-only setup details. This view cannot change the record.`,
   status: $localize`:@@onboarding.connect.status:Status`,

@@ -27,10 +27,6 @@ const EMPTY: OnboardingProgress = {
   done: NO_STEPS_DONE,
   activation: { kind: 'none' },
   sampleRun: null,
-  bindings: [],
-  tokens: [],
-  bindingsTruncated: false,
-  tokensTruncated: false,
   currentStep: 1,
 };
 
@@ -147,16 +143,6 @@ describe('EvidencePanelComponent', () => {
       'current access',
     );
     expect(root.querySelector('[data-resource-state="empty"]')).toBeNull();
-  });
-
-  it('labels retained resources as last confirmed after a refresh failure', async () => {
-    fixture.componentRef.setInput('progress', { ...EMPTY, project: PROJECT });
-    fixture.componentRef.setInput('refreshFailed', true);
-    await fixture.whenStable();
-    expect(root.textContent).toContain(PROJECT.name);
-    expect(
-      root.querySelector('[data-resource-state="stale"][role="status"]')?.textContent,
-    ).toContain('last confirmed resources');
   });
 
   it('renders server-supplied project text as text, not HTML', async () => {

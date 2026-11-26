@@ -5,74 +5,15 @@ using Xunit;
 namespace Tenancy.IntegrationTests;
 
 /// <summary>
-/// 02.4.1 / 02.4.2 schema and pre-tenant resolver rules (migrations 0016-0018, TL T1 and T70): at most one org holds
-/// the active binding of a repository, the resolver prefers it, a pending binding is named only when its challenge
-/// is proven, and an unproven one leaks no tenant.
+/// Ingest-token schema and pre-tenant resolver rules (migrations 0018 and 0134): the resolver derives the token
+/// status without a tenant, and the retired GitHub exchange objects are gone while the shared permission stays.
 /// </summary>
 [Trait("Category", "Docker")]
 public sealed class CiResolverTests
 {
-    private static readonly byte[] HashA = Enumerable.Repeat((byte)0xA1, 32).ToArray();
-    private static readonly byte[] HashB = Enumerable.Repeat((byte)0xB2, 32).ToArray();
-
     private readonly PostgresTenancyFixture _fixture;
 
     public CiResolverTests(PostgresTenancyFixture fixture) => _fixture = fixture;
-
-    [Fact]
-    public async Task ActiveBinding_IsUniquePerRepository_PlatformWide()
-    {
-        // Dedicated database: the binding key spans every org, so the rows it clashes with must be its own.
-        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
-        var (orgA, projectA) = await SeedOrgAsync(database, "alpha");
-        var (orgB, projectB) = await SeedOrgAsync(database, "bravo");
-
-        await SeedBindingAsync(database, orgA, projectA, 7, "active");
-        // A pending binding by another org is fine; a second ACTIVE one is not (T70).
-        await SeedBindingAsync(database, orgB, projectB, 7, "pending_verification", HashB);
-        var activate = Should.ThrowAsync<PostgresException>(() =>
-            _fixture.ExecuteAsync(database, $"update public.ci_binding set status = 'active' where org_id = '{orgB}'"));
-        (await activate).ConstraintName.ShouldBe("ci_binding_active_repository_key");
-
-        // One binding per (project, repository).
-        var duplicate = await Should.ThrowAsync<PostgresException>(() => SeedBindingAsync(database, orgA, projectA, 7, "disabled"));
-        duplicate.ConstraintName.ShouldBe("ci_binding_project_repository_key");
-    }
-
-    [Fact]
-    public async Task ResolveBinding_PrefersActive_NamesPendingOnlyWhenProven_AndLeaksNoTenantOtherwise()
-    {
-        // Dedicated database: the pre-tenant resolver answers across all orgs of the database.
-        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
-        var (orgA, projectA) = await SeedOrgAsync(database, "alpha");
-        var (orgB, projectB) = await SeedOrgAsync(database, "bravo");
-        var pending = await SeedBindingAsync(database, orgA, projectA, 11, "pending_verification", HashA);
-        await SeedBindingAsync(database, orgB, projectB, 11, "pending_verification", HashB);
-
-        // Nothing proven: one row, no tenant.
-        var unproven = await ResolveAsync(database, 11, null);
-        unproven.ShouldBe((null, null, null, "pending_unproven"));
-        (await ResolveAsync(database, 11, [new byte[32]])).ShouldBe((null, null, null, "pending_unproven"));
-
-        // A challenge proves exactly one of the two pending bindings.
-        (await ResolveAsync(database, 11, [HashA])).ShouldBe((orgA, projectA, pending, "pending_verification"));
-        (await ResolveAsync(database, 11, [HashB])).Status.ShouldBe("pending_verification");
-        (await ResolveAsync(database, 11, [HashB])).OrgId.ShouldBe(orgB);
-
-        // Once one is active it wins over any proof of the other.
-        await _fixture.ExecuteAsync(database, $"update public.ci_binding set status = 'active', binding_challenge_hash = null where id = '{pending}'");
-        (await ResolveAsync(database, 11, [HashB])).ShouldBe((orgA, projectA, pending, "active"));
-        (await ResolveAsync(database, 11, null)).Status.ShouldBe("active");
-
-        // Unbound repository: no row at all.
-        (await ResolveRawAsync(database, 99, null)).ShouldBeEmpty();
-
-        // A disabled binding is reported as such.
-        await _fixture.ExecuteAsync(database, $"update public.ci_binding set status = 'disabled' where id = '{pending}'");
-        (await ResolveAsync(database, 11, null)).Status.ShouldBe("disabled");
-        await _fixture.ExecuteAsync(database, $"update public.ci_binding set status = 'disabled' where org_id = '{orgB}'");
-        (await ResolveAsync(database, 11, null)).Status.ShouldBe("disabled");
-    }
 
     [Fact]
     public async Task ResolveIngestToken_ReportsTheDerivedStatus_AndNothingForAnUnknownPrefix()
@@ -96,26 +37,42 @@ public sealed class CiResolverTests
     }
 
     [Fact]
-    public async Task TheAppRole_CannotReadTheCiTablesWithoutATenant_AndCannotEditIssuedRecords()
+    public async Task TheAppRole_CannotReadTheIngestTokensWithoutATenant_AndCannotDeleteThem()
     {
-        // Dedicated database: it reads the platform grant state of the CI tables.
+        // Dedicated database: it reads the platform grant state of the table.
         await using var database = await _fixture.CreateDedicatedDatabaseAsync();
         var (org, project) = await SeedOrgAsync(database, "alpha");
-        await SeedBindingAsync(database, org, project, 5, "active");
         await SeedTokenAsync(database, org, project, "AAAAAAAAAAAA", "");
 
-        foreach (var table in new[] { "ci_binding", "ingest_token", "ci_token_issue" })
+        await using var connection = new NpgsqlConnection(_fixture.AppConnectionString(database));
+        await connection.OpenAsync(TestContext.Current.CancellationToken);
+        await using var count = new NpgsqlCommand("select count(*) from public.ingest_token", connection);
+        ((long)(await count.ExecuteScalarAsync(TestContext.Current.CancellationToken))!).ShouldBe(0);
+
+        (await _fixture.ScalarAsync<bool>(database, "select has_table_privilege('evidgate_app', 'public.ingest_token', 'delete')")).ShouldBeFalse();
+        (await _fixture.ScalarAsync<bool>(database, "select has_table_privilege('evidgate_app', 'public.ingest_token', 'update')")).ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task TheRetiredGithubExchangeObjects_DoNotExist_AndTheirPermissionSurvives()
+    {
+        var database = await _fixture.SharedDatabaseAsync();
+
+        foreach (var relation in new[] { "public.ci_binding", "public.ci_token_issue", "public.ci_token_issue_run_idx" })
         {
-            await using var connection = new NpgsqlConnection(_fixture.AppConnectionString(database));
-            await connection.OpenAsync(TestContext.Current.CancellationToken);
-            await using var count = new NpgsqlCommand($"select count(*) from public.{table}", connection);
-            ((long)(await count.ExecuteScalarAsync(TestContext.Current.CancellationToken))!).ShouldBe(0, table);
+            (await _fixture.ScalarAsync<bool>(database, $"select to_regclass('{relation}') is null")).ShouldBeTrue(relation);
         }
 
-        (await _fixture.ScalarAsync<bool>(database, "select has_table_privilege('evidgate_app', 'public.ci_token_issue', 'update')")).ShouldBeFalse();
-        (await _fixture.ScalarAsync<bool>(database, "select has_table_privilege('evidgate_app', 'public.ci_token_issue', 'delete')")).ShouldBeFalse();
-        (await _fixture.ScalarAsync<bool>(database, "select has_table_privilege('evidgate_app', 'public.ci_binding', 'delete')")).ShouldBeFalse();
-        (await _fixture.ScalarAsync<bool>(database, "select has_table_privilege('evidgate_app', 'public.ingest_token', 'delete')")).ShouldBeFalse();
+        foreach (var function in new[] { "evidgate_resolve.resolve_ci_binding(text, bigint, bytea[])", "evidgate.purge_expired_ci_token_issue(integer)" })
+        {
+            (await _fixture.ScalarAsync<bool>(database, $"select to_regprocedure('{function}') is null")).ShouldBeTrue(function);
+        }
+
+        // The positive control: the permission shared with other operations is still catalogued and granted.
+        (await _fixture.ScalarAsync<long>(
+            database,
+            "select count(*) from public.role_permission rp join public.role r on r.id = rp.role_id "
+            + "where r.org_id is null and rp.permission_code in ('ci_binding:write', 'ingest_token:write')")).ShouldBeGreaterThan(1);
     }
 
     [Fact]
@@ -155,22 +112,6 @@ public sealed class CiResolverTests
         return (org, project);
     }
 
-    private async Task<Guid> SeedBindingAsync(string database, Guid org, Guid project, long repository, string status, byte[]? hash = null)
-    {
-        var id = Guid.CreateVersion7();
-        var hashSql = hash is null ? "null" : $"decode('{Convert.ToHexStringLower(hash)}', 'hex')";
-        await _fixture.ExecuteAsync(
-            database,
-            $"""
-            insert into public.ci_binding (id, org_id, project_id, provider, repository_id, repository_full_name, allowed_ref_patterns,
-                                           allowed_workflow_refs, status, binding_challenge_hash, challenge_pepper_version)
-            values ('{id}', '{org}', '{project}', 'github_actions', {repository}, 'acme/web', array['refs/heads/main'],
-                    array['acme/web/.github/workflows/ci.yml@refs/heads/main'], '{status}', {hashSql}, {(hash is null ? "null" : "1")})
-            """);
-
-        return id;
-    }
-
     private async Task<Guid> SeedTokenAsync(string database, Guid org, Guid project, string prefix, string extraSet)
     {
         var id = Guid.CreateVersion7();
@@ -183,25 +124,6 @@ public sealed class CiResolverTests
             """);
 
         return id;
-    }
-
-    private async Task<(Guid? OrgId, Guid? ProjectId, Guid? SubjectId, string Status)> ResolveAsync(string database, long repository, byte[][]? hashes)
-    {
-        var rows = await ResolveRawAsync(database, repository, hashes);
-
-        return rows.ShouldHaveSingleItem();
-    }
-
-    private async Task<List<(Guid? OrgId, Guid? ProjectId, Guid? SubjectId, string Status)>> ResolveRawAsync(string database, long repository, byte[][]? hashes)
-    {
-        await using var connection = new NpgsqlConnection(_fixture.AppConnectionString(database));
-        await connection.OpenAsync(TestContext.Current.CancellationToken);
-        await using var command = new NpgsqlCommand(
-            "select org_id, project_id, binding_id, status from evidgate_resolve.resolve_ci_binding('github_actions', @repo, @hashes)", connection);
-        command.Parameters.AddWithValue("repo", repository);
-        command.Parameters.Add(new NpgsqlParameter("hashes", NpgsqlTypes.NpgsqlDbType.Array | NpgsqlTypes.NpgsqlDbType.Bytea) { Value = hashes is null ? DBNull.Value : hashes });
-
-        return await ReadAsync(command);
     }
 
     private async Task<(Guid? OrgId, Guid? ProjectId, Guid? SubjectId, string Status)> ResolveTokenAsync(string database, string prefix) =>

@@ -106,7 +106,7 @@ public sealed partial class EvidenceRawReportQuotaTests
         var artifact = await SeedArtifactAsync(world, ThreeEventBody);
         await SeedCounterAsync(counters, world, used: 0m, limit: 3m);
         var ingestRun = await PlannedExecutionSeeder.SeedPlanAsync(_fixture, world.Database, world.Org, 1);
-        await IngestTestWorld.SeedSlotsAsync(_fixture, world.Database, world.Org, ingestRun.RunId, 1, IngestTestWorld.Jti);
+        await IngestTestWorld.SeedSlotsAsync(_fixture, world.Database, world.Org, ingestRun.RunId, 1, IngestTestWorld.OwnerId);
         await using var host = TenancyApiFactory.WithPrincipal(_fixture.AppConnectionString(world.Database),
             world.Org, world.Project, IngestTestWorld.Writer(projectScope: world.Project));
         using var client = host.CreateClient();

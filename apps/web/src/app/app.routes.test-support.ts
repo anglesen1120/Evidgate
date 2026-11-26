@@ -331,7 +331,6 @@ export async function setUp(
         provide: ProjectDashboardDataService,
         useValue: {
           runs: () => Promise.resolve({ items: [], complete: true }),
-          bindings: () => Promise.resolve({ items: [] }),
           waivers: () => Promise.resolve({ items: [] }),
           quarantine: () => Promise.resolve({ items: [] }),
           incidents: () => Promise.resolve({ items: [] }),

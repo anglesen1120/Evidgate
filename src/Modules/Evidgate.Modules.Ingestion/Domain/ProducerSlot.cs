@@ -7,12 +7,10 @@ namespace Evidgate.Modules.Ingestion.Domain;
 /// be mutated after construction; EF Core binds the row through this constructor and the
 /// compiler-generated backing fields.
 /// <para>
-/// The binding columns (<see cref="BoundTokenJti"/>, <see cref="BoundCiRunRef"/>) are written by
-/// <c>IProducerRegistry.BindOrCheckAsync</c> as one conditional <c>UPDATE</c> (T9), not through this
-/// entity: the app role holds a column-level UPDATE grant on exactly those two columns (migration
-/// 0029), and a single statement is what makes two racing first writers safe. The entity is the
-/// module's mapping of the table - the shape 04.1.2-T5's <c>CloseSlotAsync</c> and the 05
-/// reconciliation read build on.
+/// The owner column (<see cref="BoundTokenJti"/>, which now holds the ingest-token id despite its historical name) is
+/// written by <c>IProducerRegistry.BindOrCheckAsync</c> as one conditional <c>UPDATE</c> (T9), not through
+/// this entity: the app role holds a column-level UPDATE grant on it (migration 0029), and a single
+/// statement is what makes two racing first writers safe. The entity is the module's mapping of the table.
 /// </para>
 /// </summary>
 internal sealed class ProducerSlot
@@ -25,7 +23,6 @@ internal sealed class ProducerSlot
         int shardIndex,
         string producerId,
         string? boundTokenJti = null,
-        string? boundCiRunRef = null,
         long lastSequence = 0,
         DateTimeOffset? closedAt = null,
         long? declaredLastSequence = null,
@@ -40,7 +37,6 @@ internal sealed class ProducerSlot
         ShardIndex = shardIndex;
         ProducerId = producerId;
         BoundTokenJti = boundTokenJti;
-        BoundCiRunRef = boundCiRunRef;
         LastSequence = lastSequence;
         ClosedAt = closedAt;
         DeclaredLastSequence = declaredLastSequence;
@@ -65,11 +61,8 @@ internal sealed class ProducerSlot
     /// <summary>The deterministic producer id, <c>shard-&lt;index&gt;</c> (T54).</summary>
     public string ProducerId { get; }
 
-    /// <summary>The token id the first accepted write bound the slot to (T9); null while unbound.</summary>
+    /// <summary>The authenticated credential id the first accepted write bound the slot to (T9); null while unbound.</summary>
     public string? BoundTokenJti { get; }
-
-    /// <summary>The GitHub CI reference the binding carries (T88); null for a non-CI caller.</summary>
-    public string? BoundCiRunRef { get; }
 
     /// <summary>The highest sequence the slot has stored; 0 before the first write.</summary>
     public long LastSequence { get; }

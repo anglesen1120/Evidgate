@@ -1,5 +1,5 @@
-// Test seams of the 05.2.1-T1 run-create suite: a crashing outbox writer (AC2) and the direct
-// principal/tenant seam the CI-claims cases need (the header seam of TenancyApiFactory carries no CiRun).
+// Test seams of the run-create suite: a crashing outbox writer and the direct principal/tenant seam for
+// callers the header seam of TenancyApiFactory cannot express.
 #pragma warning disable CA1861
 using System.Text;
 using Evidgate.BuildingBlocks.Persistence.Outbox;
@@ -79,34 +79,30 @@ internal sealed class ThrowingProducerRegistry(IProducerRegistry inner) : IProdu
     public ValueTask<Result<ProducerSlotBinding>> BindOrCheckAsync(
         Guid runId,
         string producerId,
-        string tokenJti,
-        string? ciRunRef,
+        string ownerId,
         CancellationToken cancellationToken) =>
-        inner.BindOrCheckAsync(runId, producerId, tokenJti, ciRunRef, cancellationToken);
+        inner.BindOrCheckAsync(runId, producerId, ownerId, cancellationToken);
 
     /// <inheritdoc />
     public ValueTask<Result<ProducerSlotClosure>> CloseSlotAsync(
         Guid runId,
         string producerId,
-        string tokenJti,
-        string? ciRunRef,
+        string ownerId,
         long declaredLastSequence,
         int declaredCount,
         CancellationToken cancellationToken) =>
-        inner.CloseSlotAsync(runId, producerId, tokenJti, ciRunRef, declaredLastSequence, declaredCount, cancellationToken);
+        inner.CloseSlotAsync(runId, producerId, ownerId, declaredLastSequence, declaredCount, cancellationToken);
 
     /// <inheritdoc />
     public ValueTask<IReadOnlyList<ProducerSlotView>> GetRunProducerSlotsAsync(Guid runId, CancellationToken cancellationToken) =>
         inner.GetRunProducerSlotsAsync(runId, cancellationToken);
 }
 
-/// <summary>The principal/tenant seam of the CI-claims cases: publish a caller the headers cannot express.</summary>
+/// <summary>Publishes a principal and tenant that the HTTP test headers cannot express.</summary>
 internal static class RunCreationSeams
 {
     /// <summary>
-    /// Sends <see cref="CreateRunCommand"/> through the real C2 pipeline with <paramref name="principal"/> published
-    /// for the flow — the same seam <c>TenancyApiFactory</c>'s middleware uses, invoked directly because a
-    /// <c>CiRunReference</c> has no header.
+    /// Sends <see cref="CreateRunCommand"/> through the real pipeline with the caller's credentials.
     /// </summary>
     internal static async Task<Result<RunCreated>> SendDirectAsync(
         TenancyApiFactory api,
@@ -123,13 +119,7 @@ internal static class RunCreationSeams
 
         return await provider.GetRequiredService<IMediator>()
             .Send(
-                // The CI run reference joins the request identity exactly as the endpoint passes it (05.2.2-T1.4), so the
-                // seam exercises the same idempotency key the served route does.
-                new CreateRunCommand(
-                    project,
-                    Encoding.UTF8.GetBytes(body),
-                    idempotencyKey ?? RegistryApi.NewKey(),
-                    principal.CiRun?.ToBindingReference()),
+                new CreateRunCommand(project, Encoding.UTF8.GetBytes(body), idempotencyKey ?? RegistryApi.NewKey()),
                 TestContext.Current.CancellationToken);
     }
 }

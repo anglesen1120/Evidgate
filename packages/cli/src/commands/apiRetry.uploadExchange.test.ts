@@ -1,8 +1,6 @@
 // The other half of the retry surface: `manifests upload` is replay-safe through the
 // file digest it sends as `Idempotency-Key`, while the pre-tenant token exchange has no
-// key at all (openapi: "Idempotency-Key exempt: `jti` single-use is the arbiter") and may
-// therefore retry only the answers that provably precede the token — 429 and 503. Both
-// resend the SAME body bytes, and a spent budget surfaces the server's own error.
+// idempotency key and retries only 429 and 503. Both resend the same body bytes.
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -272,7 +270,7 @@ describe('token exchange retries', () => {
     await Promise.all(dirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
   });
 
-  async function oidcConfig() {
+  async function ingestConfig() {
     const dir = await mkdtemp(join(tmpdir(), 'evidgate-cli-'));
     dirs.push(dir);
     return resolveConfig({
@@ -280,13 +278,13 @@ describe('token exchange retries', () => {
         EVIDGATE_API_URL: 'https://api.evidgate.test',
         EVIDGATE_PROJECT: project,
         EVIDGATE_CACHE_DIR: dir,
-        EVIDGATE_OIDC_TOKEN: 'jwt-value',
+        EVIDGATE_INGEST_TOKEN: 'ingest-value',
       },
     });
   }
 
-  it('a_503_is_retried_with_the_same_body_and_bearer', async () => {
-    const config = await oidcConfig();
+  it('a_503_is_retried_with_the_same_body_and_no_bearer', async () => {
+    const config = await ingestConfig();
     let attempt = 0;
     const stub = stubFetch(() => {
       attempt += 1;
@@ -303,13 +301,12 @@ describe('token exchange retries', () => {
     expect(fake.sleeps).toEqual([1_000]);
     const [first, second] = stub.calls;
     expect(second?.body.toString('utf8')).toBe(first?.body.toString('utf8') ?? '');
-    expect(second?.request.headers.get('authorization')).toBe(
-      first?.request.headers.get('authorization'),
-    );
+    expect(first?.request.headers.get('authorization')).toBeNull();
+    expect(second?.request.headers.get('authorization')).toBeNull();
   });
 
   it('a_500_after_a_possible_mint_is_not_retried', async () => {
-    const config = await oidcConfig();
+    const config = await ingestConfig();
     const stub = stubFetch(() => refusal(500, 'server_error'));
     const fake = fakeDeps(stub.fetchImpl);
 
@@ -320,7 +317,7 @@ describe('token exchange retries', () => {
   });
 
   it('a_400_is_not_retried', async () => {
-    const config = await oidcConfig();
+    const config = await ingestConfig();
     const stub = stubFetch(() => refusal(400, 'bad_request'));
     const fake = fakeDeps(stub.fetchImpl);
 
@@ -341,7 +338,7 @@ describe('token exchange retries', () => {
   });
 
   it('a_429_waits_the_retry_after_then_succeeds', async () => {
-    const config = await oidcConfig();
+    const config = await ingestConfig();
     let attempt = 0;
     const stub = stubFetch(() => {
       attempt += 1;
@@ -359,7 +356,7 @@ describe('token exchange retries', () => {
   });
 
   it('an_exhausted_retry_surfaces_the_server_error', async () => {
-    const config = await oidcConfig();
+    const config = await ingestConfig();
     const stub = stubFetch(() => refusal(503, 'unavailable'));
     const fake = fakeDeps(stub.fetchImpl);
 
@@ -375,7 +372,6 @@ describe('token exchange retries', () => {
       throw new Error('expected the exchange to raise a CliError');
     }
     expect(caught.code).toBe('unavailable');
-    // One retry, the exchange's own budget: a credential is single-use.
     expect(stub.calls).toHaveLength(2);
     expect(fake.sleeps).toHaveLength(1);
   });

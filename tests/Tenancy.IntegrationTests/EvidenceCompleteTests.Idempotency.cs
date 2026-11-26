@@ -153,7 +153,7 @@ public sealed partial class EvidenceCompleteTests
         // same key is a conflict, never the first caller's stored response.
         // Two principal hosts must be live at once, so both stay unpooled: the pool holds one host per variant.
         await using var other = TenancyApiFactory.WithPrincipal(
-            _fixture.AppConnectionString(world.Database), world.Org, world.Project, Writer(OtherJti), _store.Configuration());
+            _fixture.AppConnectionString(world.Database), world.Org, world.Project, Writer(IngestTestWorld.OtherOwnerId), _store.Configuration());
         using var otherClient = other.CreateClient();
         var conflict = await otherClient.SendAsync(
             HttpMethod.Post, $"/v1/artifacts/{artifactId:D}/complete", _ => { }, null, key);

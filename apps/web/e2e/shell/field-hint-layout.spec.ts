@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { openConnectStep } from './onboarding-connection-support';
 import { onboardingUrl } from './onboarding-support';
 import { openRunFilters } from './run-list.support';
 import {
@@ -137,17 +138,12 @@ for (const width of [1440, 390]) {
       }
     });
 
-    test('keeps the Connect CI fields usable without exposing mutations on mobile', async ({
-      page,
-    }) => {
+    test('keeps the token field usable without exposing mutations on mobile', async ({ page }) => {
       await page.goto(onboardingUrl('vi', 'onboarding-project'));
+      await openConnectStep(page);
       await expect(page.getByTestId('connect-ci-page')).toBeVisible();
       if (desktop) {
-        await checkRows(
-          page,
-          ['connect-oidc-repo-id', 'connect-oidc-repo-name', 'connect-token-name'],
-          minimum,
-        );
+        await checkRows(page, ['connect-token-name'], minimum);
       } else {
         await expect(
           page.locator('app-onboarding-connect-ci app-desktop-required-notice').first(),

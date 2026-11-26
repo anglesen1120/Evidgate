@@ -1,3 +1,4 @@
+using Evidgate.Migrator;
 using Shouldly;
 using Xunit;
 
@@ -61,33 +62,6 @@ public sealed partial class RunIdentitySchemaTests : IClassFixture<TenancyHostPo
         // 0037 adds columns, a function and a trigger to `run`; the table-scoped policy and the two
         // row-security flags 0031 set are untouched (00 §5.4, DECISIONS F5).
         (await _fixture.RowSecurityAsync(database, "run")).ShouldBe((true, true));
-    }
-
-    [Fact]
-    public async Task CiTokenIssueRunIndex_ExistsOnTheRunReferenceKeys_AndSurvivesTheReRun()
-    {
-        // Dedicated: it re-applies the migration, so the index must be counted in a database it alone owns.
-        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
-
-        async Task<string> DefinitionAsync() =>
-            (await _fixture.IndexesAsync(database, "ci_token_issue"))
-                .SingleOrDefault(index => index.StartsWith("ci_token_issue_run_idx:", StringComparison.Ordinal))
-            ?? string.Empty;
-
-        // D-S45-Q2: the verified-caller read filters (project_id, repository_id, run_id, run_attempt) and
-        // takes the newest row of the attempt (created_at desc), so 0037 adds exactly this btree index to
-        // the Identity-owned `ci_token_issue` — no grant, policy or RLS change.
-        var definition = await DefinitionAsync();
-        definition.ShouldContain("ON public.ci_token_issue USING btree (project_id, repository_id, run_id, run_attempt, created_at DESC)");
-
-        // `create index if not exists`: the second application of 0037 must not fail on the index it
-        // already created and must leave exactly that one behind.
-        await ReRunMigrationAsync(database);
-
-        (await DefinitionAsync()).ShouldBe(definition);
-        (await _fixture.IndexesAsync(database, "ci_token_issue"))
-            .Count(index => index.StartsWith("ci_token_issue_run_idx:", StringComparison.Ordinal))
-            .ShouldBe(1);
     }
 
     // ------------------------------------------------------------------ (b) AC4: the shape constraints
@@ -315,31 +289,56 @@ public sealed partial class RunIdentitySchemaTests : IClassFixture<TenancyHostPo
 
     // ------------------------------------------------------------------ (e) the migration re-run
 
+    /// <summary>
+    /// 0037 also indexes <c>ci_token_issue</c>, which 0134 retires, so the historical re-run only exists on a database
+    /// that has not applied 0134 yet. The guard is then asserted again on the database brought to head.
+    /// </summary>
     [Fact]
-    public async Task Migration_ReRun_IsANoOpAndKeepsTheGuard()
+    public async Task Migration_ReRun_BeforeTheCiTokenIssueRetirement_IsANoOpAndHeadKeepsTheGuard()
     {
-        // Dedicated: it re-applies the migration and counts the run table whole, so it owns the database.
-        await using var dedicated = await _fixture.CreateDedicatedDatabaseAsync();
-        await using var world = await StartAsync(dedicated);
-        var parents = await SeedParentsAsync(world.Database, world.Org, world.Project);
-        var runId = await InsertRunAsync(world, parents, Guid.CreateVersion7(), FullIdentity);
+        await using var dedicated = await _fixture.CreateEmptyDedicatedDatabaseAsync();
+        const string Retirement = "0134_identity_github_removal.sql";
+        var prefixes = Directory.EnumerateFiles(PostgresTenancyFixture.RepoMigrationsPath, "*.sql")
+            .Select(Path.GetFileName)
+            .Where(name => string.CompareOrdinal(name, Retirement) < 0)
+            .Select(name => name![..4])
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        using (var history = TempMigrationDirectory.CreateFrom(PostgresTenancyFixture.RepoMigrationsPath, prefixes))
+        {
+            var baselined = _fixture.ApplyMigrations(dedicated.Name, history.Path);
+            baselined.ExitCode.ShouldBe(MigratorExitCodes.Success, baselined.Transcript);
+        }
 
-        // `add column if not exists` / `drop constraint if exists` + `add constraint` /
-        // `create or replace function` / `drop trigger if exists` + `create trigger`: the second pass
-        // must change nothing and must leave an enforcing trigger behind.
-        await ReRunMigrationAsync(world.Database);
+        // `add column if not exists` / `drop constraint if exists` + `add constraint` / `create or replace
+        // function` / `drop trigger if exists` + `create trigger`: the second pass must change nothing.
+        var before = await IdentityCatalogAsync(dedicated.Name);
+        await ReRunMigrationAsync(dedicated.Name);
+        (await IdentityCatalogAsync(dedicated.Name)).ShouldBe(before);
 
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.run")).ShouldBe(1);
+        var head = _fixture.ApplyMigrations(dedicated.Name);
+        head.ExitCode.ShouldBe(MigratorExitCodes.Success, head.Transcript);
+        head.Result.AppliedNow.ShouldContain(Retirement);
         (await _fixture.ScalarAsync<bool>(
-            world.Database,
-            "select exists (select 1 from pg_catalog.pg_trigger where tgrelid = 'public.run'::regclass and tgname = 'run_identity_immutable')"))
+            dedicated.Name,
+            "select exists (select 1 from pg_catalog.pg_trigger where tgrelid = 'public.run'::regclass and tgname = 'run_identity_immutable' and tgenabled = 'O')"))
             .ShouldBeTrue();
-
-        var error = await OwnerUpdateErrorAsync(
-            world.Database, $"update public.run set ref_name = 'other' where id = '{runId}'");
-
-        error.SqlState.ShouldBe("P0001");
-        (await _fixture.ScalarAsync<string>(world.Database, $"select ref_name from public.run where id = '{runId}'"))
-            .ShouldBe("refs/pull/42/merge");
+        (await _fixture.ScalarAsync<bool>(
+            dedicated.Name,
+            "select exists (select 1 from pg_catalog.pg_proc where proname = 'forbid_run_identity_update' and pronamespace = 'public'::regnamespace)"))
+            .ShouldBeTrue();
     }
+
+    /// <summary>The run table's constraints, indexes and identity trigger and guard function, as one ordered text.</summary>
+    private Task<string> IdentityCatalogAsync(string database) =>
+        _fixture.ScalarAsync<string>(
+            database,
+            """
+            select string_agg(item, E'\n' order by item) from (
+              select conname || ':' || pg_get_constraintdef(oid) as item from pg_catalog.pg_constraint where conrelid = 'public.run'::regclass
+              union all select pg_get_triggerdef(oid) from pg_catalog.pg_trigger where tgrelid = 'public.run'::regclass and not tgisinternal
+              union all select indexdef from pg_catalog.pg_indexes where schemaname = 'public' and tablename = 'run'
+              union all select pg_get_functiondef('public.forbid_run_identity_update'::regproc)
+            ) catalog
+            """);
 }

@@ -1,8 +1,8 @@
 // A refusal's field reasons clear as the visitor edits them, and a re-read keeps the place they
 // were on. Both belong to the same answer: what the screen still says, and where the stop is.
-import { computed, provideZonelessChangeDetection, signal } from '@angular/core';
+import { provideZonelessChangeDetection, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import type { CiBindingView, IngestTokenView } from '@evidgate/sdk';
+import type { IngestTokenView } from '@evidgate/sdk';
 
 import { OnboardingDataService } from '../../../core/data/onboarding-data.service';
 import { ApiRequestError, type ApiError } from '../../../core/http/api-error';
@@ -10,30 +10,7 @@ import { SessionStore } from '../../../core/session/session.store';
 import { OnboardingStore } from '../onboarding.store';
 import { provideDesktopOnboardingViewport } from '../onboarding-viewport.testing';
 import { ConnectCiPage } from './connect-ci.page';
-
-const BINDING: CiBindingView = {
-  id: 'binding-1',
-  project_id: 'project-1',
-  provider: 'github_actions',
-  repository_id: 123,
-  repository_full_name: 'acme/web',
-  allowed_ref_patterns: ['refs/heads/main'],
-  allowed_workflow_refs: ['acme/web/.github/workflows/ci.yml@refs/heads/main'],
-  status: 'pending_verification',
-  created_at: '2026-10-25T00:00:00Z',
-  version: 1,
-};
-const TOKEN: IngestTokenView = {
-  id: 'token-1',
-  project_id: 'project-1',
-  name: 'Build upload',
-  prefix: 'egt_prefix',
-  status: 'active',
-  scopes: ['event:write'],
-  expires_at: '2026-11-25T00:00:00Z',
-  last_used_at: null,
-  created_at: '2026-10-25T00:00:00Z',
-};
+import { provideTokenInventory } from './connect-ci.page.test-support';
 
 function refusal(details: NonNullable<ApiError['details']>): ApiRequestError {
   return new ApiRequestError({
@@ -52,27 +29,22 @@ describe('ConnectCiPage field reasons and re-read focus', () => {
   let fixture: ComponentFixture<ConnectCiPage>;
   let root: HTMLElement;
   const permitted = signal(true);
-  const bindings = signal<readonly CiBindingView[]>([]);
   const tokens = signal<readonly IngestTokenView[]>([]);
   const refreshFailure = signal<'unavailable' | null>(null);
-  const createCiBinding = vi.fn<OnboardingDataService['createCiBinding']>();
   const createIngestToken = vi.fn<OnboardingDataService['createIngestToken']>();
   const refresh = vi.fn<(orgId: string, projectId: string) => Promise<void>>();
 
   beforeEach(async () => {
     permitted.set(true);
-    bindings.set([]);
     tokens.set([]);
     refreshFailure.set(null);
     createIngestToken.mockReset();
-    createCiBinding
-      .mockReset()
-      .mockResolvedValue({ binding: BINDING, binding_challenge: 'challenge-shown-once' });
     // The store clears its refresh failure on success, which is what takes the retry notice away.
     refresh.mockReset().mockImplementation(() => {
       refreshFailure.set(null);
       return Promise.resolve();
     });
+    provideTokenInventory({ tokens, tokensRefreshFailure: refreshFailure, refreshTokens: refresh });
     await TestBed.configureTestingModule({
       imports: [ConnectCiPage],
       providers: [
@@ -80,21 +52,12 @@ describe('ConnectCiPage field reasons and re-read focus', () => {
         provideDesktopOnboardingViewport(),
         {
           provide: OnboardingDataService,
-          useValue: { createCiBinding, createIngestToken, rotateIngestToken: vi.fn() },
+          useValue: { createIngestToken, rotateIngestToken: vi.fn() },
         },
         {
           provide: OnboardingStore,
           useValue: {
-            bindings,
-            tokens,
-            bindingsTruncated: signal(false),
-            tokensTruncated: signal(false),
             project: signal<{ readonly slug: string } | null>({ slug: 'acme-web' }),
-            done: computed(() => ({ 2: bindings().length + tokens().length > 0 })),
-            canGoNext: computed(() => bindings().length + tokens().length > 0),
-            refreshing: signal(false),
-            refreshFailure,
-            refresh,
           },
         },
         {
@@ -124,18 +87,9 @@ describe('ConnectCiPage field reasons and re-read focus', () => {
     await fixture.whenStable();
   }
 
-  async function fillOidc(): Promise<void> {
-    await fill({
-      'connect-oidc-repo-id': '123',
-      'connect-oidc-repo-name': ' acme/web ',
-      'connect-oidc-refs': ' refs/heads/main \n',
-      'connect-oidc-workflows': ' acme/web/.github/workflows/ci.yml@refs/heads/main \n',
-    });
-  }
-
   async function submit(): Promise<void> {
     root
-      .querySelector('[data-testid="connect-oidc-panel"] form')!
+      .querySelector('[data-testid="connect-token-panel"] form')!
       .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
     await fixture.whenStable();
   }
@@ -159,43 +113,31 @@ describe('ConnectCiPage field reasons and re-read focus', () => {
     await fixture.whenStable();
   }
 
-  it('clears only the edited field server reason on edit', async () => {
-    createCiBinding.mockRejectedValueOnce(
-      refusal([
-        { path: '/repository_id', reason: 'No such repository ID.' },
-        { path: '/repository_full_name', reason: 'That repository is not visible to the app.' },
-      ]),
+  it('clears the edited token-name refusal without clearing the alert', async () => {
+    createIngestToken.mockRejectedValueOnce(
+      refusal([{ path: '/name', reason: 'That token name is reserved.' }]),
     );
-    await fillOidc();
+    await fill({ 'connect-token-name': 'Build upload' });
     await submit();
-    expect(field('connect-oidc-repo-id').getAttribute('aria-invalid')).toBe('true');
-    expect(field('connect-oidc-repo-name').getAttribute('aria-invalid')).toBe('true');
+    expect(field('connect-token-name').getAttribute('aria-invalid')).toBe('true');
 
-    await fill({ 'connect-oidc-repo-name': ' acme/api ' });
+    await fill({ 'connect-token-name': 'Replacement token name' });
     // The edited field answers for itself: its reason and its invalidity go.
-    expect(field('connect-oidc-repo-name').getAttribute('aria-invalid')).toBeNull();
-    expect(field('connect-oidc-repo-name').getAttribute('aria-describedby')).toBe(
-      'connect-oidc-repo-name-hint',
+    expect(field('connect-token-name').getAttribute('aria-invalid')).toBeNull();
+    expect(field('connect-token-name').getAttribute('aria-describedby')).toBe(
+      'connect-token-name-hint',
     );
-    expect(root.querySelector('#connect-oidc-repo-name-error')).toBeNull();
-    // The field the visitor did not touch keeps its reason, and the alert keeps the rows it spoke.
-    expect(field('connect-oidc-repo-id').getAttribute('aria-invalid')).toBe('true');
-    expect(field('connect-oidc-repo-id').getAttribute('aria-describedby')).toBe(
-      'connect-oidc-repo-id-hint connect-oidc-repo-id-error',
-    );
-    expect(root.querySelector('#connect-oidc-repo-id-error')?.textContent).toContain(
-      'No such repository ID.',
-    );
+    expect(root.querySelector('#connect-token-name-error')).toBeNull();
     const alert = root.querySelector<HTMLElement>('[data-testid="connect-ci-details"]')!;
-    expect(alert.textContent).toContain('That repository is not visible to the app.');
-    expect(alert.textContent).toContain('Repository (owner/repo):');
-    expect(alert.textContent).not.toContain('/repository_full_name');
+    expect(alert.textContent).toContain('That token name is reserved.');
+    expect(alert.textContent).toContain('Token name:');
+    expect(alert.textContent).not.toContain('/name');
 
     // An edited field that is still invalid stays invalid, now for its own reason.
-    await fill({ 'connect-oidc-repo-id': 'abc' });
-    expect(field('connect-oidc-repo-id').getAttribute('aria-invalid')).toBe('true');
-    expect(root.querySelector('#connect-oidc-repo-id-error')?.textContent).toContain(
-      'positive whole-number',
+    await fill({ 'connect-token-name': '' });
+    expect(field('connect-token-name').getAttribute('aria-invalid')).toBe('true');
+    expect(root.querySelector('#connect-token-name-error')?.textContent).toContain(
+      'Enter a token name',
     );
     for (const described of root.querySelectorAll<HTMLElement>('[aria-describedby]')) {
       for (const id of (described.getAttribute('aria-describedby') ?? '').split(/\s+/)) {
@@ -205,57 +147,9 @@ describe('ConnectCiPage field reasons and re-read focus', () => {
   });
 
   it('associates initial hints without an error id before validation or refusal', () => {
-    expect(field('connect-oidc-repo-id').getAttribute('aria-describedby')).toBe(
-      'connect-oidc-repo-id-hint',
-    );
-    expect(field('connect-oidc-repo-name').getAttribute('aria-describedby')).toBe(
-      'connect-oidc-repo-name-hint',
-    );
     expect(field('connect-token-name').getAttribute('aria-describedby')).toBe(
       'connect-token-name-hint',
     );
-    expect(field('connect-oidc-refs').getAttribute('aria-describedby')).toBe(
-      'connect-oidc-refs-hint',
-    );
-    expect(field('connect-oidc-workflows').getAttribute('aria-describedby')).toBe(
-      'connect-oidc-workflows-hint',
-    );
-  });
-
-  it('focuses the linked OIDC summary after an empty submit', async () => {
-    const submitButton = root.querySelector<HTMLButtonElement>(
-      '[data-testid="connect-oidc-submit"]',
-    );
-    submitButton?.focus();
-    await submit();
-    const summary = root.querySelector('#connect-oidc-errors')!;
-    expect(document.activeElement).toBe(summary);
-    expect(summary.querySelectorAll('a')).toHaveLength(4);
-    summary.querySelector<HTMLAnchorElement>('a[href="#connect-oidc-repo-id"]')!.click();
-    expect(document.activeElement).toBe(field('connect-oidc-repo-id'));
-    expect(field('connect-oidc-repo-id').getAttribute('aria-invalid')).toBe('true');
-    expect(root.querySelector('#connect-oidc-repo-id-error')?.textContent).toContain(
-      'Enter a positive',
-    );
-    expect(createCiBinding).not.toHaveBeenCalled();
-  });
-
-  it.each([
-    ['connect-oidc-repo-id', '9007199254740992'],
-    ['connect-oidc-repo-name', 'missing-owner'],
-    ['connect-oidc-refs', ' \n '],
-    ['connect-oidc-workflows', Array.from({ length: 33 }, () => 'workflow').join('\n')],
-  ])('links only the invalid OIDC control %s in the focused summary', async (id, value) => {
-    await fillOidc();
-    await fill({ [id]: value });
-    await submit();
-    const summary = root.querySelector('#connect-oidc-errors')!;
-    expect(document.activeElement).toBe(summary);
-    expect(summary.querySelectorAll('a')).toHaveLength(1);
-    summary.querySelector<HTMLAnchorElement>(`a[href="#${id}"]`)!.click();
-    expect(document.activeElement).toBe(field(id));
-    expect(field(id).getAttribute('aria-invalid')).toBe('true');
-    expect(createCiBinding).not.toHaveBeenCalled();
   });
 
   it.each(['', '   ', 'a'.repeat(129)])(
@@ -281,46 +175,14 @@ describe('ConnectCiPage field reasons and re-read focus', () => {
     },
   );
 
-  it('refresh keeps focus when focused control still enabled', async () => {
-    refreshFailure.set('unavailable');
-    await fixture.whenStable();
-    const nameField = field('connect-token-name');
-    nameField.focus();
-    // The press does not move the focus, so the visitor's place is still the field they typed in.
-    retryButton().click();
-    await settle();
-    expect(refresh).toHaveBeenCalledWith('org-1', 'project-1');
-    // The notice the press came from is gone, and the field the visitor was in keeps the place.
-    expect(root.querySelector('[data-testid="connect-ci-refresh-failed"]')).toBeNull();
-    expect(document.activeElement).toBe(nameField);
-  });
-
-  it('refresh restores focus when focused control disabled', async () => {
-    tokens.set([TOKEN]);
-    refreshFailure.set('unavailable');
-    await fixture.whenStable();
-    const rotate = root.querySelector<HTMLButtonElement>('[data-testid="connect-token-rotate"]')!;
-    rotate.focus();
-    refresh.mockImplementationOnce(() => {
-      // The read took the permission the control was usable with, so the place it held is gone.
-      permitted.set(false);
-      refreshFailure.set(null);
-      return Promise.resolve();
-    });
-    retryButton().click();
-    await settle();
-    expect(rotate.disabled).toBe(true);
-    // A token-row control belongs to the token panel, so that panel's heading takes the place.
-    expect(document.activeElement).toBe(root.querySelector('#connect-token-heading'));
-  });
-
   it('refresh keeps the focus the visitor moved to while the re-read ran', async () => {
     refreshFailure.set('unavailable');
     await fixture.whenStable();
-    const nameField = field('connect-token-name');
+    const elsewhere = document.createElement('button');
+    document.body.append(elsewhere);
     refresh.mockImplementationOnce(() => {
       // The visitor moved on while the read was running: that focus is theirs to keep.
-      nameField.focus();
+      elsewhere.focus();
       refreshFailure.set(null);
       return Promise.resolve();
     });
@@ -329,13 +191,14 @@ describe('ConnectCiPage field reasons and re-read focus', () => {
     pressed.click();
     await settle();
     expect(root.querySelector('[data-testid="connect-ci-refresh-failed"]')).toBeNull();
-    expect(document.activeElement).toBe(nameField);
+    expect(document.activeElement).toBe(elsewhere);
+    elsewhere.remove();
   });
 
   it('releases the re-read focus listener when the page is destroyed mid-read', async () => {
     refreshFailure.set('unavailable');
     await fixture.whenStable();
-    field('connect-token-name').focus();
+    retryButton().focus();
     const removed = vi.spyOn(document, 'removeEventListener');
     const focusRemovals = (): number =>
       removed.mock.calls.filter((call) => call[0] === 'focusin').length;
@@ -359,35 +222,8 @@ describe('ConnectCiPage field reasons and re-read focus', () => {
       });
       // Released exactly once, and the read that settled on a destroyed page puts nothing back.
       expect(focusRemovals()).toBe(1);
-      expect(document.activeElement).toBe(field('connect-token-name'));
     } finally {
       removed.mockRestore();
-    }
-  });
-
-  it('keeps the focus the visitor moved when the read disables the pressed control', async () => {
-    tokens.set([TOKEN]);
-    refreshFailure.set('unavailable');
-    await fixture.whenStable();
-    const rotate = root.querySelector<HTMLButtonElement>('[data-testid="connect-token-rotate"]')!;
-    const elsewhere = document.createElement('button');
-    document.body.append(elsewhere);
-    try {
-      refresh.mockImplementationOnce(() => {
-        // The visitor moved on before the read took the permission the control was usable with.
-        elsewhere.focus();
-        permitted.set(false);
-        refreshFailure.set(null);
-        return Promise.resolve();
-      });
-      rotate.focus();
-      retryButton().click();
-      await settle();
-      expect(rotate.disabled).toBe(true);
-      // A focus the visitor moved themselves is never taken back to the panel heading.
-      expect(document.activeElement).toBe(elsewhere);
-    } finally {
-      elsewhere.remove();
     }
   });
 
@@ -401,34 +237,5 @@ describe('ConnectCiPage field reasons and re-read focus', () => {
     await refreshPage.call(page);
     // Nothing was captured, so nothing has to be released: no listener outlives the page.
     expect(refresh).not.toHaveBeenCalled();
-  });
-
-  it('leaves the visitor alone when the read takes the place they had moved to', async () => {
-    tokens.set([TOKEN]);
-    refreshFailure.set('unavailable');
-    await fixture.whenStable();
-    const rotate = root.querySelector<HTMLButtonElement>('[data-testid="connect-token-rotate"]')!;
-    const tokenHeading = root.querySelector('#connect-token-heading');
-    const elsewhere = document.createElement('button');
-    document.body.append(elsewhere);
-    try {
-      refresh.mockImplementationOnce(() => {
-        // The visitor moved on and the read then took that place too, leaving them on `<body>`:
-        // their own move is not a place this handoff is owed, so no heading takes it back.
-        elsewhere.focus();
-        permitted.set(false);
-        elsewhere.remove();
-        refreshFailure.set(null);
-        return Promise.resolve();
-      });
-      rotate.focus();
-      retryButton().click();
-      await settle();
-      expect(rotate.disabled).toBe(true);
-      expect(document.activeElement).toBe(document.body);
-      expect(document.activeElement).not.toBe(tokenHeading);
-    } finally {
-      elsewhere.remove();
-    }
   });
 });
