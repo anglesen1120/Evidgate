@@ -321,4 +321,11 @@ internal sealed partial class TenantRowFactory
             }
         }
     }
+
+    /// <summary>
+    /// One more row of <paramref name="table"/> for <paramref name="org"/> beside the cached one, for a suite that
+    /// needs a sibling the valid row does not name (another project, case or planned execution).
+    /// </summary>
+    internal Task<GeneratedRow> CreateBesideAsync(string table, Guid org, CancellationToken cancellationToken) =>
+        CreateBesideCacheAsync(table, org, cancellationToken);
 }

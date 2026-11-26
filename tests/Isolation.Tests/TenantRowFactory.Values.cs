@@ -170,6 +170,11 @@ internal sealed partial class TenantRowFactory
             ("public.case_attempt", "attempt_no") => Interlocked.Increment(ref _attemptNo),
             ("public.case_attempt", "raw_status") => "passed",
             ("public.case_attempt", "normalized_status") => "passed",
+            // incident's execution_key is the sha256 hex (CHECK ^[0-9a-f]{64}$) and part of its run key, so
+            // a fresh value per generated row keeps the corrupt sibling from colliding on that key first.
+            ("public.incident", "execution_key") =>
+                Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture) + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture),
+            ("public.incident_attempt", "result") => "failed",
             // event's execution_key is the 00 §7 sha256 hex (0034 CHECK ^[0-9a-f]{64}$), its type is the
             // envelope's dotted lower_snake shape and its payload_hash is the 00 §7 RFC 8785 content
             // address (0034 CHECK ^sha256:[0-9a-f]{64}$): the generic text rule satisfies none of the three.

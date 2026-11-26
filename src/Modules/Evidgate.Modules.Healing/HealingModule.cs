@@ -4,6 +4,7 @@ using Evidgate.BuildingBlocks.SharedKernel.Secrets;
 using Evidgate.Modules.Healing.Application;
 using Evidgate.Modules.Healing.Contracts;
 using Evidgate.Modules.Healing.Infrastructure;
+using Evidgate.Modules.Healing.Infrastructure.Persistence;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -40,8 +41,9 @@ internal static class HealingModule
         services.Configure<HealingOptions>(configuration.GetSection(HealingOptions.SectionName));
         services.TryAddSingleton<IHealingApplyPolicy, HealingApplyPolicy>();
 
-        // The switch store is the module's only Dapper path: the tenant/project upsert and the three-row resolution
-        // read. No EF write model exists — the row is configuration, written through one statement.
+        services.AddEvidgateDbContext<HealingDbContext>(typeof(HealingDbContext).Assembly);
+        services.TryAddScoped<IIncidentRecorder, IncidentRecorder>();
+        services.TryAddScoped<RecordIncidentsForEvidenceRevisionHandler>();
         services.TryAddScoped<HealingSwitchStore>();
 
         // The Contracts seam other modules resolve to ask "may healing act for this project?".

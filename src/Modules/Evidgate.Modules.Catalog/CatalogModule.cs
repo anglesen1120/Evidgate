@@ -45,6 +45,7 @@ internal static class CatalogModule
         services.TryAddScoped<ITestRevisionStore, TestRevisionStore>();
         services.TryAddSingleton<SuiteRevisionPlanner>();
         services.TryAddScoped<ICatalogContracts, CatalogContracts>();
+        services.TryAddScoped<IIncidentRevisionFrameworks, IncidentRevisionFrameworks>();
 
         // The suite write path asks this for the fixture references a revision authors; it reads inside the caller's
         // tenant transaction, like every other catalog read.

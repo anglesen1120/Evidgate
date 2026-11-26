@@ -112,7 +112,31 @@ EVIDGATE__SESSION__PEPPER=$(rv_random_base64 32)"
   printf '%s\n' "$content"
 }
 
-# Creates the secrets file on the first deploy and never touches its content
+# An env file made before a key existed lacks it, and compose refuses to start
+# on a missing key. The host adds only the absent keys, once, in one locked
+# step that re-checks presence: a key that is already declared (any dotenv
+# spelling, even with an empty value) is never touched, so a pepper that signed
+# live invites is never rotated and two deploys cannot append two peppers. The
+# values travel on stdin, never in argv, and the file is replaced by one rename.
+rv_env_add_missing() {
+  local key value add="" file
+  for key in EVIDGATE__INVITE__PEPPER EVIDGATE__INVITE__PEPPERVERSION; do
+    case "$key" in
+      *PEPPERVERSION) value=1 ;;
+      *)
+        value="$(rv_random_base64 32)" || rv_die "cannot generate the invite pepper"
+        [ "${#value}" -eq 44 ] || rv_die "the generated invite pepper is not 32 base64 bytes"
+        ;;
+    esac
+    add="${add}${key}=${value}"$'\n'
+  done
+  file="$(rv_quote "$RV_ENV_FILE")"
+  printf '%s' "$add" | rv_mutate "set -eu; f=$file; l=\"\$f.lock\"; n=0; until mkdir \"\$l\" 2>/dev/null; do n=\$((n+1)); [ \"\$n\" -le 30 ] || { echo \"the env file is locked by another deploy\" >&2; exit 1; }; sleep 1; done; trap 'rmdir \"\$l\"' EXIT; umask 077; t=\"\$f.up.\$\$\"; cp -p \"\$f\" \"\$t\"; chg=0; while IFS= read -r line; do k=\${line%%=*}; if grep -Eq \"^[[:space:]]*(export[[:space:]]+)?\$k[[:space:]]*[=:]\" \"\$f\"; then continue; else rc=\$?; [ \"\$rc\" -eq 1 ] || exit \"\$rc\"; fi; [ -z \"\$(tail -c1 \"\$t\")\" ] || printf '\\n' >>\"\$t\"; printf '%s\\n' \"\$line\" >>\"\$t\"; chg=1; done; if [ \"\$chg\" = 1 ]; then chmod 600 \"\$t\"; mv \"\$t\" \"\$f\"; else rm -f \"\$t\"; fi" \
+    || rv_die "cannot add the invite keys to $RV_ENV_FILE"
+  rv_info "$RV_ENV_FILE has the invite keys (an existing declaration is never replaced)"
+}
+
+# Creates the secrets file on the first deploy and never rewrites its content
 # again: it holds the only copy of the database and API credentials, and a
 # rewrite would lock every running service out of its own data.
 rv_env_ensure() { # SHA PUBLIC_ORIGIN TUNNEL_TOKEN; returns 0 created, 1 kept
@@ -122,7 +146,8 @@ rv_env_ensure() { # SHA PUBLIC_ORIGIN TUNNEL_TOKEN; returns 0 created, 1 kept
     if rv_run "grep -Eq '=__[A-Za-z0-9_]+__\$' $(rv_quote "$RV_ENV_FILE")"; then
       rv_die "$RV_ENV_FILE still holds a __PLACEHOLDER__; it is never rewritten, so fill it in on the host or move it aside and deploy again"
     fi
-    rv_info "$RV_ENV_FILE kept existing (never rewritten): $(rv_target):$RV_ENV_FILE"
+    rv_env_add_missing
+    rv_info "$RV_ENV_FILE kept existing (values never rewritten): $(rv_target):$RV_ENV_FILE"
     return 1
   fi
 
