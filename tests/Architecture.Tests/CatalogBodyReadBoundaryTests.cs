@@ -58,8 +58,6 @@ public sealed class CatalogBodyReadBoundaryTests
             (["JsonSerializer.Deserialize<JsonElement>( x3"], "decodes stored suite revision JSON columns for the read model"),
         [ModuleDirectory + "/Application/Commands/SuiteCommands.cs"] =
             (["JsonSerializer.Deserialize<JsonElement>( x1"], "decodes the stored variant params JSON"),
-        [ModuleDirectory + "/Infrastructure/GitHub/GitHubClient.cs"] =
-            (["ReadJsonAsync( x1"], "reads the outbound GitHub API response through its own capped reader, not a request body"),
         [ModuleDirectory + "/Domain/SidecarManifestReader.cs"] =
             (["JsonDocument.Parse x1"], "parses a repository sidecar manifest after converting it from YAML"),
         [ModuleDirectory + "/Domain/TemplateConformance.cs"] =

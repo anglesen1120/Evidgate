@@ -85,6 +85,11 @@ public sealed class CatalogueTests
             "script:generate",
             "13.1.1",
             "plans/features/13-product-phases/13.1.1-feature-tree-and-manual-test-cases.md:39 — AC17 seeds `script:generate` and names 13.5.1 as its consumer (route-less here)"),
+        new(
+            // The GitHub App routes were its last handlers; it stays in every role until the permission cleanup of T4/T5.
+            "ci_binding:write",
+            "02.11.1",
+            "plans/features/02-identity-tenancy/02.11.1-github-removal.md:1 — the removal keeps the code in the catalogue and roles; the next integration connector (13.10.4) or the T4 cleanup decides its fate"),
     ];
 
     /// <summary>
