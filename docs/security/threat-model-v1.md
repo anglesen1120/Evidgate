@@ -55,6 +55,8 @@ Legend: ✅ verified with a link · ⚠️ unverified · `[INFERENCE]` · `[DECI
 | B-webhook-out | boundary | API → webhook receivers | `plans/11-security-compliance.md` §4.1 |
 | B-operator | boundary | Operator → tenant data | `plans/11-security-compliance.md` §4.1 |
 
+Under D-NO-GITHUB, Evidgate stores approved scripts as immutable revisions and connects to no customer repository or GitHub service (02.11 retires the old surfaces); hosted runs (13.11) add claim/finalize and executor egress surfaces, with TH-hosted rows to be written by 13.11.1-T1.
+
 ## 3. Module sections
 
 One section per module in the catalogue, each followed by its STRIDE threat table.

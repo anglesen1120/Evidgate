@@ -5,6 +5,10 @@ Checks: one file per story; H1; header table; the 11 sections of 00 §12 in orde
 `### <task-id>` block per area task in §10; sub-task ids/sizes (each ≤ S, sum == task size; ids 1..n, optional letter suffix a, b, c per 00 §12;
 an `[OPEN]` row with an `unsized` size cell is a warning and left out of the sum);
 balanced code fences; every referenced story/task id exists. Exit 1 on any error.
+
+plans/removed-scope.md lists task ids removed by an owner decision. Those ids stay in history text
+(old §10 blocks, status lines), so they are not "unknown", and a file whose story was removed
+entirely is not an orphan when it says `Removed by D-NO-GITHUB`.
 """
 import glob, json, os, re, subprocess, sys
 
@@ -15,6 +19,10 @@ SECTIONS = ["Goal and non-goals", "User stories and acceptance criteria", "Contr
 
 graph = json.loads(subprocess.check_output([sys.executable, "scripts/plan_graph.py", "--json"]))
 stories, tasks = graph["stories"], graph["tasks"]
+removed = set()
+if os.path.exists("plans/removed-scope.md"):
+    removed = set(re.findall(r"^\|\s*(\d{2}\.\d+\.\d+-T\d+)\s*\|", open("plans/removed-scope.md", encoding="utf-8").read(), re.M))
+removed_stories = {t.split("-T")[0] for t in removed} - set(stories)
 errors, warn = [], []
 only = sys.argv[1] if len(sys.argv) > 1 else None  # optional plan prefix filter, e.g. "04"
 
@@ -82,17 +90,18 @@ for sid, st in sorted(stories.items(), key=lambda kv: [int(x) for x in kv[0].spl
         if big: errors.append(f"{f}: sub-tasks > S: {big}")
         tot = sum(SIZE[s] for _, _, s in subs if s); want_sz = SIZE[tasks[tid]["size"]]
         if abs(tot - want_sz) > 1e-9: errors.append(f"{f}: {tid} sub-tasks sum {tot} != task size {want_sz} ({tasks[tid]['size']})")
-    extra = set(re.findall(r"^### (\d{2}\.\d+\.\d+-T\d+)\b", sec10, re.M)) - set(st["tasks"])
+    extra = set(re.findall(r"^### (\d{2}\.\d+\.\d+-T\d+)\b", sec10, re.M)) - set(st["tasks"]) - removed
     if extra: errors.append(f"{f}: §10 has blocks for tasks not in the area plan: {sorted(extra)}")
     for ref in set(re.findall(r"\b(\d{2}\.\d+\.\d+-T\d+)(?:\.\d+)?\b", txt)):
-        if ref not in tasks: errors.append(f"{f}: unknown task id {ref}")
+        if ref not in tasks and ref not in removed: errors.append(f"{f}: unknown task id {ref}")
     if len(lines) < 60: warn.append(f"{f}: thin ({len(lines)} lines)")
     for ref in set(re.findall(r"(?<![\d.])(\d{2})\.(\d+)\.(\d+)(?![\d-]|\.\d)", txt)):
         sref = ".".join(ref)
-        if 1 <= int(ref[0]) <= 12 and ref[1] != "0" and sref not in stories:
+        if 1 <= int(ref[0]) <= 12 and ref[1] != "0" and sref not in stories and sref not in removed_stories:
             warn.append(f"{f}: story id {sref} not found")
 
-orphans = [f for sid, fl in files.items() if sid not in stories for f in fl]
+orphans = [f for sid, fl in files.items() if sid not in stories for f in fl
+           if not (sid in removed_stories and "Removed by D-NO-GITHUB" in open(f, encoding="utf-8").read())]
 if orphans: errors.append(f"feature files without a story: {orphans}")
 print(f"stories checked: {sum(1 for s in stories if not only or s.startswith(only + '.'))}, files: {sum(len(v) for v in files.values())}")
 print(f"errors: {len(errors)}"); [print("  E", e) for e in errors[:200]]

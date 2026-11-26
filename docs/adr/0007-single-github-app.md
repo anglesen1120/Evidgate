@@ -2,7 +2,7 @@
 
 ## Status
 
-proposed (2026-10-11; custodian [OPEN], DECISIONS §8 O11)
+Superseded (owner 2026-11-27, DECISIONS D-NO-GITHUB)
 
 ## Date
 

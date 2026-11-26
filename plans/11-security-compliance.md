@@ -13,7 +13,7 @@
 
 - Threat model (STRIDE) per module and per trust boundary, kept versioned.
 - Untrusted CI and fork pull requests: what we tell customers, what we refuse to accept, and how a fork run cannot reach our credentials.
-- Sandbox requirements for any code Evidgate executes (V2 agent, healing sandbox) and the boundary required before hosted multi-tenant execution (V3).
+- Sandbox requirements for any code Evidgate executes (V2 agent, healing sandbox) and the boundary required before Evidgate-hosted multi-tenant execution ships (hosted runs, Epic 13.11, G2).
 - Secrets as references only; masking; rotation; leak response.
 - AI permissions and prompt-injection containment.
 - Audit, support access, monitoring, break-glass.
@@ -23,9 +23,9 @@
 - PDPL (Law 91/2025/QH15) program: DPA, privacy notice, data map, impact dossiers, transfer assessment, consent stance, deletion SLAs, breach runbook, sub-processor list.
 - Data residency decision support for O3/O4.
 
-**Out of scope (V1-V2):** ISO 27001 / SOC 2 certification, HIPAA/PCI scope, SAML/enterprise identity federation, on-premise packaging, and any hosted runner or device farm (G4, gated by 11.2.1-T5).
+**Out of scope (V1-V2):** ISO 27001 / SOC 2 certification, HIPAA/PCI scope, SAML/enterprise identity federation, on-premise packaging, and any device farm. Evidgate-hosted runs are not out of scope: they ship only as Epic 13.11 (G2) behind 11.2.1-T4/T5 and a VM/microVM boundary (DECISIONS A5 exception, D-HOSTED-RUN).
 
-**Version split:** V1 = baseline + PDPL program + pen test (M1-M3). V2 = AI security, ASVS walkthrough with evidence (M4). V3 = hosted multi-tenant isolation evaluation (M5).
+**Version split:** V1 = baseline + PDPL program + pen test (M1-M3). V2 = AI security, ASVS walkthrough with evidence (M4). V3 = hosted multi-tenant isolation evaluation (M5), pulled forward to G2 for Epic 13.11 (the §9 Milestone column is authoritative; the Version column and §12 totals are unchanged).
 
 **Phase placement (CR-D-2).** G1 is the authoring phase, and it raises the privacy bar before anything else ships:
 
@@ -34,14 +34,14 @@
 - the **cross-border transfer assessment is complete before the first G1 pilot data leaves Vietnam**, including the first provider call for checklist / test-case generation, rather than filed within the 60-day window afterwards (`11.8.1-T5`, with `11.4.1-T3`/`T4` and the tenant data-owner approval of `08.5.3-T3`);
 - the rest of the G1 baseline: threat model and ASVS decision (`11.1.1`), CI security baseline and ingest-token review (`11.2.1-T1`..`T3`, `T7`), secrets/key lifecycle (`11.3.1-T1`/`T2`/`T4`/`T5`), AI permission boundary and injection corpus (`11.4.1`), supply chain (`11.6.1`), PDPL paperwork (`11.8.1`) and data-protection operations (`11.9.1`, `11.9.2`), plus the audit taxonomy (`11.5.1-T1`) and the audit-chain ADR (`11.5.2-T1`).
 
-G2 adds automated secret scanning in our CI and over ingested artifacts (`11.3.1-T3`) and the audit, support-access and monitoring rows (`11.5.1-T2`..`T5`, `11.5.2-T2`/`T3`); the V1 replay-sandbox requirement `11.2.1-T6` is G3 with the shadow replay it serves (`08.4.3`). The V2 agent sandbox specification (`11.2.1-T4`) and the hosted multi-tenant isolation evaluation (`11.2.1-T5`) are **G4**, so no hosted multi-tenant execution ships before G4. Everyone else — pen test, SAST/DAST, tenant red-team suite (`11.7.1`) — is G4.
+G2 adds automated secret scanning in our CI and over ingested artifacts (`11.3.1-T3`) and the audit, support-access and monitoring rows (`11.5.1-T2`..`T5`, `11.5.2-T2`/`T3`); the V1 replay-sandbox requirement `11.2.1-T6` is G3 with the shadow replay it serves (`08.4.3`). The sandbox specification for V2 agents and hosted runs (`11.2.1-T4`) and the hosted multi-tenant isolation evaluation (`11.2.1-T5`) are **G2**, because hosted execution ships for Epic 13.11 (`13.11.1`) behind them, with a VM/microVM boundary (D4 unchanged); no hosted multi-tenant execution ships before they are done. Everyone else — pen test, SAST/DAST, tenant red-team suite (`11.7.1`) — is G4.
 
 ## 2. Requirements
 
 - **FR-11-1** A versioned threat model enumerates trust boundaries and STRIDE threats per module (`identity`, `tenancy`, `catalog`, `orchestrator`, `ingestion`, `evidence`, `policy`, `healing`, `usage`, `audit`, `notifications`, plus web, CLI/adapters, agent, healing sandbox, LLM gateway, object storage, database, CI). Every threat names a control and a task id; a threat without a control is either accepted in writing or a gap.
 - **FR-11-2** Untrusted CI: our published CI recipe (a) never uses `pull_request_target` to check out untrusted code, (b) pins every action to a full commit SHA, (c) grants `GITHUB_TOKEN` read-only by default and elevates per job, (d) registers/masks derived secrets with `::add-mask::`, (e) never puts a long-lived Evidgate credential in a workflow. ✅ Verified guidance: GitHub "Secure use reference" documents exactly these points, including the `pull_request_target`/`workflow_run` risk with untrusted checkout, secret masking, least-privilege `GITHUB_TOKEN`, and SHA pinning ([docs.github.com/en/actions/reference/security/secure-use](https://docs.github.com/en/actions/reference/security/secure-use), read 2026-09-24).
 - **FR-11-3** A workflow triggered by a fork pull request must be able to run tests **without any Evidgate credential**; if such a run uploads results, it does so through a separately minted, project-scoped, short-lived token that the maintainer's workflow explicitly provides, or not at all. A fork run must never receive a tenant-level ingest token.
-- **FR-11-4** Any code Evidgate executes (V2 agent jobs, healing sandbox, dry runs) runs in a disposable environment with a default-deny network allowlist, a least-privilege identity with no ambient tenant credentials, no host mounts, resource caps, and verified teardown. A single container is **not** assumed sufficient for hostile code `[OPEN]`; hosted multi-tenant execution requires a VM/microVM-grade boundary validated in 11.2.1-T5 before it ships (V3).
+- **FR-11-4** Any code Evidgate executes (V2 agent jobs, healing sandbox, dry runs, hosted runs) runs in a disposable environment with a default-deny network allowlist, a least-privilege identity with no ambient tenant credentials, no host mounts, resource caps, and verified teardown. A single container is **not** assumed sufficient for non-hosted hostile code `[OPEN]`; hosted multi-tenant execution (Epic 13.11, G2) is decided: it requires a VM/microVM-grade boundary (D4), and 11.2.1-T5 validates the chosen option before it ships.
 - **FR-11-5** Secrets are stored as **references** (customer vault/CI or our secret manager) and resolved per job with the narrowest scope; values never enter the database, logs, artifacts, error `details`, traces or metric labels. Derived values (tokens, signed URLs) are masked/registered; ingestion masks before upload.
 - **FR-11-6** AI: the model receives structured input and returns a structured candidate only. It has no shell tool, no repository merge right, no policy edit right, and no access to secrets or other tenants. Retrieval is tenant-filtered. Sending content to a provider is opt-in per tenant, redacted at source, and blocked until the tenant's data owner approves.
 - **FR-11-7** Prompt injection is assumed: DOM, logs, documents and artifact content are untrusted input. No instruction found inside content may change a policy, an approval, a permission, a gate decision or a kill switch; the independent rule engine (validator) is the only authority over a candidate, and injection attempts are logged as security events (read endpoint 11.5.1-T5, `security_event:read`, `tenant_admin` only) and visible to the tenant in the Settings security-events view (09.7.1-T9); the V1 event set is the 11.1.1-T4 baseline plus support-access rows (02.8.1-T1, 11.5.1-T2), with injection-attempt events joining it in V2 (11.4.1-T2).
@@ -71,9 +71,9 @@ G2 adds automated secret scanning in our CI and over ingested artifacts (`11.3.1
 | # | Decision | Rationale | Rejected |
 |---|---|---|---|
 | D1 | No password storage; OIDC login only in V1 (DECISIONS R5) | Smallest credential surface; enterprise SAML is V3 | Email+password, social login without SSO |
-| D2 | Customer CI authenticates with GitHub OIDC → short-lived Evidgate token (DECISIONS R4/F3); other CIs use a hashed project token | No long-lived secret in customer CI; per-job scope | Long-lived API key per repository |
+| D2 | Customer CI authenticates with a hashed project ingest token (shown once, rotatable), optionally exchanged for a short-lived `ci_producer` token (DECISIONS R4); no GitHub OIDC (D-NO-GITHUB) | Works from any CI without access to the customer's systems; per-project scope, revocable; the short-lived token limits the exposure of long jobs; a run's branch/commit is producer-declared | Long-lived API key per repository; GitHub OIDC |
 | D3 | ASVS **⚠️ L2 proposed** with a published gap list; no certification claim | Useful, verifiable target at pilot scale; a certification claim we cannot back is worse than none | Claiming L2 compliance without evidence; L3 (cost without a customer asking) |
-| D4 | Sandbox: disposable + allowlist + least privilege; a container is not accepted as the isolation boundary for hostile multi-tenant code | Source §8 requires VM/microVM or an equivalent verified boundary for hosted multi-tenant | Treating a single container or a shared runner as sufficient |
+| D4 | Sandbox: disposable + allowlist + least privilege; a container is not accepted as the isolation boundary for hostile multi-tenant code; hosted runs (13.11) use a VM/microVM boundary | Source §8 requires VM/microVM or an equivalent verified boundary for hosted multi-tenant | Treating a single container or a shared runner as sufficient |
 | D5 | LLM context is opt-in per tenant, redacted at source, and never includes secrets or other tenants' data (DECISIONS §7) | Cross-border transfer (Art. 20.1.c ✅) and the healing safety boundary | "Send everything, filter later" |
 | D6 | Healing runs with kill switches before any apply capability ships (DECISIONS §5.9) | A broken healing path must not be able to stop ingestion or gates | Shipping apply first, kill switch later |
 | D7 | Audit is append-only with hashes; support access is time-boxed and tenant-visible | "Who saw what" is part of the product promise for evidence | Editable audit tables; silent support access |
@@ -87,7 +87,7 @@ G2 adds automated secret scanning in our CI and over ingested artifacts (`11.3.1
 | Boundary | Threats considered | Controls |
 |---|---|---|
 | Browser → API | spoofing, tampering, XSS-based session theft, CSRF | OIDC, `__Host-` session cookie `HttpOnly; Secure; SameSite=Lax`, ASP.NET Core antiforgery issuing `XSRF-TOKEN` with Angular `withXsrfConfiguration` sending `X-XSRF-TOKEN` on cookie-authenticated mutations (T38), CSP, no token in `localStorage`, isolated origin for artifact HTML |
-| Customer CI → API | spoofing (stolen token), replay, flooding | OIDC-issued short-lived token, hashed ingest token, batch limits, per-project scope, sequence uniqueness |
+| Customer CI → API | spoofing (stolen token), replay, flooding | hashed ingest token, short-lived `ci_producer` token from the ingest-token exchange, batch limits, per-project scope, sequence uniqueness |
 | Agent → API | impersonation, stale lease, job theft | per-agent identity, epoch fencing, capability match, heartbeat, lease expiry |
 | API/worker → PostgreSQL | privilege escalation, cross-tenant read | app role not owner, `FORCE ROW LEVEL SECURITY` (DECISIONS F5), parameterised `set_config('evidgate.org_id', …, true)` per transaction via `ITenantScope.BeginAsync` (00 §5.5 C3), composite FKs |
 | API → object storage | URL leakage, confused deputy | short-lived presigned URL, checksum verification, server-chosen keys, no public buckets |
@@ -125,9 +125,9 @@ Every article citation in this table is from the Law text I opened: Law on Perso
 | Deletion SLA + report | windows per data class, verification method | Art. 37.2 + contract | Tech Lead |
 | Fines exposure note | cross-border violation up to 5 % of preceding-year revenue; other violations up to VND 3 billion; buying/selling up to 10× proceeds | Art. 8.3/8.4/8.5 ✅ | Owner |
 
-### 4.4 Sandbox requirements (V1 replay sandbox for shadow healing, `11.2.1-T6`, G3; V2 agents `11.2.1-T4`, G4; hosted multi-tenant `11.2.1-T5`, G4)
+### 4.4 Sandbox requirements (V1 replay sandbox for shadow healing, `11.2.1-T6`, G3; V2 agents and hosted runs `11.2.1-T4`, G2; hosted multi-tenant `11.2.1-T5`, G2)
 
-Disposable environment per job · default-deny egress with an explicit allowlist (engine CDN, package registry, customer staging host, LLM gateway) · least-privilege identity, no ambient tenant credentials, no long-lived cloud role · no host mounts, no docker socket, no access to the control-plane network · CPU/memory/disk/time caps with a hard kill · artifact collection through the normal upload path only · teardown verified and logged · escape attempts logged as security events. For V3 hosted multi-tenant execution the boundary must be a VM/microVM or a verified equivalent `[OPEN]`.
+Disposable environment per job · default-deny egress with an explicit allowlist (engine CDN, package registry, customer staging host, LLM gateway) · least-privilege identity, no ambient tenant credentials, no long-lived cloud role · no host mounts, no docker socket, no access to the control-plane network · CPU/memory/disk/time caps with a hard kill · artifact collection through the normal upload path only · teardown verified and logged · escape attempts logged as security events. For hosted multi-tenant execution (Epic 13.11) the boundary is a VM/microVM or a verified equivalent (D4, decided); only the choice among options is evaluated in 11.2.1-T5.
 
 The healing validator (`packages/healing-validator`, Node 26 + TypeScript 6.0.x, 08-owned) runs V1 shadow replay validation as a **child process of `Evidgate.Worker`** over JSON stdin/stdout — never inside the API process — with CPU, memory and wall-time limits enforced by the worker and a pinned Node runtime carried in the worker image (T36); the worker's own environment follows the disposable/allowlisted rules above, and the V1 replay host is customer-side (DECISIONS O10 option (a)).
 
@@ -207,13 +207,13 @@ Epic 11.1 total: 4.0
 #### Story 11.2.1 A fork pull request cannot reach our credentials - acceptance: the published recipe and the fork-PR test prove no Evidgate credential is reachable from an untrusted workflow context.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 11.2.1-T1 | Customer CI security guide: fork-PR rules, `pull_request_target` prohibition, SHA pinning, least-privilege `GITHUB_TOKEN`, masking, rotation ✅ (GitHub secure-use) | M | V1 | G1 | - |
-| 11.2.1-T2 | Fork-PR test: demonstrate no credential reachability and that an attempted use fails authorisation + is logged | M | V1 | G1 | 02.4.1-T1 |
-| 11.2.1-T3 | Ingest token security design review (with 02): scope, TTL, OIDC claim validation, revocation, replay — and the decided storage design: ≥128-bit random token, public prefix, `HMAC-SHA256(pepper_vN, secret)` + `pepper_version`, prefix lookup + `CryptographicOperations.FixedTimeEquals`; review covers pepper custody in the secret store and the versioned rotation runbook (10.7.1-T4) (T5) | M | V1 | G1 | 02.4.1-T1, 02.4.2-T1 |
-| 11.2.1-T4 | Sandbox requirements spec + verification plan for V2 agent/healing (disposable, allowlist, least privilege, teardown proof) | L | V2 | G4 | 05.7.4-T1, 11.2.1-T6 |
-| 11.2.1-T5 | Hosted multi-tenant isolation evaluation: VM/microVM boundary options and evidence | M | V3 | G4 | 11.2.1-T4 |
-| 11.2.1-T6 | V1 replay-sandbox requirements for shadow healing (08.4.3): one-shot workspace, network allowlist, no tenant secrets, resource caps, teardown check; includes the `packages/healing-validator` child-process contract — JSON stdin/stdout, CPU/memory/wall-time limits enforced by the worker, pinned Node runtime in the worker image, never in the API process (T36); 11.2.1-T4 extends it to V2 agents | M | V1 | G3 | 08.4.3-T1 |
-| 11.2.1-T7 | `evidgate_resolve` SECURITY DEFINER review (with 02/03): pinned `search_path`, return limited to `(org_id, project_id, binding_id, status)`, app role `EXECUTE`-only, every call audited; abuse cases checked (binding enumeration, timing oracle, revoked-but-resolvable bindings) (T1) | S | V1 | G1 | 02.6.1-T3, 03.4.1-T2 |
+| 11.2.1-T1 | Customer CI security guide: fork-PR rules for the ingest token (a fork run never receives it), `pull_request_target` prohibition, SHA pinning, masking, rotation ✅ (GitHub secure-use) | M | V1 | G1 | - |
+| 11.2.1-T2 | Fork-PR test: demonstrate no credential reachability and that an attempted use of an ingest token fails authorisation + is logged | M | V1 | G1 | 02.4.2-T1 |
+| 11.2.1-T3 | Ingest token security design review (with 02): scope, TTL, revocation, replay — and the decided storage design: ≥128-bit random token, public prefix, `HMAC-SHA256(pepper_vN, secret)` + `pepper_version`, prefix lookup + `CryptographicOperations.FixedTimeEquals`; review covers pepper custody in the secret store and the versioned rotation runbook (10.7.1-T4) (T5) | M | V1 | G1 | 02.4.2-T1 |
+| 11.2.1-T4 | Sandbox requirements spec + verification plan for V2 agent/healing and hosted runs (disposable, allowlist, least privilege, teardown proof) | L | V2 | G2 | 05.7.4-T1 |
+| 11.2.1-T5 | Hosted multi-tenant isolation evaluation: VM/microVM boundary options and evidence (decision input for 13.11) | M | V3 | G2 | 11.2.1-T4 |
+| 11.2.1-T6 | V1 replay-sandbox requirements for shadow healing (08.4.3): one-shot workspace, network allowlist, no tenant secrets, resource caps, teardown check; includes the `packages/healing-validator` child-process contract — JSON stdin/stdout, CPU/memory/wall-time limits enforced by the worker, pinned Node runtime in the worker image, never in the API process (T36); applies the 11.2.1-T4 requirements to the V1 replay | M | V1 | G3 | 08.4.3-T1, 11.2.1-T4 |
+| 11.2.1-T7 | `evidgate_resolve` SECURITY DEFINER review (with 02): pinned `search_path`, return limited to the identifiers the pre-tenant caller needs (`member_orgs` and the ingest-token lookup; no cross-tenant data), app role `EXECUTE`-only, every call audited; abuse cases checked (token-prefix enumeration, timing oracle, revoked-but-resolvable ingest tokens) (T1) | S | V1 | G1 | 02.6.1-T3 |
 
 Epic 11.2 total: 7.5
 
@@ -330,7 +330,7 @@ Epic 11.9 total: 7.5
 | Needs | From |
 |---|---|
 | Identity, membership, permission catalogue, RLS + tenant context, audit core, support access, isolation suite | 02.1.1-T1, 02.1.2-T1, 02.2.1-T1, 02.6.1-T1, 02.6.2-T1, 02.7.1-T1, 02.8.1-T1, 02.9.1-T1 |
-| CI authentication (OIDC exchange and hashed ingest tokens) | 02.4.1-T1, 02.4.2-T1 |
+| CI authentication (hashed ingest tokens and the short-lived `ci_producer` exchange) | 02.4.1-T3, 02.4.2-T1 |
 | Atomic event ingest (quota, epochs) for artifact/log streams | 04.1.1-T1, 04.1.2-T1 |
 | Agent executor and sandbox surfaces (lease/epoch, one-shot workspace) | 05.7.1-T1, 05.7.4-T1 |
 | Artifact sensitivity, redaction at source, secret masking, parser hardening + hostile fixtures, isolated viewer, retention/deletion | 06.2.1-T1, 06.2.2-T1, 06.2.3-T1, 06.3.1-T1, 06.3.2-T1, 06.3.3-T1, 06.4.1-T1, 06.4.4-T1, 06.4.5-T1 |
@@ -347,8 +347,8 @@ Epic 11.9 total: 7.5
 |---|---|---|---|
 | 1 | ASVS target level ⚠️: confirm L2 or accept a documented subset — **Closed 2026-10-27 (D-S107-Q1):** ASVS 5.0.0 (tag `v5.0.0`), level L2 confirmed for the web origin and the `/v1` API; chapter-level mapping, 39 published gap rows (34 counted L2 gaps plus five traceability observations) and a named owner per gap in `docs/security/asvs-l2-mapping.md`, requirement-level walkthrough stays with 11.7.1-T5 | Tech Lead | M2 (11.1.1-T3) |
 | 2 | Cloud provider/region and whether any store may leave Vietnam (O3) | Owner | M2 (first pilot data) |
-| 3 | LLM provider(s) and whether tenant content may leave Vietnam (O4) | Owner | V2 healing PR |
-| 4 | Whether a container-only isolation boundary is acceptable for any V2 execution, or the agent must stay wholly customer-side `[OPEN]` | Tech Lead | M4 (11.2.1-T4) |
+| 3 | LLM provider(s) and whether tenant content may leave Vietnam (O4) | Owner | V2 healing approval |
+| 4 | Whether a container-only isolation boundary is acceptable for any non-hosted V2 execution, or the agent must stay wholly customer-side `[OPEN]` (hosted runs are not open: VM/microVM per D4) | Tech Lead | M4 (11.2.1-T4) |
 | 5 | Whether the pilot customers require an on-premise or single-tenant deployment | Owner | M3 |
 | 6 | Budget and vendor for the external pen test | Owner | M3 start |
 | 7 | Cross-plan story ids referenced in `Depends on` were written in parallel across twelve plans; the integrator must reconcile any mismatch found at the first full-program review — **Closed 2026-09-25:** script check over all 487 task rows finds 0 unresolved ids; whether each cited id means what the citation says is checked in each feature plan's Definition of Ready (00 §12) | Tech Lead | before M1 |
@@ -383,3 +383,5 @@ Epic 11.9 total: 7.5
 | 11-CR-3 | State in 00 §9.3 that `POST /v1/support-access` style operator grants (scope + expiry) are audited and returned in the tenant audit feed | Support access must be tenant-visible per FR-11-8 | applied 2026-09-24 |
 | 11-CR-4 | 00 §14: this plan's row becomes `43 tasks, V1 42, V2 9, V3 1, raw 52.0, buffered 62.4` (new task 11.5.1-T5, M, V1, M3); 2026-09-25 integrator: plus 11.2.1-T6 (M, V1, M3) → `44 tasks, V1 43, V2 9, V3 1, raw 53.0, buffered 63.6`. Note that 11-CR-2's request text still shows the pre-apply path `GET /v1/security-events`; 00 §9.3 already carries the applied path `GET /v1/orgs/{o}/security-events`, so no further 00 edit is needed there | Keep the roll-up equal to the sum of plan §12 tables after every task addition | Applied 2026-09-25 by integrator |
 | 11-CR-5 | 00 §14: this plan's row becomes `45 tasks, V1 44.5, V2 9.0, V3 1.0, raw 54.5, buffered 65.4` (new task 11.2.1-T7 S/V1/M2 for the T1 resolver review; 11.6.1-T1 resized M→L, +1.0, for dual-ecosystem lockfile work) | Keep the roll-up equal to the sum of plan §12 tables after every task addition | filed 2026-09-25 (CR-D-1 + TL review) |
+
+> **2026-11-27 D-HOSTED-RUN / D-NO-GITHUB (S698):** 11.2.1-T4 and 11.2.1-T5 move to milestone G2 (hosted runs, Epic 13.11); 11.2.1-T4 no longer depends on 11.2.1-T6 (G3), the dependency is inverted (11.2.1-T6 now depends on 11.2.1-T4) so the graph has no later-phase dependency. 11.2.1-T1..T3 drop the GitHub OIDC and `GITHUB_TOKEN` clauses and keep the fork-PR secret rules for the ingest token; 11.2.1-T7 drops its dependency on the removed 03.4.1-T2. No size changed, so the §12 totals are unchanged.

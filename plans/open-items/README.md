@@ -20,6 +20,19 @@ Rows re-counted in S136 (2026-10-28) over every `| OI-` row of the five files; t
 3. A ⚠️ row is closed only by the check it names (official doc, command output or experiment), with the link or output recorded in the source file. Never close a ⚠️ by assumption.
 4. A reviewer working from the spec package (`plans/features/SOLO-PATH.md` §3) treats an open row that blocks the reviewed task as a failed review.
 
+**ID ranges reserved for S698 feature plans (2026-11-27).** Before assigning a new id in these namespaces, check this list; a feature plan adds its rows to the register named here and to its own Notes table, and no placeholder rows exist. Used already: OI-13-701…707 and OI-13-801…806 (`05-product-phases-g1.md`), OI-02-34 and OI-02-35 (`01-core-identity.md`).
+
+| Story | Register file | Range |
+|---|---|---|
+| 13.10.1 requirements | `05-product-phases-g1.md` | OI-13-710…719 |
+| 13.10.2 manual runs | `05-product-phases-g1.md` | OI-13-720…729 |
+| 13.10.3 test case reports | `05-product-phases-g1.md` | OI-13-730…739 |
+| 13.10.4 tracker connections | `05-product-phases-g1.md` | OI-13-740…749 |
+| 13.11.1 hosted runs | `05-product-phases-g1.md` | OI-13-810…819 |
+| 02.11.1 GitHub removal | `01-core-identity.md` | OI-02-36 and up |
+| 07.5.5 manual evidence in the release decision | `03-policy-healing-web.md` | OI-07-24 and up |
+| 03.4.3 register customer-owned tests from CI | `02-catalog-ingest-runs-evidence.md` | OI-03-17 and up |
+
 ## 2. Stage A blockers in build order (28)
 
 Stage A order from `plans/features/SOLO-PATH.md` §2. "Type" tells you what closing the row needs.

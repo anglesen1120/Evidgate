@@ -57,11 +57,15 @@ Owner decision 2026-10-31 (D-PILOT0): deliver a dogfood Pilot-0 first, then cont
 
 **Days (raw, plan sizes × AGENTS.md scale XS 0.25 · S 0.5 · M 1 · L 2 · XL 3).** Critical path: CR-08 2.0 + CR-09 1.0 + CR-11 1.0 (register sizes L, M, M) + 07.2.1-T1 1.0 + 07.2.1-T2 1.0 + 07.2.2-T1 1.0 + 07.2.2-T2 1.0 + 07.2.2-T3 0.5 + 07.5.2-T1 0.5 = 9.0 days (the CR-10 remainder is unsized and not counted; size it when scheduling). Side lanes: 0.5 + 1.0 + 2.0 + 1.0 = 4.5 days. Pilot-0 sized total 9.0 + 4.5 = 13.5 raw days. Calendar `[INFERENCE]`: ×1.4 buffer = 18.9 days; with the 0.7 focus factor ≈ 27 days; the e2e wiring through the adapter and CLI is not sized in the plans.
 
-**Deferred to Pilot-1 (external team):** 02.4.3-T2/T3 + 07.6.1-T1 GitHub App and check run; 07.5.1 late re-evaluation; 04.1.2 rate limit/epoch; 05.2.2-T3 fork PR; 03.2.1-T2..T4; 09.3.1-T6..T11; register rows CR-12..CR-16; and O3 hosting (before any real customer data). 02.4.1-T2..T4 (OIDC CI token) are already landed on develop (STATUS §2, a0c3a08), so no work remains there; Pilot-0 uses the seeded dev token instead of OIDC.
+**Pilot-1 scope correction (D-NO-GITHUB, 2026-11-27):** The GitHub App, check run and OIDC exchange are removed, not deferred; 02.11.1 deletes their landed code. Pilot-0 uses its seeded dev token. The other Pilot-1 items remain as listed below.
+
+> Historical schedule (superseded for GitHub): **Deferred to Pilot-1 (external team):** 02.4.3-T2/T3 + 07.6.1-T1 GitHub App and check run; 07.5.1 late re-evaluation; 04.1.2 rate limit/epoch; 05.2.2-T3 fork PR; 03.2.1-T2..T4; 09.3.1-T6..T11; register rows CR-12..CR-16; and O3 hosting (before any real customer data). 02.4.1-T2..T4 (OIDC CI token) are already landed on develop (STATUS §2, a0c3a08), so no work remains there; Pilot-0 uses the seeded dev token instead of OIDC.
 
 ### Stage B — see it and gate on it (+19.5 raw days)
 
-Demo result: sign in, see the run list, run detail, evidence panel and decision; a GitHub check run carries the decision on the PR. Stories: 02.3.1 login (2.0) · 09.1.1 shell, session, shared state components (T1, T3, T4, T5, T7, T8, and the T2 integration spike they depend on) · 09.3.1 T1, T2, T3, T5 run list, detail, evidence, decision · 07.6.1 GitHub check run (02.4.3-T1/T2 GitHub App installation, now an explicit dependency of 07.6.1-T1) · 07.5.2 decision read API.
+The Stage B demo signs in, shows the run list, detail, evidence and decision, and gates with `evidgate gate`. No repository connection is required (D-NO-GITHUB; 02.11.1).
+
+> Historical demo (superseded): Demo result: sign in, see the run list, run detail, evidence panel and decision; a GitHub check run carries the decision on the PR. Stories: 02.3.1 login (2.0) · 09.1.1 shell, session, shared state components (T1, T3, T4, T5, T7, T8, and the T2 integration spike they depend on) · 09.3.1 T1, T2, T3, T5 run list, detail, evidence, decision · 07.6.1 GitHub check run (02.4.3-T1/T2 GitHub App installation, now an explicit dependency of 07.6.1-T1) · 07.5.2 decision read API.
 
 Cumulative A + B = 98.25 raw days: ≈ 28 weeks with the 1.4 buffer, ≈ 39 weeks with the 0.7 focus factor.
 
