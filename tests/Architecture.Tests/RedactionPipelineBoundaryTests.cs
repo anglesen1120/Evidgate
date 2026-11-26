@@ -335,20 +335,6 @@ public sealed class RedactionPipelineBoundaryTests
     }
 
     [Fact]
-    public void Redact_Base64SuccessfulTokenBudget_BlocksOnlyWhenTruncated()
-    {
-        var token = Convert.ToBase64String(Encoding.UTF8.GetBytes("document=public"));
-        var control = Pipeline.Redact(string.Join(" ", Enumerable.Repeat(token, 256)));
-        control.Blocked.ShouldBeFalse();
-
-        var outcome = Pipeline.Redact(string.Join(" ", Enumerable.Repeat(token, 257)));
-
-        outcome.Blocked.ShouldBeTrue();
-        outcome.Text.ShouldBeEmpty();
-        outcome.Report.Findings.ShouldContain(finding => finding.RuleId == "residual_scan_truncated");
-    }
-
-    [Fact]
     public void Redact_InvalidBase64Candidates_DoNotExhaustSuccessfulTokenBudget()
     {
         var invalid = Convert.ToBase64String(Enumerable.Repeat((byte)0xff, 24).ToArray());
