@@ -242,7 +242,8 @@ internal sealed class RequestArtifactUploadUrlHandler(
             command.Checksum,
             cancellationToken,
             policy.DefaultSensitivity,
-            run).ConfigureAwait(false);
+            run,
+            command.CredentialId).ConfigureAwait(false);
         if (!minted.IsSuccess)
         {
             return Result.Failure<UploadUrlResponse>(minted.Error!);

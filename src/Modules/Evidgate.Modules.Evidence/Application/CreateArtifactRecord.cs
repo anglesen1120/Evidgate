@@ -176,7 +176,8 @@ internal sealed class ArtifactMinter(
     /// handler) pass its <c>default_sensitivity</c> in, so the row is not read twice; when it is null the policy is
     /// read here. <paramref name="knownRun"/> must be the <c>FindAsync</c> answer for this same run id and
     /// execution key; it lets a caller that already read the run skip a second read, and its project is still
-    /// compared here.
+    /// compared here. <paramref name="ownerCredentialId"/> is the stable ingest-token id that may later complete
+    /// or reject the upload; null leaves the row ownerless, which only the route without a token identity does.
     /// </summary>
     public async ValueTask<Result<ArtifactRecord>> MintAsync(
         Guid orgId,
@@ -190,7 +191,8 @@ internal sealed class ArtifactMinter(
         string checksum,
         CancellationToken cancellationToken,
         string? sensitivity = null,
-        RunPlanLookup? knownRun = null)
+        RunPlanLookup? knownRun = null,
+        string? ownerCredentialId = null)
     {
         var run = knownRun
             ?? await runs.FindAsync(runId, executionKey, cancellationToken).ConfigureAwait(false);
@@ -226,7 +228,8 @@ internal sealed class ArtifactMinter(
                 resolved,
                 bytes: declaredBytes,
                 scanState: ArtifactScanState.Pending,
-                state: ArtifactState.PendingUpload),
+                state: ArtifactState.PendingUpload,
+                ownerCredentialId: ownerCredentialId),
             cancellationToken).ConfigureAwait(false);
 
         // A UUIDv7 collision would repeat the id and therefore the key: a bug, not a client conflict, so the
