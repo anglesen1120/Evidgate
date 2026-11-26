@@ -3,8 +3,6 @@
 
 import { OnboardingStore } from './onboarding.store';
 import {
-  BINDING,
-  bindingPage,
   FakeOnboardingDataService,
   PROJECT,
   runState,
@@ -30,9 +28,8 @@ describe('OnboardingStore (09.2.1-T1.1/T2)', () => {
   });
 
   it('resumes on the first incomplete step from server state (AC1)', async () => {
-    // Seeded: project created, CI connected, no run yet — the AC1 resume position.
+    // Seeded: project created, no run yet — the AC1 resume position.
     data.projects = [PROJECT];
-    data.bindings = bindingPage([BINDING]);
 
     await store.load('o-1', 'p-1');
 
@@ -41,7 +38,7 @@ describe('OnboardingStore (09.2.1-T1.1/T2)', () => {
     expect(store.project()).toEqual(PROJECT);
     expect(store.currentStep()).toBe(3);
     expect(store.viewStep()).toBe(3);
-    expect(store.done()).toEqual({ 1: true, 2: true, 3: false, 4: false, 5: false });
+    expect(store.done()).toEqual({ 1: true, 2: false, 3: false, 4: false, 5: false });
     expect(store.canGoBack()).toBe(true);
     // Step 3 is not done, so the next control stays disabled (T1.3).
     expect(store.canGoNext()).toBe(false);
@@ -53,10 +50,9 @@ describe('OnboardingStore (09.2.1-T1.1/T2)', () => {
   });
 
   it('gates next on the viewed step being done (T1.3)', async () => {
-    // Seeded: project + binding + a complete run without an evidence revision → step 4, so steps
-    // 1–3 are done and step 4 is the first open one.
+    // Seeded: project + a complete run without an evidence revision → step 4, so steps
+    // 1 and 3 are done and step 4 is the first open one.
     data.projects = [PROJECT];
-    data.bindings = bindingPage([BINDING]);
     data.runs = [runSummary('r-1', 'complete')];
     data.runStates.set('r-1', runState('r-1', null));
 
@@ -84,7 +80,6 @@ describe('OnboardingStore (09.2.1-T1.1/T2)', () => {
 
   it('cannot select a step past the derived current one', async () => {
     data.projects = [PROJECT];
-    data.bindings = bindingPage([BINDING]);
 
     await store.load('o-1', 'p-1');
     expect(store.currentStep()).toBe(3);
@@ -99,9 +94,21 @@ describe('OnboardingStore (09.2.1-T1.1/T2)', () => {
     expect(store.viewStep()).toBe(1);
   });
 
+  it('keeps the optional credential step selectable without making it a prerequisite', async () => {
+    data.projects = [PROJECT];
+    await store.load('o-1', 'p-1');
+    expect(store.currentStep()).toBe(3);
+    expect(store.done()[2]).toBe(false);
+    store.selectStep(2);
+    expect(store.viewStep()).toBe(2);
+    expect(store.canGoNext()).toBe(true);
+    store.next();
+    expect(store.viewStep()).toBe(3);
+    expect(data.mutations).toEqual([]);
+  });
+
   it('bumps the focus token only when a user move changes the viewed step (S71 F2)', async () => {
     data.projects = [PROJECT];
-    data.bindings = bindingPage([BINDING]);
 
     // A load publishes step 3, but a load is not a user move: focus must stay where it is.
     await store.load('o-1', 'p-1');

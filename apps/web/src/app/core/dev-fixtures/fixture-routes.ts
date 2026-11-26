@@ -18,8 +18,8 @@
 // A `POST` row answers its corpus document whatever request body arrives (09.2.1-T2): the corpus
 // is a *response* corpus, so a create's answer never depends on what was sent and, being fixed,
 // cannot change a later list read — the wizard's "created" and "resumed" states are separate
-// documents (see `fixture-catalog.ts`). The four secret-bearing creates (`createCiBinding`,
-// `createIngestToken`, `rotateIngestToken`, `createApiToken`) take no `Idempotency-Key` in
+// documents (see `fixture-catalog.ts`). The three secret-bearing creates (`createIngestToken`,
+// `rotateIngestToken`, `createApiToken`) take no `Idempotency-Key` in
 // `contracts/openapi.yaml`, so the backend ignores the header the app's interceptor still adds.
 // The invite pair below takes one (`createMembership`, `resendMembershipInvite`) and answers a
 // secret too; a fixture neither validates nor replays a key, so the header changes nothing here
@@ -62,23 +62,15 @@
 // ID-keyed routes compare a path parameter to the resource-id field declared on the route.
 // Policy revisions use `id`; releases use `release_id`. Unknown ids fall back to the URL variant.
 //
-// 09.7.1-F15 note (4) is the same selection one dimension over, on the QUERY string: `listCiBindings`
-// declares `cursorQueryParameter: 'cursor'`, and a request that carries a cursor some catalog row
-// declares for the page it holds is answered by THAT row. It closes residual (1) of the S86
-// low-notes row in `STATUS.md` ("the ci-binding list has no Playwright load-more case because
-// `ci-bindings-list-settings` ends with `next_cursor: null`; a cursor-page fixture seam is needed").
-// The rule above — "query parameters never select a fixture" — held because no corpus row declared
-// one; a cursor page is the one case where the query string *is* the identity of the answer, so the
+// A route that declares `cursorQueryParameter: 'cursor'` selects its answer on the QUERY string: a
+// request that carries a cursor some catalog row declares for the page it holds is answered by THAT
+// row. A cursor page is the one case where the query string *is* the identity of the answer, so the
 // corpus spells it out per page instead of the backend guessing. The order stays the id-keyed rule's:
 // a matching cursor wins over the variant, and a cursor no document declares (a stale one, or the
-// first request, which carries none) falls back to the variant exactly as before. Only one row
-// declared it until 09.3.1-T1; a second one needs its own pin in `fixture-contract.spec.ts`.
-//
-// 09.3.1-T1 adds the second cursor-keyed row: `listRuns` declares the same `cursor` parameter, and
-// `run-list-page-2` declares the `next_cursor` `run-list-page-1` names, so the Runs list's Load more
-// walks both corpus pages in a browser instead of the first page's cursor being answered with the
-// first page again (which the store refuses as a repeated-cursor contract violation). The pin in
-// `fixture-contract.spec.ts` names both rows explicitly, one per walk.
+// first request, which carries none) falls back to the variant exactly as before. `listRuns` is the
+// reference walk: `run-list-page-2` declares the `next_cursor` `run-list-page-1` names, so the Runs
+// list's Load more walks both corpus pages in a browser. Every cursor-keyed row needs its own pin in
+// `fixture-contract-keys.spec.ts`.
 
 import { API_BASE_PATH } from '../http/api-origin';
 
@@ -105,7 +97,7 @@ export interface FixtureRoute {
    * The value is compared against the `cursor` a catalog row declares for the page it holds, so a
    * cursor-paged list shows a second page only for the cursor the previous page actually named.
    * Absent on every route whose document does not depend on a query parameter — which is all of
-   * them but `listCiBindings`, `listRuns` and `listCases`; the module comment holds the rule. The
+   * them but `listRuns` and `listCases`; the module comment holds the rule. The
    * catalog walk (`catalog-cases-list` → `catalog-cases-page-2`) is pinned in
    * `fixture-case-list.spec.ts`, beside the filter rules that page also answers.
    */
@@ -201,13 +193,6 @@ export const FIXTURE_ROUTES: readonly FixtureRoute[] = [
     cursorQueryParameter: 'cursor',
   },
   { operationId: 'updateCase', method: 'PATCH', path: '/cases/{c}' },
-  { operationId: 'createCiBinding', method: 'POST', path: '/projects/{p}/ci-bindings' },
-  {
-    operationId: 'listCiBindings',
-    method: 'GET',
-    path: '/projects/{p}/ci-bindings',
-    cursorQueryParameter: 'cursor',
-  },
   { operationId: 'createIngestToken', method: 'POST', path: '/projects/{p}/ingest-tokens' },
   { operationId: 'listIngestTokens', method: 'GET', path: '/projects/{p}/ingest-tokens' },
   { operationId: 'rotateIngestToken', method: 'POST', path: '/ingest-tokens/{t}/rotate' },

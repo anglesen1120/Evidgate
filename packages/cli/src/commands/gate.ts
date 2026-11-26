@@ -218,8 +218,7 @@ async function mintForReplay(
   } catch (error) {
     session.refreshed = false;
     if (error instanceof ExchangeAuthError) {
-      // The source itself was refused — a replayed single-use JWT is the usual cause — so
-      // the 401 on the decision is still the answer that explains the failure.
+      // The refresh was refused too; preserve the decision endpoint's original 401.
       throw refusal;
     }
     if (deadlineAt !== undefined && now() >= deadlineAt) {

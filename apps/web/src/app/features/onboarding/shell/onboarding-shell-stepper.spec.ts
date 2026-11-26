@@ -122,7 +122,7 @@ describe('the onboarding step navigator', () => {
     await fixture.whenStable();
     const progress = root.querySelector('[role="progressbar"]');
     expect(progress?.getAttribute('aria-valuenow')).toBe('1');
-    expect(progress?.getAttribute('aria-valuemax')).toBe('5');
+    expect(progress?.getAttribute('aria-valuemax')).toBe('4');
     expect(currentSteps(root)).toEqual(['onboarding-select-step-2']);
     expect(
       stepButton(root, 1).querySelector('[data-step-status="complete"]')?.textContent,
@@ -144,10 +144,26 @@ describe('the onboarding step navigator', () => {
     expect(store.done()[2]).toBe(false);
     expect(progress?.getAttribute('aria-valuenow')).toBe('1');
     expect(root.querySelector('[data-testid="onboarding-progress-count"]')?.textContent).toContain(
-      '1 of 5',
+      '1 of 4',
     );
     expect(stepButton(root, 2).querySelector('[data-step-status="required"]')).not.toBeNull();
     expect(document.activeElement?.id).toBe('onboarding-step-title');
+  });
+
+  it('completes on the required steps alone, leaving the optional credential step unopened', async () => {
+    const { fixture, root, store } = await mountShell();
+    store.done.set({ 1: true, 2: false, 3: true, 4: true, 5: true });
+    store.currentStep.set('enabled');
+    store.viewStep.set(5);
+    await fixture.whenStable();
+    const progress = root.querySelector('[role="progressbar"]');
+    expect(progress?.getAttribute('aria-valuenow')).toBe('4');
+    expect(progress?.getAttribute('aria-valuemax')).toBe('4');
+    expect(root.querySelector('[data-testid="onboarding-progress-count"]')?.textContent).toContain(
+      '4 of 4',
+    );
+    expect(stepButton(root, 2).parentElement?.getAttribute('data-done')).toBe('false');
+    expect(stepButton(root, 2).getAttribute('aria-disabled')).toBe('false');
   });
 
   it('keeps blocked steps focusable, explains the prerequisite and refuses activation', async () => {
@@ -206,7 +222,7 @@ describe('the onboarding step navigator', () => {
     await fixture.whenStable();
     expect(store.selectStep).toHaveBeenCalledExactlyOnceWith(5);
     expect(currentSteps(root)).toEqual(['onboarding-select-step-5']);
-    expect(root.querySelector('[role="progressbar"]')?.getAttribute('aria-valuenow')).toBe('5');
+    expect(root.querySelector('[role="progressbar"]')?.getAttribute('aria-valuenow')).toBe('4');
     expect(stepButton(root, 5).getAttribute('aria-controls')).toBe('onboarding-step-body');
   });
 
@@ -343,7 +359,7 @@ describe('the onboarding step navigator', () => {
   it.each([
     [1, 1, 'Viewing 1 of 5: Create project', 'Next required 1 of 5: Create project.'],
     [1, 3, 'Viewing 1 of 5: Create project', 'Next required 3 of 5: Sample run.'],
-    [5, 'enabled', 'Viewing 5 of 5: Enable collection', 'All 5 steps complete.'],
+    [5, 'enabled', 'Viewing 5 of 5: Enable collection', 'All 4 steps complete.'],
   ] as const)(
     'summarizes viewed %s and required %s independently',
     async (viewed, next, viewingText, nextText) => {

@@ -56,8 +56,6 @@ export interface ShellStore {
   readonly status: WritableSignal<'loading' | 'ready' | 'error'>;
   readonly failure: WritableSignal<'forbidden' | 'not-found' | 'unavailable' | null>;
   readonly progress: WritableSignal<OnboardingProgress | null>;
-  readonly refreshing: WritableSignal<boolean>;
-  readonly refreshFailure: WritableSignal<'forbidden' | 'not-found' | 'unavailable' | null>;
   readonly viewStep: WritableSignal<StepNumber>;
   readonly currentStep: WritableSignal<StepNumber | 'enabled'>;
   readonly done: WritableSignal<Readonly<Record<StepNumber, boolean>>>;
@@ -96,12 +94,13 @@ export function shellStore(options: ShellStoreOptions = {}): ShellStore {
     viewStep.set(step);
     focusToken.update((token) => token + 1);
   };
+  /** Mirrors the store: the optional credential step opens Next once the project exists. */
+  const canAdvance = (): boolean =>
+    viewStep() < 5 && (viewStep() === 2 ? done()[1] : done()[viewStep()]);
   return {
     status: signal<'loading' | 'ready' | 'error'>('ready'),
     failure: signal<'forbidden' | 'not-found' | 'unavailable' | null>(null),
     progress: signal<OnboardingProgress | null>(null),
-    refreshing: signal(false),
-    refreshFailure: signal<'forbidden' | 'not-found' | 'unavailable' | null>(null),
     recordActivation: vi.fn<(orgId: string, activation: PolicyActivationStateDto) => void>(),
     viewStep,
     currentStep,
@@ -111,7 +110,7 @@ export function shellStore(options: ShellStoreOptions = {}): ShellStore {
       name: 'Storefront web',
     }),
     focusToken,
-    canGoNext: computed(() => done()[viewStep()] && viewStep() < 5),
+    canGoNext: computed(() => canAdvance()),
     canGoBack: computed(() => viewStep() > 1),
     load: vi.fn<(orgId: string, projectId: string | null) => Promise<void>>(() =>
       Promise.resolve(),
@@ -125,7 +124,7 @@ export function shellStore(options: ShellStoreOptions = {}): ShellStore {
       if (current === 'enabled' || step <= current) showStep(step);
     }),
     next: vi.fn(() => {
-      if (done()[viewStep()] && viewStep() < 5) showStep((viewStep() + 1) as StepNumber);
+      if (canAdvance()) showStep((viewStep() + 1) as StepNumber);
     }),
     back: vi.fn(() => {
       if (viewStep() > 1) showStep((viewStep() - 1) as StepNumber);

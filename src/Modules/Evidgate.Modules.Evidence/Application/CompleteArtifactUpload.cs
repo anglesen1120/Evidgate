@@ -89,7 +89,7 @@ internal sealed record ArtifactCompletionVerdict(bool Verified, long? VerifiedBy
 /// </summary>
 /// <param name="ArtifactId">The artifact the route addressed.</param>
 /// <param name="Verdict">The server-derived storage verdict.</param>
-/// <param name="CredentialId">The caller's token id (<c>jti</c>), or <c>null</c> when it has none.</param>
+/// <param name="CredentialId">The caller's stable credential id, or <c>null</c> when it has none.</param>
 /// <param name="IdempotencyKey">The required <c>Idempotency-Key</c> header (T92).</param>
 internal sealed record CompleteArtifactUpload(
     Guid ArtifactId,

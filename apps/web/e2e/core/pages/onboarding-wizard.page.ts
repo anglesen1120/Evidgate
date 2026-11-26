@@ -55,7 +55,7 @@ export class OnboardingWizard {
   /** The derivation is a prefix: earlier steps are done, `step` and every later one are not. */
   async expectCompletedPrefix(step: StepNumber): Promise<void> {
     for (const number of STEP_NUMBERS) {
-      await expectStepDone(this.page, number, number < step);
+      await expectStepDone(this.page, number, number < step && number !== 2);
     }
   }
 

@@ -89,10 +89,10 @@ public sealed class FinalizeBindingTests
         await using var world = await StartAsync();
         var runId = await CreateRunAsync(world);
         await InScopeAsync(world, registry => registry.RegisterSlotsAsync(runId, 1, TestContext.Current.CancellationToken));
-        await InScopeAsync(world, registry => registry.BindOrCheckAsync(runId, "shard-1", "jti-a", null, TestContext.Current.CancellationToken));
+        await InScopeAsync(world, registry => registry.BindOrCheckAsync(runId, "shard-1", IngestTestWorld.OwnerId, TestContext.Current.CancellationToken));
 
         var first = await InScopeAsync(world, registry =>
-            registry.CloseSlotAsync(runId, "shard-1", "jti-a", null, declaredLastSequence: 12, declaredCount: 11, TestContext.Current.CancellationToken));
+            registry.CloseSlotAsync(runId, "shard-1", IngestTestWorld.OwnerId, declaredLastSequence: 12, declaredCount: 11, TestContext.Current.CancellationToken));
 
         first.IsSuccess.ShouldBeTrue(first.Error?.Message);
         first.Value.Closed.ShouldBeTrue();
@@ -107,7 +107,7 @@ public sealed class FinalizeBindingTests
         // The repeat carries different declared values on purpose: they are ignored, the STORED ones are
         // returned, nothing is written and the version does not move (T68/AC9).
         var repeat = await InScopeAsync(world, registry =>
-            registry.CloseSlotAsync(runId, "shard-1", "jti-a", null, declaredLastSequence: 99, declaredCount: 99, TestContext.Current.CancellationToken));
+            registry.CloseSlotAsync(runId, "shard-1", IngestTestWorld.OwnerId, declaredLastSequence: 99, declaredCount: 99, TestContext.Current.CancellationToken));
 
         repeat.IsSuccess.ShouldBeTrue(repeat.Error?.Message);
         repeat.Value.Closed.ShouldBeFalse();
@@ -129,19 +129,23 @@ public sealed class FinalizeBindingTests
         await using var world = await StartAsync();
         var runId = await CreateRunAsync(world);
         await InScopeAsync(world, registry => registry.RegisterSlotsAsync(runId, 1, TestContext.Current.CancellationToken));
-        await InScopeAsync(world, registry => registry.BindOrCheckAsync(runId, "shard-1", "jti-a", "1/7/2", TestContext.Current.CancellationToken));
+        var bound = await InScopeAsync(world, registry =>
+            registry.BindOrCheckAsync(runId, "shard-1", IngestTestWorld.OwnerId, TestContext.Current.CancellationToken));
+        bound.IsSuccess.ShouldBeTrue(bound.Error?.Message);
+        bound.Value.Bound.ShouldBeTrue();
 
         var foreign = await InScopeAsync(world, registry =>
-            registry.CloseSlotAsync(runId, "shard-1", "jti-b", "1/7/2", 1, 1, TestContext.Current.CancellationToken));
-        var mismatchedCiRun = await InScopeAsync(world, registry =>
-            registry.CloseSlotAsync(runId, "shard-1", "jti-a", "1/7/3", 1, 1, TestContext.Current.CancellationToken));
+            registry.CloseSlotAsync(runId, "shard-1", IngestTestWorld.OtherOwnerId, 1, 1, TestContext.Current.CancellationToken));
 
         foreign.IsSuccess.ShouldBeFalse();
         foreign.Error!.Code.ShouldBe(ApiErrorCode.ProducerSlotTaken);
         foreign.Error.Status.ShouldBe(403);
-        mismatchedCiRun.IsSuccess.ShouldBeFalse();
-        mismatchedCiRun.Error!.Code.ShouldBe(ApiErrorCode.ProducerSlotTaken);
         (await ClosureAsync(world)).ClosedAt.ShouldBeNull();
+
+        var owner = await InScopeAsync(world, registry =>
+            registry.CloseSlotAsync(runId, "shard-1", IngestTestWorld.OwnerId, 1, 1, TestContext.Current.CancellationToken));
+        owner.IsSuccess.ShouldBeTrue(owner.Error?.Message);
+        owner.Value.Closed.ShouldBeTrue();
     }
 
     [Fact]
@@ -153,7 +157,7 @@ public sealed class FinalizeBindingTests
 
         // Nobody is the bound identity of an unbound slot, so no caller may finalize it.
         var unbound = await InScopeAsync(world, registry =>
-            registry.CloseSlotAsync(runId, "shard-1", "jti-a", null, 0, 0, TestContext.Current.CancellationToken));
+            registry.CloseSlotAsync(runId, "shard-1", IngestTestWorld.OwnerId, 0, 0, TestContext.Current.CancellationToken));
 
         unbound.IsSuccess.ShouldBeFalse();
         unbound.Error!.Code.ShouldBe(ApiErrorCode.ProducerSlotTaken);
@@ -168,7 +172,7 @@ public sealed class FinalizeBindingTests
         await InScopeAsync(world, registry => registry.RegisterSlotsAsync(runId, 1, TestContext.Current.CancellationToken));
 
         var unknown = await InScopeAsync(world, registry =>
-            registry.CloseSlotAsync(runId, "shard-9", "jti-a", null, 0, 0, TestContext.Current.CancellationToken));
+            registry.CloseSlotAsync(runId, "shard-9", IngestTestWorld.OwnerId, 0, 0, TestContext.Current.CancellationToken));
 
         unknown.IsSuccess.ShouldBeFalse();
         unknown.Error!.Code.ShouldBe(ApiErrorCode.UnknownProducer);
@@ -181,10 +185,10 @@ public sealed class FinalizeBindingTests
         await using var world = await StartAsync();
         var runId = await CreateRunAsync(world);
         await InScopeAsync(world, registry => registry.RegisterSlotsAsync(runId, 1, TestContext.Current.CancellationToken));
-        await InScopeAsync(world, registry => registry.BindOrCheckAsync(runId, "shard-1", "jti-a", null, TestContext.Current.CancellationToken));
+        await InScopeAsync(world, registry => registry.BindOrCheckAsync(runId, "shard-1", IngestTestWorld.OwnerId, TestContext.Current.CancellationToken));
 
         var negative = await InScopeAsync(world, registry =>
-            registry.CloseSlotAsync(runId, "shard-1", "jti-a", null, -1, 0, TestContext.Current.CancellationToken));
+            registry.CloseSlotAsync(runId, "shard-1", IngestTestWorld.OwnerId, -1, 0, TestContext.Current.CancellationToken));
 
         negative.IsSuccess.ShouldBeFalse();
         negative.Error!.Status.ShouldBe(422);
@@ -199,14 +203,14 @@ public sealed class FinalizeBindingTests
         await using var world = await StartAsync();
         var runId = await CreateRunAsync(world);
         await InScopeAsync(world, registry => registry.RegisterSlotsAsync(runId, 1, TestContext.Current.CancellationToken));
-        await InScopeAsync(world, registry => registry.BindOrCheckAsync(runId, "shard-1", "jti-a", null, TestContext.Current.CancellationToken));
+        await InScopeAsync(world, registry => registry.BindOrCheckAsync(runId, "shard-1", IngestTestWorld.OwnerId, TestContext.Current.CancellationToken));
 
         // Two finalizes of the same bound slot race: the conditional UPDATE is the arbiter, so exactly one
         // closes and both answer the same stored values (T68, AC9).
         var first = InScopeAsync(world, registry =>
-            registry.CloseSlotAsync(runId, "shard-1", "jti-a", null, 7, 6, TestContext.Current.CancellationToken));
+            registry.CloseSlotAsync(runId, "shard-1", IngestTestWorld.OwnerId, 7, 6, TestContext.Current.CancellationToken));
         var second = InScopeAsync(world, registry =>
-            registry.CloseSlotAsync(runId, "shard-1", "jti-a", null, 7, 6, TestContext.Current.CancellationToken));
+            registry.CloseSlotAsync(runId, "shard-1", IngestTestWorld.OwnerId, 7, 6, TestContext.Current.CancellationToken));
 
         var results = await Task.WhenAll(first, second);
 
@@ -226,16 +230,18 @@ public sealed class FinalizeBindingTests
         await using var world = await StartAsync();
         var runId = await CreateRunAsync(world);
         await InScopeAsync(world, registry => registry.RegisterSlotsAsync(runId, 1, TestContext.Current.CancellationToken));
-        await InScopeAsync(world, registry => registry.BindOrCheckAsync(runId, "shard-1", "jti-a", null, TestContext.Current.CancellationToken));
-        await InScopeAsync(world, registry =>
-            registry.CloseSlotAsync(runId, "shard-1", "jti-a", null, 3, 3, TestContext.Current.CancellationToken));
+        await InScopeAsync(world, registry => registry.BindOrCheckAsync(runId, "shard-1", IngestTestWorld.OwnerId, TestContext.Current.CancellationToken));
+        var closed = await InScopeAsync(world, registry =>
+            registry.CloseSlotAsync(runId, "shard-1", IngestTestWorld.OwnerId, 3, 3, TestContext.Current.CancellationToken));
+        closed.IsSuccess.ShouldBeTrue(closed.Error?.Message);
+        closed.Value.Closed.ShouldBeTrue();
 
         // `closed_at` records the finalize; it is not a write gate of its own - the run's window closes the
         // run (T81) - so the bound identity still passes and a foreign one is still refused (T9).
         var owner = await InScopeAsync(world, registry =>
-            registry.BindOrCheckAsync(runId, "shard-1", "jti-a", null, TestContext.Current.CancellationToken));
+            registry.BindOrCheckAsync(runId, "shard-1", IngestTestWorld.OwnerId, TestContext.Current.CancellationToken));
         var foreign = await InScopeAsync(world, registry =>
-            registry.BindOrCheckAsync(runId, "shard-1", "jti-b", null, TestContext.Current.CancellationToken));
+            registry.BindOrCheckAsync(runId, "shard-1", IngestTestWorld.OtherOwnerId, TestContext.Current.CancellationToken));
 
         owner.IsSuccess.ShouldBeTrue(owner.Error?.Message);
         owner.Value.Bound.ShouldBeFalse();

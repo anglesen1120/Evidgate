@@ -43,7 +43,6 @@ describe('ProjectDashboard requests', () => {
       'projects/p/runs',
       'projects/p/waivers',
       'projects/p/quarantine',
-      'projects/p/ci-bindings',
       'projects/p/authoring/tree',
       'projects/p/authoring/manual-cases',
       'projects/p/authoring/changes',

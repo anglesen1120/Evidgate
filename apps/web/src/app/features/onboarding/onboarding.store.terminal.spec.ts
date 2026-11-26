@@ -9,7 +9,7 @@ import {
   type OnboardingProgress,
 } from './data/onboarding-progress.service';
 import { OnboardingStore } from './onboarding.store';
-import { BINDING, FakeSessionStore, PROJECT } from './onboarding.store.test-support';
+import { FakeSessionStore, PROJECT } from './onboarding.store.test-support';
 
 describe('OnboardingStore on the terminal screen (09.2.1-T1.1)', () => {
   const ENABLED: OnboardingProgress = {
@@ -27,10 +27,6 @@ describe('OnboardingStore on the terminal screen (09.2.1-T1.1)', () => {
       },
     },
     sampleRun: null,
-    bindings: [BINDING],
-    tokens: [],
-    bindingsTruncated: false,
-    tokensTruncated: false,
     currentStep: 'enabled',
   };
 

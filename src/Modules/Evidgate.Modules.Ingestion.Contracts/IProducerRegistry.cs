@@ -2,19 +2,7 @@ using Evidgate.BuildingBlocks.SharedKernel.Results;
 
 namespace Evidgate.Modules.Ingestion.Contracts;
 
-/// <summary>
-/// The run's producer registry (00 §9.4, TL T9): one <c>producer_slot</c> row per manifest shard,
-/// written by 05's run-create command inside its own tenant transaction, and bound to the caller's
-/// token identity by the first accepted write of any kind (an event batch or 06.1.2's
-/// <c>upload-url</c>, T85). Every cross-module call goes through this project only (00 §5.5 C5).
-/// <para>
-/// 04.1.2-T4 registered the slots and answered the binding question; 04.1.2-T5 added the enforcement
-/// that turns a <c>producer_slot_taken</c>/<c>unknown_producer</c> answer into a rejected batch on
-/// <em>every</em> write path (the event batch and 06.1.2's <c>upload-url</c>, T85), the T88 comparison
-/// of the caller's CI claims with <c>run.ci_run_ref</c>, and <c>CloseSlotAsync</c> (T68) with the
-/// <c>declared_last_sequence</c>/<c>declared_count</c> columns (migration 0035).
-/// </para>
-/// </summary>
+/// <summary>Registers manifest shards and binds each slot to the authenticated owner on its first write.</summary>
 public interface IProducerRegistry
 {
     /// <summary>
@@ -39,38 +27,24 @@ public interface IProducerRegistry
         CancellationToken cancellationToken);
 
     /// <summary>
-    /// Binds the slot of <paramref name="producerId"/> to the caller's token identity on the first
-    /// accepted write, or checks that the caller is the identity already bound (T9). The bind is one
-    /// conditional <c>UPDATE … WHERE bound_token_jti IS NULL</c>, so two racing first writers cannot
-    /// both win.
+    /// Binds the slot of <paramref name="producerId"/> to the caller's stable credential id on the first
+    /// accepted write, or checks that the caller is the owner already bound (T9). The bind is one
+    /// conditional <c>UPDATE … WHERE bound_token_jti IS NULL</c> (the owner column keeps its historical
+    /// name), so two racing first writers cannot both win.
     /// </summary>
     /// <param name="runId">The run the slot belongs to.</param>
     /// <param name="producerId">The manifest shard's deterministic producer id (T54).</param>
-    /// <param name="tokenJti">The caller's token id (an id, never the token itself; S3).</param>
-    /// <param name="ciRunRef">
-    /// The GitHub <c>(repository_id, run_id, run_attempt)</c> reference the caller's claims carry, or
-    /// null for a non-CI caller. Its comparison with <c>run.ci_run_ref</c> (T88) is 04.1.2-T5's: the
-    /// <c>run</c> table does not exist yet (05.2.1-T1 creates it), so T4 only binds and compares the
-    /// value against the slot's own binding.
-    /// <para>
-    /// The comparison is exact, so a retry that adds a CI reference to a slot first bound without one
-    /// (or drops it) is a <em>different identity</em> and answers <c>producer_slot_taken</c>. That is
-    /// the safe default: a different CI-run identity is a different identity, and a caller that
-    /// changes its CI reference mid-run must not silently inherit the slot.
-    /// </para>
-    /// </param>
+    /// <param name="ownerId">Stable authenticated credential identity, never a bearer token or JWT id.</param>
     /// <param name="cancellationToken">The request's cancellation token.</param>
     /// <returns>
     /// The slot's binding, or a failure: <c>request_invalid</c> (422) when an argument is outside the
-    /// column bounds (an empty or over-long <c>tokenJti</c>/<c>ciRunRef</c>, or a <c>producerId</c>
-    /// outside the 1..128 charset), <c>unknown_producer</c> (422) when the run has no such slot,
-    /// <c>producer_slot_taken</c> (403) when the slot is bound to another jti or CI reference.
+    /// column bounds, <c>unknown_producer</c> (422) when the run has no such slot,
+    /// <c>producer_slot_taken</c> (403) when the slot belongs to another owner.
     /// </returns>
     ValueTask<Result<ProducerSlotBinding>> BindOrCheckAsync(
         Guid runId,
         string producerId,
-        string tokenJti,
-        string? ciRunRef,
+        string ownerId,
         CancellationToken cancellationToken);
 
     /// <summary>
@@ -89,8 +63,7 @@ public interface IProducerRegistry
     /// </summary>
     /// <param name="runId">The run the slot belongs to.</param>
     /// <param name="producerId">The manifest shard's deterministic producer id (T54).</param>
-    /// <param name="tokenJti">The caller's token id (an id, never the token itself; S3).</param>
-    /// <param name="ciRunRef">The caller's GitHub <c>(repository_id, run_id, run_attempt)</c> reference, or null (T88).</param>
+    /// <param name="ownerId">Stable authenticated credential identity.</param>
     /// <param name="declaredLastSequence">The highest producer sequence the shard declares it sent; <c>&gt;= 0</c>.</param>
     /// <param name="declaredCount">How many events the shard declares it sent; <c>&gt;= 0</c>.</param>
     /// <param name="cancellationToken">The request's cancellation token.</param>
@@ -98,16 +71,12 @@ public interface IProducerRegistry
     /// The slot's closure (the stored declared values and <c>closed_at</c>, with <see cref="ProducerSlotClosure.Closed"/>
     /// true only when this call wrote them), or a failure: <c>request_invalid</c> (422) when a declared value is
     /// outside the column bound, <c>unknown_producer</c> (422) when the run has no such slot,
-    /// <c>producer_slot_taken</c> (403) when the slot is bound to another jti or CI reference, when the run's CI
-    /// reference (T88) does not match the caller's, or when the slot was never bound — only the bound identity
-    /// may finalize it (T9). 05.3.2-T1's handler binds through <see cref="BindOrCheckAsync"/> before it closes,
-    /// so a finalize arriving before the events still closes the slot (05.3.2 AC7).
+    /// <c>producer_slot_taken</c> (403) when the slot is unbound or belongs to another owner.
     /// </returns>
     ValueTask<Result<ProducerSlotClosure>> CloseSlotAsync(
         Guid runId,
         string producerId,
-        string tokenJti,
-        string? ciRunRef,
+        string ownerId,
         long declaredLastSequence,
         int declaredCount,
         CancellationToken cancellationToken);
@@ -149,17 +118,8 @@ public static class ProducerSlotLimits
     /// </summary>
     public const string ProducerIdPattern = "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$";
 
-    /// <summary>
-    /// The longest <c>bound_token_jti</c> the migration's <c>producer_slot_bound_token_jti_check</c>
-    /// allows (1..256, mirroring 0017's <c>jti</c>).
-    /// </summary>
-    public const int MaxTokenJtiLength = 256;
-
-    /// <summary>
-    /// The longest <c>bound_ci_run_ref</c> the migration's <c>producer_slot_bound_ci_run_ref_check</c>
-    /// allows (1..256): the GitHub <c>(repository_id, run_id, run_attempt)</c> triple (T88).
-    /// </summary>
-    public const int MaxCiRunRefLength = 256;
+    /// <summary>The historical bound_token_jti column allows at most 256 characters.</summary>
+    public const int MaxOwnerIdLength = 256;
 }
 
 /// <summary>One registered slot, as <see cref="IProducerRegistry.RegisterSlotsAsync"/> returns it.</summary>

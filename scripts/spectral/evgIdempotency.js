@@ -5,9 +5,7 @@
 // justification from the plan contracts.
 var IDEMPOTENCY_EXEMPT = {
   'post /ci/token':
-    'Idempotency-Key not required — no side effect beyond ci_token_issue; jti single-use rejects replays (02 §4 endpoint table, FR-02-6/02.4.1)',
-  'post /projects/{p}/ci-bindings':
-    'the response carries a one-time challenge and is never replayed, so no key can be honoured (00 §5.7 S3, 02.4.1)',
+    'a successful exchange mints a fresh credential; a bearer token must never be cached for replay',
   'post /projects/{p}/ingest-tokens':
     'the response carries a one-time secret and is never replayed, so no key can be honoured (00 §5.7 S3, 02.4.2)',
   'post /projects/{p}/api-tokens':

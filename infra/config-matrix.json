@@ -268,7 +268,7 @@
         "staging": "default",
         "prod": "default"
       },
-      "note": "`EVIDGATE:Identity:RateLimits:CiExchangeLimit` (CR-13, replacing EVIDGATE__CI__EXCHANGEBURSTLIMIT): exchange attempts allowed per key (client address, repository id, token prefix) within `CiExchangeWindowSeconds`, bearer and ingest-token paths alike (02.4.1 AC8), counted in the shared PostgreSQL window. Default 30; a value outside 1..1000000 fails the boot naming this key."
+      "note": "Exchange attempts allowed per client address and per address/token prefix in the shared PostgreSQL window. Default 30; values outside 1..1000000 fail startup."
     },
     {
       "key": "EVIDGATE__IDENTITY__RATELIMITS__CIEXCHANGEWINDOWSECONDS",
@@ -454,7 +454,7 @@
         "staging": "secret-store",
         "prod": "secret-store"
       },
-      "note": "base64 current pepper (at least 32 bytes) behind the HMAC of ingest tokens and binding challenges (TL T5, DECISIONS D-A4). Absent: creating a binding or ingest token answers 503 `unavailable`."
+      "note": "Base64 current pepper (at least 32 bytes) for ingest-token HMACs. Without it, ingest-token creation and exchange return 503 unavailable."
     },
     {
       "key": "EVIDGATE__CI__PEPPERVERSION",
@@ -515,129 +515,6 @@
         "prod": "default"
       },
       "note": "version of the previous pepper; must differ from the current one; default 1."
-    },
-    {
-      "key": "EVIDGATE__CI__GITHUBOIDCISSUER",
-      "scope": "runtime",
-      "consumers": ["api", "migrator", "worker"],
-      "type": "string",
-      "requiredAtBoot": false,
-      "constraints": {},
-      "secret": false,
-      "required": {
-        "dev": false,
-        "staging": false,
-        "prod": false
-      },
-      "source": {
-        "dev": "default",
-        "staging": "default",
-        "prod": "default"
-      },
-      "note": "expected `iss` of a GitHub Actions OIDC token (02.4.1-T1.1); default https://token.actions.githubusercontent.com."
-    },
-    {
-      "key": "EVIDGATE__CI__GITHUBOIDCAUDIENCE",
-      "scope": "runtime",
-      "consumers": ["api", "migrator", "worker"],
-      "type": "string",
-      "requiredAtBoot": false,
-      "constraints": {},
-      "secret": false,
-      "required": {
-        "dev": false,
-        "staging": false,
-        "prod": false
-      },
-      "source": {
-        "dev": "default",
-        "staging": "default",
-        "prod": "default"
-      },
-      "note": "expected `aud` of a GitHub Actions OIDC token, which the workflow requests (02.4.1); default `evidgate`."
-    },
-    {
-      "key": "EVIDGATE__CI__GITHUBJWKSURI",
-      "scope": "runtime",
-      "consumers": ["api", "migrator", "worker"],
-      "type": "string",
-      "requiredAtBoot": false,
-      "constraints": {},
-      "secret": false,
-      "required": {
-        "dev": false,
-        "staging": false,
-        "prod": false
-      },
-      "source": {
-        "dev": "default",
-        "staging": "default",
-        "prod": "default"
-      },
-      "note": "JWKS document of the GitHub issuer; the boot refuses anything that is not https on the issuer's host (S4 allowlist, 02.4.1-T1.2)."
-    },
-    {
-      "key": "EVIDGATE__CI__MAXSKEWSECONDS",
-      "scope": "runtime",
-      "consumers": ["api", "migrator", "worker"],
-      "type": "integer",
-      "requiredAtBoot": false,
-      "constraints": {
-        "min": 0,
-        "max": 300
-      },
-      "secret": false,
-      "required": {
-        "dev": false,
-        "staging": false,
-        "prod": false
-      },
-      "source": {
-        "dev": "default",
-        "staging": "default",
-        "prod": "default"
-      },
-      "note": "clock skew tolerated on exp/nbf of a GitHub OIDC token (02.4.1-T4.2); default 60."
-    },
-    {
-      "key": "EVIDGATE__CI__ALLOWEDEVENTNAMES",
-      "scope": "runtime",
-      "consumers": ["api", "migrator", "worker"],
-      "type": "string",
-      "requiredAtBoot": false,
-      "constraints": {},
-      "secret": false,
-      "required": {
-        "dev": false,
-        "staging": false,
-        "prod": false
-      },
-      "source": {
-        "dev": "default",
-        "staging": "default",
-        "prod": "default"
-      },
-      "note": "comma-separated GitHub event_name values accepted at the exchange; every other event is refused (fail closed). Default push,workflow_dispatch,schedule,release,merge_group. Entries are lowercase GitHub event tokens compared ordinally and case-exact; an empty list, an invalid entry, workflow_run and pull_request_target fail boot. The event_name claim is required and must be a JSON string. The retired EVIDGATE__CI__DENIEDEVENTNAMES fails boot when still set."
-    },
-    {
-      "key": "EVIDGATE__CI__DENIEDEVENTNAMES",
-      "scope": "runtime",
-      "consumers": ["api", "migrator", "worker"],
-      "type": "string",
-      "requiredAtBoot": false,
-      "constraints": {},
-      "secret": false,
-      "required": {
-        "dev": false,
-        "staging": false,
-        "prod": false
-      },
-      "source": {
-        "dev": "default",
-        "staging": "default",
-        "prod": "default"
-      },
-      "note": "retired: the deny list was replaced by EVIDGATE__CI__ALLOWEDEVENTNAMES and any value set here fails boot with a named message, because silently ignoring it would leave an operator believing the old list still applies. Leave unset."
     },
     {
       "key": "EVIDGATE__LOGIN__PUBLICBASEURL",

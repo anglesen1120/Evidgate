@@ -2,8 +2,6 @@
 // different epoch is stored as stale evidence and the closed shard names stale_epoch instead of completing. Partial
 // file of ReconcileRunTests for the same reason as the late-evidence file: it drives the suite's worlds and helpers.
 using System.Net;
-using Evidgate.BuildingBlocks.Pipeline.Authorization;
-using Evidgate.BuildingBlocks.SharedKernel.Authorization;
 using Evidgate.Modules.Orchestrator.Application.Runs;
 using Shouldly;
 using Xunit;
@@ -23,18 +21,13 @@ public sealed partial class ReconcileRunTests
     private const long ForeignEpoch = 1L;
 
     /// <summary>
-    /// A world whose caller owns a verified CI run reference and whose run records the same one, so the batch handler
-    /// binds the slot and the insert can compare each declared epoch with the run's own attempt. Every assertion
-    /// filters by the world's own run, so the world shares the run's database.
+    /// Historic runs may still record a CI attempt. A new ingest-token caller must preserve the epoch
+    /// comparison for evidence added to those runs.
     /// </summary>
     private async Task<IngestTestWorld> StartEpochWorldAsync(string database)
     {
-        var writer = RequestPrincipal.Service(
-            projectScope: null,
-            claimedPermissions: [Permissions.Event.Write],
-            credentialId: IngestTestWorld.Jti,
-            ciRun: new CiRunReference("github_actions", 1L, 7L, 2));
-        var world = await IngestTestWorld.StartAsync(_fixture, writer, planned: 2, slots: 1, database: database, hosts: _hosts);
+        var world = await IngestTestWorld.StartAsync(
+            _fixture, IngestTestWorld.Writer(), planned: 2, slots: 1, database: database, hosts: _hosts);
         world = await AnswerPlanOrDisposeAsync(world);
         await _fixture.ExecuteAsync(
             world.Database, $"update public.run set ci_run_ref = '{RunCiRunRefJson}'::jsonb where id = '{world.RunId:D}'");

@@ -3,10 +3,8 @@ import { apiError } from '../../../shared/testing/http-data.testing';
 import { OnboardingProgressService } from './onboarding-progress.service';
 import {
   ACTIVATION,
-  BINDING,
   FakeOnboardingDataService,
   PROJECT,
-  bindingPage,
   rejectionOf,
   runPage,
   runState,
@@ -22,16 +20,15 @@ describe('OnboardingProgressService (09.2.1-T1.2)', () => {
     ({ data, service } = setupProgressService());
   });
 
-  it('completes step 5 and reaches the terminal screen when the activation read answers', async () => {
+  it('completes onboarding with a confirmed run, evidence and activation but no credentials', async () => {
     data.projectsById.set('p-1', PROJECT);
-    data.bindings = bindingPage([BINDING]);
     data.runs = runPage([runSummary('r-1', '2026-10-21T09:00:00Z', 'complete')]);
     data.runStates.set('r-1', runState('r-1', 'complete', 'rev-7'));
     data.activation = ACTIVATION;
 
     const progress = await service.load('o-1', 'p-1');
 
-    expect(progress.done).toEqual({ 1: true, 2: true, 3: true, 4: true, 5: true });
+    expect(progress.done).toEqual({ 1: true, 2: false, 3: true, 4: true, 5: true });
     expect(progress.currentStep).toBe('enabled');
     // The server's document travels unchanged, so step 5's panel renders what it was given.
     expect(progress.activation).toEqual({ kind: 'active', state: ACTIVATION });
@@ -41,7 +38,6 @@ describe('OnboardingProgressService (09.2.1-T1.2)', () => {
 
   it('leaves step 5 open when the activation read answers 404 (no activation)', async () => {
     data.projectsById.set('p-1', PROJECT);
-    data.bindings = bindingPage([BINDING]);
     data.runs = runPage([runSummary('r-1', '2026-10-21T09:00:00Z', 'complete')]);
     data.runStates.set('r-1', runState('r-1', 'complete', 'rev-7'));
     // The data service turns the contract's single 404 into `null`; a project that was never
@@ -59,7 +55,6 @@ describe('OnboardingProgressService (09.2.1-T1.2)', () => {
 
   it('a progress load with the activation read refused still resolves the wizard and leaves step 5 un-derived', async () => {
     data.projectsById.set('p-1', PROJECT);
-    data.bindings = bindingPage([BINDING]);
     data.runs = runPage([runSummary('r-1', '2026-10-21T09:00:00Z', 'complete')]);
     data.runStates.set('r-1', runState('r-1', 'complete', 'rev-7'));
     data.activationFailure = apiError('forbidden', 403);
@@ -68,16 +63,14 @@ describe('OnboardingProgressService (09.2.1-T1.2)', () => {
 
     // Steps 1–4 are derived exactly as without the read: a refused activation is step 5's own
     // state, never a failed wizard and never an "nothing is active" the caller cannot know.
-    expect(progress.done).toEqual({ 1: true, 2: true, 3: true, 4: true, 5: false });
+    expect(progress.done).toEqual({ 1: true, 2: false, 3: true, 4: true, 5: false });
     expect(progress.currentStep).toBe(5);
     expect(progress.activation).toEqual({ kind: 'forbidden' });
-    expect(progress.bindings).toEqual([BINDING]);
     expect(progress.sampleRun?.run_id).toBe('r-1');
   });
 
   it('rejects the whole load for an activation refusal that is neither 403 nor the contract 404', async () => {
     data.projectsById.set('p-1', PROJECT);
-    data.bindings = bindingPage([BINDING]);
 
     for (const [kind, status] of [
       ['unavailable', 503],

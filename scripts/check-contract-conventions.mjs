@@ -128,10 +128,6 @@ const EXPECTED = [
   ['/roles', 'get', 'role:read', 'v1'],
   ['/roles', 'post', 'role:write', 'v1'],
   ['/roles/{r}', 'patch', 'role:write', 'v1'],
-  ['/projects/{p}/ci-bindings', 'post', 'ci_binding:write', 'v1'],
-  ['/projects/{p}/ci-bindings', 'get', 'project:read', 'v1'],
-  ['/ci-bindings/{b}', 'patch', 'ci_binding:write', 'v1'],
-  ['/ci-bindings/{b}', 'delete', 'ci_binding:write', 'v1'],
   // 02.4.3: the GitHub App installation surface — start and the callback act on the org's one
   // binding (`ci_binding:write`), the read is `project:read`, disconnect is `ci_binding:write`.
   ['/github/installations/start', 'post', 'ci_binding:write', 'v1'],
@@ -330,11 +326,11 @@ if (!('items' in cl) || !('next_cursor' in cl))
 const INLINE_PARAM_ALLOWED = new Set(['X-Hub-Signature-256', 'traceparent']);
 // mutations document Idempotency-Key or are exempt — same list as the
 // spectral evgIdempotency function (keep both in sync; README lists them too).
-// Justifications: ci/token = no side effect beyond ci_token_issue, jti
-// single-use (02 §4 endpoint table, FR-02-6); webhooks/github = delivery_id
+// Justifications: ci/token = every exchange mints fresh bearer credentials, never cached;
+// webhooks/github = delivery_id
 // dedupe (00 §9.3); events = per-event event_id dedupe (00 §9.4);
 // pull-request = idempotent by (branch, commit) (00 §9.3); heartbeat =
-// extends only the current epoch (00 §9.3); ci-bindings/ingest-tokens/api-tokens/rotate = the
+// extends only the current epoch (00 §9.3); ingest-tokens/api-tokens/rotate = the
 // response carries a one-time secret, and the replay store persists response bodies,
 // so they are never replayed (02.4.1, 02.4.2, 02.4.4, 00 §5.7 S3); the auth routes of 02.3.1-T2 =
 // the invite staging writes only a short-lived cookie (no resource), and the link surface is
@@ -349,7 +345,6 @@ const INLINE_PARAM_ALLOWED = new Set(['X-Hub-Signature-256', 'traceparent']);
 // resource is created (a one-time state nonce the callback consumes), so a retry mints a fresh state.
 const IDEM_EXEMPT = new Set([
   'post /ci/token',
-  'post /projects/{p}/ci-bindings',
   'post /projects/{p}/ingest-tokens',
   'post /projects/{p}/api-tokens',
   'post /ingest-tokens/{t}/rotate',

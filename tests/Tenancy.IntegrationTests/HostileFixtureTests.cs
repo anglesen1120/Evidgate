@@ -302,8 +302,7 @@ public sealed class HostileFixtureTests(GeneratedHostileFixtures generated) : IC
             MaxBytes: HostileFixtureCorpus.KindCapBytes,
             MediaTypes: [declaredMediaType],
             CaptureEnabled: true,
-            DefaultSensitivity: null,
-            BoundCiRunRef: null);
+            DefaultSensitivity: null);
 
         var scopes = Substitute.For<ITenantScopeFactory>();
         scopes
@@ -328,7 +327,7 @@ public sealed class HostileFixtureTests(GeneratedHostileFixtures generated) : IC
 
         var verifier = new ArtifactCompletionVerifier(scopes, db, tenant, permissions, storage);
         var principal = RequestPrincipal.Service(
-            projectId, [Permissions.Artifact.Write], credentialId: "jti-hostile-corpus");
+            projectId, [Permissions.Artifact.Write], credentialId: IngestTestWorld.OwnerId);
 
         var result = await verifier.VerifyAsync(artifactId, principal, TestContext.Current.CancellationToken);
 

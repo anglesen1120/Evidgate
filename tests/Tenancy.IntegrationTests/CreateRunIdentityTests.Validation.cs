@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text.Json;
+using Evidgate.BuildingBlocks.Pipeline.Authorization;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Shouldly;
 using Xunit;
@@ -91,49 +92,26 @@ public sealed partial class CreateRunIdentityTests
     // ------------------------------------------------------------------ AC9: idempotency identity
 
     [Fact]
-    public async Task CreateRun_Replay_SameIdentity()
+    public async Task CreateRun_Replay_SameBodyFromRenewedToken_ReplaysTheStoredRun()
     {
         await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
-        await SeedClaimAsync(world.Database, world.Org, world.Project, "refs/heads/main", Sha);
         var key = NewKey();
-        var body = RunCreationTests.RunBody(world.ManifestId);
+        var body = DeclaredBranchBody(world);
+        var tokenId = Guid.CreateVersion7().ToString("D");
 
-        var first = await RunCreationSeams.SendDirectAsync(world.Api, world.Org, world.Project, Producer(world.Project, "token-replay"), body, key);
+        var first = await RunCreationSeams.SendDirectAsync(
+            world.Api, world.Org, world.Project, RequestPrincipal.Service(world.Project, ["run:create"], credentialId: tokenId), body, key);
         first.IsSuccess.ShouldBeTrue(first.Error?.Message);
 
-        // A re-minted token for the same run attempt carries a different (and, as in production, unrelated) jti and
-        // must still verify and replay.
+        // The request identity is the body digest alone, so a retry under any credential of the project replays.
         var replay = await RunCreationSeams.SendDirectAsync(
-            world.Api, world.Org, world.Project, Producer(world.Project, "token-replay-2"), body, key);
+            world.Api, world.Org, world.Project, RequestPrincipal.Service(world.Project, ["run:create"], credentialId: Guid.CreateVersion7().ToString("D")), body, key);
 
         replay.IsSuccess.ShouldBeTrue(replay.Error?.Message);
         replay.Value.RunId.ShouldBe(first.Value.RunId);
-        replay.Value.UnverifiedRef.ShouldBeFalse();
+        replay.Value.UnverifiedRef.ShouldBeTrue();
         (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.run where org_id = '{world.Org:D}'")).ShouldBe(1);
         (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.idempotency_record where operation = 'run:create' and org_id = '{world.Org:D}'")).ShouldBe(1);
-    }
-
-    [Fact]
-    public async Task CreateRun_Replay_DifferentIdentity_409()
-    {
-        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
-        await SeedClaimAsync(world.Database, world.Org, world.Project, "refs/heads/main", Sha, runAttempt: 1);
-        var key = NewKey();
-        var body = RunCreationTests.RunBody(world.ManifestId);
-
-        var first = await RunCreationSeams.SendDirectAsync(
-            world.Api, world.Org, world.Project, Producer(world.Project, "token-attempt", attempt: 1), body, key);
-        first.IsSuccess.ShouldBeTrue(first.Error?.Message);
-        first.Value.UnverifiedRef.ShouldBeFalse();
-
-        // The same key and the same body from a different run attempt of the repository is a different request
-        // identity, so it must conflict rather than silently replay the first run (AC9).
-        var conflict = await RunCreationSeams.SendDirectAsync(
-            world.Api, world.Org, world.Project, Producer(world.Project, "token-attempt", attempt: 2), body, key);
-
-        conflict.IsSuccess.ShouldBeFalse();
-        conflict.Error!.Code.ShouldBe(ApiErrorCode.IdempotencyConflict);
-        (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.run where org_id = '{world.Org:D}'")).ShouldBe(1);
     }
 
     [Fact]

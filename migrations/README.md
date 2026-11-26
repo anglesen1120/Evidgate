@@ -1359,6 +1359,13 @@ target)` and `session_revoke_audit_append(org, actor, object_type, object_id, me
 - Purge order (owner erasure): delete `requirement_version` rows first, then `requirement` rows. Deleting the identity first fails with `23503`.
 - Locks: new tables only; `lock_timeout` is 5 s. Numbering: the migrator refuses a gap, so apply only on a tree that holds `0131`. Rollback: stop the writer, then drop `requirement_version`, then `requirement`.
 
+## Notes on the GitHub Actions exchange removal (`0134`)
+
+- `0134` drops `evidgate_resolve.resolve_ci_binding(text, bigint, bytea[])`, `evidgate.purge_expired_ci_token_issue(integer)` (the `0017`/`0019`/`0089` sweep and its worker-only ACL), `ci_token_issue_run_idx` (`0037`), then `public.ci_token_issue` and `public.ci_binding`, in that foreign-key order. Grants on the functions and tables are revoked first; there is no `CASCADE`, so an unexpected dependent object fails the file.
+- Kept: `ingest_token`, `evidgate_resolve.resolve_ingest_token(text)` with its app-only grant, and every `permission` and `role_permission` row. `ci_binding:write` stays catalogued and granted because other integration operations still use it; `ingest_token:write` is unaffected. `audit_log` has no reference to these tables, so earlier `ci_binding.*` rows keep their text.
+- Locks: `ACCESS EXCLUSIVE` on both tables until commit, 5 s `lock_timeout`. Only the removed exchange wrote them: stop the previous API and Worker before applying, then deploy the release without the exchange. A blocked file rolls back whole and is not journalled.
+- Rollback: restore from backup; the tables and their rows are not recreated by a later migration. Numbering: the migrator refuses a gap, so apply only on a tree that holds `0133`.
+
 ## Notes on healing redaction reports (`0136`)
 
 - `0136` adds `public.healing_redaction_report` (one row per provider call: `purpose`, `rule_version`, the `report` jsonb of rule ids, field paths and counts, and its `report_hash`) and widens `healing_llm_call`: the status check gains `blocked_leak`, `redaction_report_hash` must be a `sha256:` digest, and a `blocked_leak` row must name its report. The report never holds a value; the hash is the RFC 8785 digest of the report JSON.

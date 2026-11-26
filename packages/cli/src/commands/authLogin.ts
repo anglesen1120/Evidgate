@@ -1,4 +1,4 @@
-// `evidgate auth login` — exchanges an OIDC JWT or ingest token for a short-lived
+// `evidgate auth login` — exchanges a project ingest token for a short-lived
 // `ci_producer` token and writes it to the `0600` cache (and, with `--github-env`, also to
 // `$GITHUB_ENV` behind a `::add-mask::` line). It is never printed except inside that mask
 // line. `--github-env` is a per-command flag, never a global option, because a global one

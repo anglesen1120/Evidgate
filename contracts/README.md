@@ -74,7 +74,7 @@ Every operation declares:
 - `x-permission` — its 00 §9.3 permission (T51). The literal `none` is
   reserved for the routes that reach no tenant permission at all:
   `POST /v1/ci/token` and `POST /v1/webhooks/github`, which must set `x-auth`
-  naming the credential (`github_oidc_jwt_or_ingest_token`,
+  naming the credential (`ingest_token`,
   `github_webhook_signature`), and the pre-tenant browser routes
   `GET /v1/auth/oidc/{provider}/start` and `/callback` (00 §5.4.8, 02 §4.2),
   which take no credential at all and set `x-auth: anonymous` with
@@ -188,15 +188,14 @@ artifact kinds also extend the artifact-kind enum (`CaptureOptionsView.kinds` no
 `evg-mutation-idempotency` rule — keep this list, the function's
 `IDEMPOTENCY_EXEMPT` map and the helper's `IDEM_EXEMPT` in sync):
 
-- `POST /v1/ci/token` — `Idempotency-Key` not required: no side effect beyond
-  the `ci_token_issue` row; `jti` single-use already rejects replays
-  (02 §4 endpoint table, FR-02-6/02.4.1).
-- `POST /v1/projects/{p}/ci-bindings`, `POST /v1/projects/{p}/ingest-tokens`,
+- `POST /v1/ci/token` — each exchange authenticates the project credential and mints a
+  fresh token. The response contains a bearer secret and is never cached for replay.
+- `POST /v1/projects/{p}/ingest-tokens`,
   `POST /v1/ingest-tokens/{t}/rotate`, `POST /v1/projects/{p}/api-tokens` — the response carries a one-time
-  secret (a binding challenge, an ingest token or an API token). The idempotency store persists
+  secret (an ingest token or an API token). The idempotency store persists
   response bodies, and a secret must never be stored in the clear (00 §5.7 S3), so
   these responses are never replayed and no key is honoured; a retried create makes
-  a second secret the admin can revoke (02.4.1, 02.4.2, 02.4.4).
+  a second secret the admin can revoke (02.4.2, 02.4.4).
 - `POST /v1/dev/session` — Development-only route: it only sets the
   session cookies of one fixed development user, so a repeat replaces the caller's own session.
 - `POST /v1/webhooks/github` — replay-safe by provider `delivery_id` dedupe

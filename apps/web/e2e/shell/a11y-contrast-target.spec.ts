@@ -75,6 +75,8 @@ const FLOWS: readonly Flow[] = [
           ? withVariant(onboardingPath(locale), seedQueryWith(seed, [ENABLE_GRANTS_TOGGLE]))
           : onboardingUrl(locale, seed),
       );
+      // A project with no credential resumes on the first run; step 2 is one Back away.
+      if (step === 2) await page.getByTestId('onboarding-back').click();
       await expectCurrentStep(page, step);
       await expect(page.locator('#onboarding-step-title')).toBeVisible();
       if (step === 2) {

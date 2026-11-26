@@ -57,7 +57,7 @@ public sealed partial class EvidenceRawReportEnqueueTests
             database,
             org,
             project,
-            RequestPrincipal.Service(projectScope: null, [Permissions.Artifact.Write], credentialId: "jti-report-enqueue"),
+            RequestPrincipal.Service(projectScope: null, [Permissions.Artifact.Write], credentialId: IngestTestWorld.OwnerId),
             configuration);
 
         return new World(api, host, host.CreateClient(), database, org, project);

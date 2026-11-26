@@ -22,7 +22,6 @@ internal sealed partial class TenantRowFactory
         // Columns whose CHECK constraints name a closed vocabulary or a shape (migrations 0016-0031).
         var special = (table, column.Name) switch
         {
-            ("public.ci_binding", "provider") or ("public.ci_token_issue", "provider") => "github_actions",
             ("public.ingest_token", "prefix") => Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture)[..12],
             ("public.ingest_token", "scopes") => new[] { "run:create" },
             // api_token's prefix is one platform-wide public lookup key: a closed 12-character grammar plus a

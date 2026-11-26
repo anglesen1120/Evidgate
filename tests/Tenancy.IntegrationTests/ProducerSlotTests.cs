@@ -46,18 +46,22 @@ public sealed partial class ProducerSlotTests : IClassFixture<TenancyHostPool>
         return new World(api, client, database, user, org, project);
     }
 
-    /// <summary>One raw insert of a slot row as the app role; every bounded column is overridable.</summary>
+    /// <summary>
+    /// One raw insert of a slot row as the app role; every bounded column is overridable. The owner
+    /// lives in the historical <c>bound_token_jti</c> column; <c>bound_ci_run_ref</c> is a dead column the
+    /// registry no longer writes, kept here only to exercise its migration constraint.
+    /// </summary>
     private static string InsertSlotSql(
         Guid org,
         Guid runId,
         int shardIndex = 1,
         string producerId = "shard-1",
-        string? boundTokenJti = null,
-        string? boundCiRunRef = null,
+        string? boundOwnerId = null,
+        string? legacyCiRunRef = null,
         long lastSequence = 0) =>
         "insert into public.producer_slot (id, org_id, run_id, shard_index, producer_id, bound_token_jti, bound_ci_run_ref, last_sequence) "
         + $"values ('{Guid.CreateVersion7()}', '{org}', '{runId}', {shardIndex}, '{producerId}', "
-        + $"{(boundTokenJti is null ? "null" : $"'{boundTokenJti}'")}, {(boundCiRunRef is null ? "null" : $"'{boundCiRunRef}'")}, {lastSequence})";
+        + $"{(boundOwnerId is null ? "null" : $"'{boundOwnerId}'")}, {(legacyCiRunRef is null ? "null" : $"'{legacyCiRunRef}'")}, {lastSequence})";
 
     /// <summary>One committed slot row for <paramref name="world"/>'s org, written as the app role.</summary>
     private async Task InsertSlotAsync(World world, Guid runId, int shardIndex = 1, string producerId = "shard-1")

@@ -1,14 +1,14 @@
 // Connection metadata and whole-page checks for the one-time reveal boundary.
 import { expect, type Page } from '@playwright/test';
 
+import type {} from '../../src/app/core/dev-fixtures/fixture-request-log';
+import { backButton, expectCurrentStep } from './onboarding-support';
+
 /** `fixtures/web-api/ingest-token-create/input.json` → `body.secret`. */
 export const FIXTURE_TOKEN_SECRET = 'egt_FIXTURE_ONLY_not_a_real_token';
 
 /** `fixtures/web-api/ingest-token-rotate/input.json` → `body.secret`. */
 export const FIXTURE_ROTATED_TOKEN_SECRET = 'egt_FIXTURE_ONLY_not_a_real_rotated_token';
-
-/** `fixtures/web-api/ci-binding-create/input.json` → `body.binding_challenge`. */
-export const FIXTURE_BINDING_CHALLENGE = 'evg_fixture_only_binding_challenge_not_a_real_value';
 
 // Connection health and CLI quickstart read the same two metadata
 // rows the panel already renders, so the facts the health suite asserts are the corpus's own:
@@ -23,9 +23,22 @@ export const TOKEN_USED_LAST_USED_AT = '2026-10-24T09:12:34Z';
 /** The project slug of `project-detail-onboarding-project`: the quickstart's `EVIDGATE_PROJECT`. */
 export const ONBOARDING_PROJECT_SLUG = 'storefront-web';
 
-/** The step-2 page (`app-onboarding-connect-ci`), rendered for `viewStep === 2` with a project. */
+/** The optional credential page (`app-onboarding-connect-ci`), reached from first-run step 3. */
 export function connectCiPage(page: Page) {
   return page.locator('[data-testid="connect-ci-page"]');
+}
+
+/** From derived step 3 (project-only seeds resume there) steps Back to the credential page. */
+export async function openConnectStep(page: Page): Promise<void> {
+  await expectCurrentStep(page, 3);
+  await backButton(page).click();
+  await expectCurrentStep(page, 2);
+  await expect(connectCiPage(page)).toBeVisible();
+}
+
+/** The scoped failure shown when the token inventory read refuses; its button only re-reads it. */
+export function refreshFailed(page: Page) {
+  return page.locator('[data-testid="connect-ci-refresh-failed"]');
 }
 
 /**
@@ -146,4 +159,29 @@ export async function expectSecretOnlyInReveal(
 export async function expectNoReveal(page: Page): Promise<void> {
   await expect(revealSlot(page)).toHaveCount(0);
   await expect(revealValue(page)).toHaveCount(0);
+}
+
+/**
+ * Every non-read request the in-process fixture backend handled, as `METHOD /path`. The fixtures
+ * build bypasses the network, so this log is the only place a command can be observed; reads are
+ * left out because they are expected on every load.
+ */
+export async function fixtureWrites(page: Page): Promise<readonly string[]> {
+  return page.evaluate(() =>
+    (window.__evidgateFixtureRequests ?? [])
+      .filter((call) => call.method !== 'GET' && call.method !== 'HEAD')
+      .map((call) => `${call.method} ${new URL(call.url, window.location.origin).pathname}`),
+  );
+}
+
+/** How many times the fixture backend has answered a read of the project's ingest-token list. */
+export async function tokenListReads(page: Page): Promise<number> {
+  return page.evaluate(
+    () =>
+      (window.__evidgateFixtureRequests ?? []).filter(
+        (call) =>
+          call.method === 'GET' &&
+          new URL(call.url, window.location.origin).pathname.endsWith('/ingest-tokens'),
+      ).length,
+  );
 }

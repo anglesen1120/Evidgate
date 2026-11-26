@@ -43,7 +43,6 @@ export const KNOWN_API_SEGMENTS: ReadonlySet<string> = new Set<string>([
   'changes:apply',
   'checklist-items',
   'ci',
-  'ci-bindings',
   'claim',
   'comparison',
   'complete',

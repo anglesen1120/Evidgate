@@ -4,8 +4,6 @@
 import { apiError } from '../../shared/testing/http-data.testing';
 import { OnboardingStore } from './onboarding.store';
 import {
-  BINDING,
-  bindingPage,
   FakeOnboardingDataService,
   PROJECT,
   setupOnboardingStore,
@@ -31,7 +29,7 @@ describe('OnboardingStore (09.2.1-T1.1/T2)', () => {
 
   it('maps a not_found refusal to the not-found failure', async () => {
     data.projects = [PROJECT];
-    data.bindingFailure = apiError('not_found', 404);
+    data.projectFailure = apiError('not_found', 404);
 
     await store.load('o-1', 'p-1');
 
@@ -59,7 +57,6 @@ describe('OnboardingStore (09.2.1-T1.1/T2)', () => {
 
   it('ignores a load that a newer load superseded', async () => {
     data.projects = [PROJECT];
-    data.bindings = bindingPage([BINDING]);
     data.deferProjectReads = true;
 
     const superseded = store.load('o-1', 'p-1');

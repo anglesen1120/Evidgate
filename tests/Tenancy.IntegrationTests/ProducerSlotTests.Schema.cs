@@ -1,3 +1,4 @@
+using Evidgate.Modules.Ingestion.Contracts;
 using Shouldly;
 using Xunit;
 
@@ -83,9 +84,10 @@ public sealed partial class ProducerSlotTests
                 && constraint.Contains("IS NULL", StringComparison.Ordinal),
             "the closed_at and declared-value columns need their all-or-nothing CHECK (0035)");
 
-        // The UPDATE grants the app role holds on the table are exactly the columns the module's writes
-        // name: the bind's two (0029), the ingest handler's `last_sequence` (0034) and `CloseSlotAsync`'s
-        // three (0035: `closed_at` plus the two declared values). Every other column stays outside the grant.
+        // The UPDATE grants the app role holds on the table: the owner column's (`bound_token_jti`) and the
+        // dead `bound_ci_run_ref`'s are the migration-0029 grants that still exist (the registry writes only
+        // the former), plus the ingest handler's `last_sequence` (0034) and `CloseSlotAsync`'s three (0035).
+        // Every other column stays outside the grant.
         (await _fixture.ColumnAsync<string>(
             database,
             """
@@ -155,6 +157,7 @@ public sealed partial class ProducerSlotTests
         (await _fixture.ScalarAsync<bool>(
             database,
             "select has_column_privilege('evidgate_app', 'public.producer_slot', 'bound_token_jti', 'update')")).ShouldBeTrue();
+        // Migration state, not production use: the unused column keeps its 0029 grant until a migration drops it.
         (await _fixture.ScalarAsync<bool>(
             database,
             "select has_column_privilege('evidgate_app', 'public.producer_slot', 'bound_ci_run_ref', 'update')")).ShouldBeTrue();
@@ -257,16 +260,30 @@ public sealed partial class ProducerSlotTests
     }
 
     [Fact]
-    public async Task BoundTokenJti_TooLong_FailsCheck()
+    public async Task BoundOwnerId_TooLong_FailsCheck()
     {
         await using var world = await StartAsync();
 
         await using var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org);
         var error = await scope.CaptureErrorAsync(
-            InsertSlotSql(world.Org, await CreateRunAsync(world), boundTokenJti: new string('a', 257)));
+            InsertSlotSql(world.Org, await CreateRunAsync(world), boundOwnerId: new string('a', ProducerSlotLimits.MaxOwnerIdLength + 1)));
 
         error.SqlState.ShouldBe("23514");
         error.ConstraintName.ShouldBe("producer_slot_bound_token_jti_check");
+    }
+
+    [Fact]
+    public async Task LegacyCiRunRef_TooLong_FailsMigrationCheck()
+    {
+        // The column is unused by the registry; its 0029 CHECK is asserted only while the column exists.
+        await using var world = await StartAsync();
+
+        await using var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org);
+        var error = await scope.CaptureErrorAsync(
+            InsertSlotSql(world.Org, await CreateRunAsync(world), legacyCiRunRef: new string('a', 257)));
+
+        error.SqlState.ShouldBe("23514");
+        error.ConstraintName.ShouldBe("producer_slot_bound_ci_run_ref_check");
     }
 
     [Fact]

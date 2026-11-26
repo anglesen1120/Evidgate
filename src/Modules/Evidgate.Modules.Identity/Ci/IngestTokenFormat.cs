@@ -1,4 +1,3 @@
-using System.Security.Cryptography;
 using System.Text.RegularExpressions;
 using Evidgate.Modules.Identity.Tokens;
 
@@ -53,9 +52,6 @@ internal static partial class IngestTokenFormat
 
         return true;
     }
-
-    /// <summary>A 128-bit-plus random challenge for a binding (T70): 256 bits, base64url.</summary>
-    public static string NewChallenge() => SecretTokenFormat.Base64Url(RandomNumberGenerator.GetBytes(32));
 
     [GeneratedRegex("^egt_([A-Za-z0-9]{12})_([A-Za-z0-9_-]{43})\\z", RegexOptions.CultureInvariant, matchTimeoutMilliseconds: 100)]
     private static partial Regex Shape();

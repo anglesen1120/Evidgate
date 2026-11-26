@@ -33,12 +33,6 @@ public sealed class IsolationProject
     /// <summary>The slug — identical in both orgs (<c>web</c>, <c>api</c>).</summary>
     public required string Slug { get; init; }
 
-    /// <summary>The project's first <c>ci_binding</c> (<c>{b}</c>).</summary>
-    public required Guid BindingId { get; init; }
-
-    /// <summary>Every <c>ci_binding</c> of the project, <see cref="BindingId"/> first; at least two, so the list pages.</summary>
-    public required IReadOnlyList<Guid> BindingIds { get; init; }
-
     /// <summary>An active ingest token (<c>{t}</c>).</summary>
     public required Guid ActiveTokenId { get; init; }
 
@@ -58,12 +52,6 @@ public sealed class IsolationProject
 
     /// <summary>A real <c>ci_producer</c> JWT bound to this org and project (<c>POST /v1/ci/token</c>).</summary>
     public required string CiProducerJwt { get; init; }
-
-    /// <summary>
-    /// An OIDC-minted <c>ci_producer</c> JWT bound to this org and project: the exchange of a workflow token
-    /// signed by the test JWKS, which also activated the project's primary <c>ci_binding</c> (02.9.1-T3, from #19).
-    /// </summary>
-    public required string OidcProducerJwt { get; init; }
 
     /// <summary>The test cases (<c>{c}</c>), in file-path order; at least three, so a list pages at limit 1 or 2.</summary>
     public required IReadOnlyList<Guid> CaseIds { get; init; }
@@ -256,9 +244,6 @@ public sealed class IsolationOrg
     /// <summary>Every membership of the org: the users' and the pending invite.</summary>
     public IReadOnlyList<Guid> MembershipIds => [.. Users.Select(u => u.MembershipId), PendingInviteMembershipId];
 
-    /// <summary>Every <c>ci_binding</c> id.</summary>
-    public IReadOnlyList<Guid> BindingIds => [.. Projects.SelectMany(p => p.BindingIds)];
-
     /// <summary>Every active ingest-token id.</summary>
     public IReadOnlyList<Guid> ActiveTokenIds => [.. Projects.Select(p => p.ActiveTokenId)];
 
@@ -310,11 +295,8 @@ public sealed class IsolationOrg
 /// <item>test cases — <c>ICaseIdentityService.RegisterDiscoveredAsync</c> in an <c>ITenantScope</c> (no POST route for
 /// cases), synced twice with changed content so every case has two revisions;</item>
 /// <item>suites + revisions, the <c>staging</c> environment revision (the environment row is created by the
-/// revision route), a manifest, one run of that manifest (05.3.1-T1 — <c>GET /v1/runs/{r}</c>), two <c>ci_binding</c>s (the first activated by the OIDC exchange below), two
-/// ingest tokens (one then revoked by <c>DELETE /v1/ingest-tokens/{t}</c>), a <c>ci_producer</c> JWT from
-/// <c>POST /v1/ci/token</c> over the ingest token, and a second one over a workflow token signed by the test
-/// JWKS (<see cref="IsolationApiFactory.Jwks"/>), which proves control of the repository and activates the
-/// binding (02.4.1-T3, 02.9.1-T3 from #19).</item>
+/// revision route), a manifest, a run, two ingest tokens (one revoked), and a project-scoped producer JWT
+/// from the exchange of the active ingest token.</item>
 /// </list>
 /// <para>
 /// Role combinations: the member catalogue of <c>contracts/permissions.json</c> holds exactly five
@@ -417,7 +399,7 @@ public sealed class IsolationWorld
         ArgumentNullException.ThrowIfNull(services);
         ArgumentException.ThrowIfNullOrEmpty(ownerConnectionString);
 
-        var seeder = new Seeder(client, services, ownerConnectionString, services.GetRequiredService<TestJwks>(), cancellationToken);
+        var seeder = new Seeder(client, services, ownerConnectionString, cancellationToken);
         var roles = await seeder.BuiltInRolesAsync().ConfigureAwait(false);
         var acme = await seeder.SeedOrgAsync("acme", 1, roles).ConfigureAwait(false);
         var acme2 = await seeder.SeedOrgAsync("acme-2", 2, roles).ConfigureAwait(false);
@@ -426,11 +408,9 @@ public sealed class IsolationWorld
     }
 
     /// <summary>The seeding steps; every refused call fails the fixture with the route and the body.</summary>
-    private sealed class Seeder(HttpClient client, IServiceProvider services, string ownerConnectionString, TestJwks jwks, CancellationToken cancellationToken)
+    private sealed class Seeder(HttpClient client, IServiceProvider services, string ownerConnectionString, CancellationToken cancellationToken)
     {
         private const string DisplayName = "Acme";
-
-        private static readonly string[] AllowedRefPatterns = ["refs/heads/main", "refs/tags/v*"];
 
         /// <summary>The subset of the seeded API tokens: reads the deny set allows.</summary>
         private static readonly string[] AutomationPermissions = ["run:read"];
@@ -531,7 +511,7 @@ public sealed class IsolationWorld
             var seeded = new List<IsolationProject>();
             for (var i = 0; i < projects.Count; i++)
             {
-                seeded.Add(await SeedProjectAsync(slug, org, projects[i], ProjectSlugs[i], admin, maintainer, 7000 + (orgIndex * 10) + i).ConfigureAwait(false));
+                seeded.Add(await SeedProjectAsync(slug, org, projects[i], ProjectSlugs[i], admin, maintainer).ConfigureAwait(false));
             }
 
             await SeedSecurityEventsAsync(org, projects[0]).ConfigureAwait(false);
@@ -683,7 +663,7 @@ public sealed class IsolationWorld
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
         }
 
-        private async Task<IsolationProject> SeedProjectAsync(string orgSlug, Guid org, Guid project, string projectSlug, IsolationUser admin, IsolationUser maintainer, long repositoryId)
+        private async Task<IsolationProject> SeedProjectAsync(string orgSlug, Guid org, Guid project, string projectSlug, IsolationUser admin, IsolationUser maintainer)
         {
             var (cases, caseRevisions) = await SeedCasesAsync(org, project).ConfigureAwait(false);
             var primaryRevisions = caseRevisions.Select(revisions => revisions[0]).ToArray();
@@ -811,10 +791,6 @@ public sealed class IsolationWorld
                     HttpStatusCode.Created).ConfigureAwait(false)).GetProperty("id").GetGuid());
             }
 
-            var repository = $"{orgSlug}/{projectSlug}";
-            var (binding, challenge) = await CreateBindingAsync(project, admin, org, repositoryId, repository).ConfigureAwait(false);
-            var (mirrorBinding, _) = await CreateBindingAsync(project, admin, org, repositoryId + 100, $"{repository}-mirror").ConfigureAwait(false);
-
             var active = await SendAsync(
                 HttpMethod.Post, $"/v1/projects/{project}/ingest-tokens", admin, org, new { name = "active" }, HttpStatusCode.Created).ConfigureAwait(false);
             var revokedToken = await SendAsync(
@@ -845,22 +821,6 @@ public sealed class IsolationWorld
             if (exchanged.GetProperty("project_id").GetGuid() != project)
             {
                 throw new InvalidOperationException($"seed: the ci_producer token of project {project} names another project");
-            }
-
-            // The binding becomes active through the real OIDC exchange (02.4.1-T3): a workflow token signed by
-            // the test JWKS proves control of the repository, and the minted ci_producer token is kept beside the
-            // ingest-token one (02.9.1-T3 hand-over from #19).
-            var oidc = jwks.Mint(repositoryId, (claims, _) =>
-            {
-                claims["sub"] = $"repo:{repository}:ref:refs/heads/main";
-                claims["repository"] = repository;
-                claims["job_workflow_ref"] = $"{repository}/.github/workflows/ci.yml@refs/heads/main";
-            });
-            var oidcExchanged = await SendBearerAsync(
-                "/v1/ci/token", oidc, new { binding_challenge = challenge }, HttpStatusCode.OK).ConfigureAwait(false);
-            if (oidcExchanged.GetProperty("project_id").GetGuid() != project)
-            {
-                throw new InvalidOperationException($"seed: the OIDC ci_producer token of project {project} names another project");
             }
 
             // The feature tree, one checklist item and one manual test case (13.1.1-T2), created through the
@@ -1072,8 +1032,6 @@ public sealed class IsolationWorld
             {
                 Id = project,
                 Slug = projectSlug,
-                BindingId = binding,
-                BindingIds = [binding, mirrorBinding],
                 ActiveTokenId = active.GetProperty("token").GetProperty("id").GetGuid(),
                 ActiveTokenSecret = secret,
                 RevokedTokenId = revoked,
@@ -1083,8 +1041,6 @@ public sealed class IsolationWorld
                 WebhookEndpointId = webhookEndpoint.GetProperty("id").GetGuid(),
                 CiProducerJwt = exchanged.GetProperty("token").GetString()
                     ?? throw new InvalidOperationException($"seed: the ci/token exchange of project {project} returned no token"),
-                OidcProducerJwt = oidcExchanged.GetProperty("token").GetString()
-                    ?? throw new InvalidOperationException($"seed: the OIDC ci/token exchange of project {project} returned no token"),
                 CaseIds = cases,
                 CaseRevisionIds = primaryRevisions,
                 CaseRevisions = [.. caseRevisions.Select(perCase => (IReadOnlyList<Guid>)perCase)],
@@ -1141,33 +1097,6 @@ public sealed class IsolationWorld
                 HttpStatusCode.Created).ConfigureAwait(false);
 
             return created.GetProperty("release_id").GetGuid();
-        }
-
-        /// <summary>
-        /// One <c>ci_binding</c> through <c>POST /v1/projects/{p}/ci-bindings</c>; the project's list needs two.
-        /// Returns the binding id and the one-time challenge the OIDC exchange must present to activate it.
-        /// </summary>
-        private async Task<(Guid Id, string Challenge)> CreateBindingAsync(Guid project, IsolationUser admin, Guid org, long repositoryId, string repositoryFullName)
-        {
-            var created = await SendAsync(
-                HttpMethod.Post,
-                $"/v1/projects/{project}/ci-bindings",
-                admin,
-                org,
-                new
-                {
-                    provider = "github_actions",
-                    repository_id = repositoryId,
-                    repository_full_name = repositoryFullName,
-                    allowed_ref_patterns = AllowedRefPatterns,
-                    allowed_workflow_refs = new[] { $"{repositoryFullName}/.github/workflows/ci.yml@refs/heads/main" },
-                },
-                HttpStatusCode.Created).ConfigureAwait(false);
-
-            return (
-                created.GetProperty("binding").GetProperty("id").GetGuid(),
-                created.GetProperty("binding_challenge").GetString()
-                    ?? throw new InvalidOperationException($"seed: the ci_binding of project {project} returned no challenge"));
         }
 
         /// <summary>
@@ -1380,7 +1309,7 @@ public sealed class IsolationWorld
         /// <c>version</c> (AC19), exactly as the restore routes then need the tombstone's.
         /// </summary>
         private Task<JsonElement> SendIfMatchAsync(HttpMethod method, string url, IsolationUser caller, Guid org, string ifMatch, params HttpStatusCode[] expected) =>
-            SendCoreAsync(method, url, caller.UserId, caller.Email, org, bearer: null, body: null, ifMatch, expected);
+            SendCoreAsync(method, url, caller.UserId, caller.Email, org, body: null, ifMatch, expected);
 
         /// <summary>
         /// The <c>version_no</c> a soft-deleted row keeps — the <c>If-Match</c> its restore route needs (13.1.1-T3,
@@ -1412,11 +1341,7 @@ public sealed class IsolationWorld
         }
 
         private Task<JsonElement> SendAsync(HttpMethod method, string url, Guid? user, string? email, Guid? org, object? body, params HttpStatusCode[] expected) =>
-            SendCoreAsync(method, url, user, email, org, bearer: null, body, ifMatch: null, expected);
-
-        /// <summary>One seeding request presenting a bearer credential (the OIDC exchange of 02.4.1-T3).</summary>
-        private Task<JsonElement> SendBearerAsync(string url, string bearer, object? body, params HttpStatusCode[] expected) =>
-            SendCoreAsync(HttpMethod.Post, url, user: null, email: null, org: null, bearer, body, ifMatch: null, expected);
+            SendCoreAsync(method, url, user, email, org, body, ifMatch: null, expected);
 
         /// <summary>One seeding request: member headers when a user is given, an <c>Idempotency-Key</c> on every write.</summary>
         private async Task<JsonElement> SendCoreAsync(
@@ -1425,7 +1350,6 @@ public sealed class IsolationWorld
             Guid? user,
             string? email,
             Guid? org,
-            string? bearer,
             object? body,
             string? ifMatch,
             params HttpStatusCode[] expected)
@@ -1443,11 +1367,6 @@ public sealed class IsolationWorld
             if (org is { } o)
             {
                 request.Headers.Add(IsolationApiFactory.OrgHeader, o.ToString());
-            }
-
-            if (bearer is not null)
-            {
-                request.Headers.TryAddWithoutValidation("Authorization", "Bearer " + bearer);
             }
 
             if (method != HttpMethod.Get && url != "/v1/ci/token")

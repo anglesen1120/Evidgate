@@ -20,7 +20,7 @@ import {
 } from './runsCreate.testing.js';
 
 describe('runs create', () => {
-  const { devEnv } = useRunsCreateSpec();
+  const { devEnv, ingestEnv } = useRunsCreateSpec();
 
   // AC2: the `Idempotency-Key` header is sent, the body carries only
   // `manifest_id`, and `run_id`/`manifest_hash`/`state` are printed.
@@ -51,6 +51,22 @@ describe('runs create', () => {
     expect(call?.request.headers.get('idempotency-key')).toBe('explicit-key-1');
     // `CreateRunRequest` has `additionalProperties: false`: only the members the CLI owns.
     expect(sentBody(call)).toEqual({ manifest_id: manifestId });
+  });
+
+  it('keeps the CI pull-request ref passed by the job when authenticating with ingest', async () => {
+    const ci = { GITHUB_REF: 'refs/pull/42/merge' };
+    const env = await ingestEnv(ci);
+    const stub = stubDevFetch(() => created({ unverified_ref: true }));
+
+    await expect(
+      invoke(createArgv(['--ci-ref', ci.GITHUB_REF]), env, capture(), stub.fetchImpl),
+    ).resolves.toBe(0);
+
+    expect(sentBody(stub.calls[0])).toEqual({ ingest_token: env.EVIDGATE_INGEST_TOKEN });
+    expect(sentBody(apiCalls(stub)[0])).toEqual({
+      manifest_id: manifestId,
+      ref: { kind: 'pull_request', name: '42/merge', pr_number: 42 },
+    });
   });
 
   // AC5: `--release` and every `--ci-ref` form map to the documented body

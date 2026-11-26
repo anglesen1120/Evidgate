@@ -5,21 +5,9 @@
 import apiTokenCreate from '../../../../../../fixtures/web-api/api-token-create/input.json';
 import apiTokensList from '../../../../../../fixtures/web-api/api-tokens-list/input.json';
 import permissionsRunActions from '../../../../../../fixtures/web-api/permissions-list-run-actions/input.json';
-import ciBindingCreate from '../../../../../../fixtures/web-api/ci-binding-create/input.json';
-import ciBindingCreateConflict from '../../../../../../fixtures/web-api/ci-binding-create-conflict/input.json';
-import ciBindingCreateValidation from '../../../../../../fixtures/web-api/ci-binding-create-validation/input.json';
 import auditList from '../../../../../../fixtures/web-api/audit-list/input.json';
 import auditListEmpty from '../../../../../../fixtures/web-api/audit-list-empty/input.json';
 import auditListSupport from '../../../../../../fixtures/web-api/audit-list-support/input.json';
-import ciBindingsList from '../../../../../../fixtures/web-api/ci-bindings-list/input.json';
-import ciBindingsListOnboardingConnected from '../../../../../../fixtures/web-api/ci-bindings-list-onboarding-connected/input.json';
-import ciBindingsListOnboardingProject from '../../../../../../fixtures/web-api/ci-bindings-list-onboarding-project/input.json';
-import ciBindingsListOnboardingRun from '../../../../../../fixtures/web-api/ci-bindings-list-onboarding-run/input.json';
-import ciBindingsListSettings from '../../../../../../fixtures/web-api/ci-bindings-list-settings/input.json';
-import ciBindingsListSettingsEmpty from '../../../../../../fixtures/web-api/ci-bindings-list-settings-empty/input.json';
-import ciBindingsListSettingsForbidden from '../../../../../../fixtures/web-api/ci-bindings-list-settings-forbidden/input.json';
-import ciBindingsListSettingsPage1 from '../../../../../../fixtures/web-api/ci-bindings-list-settings-page-1/input.json';
-import ciBindingsListSettingsPage2 from '../../../../../../fixtures/web-api/ci-bindings-list-settings-page-2/input.json';
 import ingestTokenCreate from '../../../../../../fixtures/web-api/ingest-token-create/input.json';
 import ingestTokenCreateNameInvalid from '../../../../../../fixtures/web-api/ingest-token-create-name-invalid/input.json';
 import ingestTokenRotate from '../../../../../../fixtures/web-api/ingest-token-rotate/input.json';
@@ -121,25 +109,9 @@ import rolesList from '../../../../../../fixtures/web-api/roles-list/input.json'
 import type { FixtureCatalogRow } from './fixture-document';
 
 export const FIXTURE_CATALOG_SESSION_ROWS: readonly FixtureCatalogRow[] = [
-  { name: 'ci-binding-create', document: ciBindingCreate },
-  { name: 'ci-binding-create-conflict', document: ciBindingCreateConflict },
-  { name: 'ci-binding-create-validation', document: ciBindingCreateValidation },
   { name: 'audit-list', document: auditList },
   { name: 'audit-list-empty', document: auditListEmpty },
   { name: 'audit-list-support', document: auditListSupport },
-  { name: 'ci-bindings-list', document: ciBindingsList },
-  { name: 'ci-bindings-list-onboarding-connected', document: ciBindingsListOnboardingConnected },
-  { name: 'ci-bindings-list-onboarding-project', document: ciBindingsListOnboardingProject },
-  { name: 'ci-bindings-list-onboarding-run', document: ciBindingsListOnboardingRun },
-  { name: 'ci-bindings-list-settings', document: ciBindingsListSettings },
-  { name: 'ci-bindings-list-settings-empty', document: ciBindingsListSettingsEmpty },
-  { name: 'ci-bindings-list-settings-forbidden', document: ciBindingsListSettingsForbidden },
-  { name: 'ci-bindings-list-settings-page-1', document: ciBindingsListSettingsPage1 },
-  {
-    name: 'ci-bindings-list-settings-page-2',
-    document: ciBindingsListSettingsPage2,
-    cursor: '08df2cdfd69f6800-018f0000-0000-7000-8000-000000000063',
-  },
   { name: 'api-token-create', document: apiTokenCreate },
   { name: 'api-tokens-list', document: apiTokensList },
   { name: 'ingest-token-create', document: ingestTokenCreate },

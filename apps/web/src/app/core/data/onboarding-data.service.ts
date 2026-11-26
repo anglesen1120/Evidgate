@@ -4,22 +4,10 @@
 // `@evidgate/sdk` operation is called with the app's one client, `ApiGateway.call` decides
 // success versus typed failure, and no wire type is declared here: every signature is an SDK type.
 //
-// The reads are the five inputs of the derivation (plan §6): the org's projects (which project the
-// wizard resumes on), the project's CI bindings and ingest tokens (step 2), the project's runs
-// (step 3, oldest first) and one run's current evidence revision (step 4). The `Intent` is the
-// caller's: `steps/create-project.page.ts` mints one with `createIntent()` when the user presses
-// submit and passes the same value to every retry, so a retried create replays the original
-// response instead of creating a second project (00 §9.1, ADR-0008 rule 2).
-//
-// Step 2's two connect paths (T2.1, AC2) are the three secret-bearing creates: a CI binding
-// (`POST /v1/projects/{p}/ci-bindings`, whose answer carries the one-time `binding_challenge`) and
-// an ingest token plus its rotation (`POST /v1/projects/{p}/ingest-tokens`,
-// `POST /v1/ingest-tokens/{t}/rotate`, whose answers carry the one-time `secret`). None of the
-// three takes an `Idempotency-Key` (contracts/openapi.yaml: a response carrying a one-time secret
-// is never replayed), so none is minted for them and no `Intent` parameter exists: a caller guards
-// one in-flight submit and maps a `409` through the typed error path instead.
-// `POST /v1/ci/token` is CI's own pre-tenant exchange — the credential is the request — so the
-// web never calls it.
+// The org's projects select the resume target. Project runs and their evidence revisions drive
+// progress; only the optional connection panel reads the project's ingest tokens.
+// The `Intent` is the caller's: the project create passes the same value on a retry.
+// Token creation and rotation return a secret once and must never be automatically replayed.
 //
 // Step 5's two commands (09.2.1-T5.2, AC5) are the last two methods: the append of the default
 // advisory policy (`POST /v1/projects/{p}/policies`, 07.1.1-T3) and the activation that moves the
@@ -40,26 +28,20 @@
 import { inject, Injectable } from '@angular/core';
 import {
   activatePolicyRevision,
-  createCiBinding,
   createIngestToken,
   createPolicyRevision,
   createProject,
   getPolicyActivation,
   getProject,
   getRun,
-  listCiBindings,
   listIngestTokens,
   listProjects,
   listRuns,
   rotateIngestToken,
-  type CiBindingCreatedResponse,
-  type CiBindingListResponse,
-  type CreateCiBindingRequest,
   type CreateIngestTokenRequest,
   type CreateProjectRequest,
   type IngestTokenCreatedResponse,
   type IngestTokenListResponse,
-  type ListCiBindingsData,
   type ListIngestTokensData,
   type ListProjectsData,
   type ListRunsData,
@@ -79,7 +61,6 @@ import { intentHeaders, type Intent } from '../http/intent';
 
 /** Each query object below without its optionality, so the parameter can default to `{}`. */
 type ProjectListQuery = NonNullable<ListProjectsData['query']>;
-type CiBindingListQuery = NonNullable<ListCiBindingsData['query']>;
 type IngestTokenListQuery = NonNullable<ListIngestTokensData['query']>;
 type RunListQuery = NonNullable<ListRunsData['query']>;
 
@@ -125,35 +106,6 @@ export class OnboardingDataService {
    */
   getProject(projectId: string): Promise<ProjectDto> {
     return this.gateway.call((client) => getProject({ client, path: { p: projectId } }));
-  }
-
-  /**
-   * One page of the project's CI bindings (`GET /v1/projects/{p}/ci-bindings`, step 2). The row it
-   * answers is metadata only: the challenge is never listed, so a resume can show what exists
-   * without being able to show the secret again (AC7, T2.2).
-   */
-  listCiBindings(
-    projectId: string,
-    query: CiBindingListQuery = {},
-  ): Promise<CiBindingListResponse> {
-    return this.gateway.call((client) => listCiBindings({ client, path: { p: projectId }, query }));
-  }
-
-  /**
-   * Bind a repository to the project (`POST /v1/projects/{p}/ci-bindings`, step 2's GitHub OIDC
-   * path, AC2; `ci_binding:write`). The answer carries `binding_challenge` exactly once (set as
-   * the repository variable `EVIDGATE_BINDING_CHALLENGE`) and the binding starts
-   * `pending_verification`; the route takes no `Idempotency-Key`, so the caller's single in-flight
-   * submit is the guard and a `409` (`binding_exists`) arrives typed.
-   *
-   * `X-Evidgate-Org` is the interceptor's (`tenant-org.interceptor.ts`), never built here: the
-   * generated `headers` type declares no such parameter anyway.
-   */
-  createCiBinding(
-    projectId: string,
-    body: CreateCiBindingRequest,
-  ): Promise<CiBindingCreatedResponse> {
-    return this.gateway.call((client) => createCiBinding({ client, path: { p: projectId }, body }));
   }
 
   /**

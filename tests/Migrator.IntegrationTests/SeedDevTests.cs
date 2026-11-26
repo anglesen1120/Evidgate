@@ -28,7 +28,7 @@ public sealed class SeedDevTests
         first.ExitCode.ShouldBe(MigratorExitCodes.Success, first.Error);
         var counts = await CountsAsync(database);
 
-        counts.ShouldBe(new SeedCounts(1, 1, 1, 2, 1));
+        counts.ShouldBe(new SeedCounts(1, 1, 1, 2));
 
         var second = RunSeed(database, "Development");
         second.ExitCode.ShouldBe(MigratorExitCodes.Success);
@@ -37,7 +37,7 @@ public sealed class SeedDevTests
     }
 
     [Fact]
-    public async Task SeedDev_SeedsTheRolesOfTheCatalogue_AndAnActiveBinding()
+    public async Task SeedDev_SeedsTheRolesOfTheCatalogue_AndNoRetiredBindingRows()
     {
         var database = await _harness.MigratedDatabaseAsync();
         RunSeed(database, "Development").ExitCode.ShouldBe(MigratorExitCodes.Success);
@@ -46,8 +46,7 @@ public sealed class SeedDevTests
             database,
             $"select string_agg(r.code, ',' order by r.code) from public.membership_role mr join public.role r on r.id = mr.role_id where mr.membership_id = '{DevSeed.MembershipId}'"))
             .ShouldBe("release_approver,tenant_admin");
-        (await _fixture.ScalarAsync<string>(database, "select status from public.ci_binding")).ShouldBe("active");
-        (await _fixture.ScalarAsync<long>(database, "select repository_id from public.ci_binding")).ShouldBe(DevSeed.DevRepositoryId);
+        (await _fixture.TableExistsAsync(database, "ci_binding")).ShouldBeFalse("the retired exchange table is not seeded");
         (await _fixture.ScalarAsync<string>(database, "select status from public.membership")).ShouldBe("active");
     }
 
@@ -64,7 +63,7 @@ public sealed class SeedDevTests
 
         run.ExitCode.ShouldBe(MigratorExitCodes.InvalidInvocation);
         run.Error.ShouldContain("refused");
-        (await CountsAsync(database)).ShouldBe(new SeedCounts(0, 0, 0, 0, 0));
+        (await CountsAsync(database)).ShouldBe(new SeedCounts(0, 0, 0, 0));
     }
 
     [Theory]
@@ -112,8 +111,7 @@ public sealed class SeedDevTests
         await _fixture.ScalarAsync<long>(database, "select count(*) from public.organization"),
         await _fixture.ScalarAsync<long>(database, "select count(*) from public.project"),
         await _fixture.ScalarAsync<long>(database, "select count(*) from public.membership"),
-        await _fixture.ScalarAsync<long>(database, "select count(*) from public.membership_role"),
-        await _fixture.ScalarAsync<long>(database, "select count(*) from public.ci_binding"));
+        await _fixture.ScalarAsync<long>(database, "select count(*) from public.membership_role"));
 
-    private sealed record SeedCounts(long Orgs, long Projects, long Memberships, long Grants, long Bindings);
+    private sealed record SeedCounts(long Orgs, long Projects, long Memberships, long Grants);
 }

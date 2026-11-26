@@ -12,7 +12,7 @@ import { ProjectOverviewPage } from './overview.page';
 class OverviewHarness extends ComponentHarness {
   static hostSelector = 'app-project-overview';
   readonly widgets = this.locatorForAll(
-    '[data-dashboard-kpis], [data-dashboard-trend], [data-dashboard-recent], [data-dashboard-attention], [data-dashboard-authoring], [data-dashboard-ci], [data-dashboard-usage], [data-dashboard-activity]',
+    '[data-dashboard-kpis], [data-dashboard-trend], [data-dashboard-recent], [data-dashboard-attention], [data-dashboard-authoring], [data-dashboard-usage], [data-dashboard-activity]',
   );
   readonly text = async () => (await this.host()).text();
   readonly runViews = this.locatorForAll('[data-dashboard-run-view]');
@@ -76,7 +76,6 @@ function mount(rows: readonly RunSummary[] = [RUN], complete = true, allowed = t
     runs: read({ items: rows, complete }),
     waivers: read(page),
     quarantine: read(page),
-    bindings: read(page),
     cases: read(page),
     tree: read(page),
     changes: read(page),
@@ -110,10 +109,10 @@ function mount(rows: readonly RunSummary[] = [RUN], complete = true, allowed = t
 describe('ProjectOverviewPage dashboard', () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it('renders all eight independent widgets without treating collecting as PASS', async () => {
+  it('renders all seven independent widgets without treating collecting as PASS', async () => {
     const { fixture } = mount();
     const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, OverviewHarness);
-    expect(await harness.widgets()).toHaveLength(8);
+    expect(await harness.widgets()).toHaveLength(7);
     expect(await harness.text()).toContain('Still collecting');
     expect(await harness.text()).toContain('0%');
     expect(await harness.text()).toContain('Not evaluated');

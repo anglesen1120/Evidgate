@@ -42,11 +42,7 @@ describe('StepPendingComponent', () => {
       project: PROJECT,
       sampleRun: run,
       activation: { kind: 'none' },
-      bindings: [],
-      tokens: [],
-      bindingsTruncated: false,
-      tokensTruncated: false,
-      done: { 1: true, 2: true, 3: true, 4: true, 5: false },
+      done: { 1: true, 2: false, 3: true, 4: true, 5: false },
       currentStep: 5,
     } satisfies OnboardingProgress);
     await fixture.whenStable();
@@ -80,11 +76,7 @@ describe('StepPendingComponent', () => {
       project: PROJECT,
       sampleRun: null,
       activation: { kind: 'none' },
-      bindings: [],
-      tokens: [],
-      bindingsTruncated: false,
-      tokensTruncated: false,
-      done: { 1: true, 2: true, 3: false, 4: false, 5: false },
+      done: { 1: true, 2: false, 3: false, 4: false, 5: false },
       currentStep: 3,
     } satisfies OnboardingProgress);
     await fixture.whenStable();

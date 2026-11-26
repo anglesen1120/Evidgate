@@ -4,9 +4,6 @@
 
 import { TestBed } from '@angular/core/testing';
 import type {
-  CiBindingListResponse,
-  CiBindingView,
-  IngestTokenListResponse,
   IngestTokenView,
   ListProjectsData,
   PolicyActivationStateDto,
@@ -49,19 +46,6 @@ export const PROJECT: ProjectDto = {
   case_prefix: 'STOR',
 };
 
-export const BINDING: CiBindingView = {
-  id: 'b-1',
-  project_id: 'p-1',
-  provider: 'github_actions',
-  repository_id: 42,
-  repository_full_name: 'acme/storefront-web',
-  allowed_ref_patterns: ['refs/heads/main'],
-  allowed_workflow_refs: ['acme/storefront-web/.github/workflows/ci.yml@refs/heads/main'],
-  status: 'active',
-  created_at: '2026-10-20T10:00:00Z',
-  version: 1,
-};
-
 export const TOKEN: IngestTokenView = {
   id: 't-1',
   project_id: 'p-1',
@@ -74,20 +58,6 @@ export const TOKEN: IngestTokenView = {
 
 function projectPage(items: readonly ProjectDto[]): ProjectListResponse {
   return { items: [...items], next_cursor: null };
-}
-
-export function bindingPage(
-  items: readonly CiBindingView[],
-  nextCursor: string | null = null,
-): CiBindingListResponse {
-  return { items: [...items], next_cursor: nextCursor };
-}
-
-export function tokenPage(
-  items: readonly IngestTokenView[],
-  nextCursor: string | null = null,
-): IngestTokenListResponse {
-  return { items: [...items], next_cursor: nextCursor };
 }
 
 export function runSummary(runId: string, state: RunSummary['state']): RunSummary {
@@ -162,15 +132,12 @@ export function runState(runId: string, evidenceRevisionId: string | null): RunS
  */
 export class FakeOnboardingDataService {
   projects: readonly ProjectDto[] = [];
-  bindings: CiBindingListResponse = bindingPage([]);
-  tokens: IngestTokenListResponse = tokenPage([]);
   runs: readonly RunSummary[] = [];
   readonly runStates = new Map<string, RunStateDto>();
   /** Step 5's read: `null` is the contract's `404` (no activation), the default state here. */
   activation: PolicyActivationStateDto | null = null;
 
   projectFailure: Error | null = null;
-  bindingFailure: Error | null = null;
 
   /** Every call the store made, so a case can prove what was *not* issued. */
   readonly mutations: string[] = [];
@@ -212,17 +179,6 @@ export class FakeOnboardingDataService {
     return project === undefined
       ? Promise.reject(apiError('not_found', 404))
       : Promise.resolve(project);
-  }
-
-  listCiBindings(): Promise<CiBindingListResponse> {
-    if (this.bindingFailure !== null) {
-      return Promise.reject(this.bindingFailure);
-    }
-    return Promise.resolve(this.bindings);
-  }
-
-  listIngestTokens(): Promise<IngestTokenListResponse> {
-    return Promise.resolve(this.tokens);
   }
 
   listRuns(): Promise<RunPage> {

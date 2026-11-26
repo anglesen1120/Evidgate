@@ -1,15 +1,13 @@
-using System.Buffers;
 using System.Security.Cryptography;
 using System.Text;
 using Evidgate.BuildingBlocks.SharedKernel.Secrets;
-using Evidgate.BuildingBlocks.SharedKernel.Security;
 using Evidgate.Modules.Identity.Options;
 using Microsoft.Extensions.Options;
 
 namespace Evidgate.Modules.Identity.Ci;
 
 /// <summary>
-/// The key material of CI authentication: the peppers behind ingest-token and binding-challenge
+/// The key material of CI authentication: the peppers behind ingest-token
 /// HMACs (TL T5) and the key that signs minted <c>ci_producer</c> tokens (D7). Misconfigured
 /// values are rejected at boot by <see cref="CiAuthOptionsValidator"/>; absent values leave the
 /// matching capability off.
@@ -62,24 +60,6 @@ internal sealed class CiSecrets
             : null;
     }
 
-    /// <summary>The HMAC of <paramref name="data"/> under every live pepper, current first.</summary>
-    /// <param name="data">The secret bytes.</param>
-    public IReadOnlyList<byte[]> HashUnderEveryPepper(ReadOnlySpan<byte> data)
-    {
-        var hashes = new List<byte[]>(2);
-        if (_current is { } current)
-        {
-            hashes.Add(HMACSHA256.HashData(current.Key, data));
-        }
-
-        if (_previous is { } previous)
-        {
-            hashes.Add(HMACSHA256.HashData(previous.Key, data));
-        }
-
-        return hashes;
-    }
-
     /// <summary>UTF-8 bytes of a text secret.</summary>
     /// <param name="secret">The secret.</param>
     public static byte[] Bytes(string secret) => Encoding.UTF8.GetBytes(secret);
@@ -119,54 +99,8 @@ internal sealed class CiAuthOptionsValidator : IValidateOptions<CiAuthOptions>
             failures.Add("EVIDGATE:Ci:PreviousPepperVersion must differ from PepperVersion");
         }
 
-        ValidateEventNames(failures, options);
-
-        if (!Uri.TryCreate(options.GithubJwksUri, UriKind.Absolute, out var jwks)
-            || jwks.Scheme != Uri.UriSchemeHttps
-            || !Uri.TryCreate(options.GithubOidcIssuer, UriKind.Absolute, out var issuer)
-            || !string.Equals(jwks.Host, issuer.Host, StringComparison.OrdinalIgnoreCase))
-        {
-            failures.Add("EVIDGATE:Ci:GithubJwksUri must be https on the host of GithubOidcIssuer (S4 allowlist)");
-        }
-
         return failures.Count == 0 ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail(failures);
     }
-
-    /// <summary>Splits the comma-separated event list the way the exchange reads it.</summary>
-    internal static string[] SplitEventNames(string? value) =>
-        (value ?? string.Empty).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-
-    private static void ValidateEventNames(List<string> failures, CiAuthOptions options)
-    {
-        if (options.DeniedEventNames is not null)
-        {
-            failures.Add("EVIDGATE__CI__DENIEDEVENTNAMES is no longer supported and has no effect; remove it and set EVIDGATE__CI__ALLOWEDEVENTNAMES (an allowlist) instead");
-        }
-
-        var names = SplitEventNames(options.AllowedEventNames);
-        if (names.Length == 0)
-        {
-            failures.Add("EVIDGATE:Ci:AllowedEventNames must list at least one GitHub event name");
-        }
-
-        foreach (var name in names)
-        {
-            if (!IsEventToken(name))
-            {
-                failures.Add($"EVIDGATE:Ci:AllowedEventNames entry '{name}' is not a GitHub event name token (lowercase letters, digits and underscores, starting with a letter)");
-            }
-            else if (name is "workflow_run" or "pull_request_target")
-            {
-                failures.Add($"EVIDGATE:Ci:AllowedEventNames must not list '{name}': it runs in the base repository context and stays refused");
-            }
-        }
-    }
-
-    private static readonly SearchValues<char> LowerAlpha = SearchValues.Create("abcdefghijklmnopqrstuvwxyz");
-
-    private static readonly SearchValues<char> LowerSnake = SearchValues.Create("abcdefghijklmnopqrstuvwxyz0123456789_");
-
-    private static bool IsEventToken(string name) => AsciiShape.IsMatch(name, 1, 64, LowerAlpha, LowerSnake);
 
     private static void Check(List<string> failures, string property, string? value)
     {

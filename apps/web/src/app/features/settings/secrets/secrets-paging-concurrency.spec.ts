@@ -1,20 +1,13 @@
 import { TestBed } from '@angular/core/testing';
-import type {
-  CiBindingListResponse,
-  CiBindingView,
-  IngestTokenListResponse,
-  IngestTokenView,
-} from '@evidgate/sdk';
+import type { IngestTokenListResponse, IngestTokenView } from '@evidgate/sdk';
 import { vi } from 'vitest';
 
 import { SecretsDataService } from '../../../core/data/secrets-data.service';
 import { ApiRequestError } from '../../../core/http/api-error';
 import { SecretsStore } from './secrets.store';
 import tokenFixture from '../../../../../../../fixtures/web-api/ingest-tokens-list-onboarding-token/input.json';
-import bindingFixture from '../../../../../../../fixtures/web-api/ci-bindings-list-settings/input.json';
 
 const token = tokenFixture.body.items[0] as IngestTokenView;
-const binding = bindingFixture.body.items[0] as CiBindingView;
 const unavailable = new ApiRequestError({
   kind: 'unavailable',
   status: 503,
@@ -39,7 +32,6 @@ function deferred<T>() {
 describe('Secrets paging independent request boundaries', () => {
   const data = {
     listIngestTokens: vi.fn<SecretsDataService['listIngestTokens']>(),
-    listCiBindings: vi.fn<SecretsDataService['listCiBindings']>(),
   };
   let store: SecretsStore;
 
@@ -51,12 +43,6 @@ describe('Secrets paging independent request boundaries', () => {
         next_cursor: cursor ? null : 'token-next',
       }),
     );
-    data.listCiBindings.mockImplementation((project, cursor) =>
-      Promise.resolve({
-        items: [{ ...binding, id: `${project}-${cursor ?? 'first'}` }],
-        next_cursor: cursor ? null : 'binding-next',
-      }),
-    );
     TestBed.configureTestingModule({
       providers: [SecretsStore, { provide: SecretsDataService, useValue: data }],
     });
@@ -64,50 +50,19 @@ describe('Secrets paging independent request boundaries', () => {
   });
   afterEach(() => TestBed.resetTestingModule());
 
-  it('retries the failed binding size without moving the token cursor or discarding binding rows', async () => {
+  it('ignores a second Next while the token page request is pending', async () => {
     await store.load('project');
-    await store.loadCiBindings('project');
-    await store.loadMore();
-    await store.loadMoreCiBindings();
-    data.listCiBindings.mockRejectedValueOnce(unavailable);
-    await store.setCiBindingsPageSize(100);
-    expect(store.ciBindingsPage()).toBe(2);
-    expect(store.ciBindingsPageSize()).toBe(20);
-    expect(store.ciBindings().map((row) => row.id)).toEqual(['project-binding-next']);
-    expect(store.ciBindingsError()?.kind).toBe('unavailable');
-    await store.retryCiBindingsPage();
-    expect(data.listCiBindings).toHaveBeenLastCalledWith('project', undefined, 100);
-    expect(store.ciBindingsPage()).toBe(1);
-    expect(store.ciBindingsPageSize()).toBe(100);
-    expect(store.ciBindingsError()).toBeNull();
-    expect(store.page()).toBe(2);
-    expect(store.rows().map((row) => row.id)).toEqual(['project-token-next']);
-    expect(data.listIngestTokens).toHaveBeenCalledTimes(2);
-  });
-
-  it('settles simultaneous binding and token navigation independently in reverse request order', async () => {
-    await store.load('project');
-    await store.loadCiBindings('project');
     const tokens = deferred<IngestTokenListResponse>();
-    const bindings = deferred<CiBindingListResponse>();
     data.listIngestTokens.mockReturnValueOnce(tokens.promise);
-    data.listCiBindings.mockReturnValueOnce(bindings.promise);
     const tokenMove = store.loadMore();
-    const bindingMove = store.loadMoreCiBindings();
     await store.loadMore();
-    await store.loadMoreCiBindings();
     expect(data.listIngestTokens).toHaveBeenCalledTimes(2);
-    expect(data.listCiBindings).toHaveBeenCalledTimes(2);
-    bindings.resolve({ items: [{ ...binding, id: 'binding-second' }], next_cursor: null });
-    await bindingMove;
-    expect(store.ciBindingsPage()).toBe(2);
     expect(store.page()).toBe(1);
     expect(store.rows().map((row) => row.id)).toEqual(['project-first']);
     tokens.resolve({ items: [{ ...token, id: 'token-second' }], next_cursor: null });
     await tokenMove;
     expect(store.page()).toBe(2);
     expect(store.rows().map((row) => row.id)).toEqual(['token-second']);
-    expect(store.ciBindings().map((row) => row.id)).toEqual(['binding-second']);
   });
 
   it('discards a failed token page after a new project has loaded', async () => {
@@ -125,23 +80,6 @@ describe('Secrets paging independent request boundaries', () => {
     expect(store.paging()).toBe(false);
     await store.retryPage();
     expect(data.listIngestTokens).toHaveBeenCalledTimes(3);
-  });
-
-  it('discards a failed binding resize after resetting and loading another project', async () => {
-    await store.loadCiBindings('old');
-    const stale = deferred<CiBindingListResponse>();
-    data.listCiBindings.mockReturnValueOnce(stale.promise);
-    const move = store.setCiBindingsPageSize(100);
-    store.resetCiBindings();
-    await store.loadCiBindings('new');
-    stale.reject(unavailable);
-    await move;
-    expect(store.ciBindingsProjectId()).toBe('new');
-    expect(store.ciBindings().map((row) => row.id)).toEqual(['new-first']);
-    expect(store.ciBindingsPageSize()).toBe(20);
-    expect(store.ciBindingsError()).toBeNull();
-    await store.retryCiBindingsPage();
-    expect(data.listCiBindings).toHaveBeenCalledTimes(3);
   });
 
   it('retries a failed first-page reset instead of stranding retained later-page rows', async () => {
@@ -217,7 +155,6 @@ describe('Secrets paging independent request boundaries', () => {
     async (outcome) => {
       await store.load('project');
       await store.loadMore();
-      await store.loadCiBindings('project');
       const refresh = deferred<IngestTokenListResponse>();
       const resize = deferred<IngestTokenListResponse>();
       data.listIngestTokens
@@ -243,9 +180,6 @@ describe('Secrets paging independent request boundaries', () => {
       expect(store.loadError()).toBeNull();
       await store.retryPage();
       expect(data.listIngestTokens).toHaveBeenCalledTimes(4);
-      expect(store.ciBindings().map((row) => row.id)).toEqual(['project-first']);
-      expect(store.ciBindingsPage()).toBe(1);
-      expect(data.listCiBindings).toHaveBeenCalledTimes(1);
       await store.loadMore();
       expect(data.listIngestTokens).toHaveBeenLastCalledWith('project', 'size-50-next', 50);
     },

@@ -55,7 +55,7 @@ public sealed class ObservabilityTests
         Tag(batch!, EvidgateTelemetry.ProducerIdTag).ShouldBe(IngestTestWorld.ProducerId);
         Tag(batch!, CorrelationNames.RequestId).ShouldBe(RequestId);
         Tag(batch!, EvidgateTelemetry.EventCountTag).ShouldBe("1");
-        batch!.TagObjects.ShouldAllBe(tag => !Equals(tag.Value, IngestTestWorld.Jti), "the token id never reaches a span");
+        batch!.TagObjects.ShouldAllBe(tag => !Equals(tag.Value, IngestTestWorld.OwnerId), "the credential id never reaches a span");
 
         // An accepted batch is not a rejection: the counter stays untouched.
         reasons.ShouldBeEmpty();
@@ -156,7 +156,7 @@ public sealed class ObservabilityTests
         Tag(batch!, CorrelationNames.RunId).ShouldBe(world.RunId.ToString("D", CultureInfo.InvariantCulture));
         Tag(batch!, EvidgateTelemetry.ProducerIdTag).ShouldBe(IngestTestWorld.ProducerId);
         Tag(batch!, EvidgateTelemetry.EventCountTag).ShouldBe("1");
-        batch!.TagObjects.ShouldAllBe(tag => !Equals(tag.Value, IngestTestWorld.Jti));
+        batch!.TagObjects.ShouldAllBe(tag => !Equals(tag.Value, IngestTestWorld.OwnerId));
 
         // The block is reported once and commits nothing, quota and events alike.
         (await world.CountAsync("event", $"run_id = '{world.RunId:D}'")).ShouldBe(0L);

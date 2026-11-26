@@ -85,7 +85,7 @@ internal sealed partial class FinalizeShardCommandHandler(
         ArgumentNullException.ThrowIfNull(command);
         using var activity = EvidgateTelemetry.StartModuleActivity(ModuleName.Orchestrator, nameof(FinalizeShardCommand));
 
-        // Fail closed: the slot's binding IS the caller's token identity (T9), so a principal with no credential id
+        // Fail closed: the slot's owner IS the caller's stable credential id (T9), so a principal with no credential id
         // (a member session) is nobody this route can serve. The same check and code the events route answers.
         var principal = principals.Current;
         if (principal is null || string.IsNullOrEmpty(principal.CredentialId))
@@ -102,7 +102,6 @@ internal sealed partial class FinalizeShardCommandHandler(
 
         var request = parsed.Value;
         var orgId = scopes.Require().OrgId;
-        var ciRunRef = principal.CiRun?.ToBindingReference();
 
         // (1) The run. An unlocked, RLS-scoped read first, the events handler's own pattern (IngestEventBatch):
         // it answers existence (404) and the credential's project scope (403) and the project's lifecycle state
@@ -147,11 +146,11 @@ internal sealed partial class FinalizeShardCommandHandler(
             return Result.Failure(lockedRefusal);
         }
 
-        // (2) the shard's identity (T9/T88): the slot binds to this token on a first write, and only the identity it
-        // is bound to may go on. A failure is the registry's own 403/422 and leaves nothing behind (the transaction
+        // (2) the shard's identity (T9): the slot binds to this credential on a first write, and only that
+        // credential may go on. A failure is the registry's own 403/422 and leaves nothing behind (the transaction
         // rolls back), so a foreign caller learns neither the shard index nor the manifest hash.
         var bound = await producers
-            .BindOrCheckAsync(command.RunId, request.ProducerId, principal.CredentialId, ciRunRef, cancellationToken)
+            .BindOrCheckAsync(command.RunId, request.ProducerId, principal.CredentialId, cancellationToken)
             .ConfigureAwait(false);
 
         if (!bound.IsSuccess)
@@ -183,7 +182,6 @@ internal sealed partial class FinalizeShardCommandHandler(
                 command.RunId,
                 request.ProducerId,
                 principal.CredentialId,
-                ciRunRef,
                 request.LastSequence,
                 request.Count,
                 cancellationToken)

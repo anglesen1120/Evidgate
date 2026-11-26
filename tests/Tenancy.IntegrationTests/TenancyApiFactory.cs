@@ -1,7 +1,6 @@
 using System.Net.Http.Headers;
 using System.Security.Cryptography;
 using Evidgate.BuildingBlocks.Pipeline.Authorization;
-using Evidgate.Modules.Identity.Ci;
 using Evidgate.BuildingBlocks.Pipeline.Tenancy;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -56,15 +55,12 @@ internal sealed class TenancyApiFactory : WebApplicationFactory<Program>
         _createdAt = TenancyHostLeakGuard.Site();
     }
 
-    /// <summary>The GitHub OIDC stand-in (a local RSA keypair) when built with <see cref="Ci"/>.</summary>
-    public TestJwks Jwks { get; } = new();
-
     /// <summary>The configured CI key material, for tests that mint or check tokens.</summary>
     public static CiTestKeys Keys { get; } = new();
 
     /// <summary>
     /// <see cref="RealResolver"/> plus CI authentication: signing key and peppers configured, the real
-    /// <c>ci_producer</c> authenticator in place, and GitHub's JWKS served from <see cref="Jwks"/>.
+    /// <c>ci_producer</c> authenticator in place.
     /// </summary>
     public static TenancyApiFactory Ci(string appConnectionString, IReadOnlyDictionary<string, string?>? overrides = null) =>
         new(appConnectionString, realEvaluator: true, realResolver: true, ci: true) { _overrides = overrides };
@@ -87,11 +83,7 @@ internal sealed class TenancyApiFactory : WebApplicationFactory<Program>
     private bool _workerQueue;
 
     /// <summary>
-    /// A host whose requests carry <paramref name="principal"/> — a service principal with a
-    /// <c>CredentialId</c> (the slot-binding identity, T9) and an optional <c>CiRunReference</c>, which the
-    /// <c>X-Test-*</c> header stand-in cannot express — plus optional extra configuration (06.1.2-T1) and
-    /// optional service registrations (10.3.1-T1.2: the task queue, so a test can run the real consumer
-    /// against the row this host's request produced).
+    /// Supplies an authenticated principal, because test headers cannot express its ingest-token identity.
     /// </summary>
     /// <param name="configuration">In-memory configuration the host adds (06.1.2-T1).</param>
     /// <param name="services">Extra registrations, e.g. the task queue a test runs the real consumer against.</param>
@@ -315,12 +307,7 @@ internal sealed class TenancyApiFactory : WebApplicationFactory<Program>
                 services.AddSingleton<ICallerAuthenticator, HeaderAuthenticator>();
             }
 
-            if (_ci)
-            {
-                services.RemoveAll<IGitHubJwksProvider>();
-                services.AddSingleton<IGitHubJwksProvider>(Jwks);
-            }
-            else
+            if (!_ci)
             {
                 services.AddSingleton<IStartupFilter>(new RequestContextStartupFilter());
             }
@@ -432,8 +419,7 @@ internal sealed class TenancyApiFactory : WebApplicationFactory<Program>
     }
 
     /// <summary>
-    /// Publishes a fixed caller and tenant for every request (06.1.2-T1): the header stand-in cannot
-    /// express a service principal's <c>CredentialId</c> or its <c>CiRunReference</c>.
+    /// Publishes a fixed caller and tenant without taking the ingest-token identity from a header.
     /// </summary>
     private sealed class PublishedPrincipalStartupFilter(
         Func<(Guid Org, Guid Project, IRequestPrincipal Principal)> current) : IStartupFilter

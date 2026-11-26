@@ -224,14 +224,6 @@ public static partial class IsolationRouteCases
     public static ProbeCaller OrgBService(IsolationWorld world) =>
         ProbeCaller.Service("org-B ci_producer (project web)", Require(world).Acme2.Projects[0].CiProducerJwt);
 
-    /// <summary>
-    /// Org B's OIDC-minted <c>ci_producer</c> of project <c>web</c> (02.9.1-T3, hand-over from #19): the same
-    /// scope as <see cref="OrgBService"/>, minted through the JWKS-verified binding exchange instead of the
-    /// ingest token.
-    /// </summary>
-    public static ProbeCaller OrgBServiceOidc(IsolationWorld world) =>
-        ProbeCaller.Service("org-B OIDC ci_producer (project web)", Require(world).Acme2.Projects[0].OidcProducerJwt);
-
     /// <summary>The full-pagination walks of every served list route.</summary>
     public static IReadOnlyList<ListWalk> Lists(IsolationWorld world)
     {
@@ -272,8 +264,6 @@ public static partial class IsolationRouteCases
             var ap = a.Projects[i];
             walks.Add(new(Get("/v1/projects/{p}/incidents"), $"org B project {bp.Slug} incidents", HealingTriageCaller(world),
                 $"/v1/projects/{bp.Id}/incidents?limit=1", "id", Fixed(bp.IncidentIds), TriageCallerOf(a, "A"), $"/v1/projects/{ap.Id}/incidents?limit=1"));
-            walks.Add(new(Get("/v1/projects/{p}/ci-bindings"), $"org B project {bp.Slug} bindings", bAdmin, $"/v1/projects/{bp.Id}/ci-bindings?limit=1", "id",
-                Fixed(bp.BindingIds), aAdmin, $"/v1/projects/{ap.Id}/ci-bindings?limit=1"));
             walks.Add(new(Get("/v1/projects/{p}/ingest-tokens"), $"org B project {bp.Slug} ingest tokens", bAdmin, $"/v1/projects/{bp.Id}/ingest-tokens?limit=1", "id",
                 Fixed([bp.ActiveTokenId, bp.RevokedTokenId]), aAdmin, $"/v1/projects/{ap.Id}/ingest-tokens?limit=1"));
             walks.Add(new(Get("/v1/projects/{p}/api-tokens"), $"org B project {bp.Slug} api tokens", bAdmin, $"/v1/projects/{bp.Id}/api-tokens?limit=1", "id",
@@ -694,11 +684,6 @@ public static partial class IsolationRouteCases
             ]),
 
         // ---- CI admin (CiAdminEndpoints.cs:30-55) --------------------------------------------------------------
-        ProjectCase("POST", "/v1/projects/{p}/ci-bindings", p => new(HttpMethod.Post, $"/v1/projects/{p}/ci-bindings", Binding())),
-        ProjectCase("GET", "/v1/projects/{p}/ci-bindings", p => new(HttpMethod.Get, $"/v1/projects/{p}/ci-bindings"), list: true),
-        ObjectCase("PATCH", "/v1/ci-bindings/{b}", p => [("binding", p.BindingId)], id =>
-            new(HttpMethod.Patch, $"/v1/ci-bindings/{id}", new JsonObject { ["status"] = "disabled" }, "\"1\"")),
-        ObjectCase("DELETE", "/v1/ci-bindings/{b}", p => [("binding", p.BindingId)], id => new(HttpMethod.Delete, $"/v1/ci-bindings/{id}")),
         ProjectCase("POST", "/v1/projects/{p}/ingest-tokens", p => new(HttpMethod.Post, $"/v1/projects/{p}/ingest-tokens", new JsonObject { ["name"] = "intruder" })),
         ProjectCase("GET", "/v1/projects/{p}/ingest-tokens", p => new(HttpMethod.Get, $"/v1/projects/{p}/ingest-tokens"), list: true),
         ObjectCase("POST", "/v1/ingest-tokens/{t}/rotate", p => [("active token", p.ActiveTokenId), ("revoked token", p.RevokedTokenId)], id =>
@@ -1290,12 +1275,6 @@ public static partial class IsolationRouteCases
                     route, "sibling project api of the token's org", OrgBService(w), request(w.Acme2.Projects[1].Id),
                     requireScopeCode: route.Template.EndsWith("/manifests", StringComparison.Ordinal))),
                 Pair(route, "org A project web in {p}", ProbeExpect.ServiceRefused, OrgBService(w), request(w.Acme.Projects[0].Id), request(Guid.CreateVersion7())),
-                // The OIDC-minted token of project web carries the same scope, so it must be refused identically
-                // (02.9.1-T3, hand-over from #19).
-                new(route, "sibling project api of the OIDC token's org", runner => runner.ScopeMismatchAsync(
-                    route, "sibling project api of the OIDC token's org", OrgBServiceOidc(w), request(w.Acme2.Projects[1].Id),
-                    requireScopeCode: route.Template.EndsWith("/manifests", StringComparison.Ordinal))),
-                Pair(route, "org A project web in {p} (OIDC token)", ProbeExpect.ServiceRefused, OrgBServiceOidc(w), request(w.Acme.Projects[0].Id), request(Guid.CreateVersion7())),
             ]);
 
     /// <summary>
@@ -1336,10 +1315,6 @@ public static partial class IsolationRouteCases
                     route, "sibling project api of the token's org", OrgBService(w), own(w.Acme2.Projects[1]),
                     requireScopeCode: false)),
                 Pair(route, "org A project web in {p}", ProbeExpect.ServiceRefused, OrgBService(w), own(w.Acme.Projects[0]), random()),
-                new(route, "sibling project api of the OIDC token's org", runner => runner.ScopeMismatchAsync(
-                    route, "sibling project api of the OIDC token's org", OrgBServiceOidc(w), own(w.Acme2.Projects[1]),
-                    requireScopeCode: false)),
-                Pair(route, "org A project web in {p} (OIDC token)", ProbeExpect.ServiceRefused, OrgBServiceOidc(w), own(w.Acme.Projects[0]), random()),
             ]);
 
     /// <summary>The queue body: a well-formed comment on the item of the project in the path.</summary>
@@ -1493,23 +1468,17 @@ public static partial class IsolationRouteCases
                         Upload(w.Acme.Projects[0].Id, Manifest(w.Acme.Projects[0])), Upload(Guid.CreateVersion7(), Manifest(w.Acme.Projects[0]))),
                     Pair(route, "own project, manifest over org A's revisions", ProbeExpect.NotSuccess, OrgBService(w),
                         Upload(w.Acme2.Projects[0].Id, Manifest(w.Acme.Projects[0])), Upload(w.Acme2.Projects[0].Id, Random())),
-                    // The OIDC-minted token of project web: accepted for its own project (200 dedupe or 201), refused
-                    // on the sibling project (403 project_scope_mismatch) and on org A's project (02.9.1-T3, from #19).
-                    new(route, "own project, OIDC token accepted", async runner =>
+                    new(route, "own project, ingest producer accepted", async runner =>
                     {
-                        var response = await runner.SendAsync(OrgBServiceOidc(w), Upload(w.Acme2.Projects[0].Id, Manifest(w.Acme2.Projects[0])));
+                        var response = await runner.SendAsync(OrgBService(w), Upload(w.Acme2.Projects[0].Id, Manifest(w.Acme2.Projects[0])));
                         var violations = new List<string>();
                         if (response.Status is not (200 or 201))
                         {
-                            violations.Add(RouteProbeRunner.Describe(route, "own project, OIDC token accepted", OrgBServiceOidc(w), $"answered {response}, expected 200 or 201"));
+                            violations.Add(RouteProbeRunner.Describe(route, "own project, ingest producer accepted", OrgBService(w), $"answered {response}, expected 200 or 201"));
                         }
 
                         return violations;
                     }),
-                    new(route, "sibling project api of the OIDC token's org", runner => runner.ScopeMismatchAsync(
-                        route, "sibling project api of the OIDC token's org", OrgBServiceOidc(w), Upload(w.Acme2.Projects[1].Id, Manifest(w.Acme2.Projects[1])), requireScopeCode: true)),
-                    Pair(route, "org A project web in {p} (OIDC token)", ProbeExpect.ServiceRefused, OrgBServiceOidc(w),
-                        Upload(w.Acme.Projects[0].Id, Manifest(w.Acme.Projects[0])), Upload(Guid.CreateVersion7(), Manifest(w.Acme.Projects[0]))),
                 ];
             });
     }
@@ -2461,20 +2430,6 @@ public static partial class IsolationRouteCases
         ["roles"] = new JsonArray(),
     };
 
-    /// <summary>The seeder's binding shape with a fresh repository id per request (a repeat would be 409 for the wrong reason).</summary>
-    private static JsonObject Binding()
-    {
-        var repositoryId = 900_000_000L + Random.Shared.NextInt64(1, 99_999_999);
-        return new JsonObject
-        {
-            ["provider"] = "github_actions",
-            ["repository_id"] = repositoryId,
-            ["repository_full_name"] = "intruder/repo",
-            ["allowed_ref_patterns"] = new JsonArray("refs/heads/main"),
-            ["allowed_workflow_refs"] = new JsonArray("intruder/repo/.github/workflows/ci.yml@refs/heads/main"),
-        };
-    }
-
     private static JsonObject Environment() => new()
     {
         ["base_urls"] = new JsonObject { ["web"] = "https://intruder.example.test" },
@@ -2611,7 +2566,6 @@ public sealed class RouteProbeRunner
         {
             ids.AddRange([p.Id, p.ActiveTokenId, p.RevokedTokenId, p.EnvironmentRevisionId, p.ManifestId, p.ReleaseId]);
             ids.AddRange(p.RunIds);
-            ids.AddRange(p.BindingIds);
             ids.AddRange(p.CaseIds);
             ids.AddRange(p.CaseRevisions.SelectMany(revisions => revisions));
             ids.AddRange(p.SuiteIds);

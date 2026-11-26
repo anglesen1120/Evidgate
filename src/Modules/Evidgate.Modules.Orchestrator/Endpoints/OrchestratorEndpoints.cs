@@ -200,10 +200,8 @@ public static partial class OrchestratorEndpoints
             return Result.Failure<RunCreated>(tooLarge);
         }
 
-        // Bind idempotency to the verified CI attempt: another attempt conflicts, while a re-minted
-        // token for the same attempt replays. Callers without a CI reference retain their digest.
         return await mediator.Send(
-            new CreateRunCommand(p, bytes, IdempotencyKey(context), principal.CiRun?.ToBindingReference()),
+            new CreateRunCommand(p, bytes, IdempotencyKey(context)),
             cancellationToken).ConfigureAwait(false);
     }
 
@@ -452,8 +450,7 @@ public static partial class OrchestratorEndpoints
                 r,
                 bytes,
                 IdempotencyKey(context),
-                principal.CredentialId,
-                principal.CiRun?.ToBindingReference()),
+                principal.CredentialId),
             cancellationToken).ConfigureAwait(false);
     }
 

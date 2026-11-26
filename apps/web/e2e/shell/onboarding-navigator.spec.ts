@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
 import { expectNoA11yViolations } from '../a11y/axe-scan';
+import { openConnectStep } from './onboarding-connection-support';
 import { expectCurrentStep, onboardingUrl, shell, stepItem } from './onboarding-support';
 import { LOCALES, seedStoredTheme, THEMES } from './support';
 
@@ -90,7 +91,7 @@ for (const locale of LOCALES) {
         await seedStoredTheme(page, theme);
         await page.setViewportSize({ width, height: 1100 });
         await page.goto(onboardingUrl(locale, 'onboarding-project'));
-        await expectCurrentStep(page, 2);
+        await openConnectStep(page);
         await expect(shell(page).getByRole('navigation')).toHaveCount(1);
         await expect(shell(page).locator('hlm-select')).toHaveCount(0);
         if (width < 768) {
@@ -167,7 +168,7 @@ for (const locale of LOCALES) {
       await seedStoredTheme(page, theme);
       await page.setViewportSize({ width: 390, height: 1100 });
       await page.goto(onboardingUrl(locale, 'onboarding-project'));
-      await expectCurrentStep(page, 2);
+      await expectCurrentStep(page, 3);
       const toggle = page.getByTestId('onboarding-step-toggle');
       const list = page.getByTestId('onboarding-stepper');
       await toggle.focus();
@@ -185,7 +186,7 @@ for (const locale of LOCALES) {
       await expect(blocked).toBeFocused();
       await expect(blocked).toHaveAttribute('aria-disabled', 'true');
       await page.keyboard.press('Space');
-      await expectCurrentStep(page, 2);
+      await expectCurrentStep(page, 3);
       await expect(toggle).toHaveAttribute('aria-expanded', 'true');
       await page.keyboard.press('Escape');
       await expect(list).toBeHidden();
@@ -215,7 +216,7 @@ for (const locale of LOCALES) {
       await seedStoredTheme(page, theme);
       await page.setViewportSize({ width: 767, height: 1100 });
       await page.goto(onboardingUrl(locale, 'onboarding-project'));
-      await expectCurrentStep(page, 2);
+      await expectCurrentStep(page, 3);
       const list = page.getByTestId('onboarding-stepper');
       const original = await list.elementHandle();
       const toggle = page.getByTestId('onboarding-step-toggle');
@@ -231,7 +232,7 @@ for (const locale of LOCALES) {
       for (const width of [768, 767, 390, 1440, 390]) {
         await page.setViewportSize({ width, height: 1100 });
         await expect(list).toBeVisible();
-        await expectCurrentStep(page, 2);
+        await expectCurrentStep(page, 3);
         await expect(toggle).toHaveAttribute('aria-expanded', 'true');
         expect(await list.evaluate((element, previous) => element === previous, original)).toBe(
           true,
@@ -263,8 +264,8 @@ for (const locale of LOCALES) {
         await expect(next).toContainText(
           seed === 'onboarding-enabled'
             ? locale === 'vi'
-              ? 'Đã hoàn thành tất cả 5 bước.'
-              : 'All 5 steps complete.'
+              ? 'Đã hoàn thành tất cả 4 bước.'
+              : 'All 4 steps complete.'
             : locale === 'vi'
               ? `Bước cần làm ${step}/5`
               : `Next required ${step} of 5`,
@@ -291,15 +292,19 @@ for (const locale of LOCALES) {
     page,
   }) => {
     await page.goto(onboardingUrl(locale, 'onboarding-project'));
-    await expectCurrentStep(page, 2);
+    await expectCurrentStep(page, 3);
     const count = page.getByTestId('onboarding-progress-count');
     const confirmed = await count.textContent();
     const first = page.getByTestId('onboarding-select-step-1');
     const second = page.getByTestId('onboarding-select-step-2');
-    const blocked = page.getByTestId('onboarding-select-step-3');
+    const third = page.getByTestId('onboarding-select-step-3');
+    const blocked = page.getByTestId('onboarding-select-step-4');
     await first.focus();
     await page.keyboard.press('ArrowRight');
     await expect(second).toBeFocused();
+    await page.keyboard.press('ArrowRight');
+    await expect(third).toBeFocused();
+    await expect(third).not.toHaveAttribute('aria-disabled', 'true');
     await page.keyboard.press('ArrowRight');
     await expect(blocked).toBeFocused();
     await expect(blocked).toHaveAttribute('aria-disabled', 'true');
@@ -307,12 +312,12 @@ for (const locale of LOCALES) {
     await expect(page.locator('#onboarding-locked-reason')).toBeVisible();
     for (const key of ['Enter', 'Space']) {
       await page.keyboard.press(key);
-      await expectCurrentStep(page, 2);
+      await expectCurrentStep(page, 3);
       await expect(blocked).toBeFocused();
     }
     await page.keyboard.press('Home');
     await expect(first).toBeFocused();
-    await expectCurrentStep(page, 2);
+    await expectCurrentStep(page, 3);
     await page.keyboard.press('Enter');
     await expectCurrentStep(page, 1);
     await expect(page.locator('#onboarding-step-title')).toBeFocused();
@@ -323,6 +328,7 @@ for (const locale of LOCALES) {
     await expect(count).toHaveText(confirmed ?? '');
     await expect(stepItem(page, 1)).toHaveAttribute('data-done', 'true');
     await expect(stepItem(page, 2)).toHaveAttribute('data-done', 'false');
+    await expect(stepItem(page, 3)).toHaveAttribute('data-done', 'false');
   });
 }
 
@@ -333,7 +339,7 @@ for (const theme of THEMES) {
     await seedStoredTheme(page, theme);
     await page.setViewportSize({ width: 320, height: 1100 });
     await page.goto(onboardingUrl('vi', 'onboarding-project'));
-    await expectCurrentStep(page, 2);
+    await expectCurrentStep(page, 3);
     await page.getByTestId('onboarding-step-toggle').click();
     await page.getByTestId('onboarding-stepper').evaluate((list) => {
       const text = Array.from(list.querySelectorAll<HTMLElement>('span')).map((element) => ({
@@ -361,10 +367,10 @@ test.describe('compact navigator focus and the ledger link', () => {
   }) => {
     await page.setViewportSize({ width: 767, height: 1100 });
     await page.goto(onboardingUrl('vi', 'onboarding-project'));
-    await expectCurrentStep(page, 2);
+    await expectCurrentStep(page, 3);
     const toggle = page.getByTestId('onboarding-step-toggle');
     const list = page.getByTestId('onboarding-stepper');
-    const viewed = page.getByTestId('onboarding-select-step-2');
+    const viewed = page.getByTestId('onboarding-select-step-3');
     await expect(list).toBeHidden();
 
     // Collapsed: the disclosure holds the focus and the wide layout hides it.
@@ -373,7 +379,7 @@ test.describe('compact navigator focus and the ledger link', () => {
     await expect(list).toBeVisible();
     await expect(toggle).toBeHidden();
     await expect(viewed).toBeFocused();
-    expect(await focusedTestId(page), 'collapsed handoff').toBe('onboarding-select-step-2');
+    expect(await focusedTestId(page), 'collapsed handoff').toBe('onboarding-select-step-3');
 
     // Expanded: the same hand-off, and the stored disclosure state does not change.
     await page.setViewportSize({ width: 767, height: 1100 });
@@ -383,7 +389,7 @@ test.describe('compact navigator focus and the ledger link', () => {
     await page.setViewportSize({ width: 768, height: 1100 });
     await expect(list).toBeVisible();
     await expect(viewed).toBeFocused();
-    expect(await focusedTestId(page), 'expanded handoff').toBe('onboarding-select-step-2');
+    expect(await focusedTestId(page), 'expanded handoff').toBe('onboarding-select-step-3');
     await expect(toggle).toHaveAttribute('aria-expanded', 'true');
 
     // Focus somewhere else: widening must not take it.
@@ -396,7 +402,7 @@ test.describe('compact navigator focus and the ledger link', () => {
     await page.setViewportSize({ width: 768, height: 1100 });
     await expect(list).toBeVisible();
     await expect(back).toBeFocused();
-    await expectCurrentStep(page, 2);
+    await expectCurrentStep(page, 3);
   });
 
   test('the ledger link keeps the wizard address and lets modified clicks through', async ({
@@ -404,7 +410,7 @@ test.describe('compact navigator focus and the ledger link', () => {
   }) => {
     await page.setViewportSize({ width: 390, height: 1100 });
     await page.goto(onboardingUrl('vi', 'onboarding-project'));
-    await expectCurrentStep(page, 2);
+    await expectCurrentStep(page, 3);
     const link = page.getByTestId('onboarding-project-context').getByRole('link');
     const expected = new URL(page.url());
     expected.hash = 'onboarding-resources';
@@ -429,7 +435,7 @@ test.describe('compact navigator focus and the ledger link', () => {
     await expect(page).toHaveURL(expected.toString());
 
     await page.goto(before);
-    await expectCurrentStep(page, 2);
+    await expectCurrentStep(page, 3);
     const plain = page.getByTestId('onboarding-project-context').getByRole('link');
     await plain.click();
     await expect(page.locator('#onboarding-resources')).toBeFocused();
@@ -441,7 +447,7 @@ test.describe('compact navigator focus and the ledger link', () => {
   }) => {
     await page.setViewportSize({ width: 390, height: 1100 });
     await page.goto(onboardingUrl('vi', 'onboarding-project'));
-    await expectCurrentStep(page, 2);
+    await expectCurrentStep(page, 3);
     const next = page.getByTestId('onboarding-next-summary');
     const context = page.getByTestId('onboarding-project-context');
     await expect(next).toBeVisible();

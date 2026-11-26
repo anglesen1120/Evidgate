@@ -1,26 +1,5 @@
-// 09.2.1-T1.2/T2 (plan 09.2.1 §6 "Wizard step derivation", §10 T1.2/T2; T63; decisions (b) and
-// (d); AC2, AC7): the wizard's resumable position, derived from what the server holds and never
-// from a local flag. One `load` answers the project the wizard resumes on, the step 2 metadata the
-// panel renders (the CI bindings and ingest tokens the project already has, in server order) plus
-// the five done-conditions of `step-derivation.ts`.
-//
-// Cost and ordering:
-//   - the project resolves first, because every later read is project-scoped; a route that names
-//     one is read with a single `getProject` (`GET /v1/projects/{p}`), never by walking the org's
-//     project list;
-//   - the four project reads (bindings, tokens, oldest run, policy activation) are issued
-//     together, so a resume costs one round trip after the project instead of four;
-//   - `getRun` follows `listRuns`, because its run id is what the list answered (step 4 reads
-//     `current_evidence_revision_id`, which the list row does not carry).
-//
-// Step 2's two lists are read with `CONNECT_LIST_LIMIT` rows: step 2's panel shows the rows it
-// created or resumed with (T2.2: metadata only — neither list carries a secret), and the health
-// panel derives its state from those rows (09.2.1-T7), while the done-condition stays presence —
-// `done[2]` is "either list is not empty", exactly as T1 shipped it — so a token without a
-// binding (or a binding without a token) completes step 2 either way (AC2). Because the
-// panel renders one page, each list also reports whether the server held more rows than that page
-// (`bindingsTruncated` / `tokensTruncated`: the response carried a `next_cursor`), so the panel can
-// say the rows shown are not all of them instead of implying the project has exactly these.
+// Resume from project, sample run, evidence and policy activation. Credential inventory
+// belongs to the optional token panel and is never a prerequisite for this read.
 //
 // Scope: every SDK call is made with the id the route supplied (`orgId`, `projectId`), and the
 // project row the server answered with must carry that same `org_id`. A row of another org — a
@@ -39,14 +18,7 @@
 // it says nothing about the activation and the wizard must not publish a step it did not read.
 
 import { inject, Injectable } from '@angular/core';
-import type {
-  CiBindingView,
-  IngestTokenView,
-  PolicyActivationStateDto,
-  ProjectDto,
-  RunStateDto,
-  RunSummary,
-} from '@evidgate/sdk';
+import type { PolicyActivationStateDto, ProjectDto, RunStateDto, RunSummary } from '@evidgate/sdk';
 
 import { OnboardingDataService } from '../../../core/data/onboarding-data.service';
 import { ApiRequestError, isApiRequestError } from '../../../core/http/api-error';
@@ -65,18 +37,6 @@ const STEP_THREE_DONE: Partial<Record<RunStateDto['state'], true>> = {
   complete: true,
   incomplete: true,
 };
-
-/**
- * The page size of step 2's two lists (`listCiBindings`, `listIngestTokens`), which is the
- * contract's own default: `Limit` in `contracts/openapi.yaml` is `default: 50`, `maximum: 200`,
- * and both list operations declare it, so naming it explicitly changes what the server answers
- * by nothing. The rows are rendered, not merely counted — the health panel derives its state from
- * them (09.2.1-T7) — so one page has to be the inventory the panel shows; a project that outgrows
- * it answers a `next_cursor`, which the progress reports as `bindingsTruncated`/`tokensTruncated`
- * instead of silently shortening the list. Exported so the two reads and the spec that pins them
- * agree on one value.
- */
-export const CONNECT_LIST_LIMIT = 50;
 
 /**
  * Step 5's input as one closed set (09.2.1-T5.2): what the project-keyed activation read answered.
@@ -104,24 +64,6 @@ export interface OnboardingProgress {
   readonly activation: ProgressActivation;
   /** The oldest run of the project with its current evidence revision, if any. */
   readonly sampleRun: RunStateDto | null;
-  /**
-   * The project's CI bindings and ingest tokens, in the order the server answered them. Step 2's
-   * panel renders these rows as metadata (a binding's `status`, a token's `prefix` and `status`);
-   * neither list carries a secret, so resuming a project that has one of them shows what exists
-   * without re-issuing anything (AC2, AC7). The reads ask for `CONNECT_LIST_LIMIT` rows — the
-   * page a panel shows — because the rows are rendered, not merely counted, and step 2's health
-   * panel derives its state from them (09.2.1-T7).
-   */
-  readonly bindings: readonly CiBindingView[];
-  readonly tokens: readonly IngestTokenView[];
-  /**
-   * Whether the server held more rows than the page each list carries (`next_cursor` was not
-   * `null`). Step 2's panel shows one page of rows, so it renders a notice when either list is
-   * truncated rather than presenting that page as the project's whole inventory. Presence, not
-   * truncation, is what completes step 2: `done[2]` stays "either list is not empty".
-   */
-  readonly bindingsTruncated: boolean;
-  readonly tokensTruncated: boolean;
   readonly currentStep: WizardStep;
 }
 
@@ -150,20 +92,11 @@ export class OnboardingProgressService {
         // No project means no activation was read, and none can be active.
         activation: { kind: 'none' },
         sampleRun: null,
-        bindings: [],
-        tokens: [],
-        // No project means neither list was read, so neither is truncated.
-        bindingsTruncated: false,
-        tokensTruncated: false,
         currentStep: 1,
       };
     }
 
-    // Issued together: the array is built before `Promise.all` subscribes, so all four requests
-    // are in flight while the first one is still pending.
-    const [bindings, tokens, runs, activation] = await Promise.all([
-      this.data.listCiBindings(project.id, { limit: CONNECT_LIST_LIMIT }),
-      this.data.listIngestTokens(project.id, { limit: CONNECT_LIST_LIMIT }),
+    const [runs, activation] = await Promise.all([
       this.data.listRuns(project.id, { limit: 1 }),
       this.readActivation(project.id),
     ]);
@@ -172,7 +105,7 @@ export class OnboardingProgressService {
 
     const done: StepsDone = {
       1: true,
-      2: bindings.items.length + tokens.items.length > 0,
+      2: false, // Optional credential management is never a required completion gate.
       3: sampleRun !== null && STEP_THREE_DONE[sampleRun.state] === true,
       4: sampleRun !== null && sampleRun.current_evidence_revision_id !== null,
       // An activation the server answered is the only proof of step 5: a refused or absent read
@@ -185,11 +118,6 @@ export class OnboardingProgressService {
       done,
       activation,
       sampleRun,
-      bindings: bindings.items,
-      tokens: tokens.items,
-      // A non-null cursor is the server saying this page is not the whole list.
-      bindingsTruncated: bindings.next_cursor !== null,
-      tokensTruncated: tokens.next_cursor !== null,
       currentStep: deriveCurrentStep(done),
     };
   }

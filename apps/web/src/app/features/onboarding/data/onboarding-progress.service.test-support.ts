@@ -4,10 +4,6 @@
 
 import { TestBed } from '@angular/core/testing';
 import type {
-  CiBindingListResponse,
-  CiBindingView,
-  IngestTokenListResponse,
-  IngestTokenView,
   ListProjectsData,
   PolicyActivationStateDto,
   ProjectDto,
@@ -66,45 +62,8 @@ export const ACTIVATION: PolicyActivationStateDto = {
   activated_at: '2026-10-26T08:22:00Z',
 };
 
-export const BINDING: CiBindingView = {
-  id: 'b-1',
-  project_id: 'p-1',
-  provider: 'github_actions',
-  repository_id: 42,
-  repository_full_name: 'acme/storefront-web',
-  allowed_ref_patterns: ['refs/heads/main'],
-  allowed_workflow_refs: ['acme/storefront-web/.github/workflows/ci.yml@refs/heads/main'],
-  status: 'active',
-  created_at: '2026-10-20T10:00:00Z',
-  version: 1,
-};
-
-export const TOKEN: IngestTokenView = {
-  id: 't-1',
-  project_id: 'p-1',
-  name: 'ci ingest',
-  prefix: 'egt_ab12',
-  status: 'active',
-  scopes: ['run:create', 'event:write'],
-  created_at: '2026-10-20T10:05:00Z',
-};
-
 function projectPage(items: readonly ProjectDto[]): ProjectListResponse {
   return { items: [...items], next_cursor: null };
-}
-
-export function bindingPage(
-  items: readonly CiBindingView[],
-  nextCursor: string | null = null,
-): CiBindingListResponse {
-  return { items: [...items], next_cursor: nextCursor };
-}
-
-export function tokenPage(
-  items: readonly IngestTokenView[],
-  nextCursor: string | null = null,
-): IngestTokenListResponse {
-  return { items: [...items], next_cursor: nextCursor };
 }
 
 export function runPage(items: readonly RunSummary[]): RunPage {
@@ -191,8 +150,6 @@ export class FakeOnboardingDataService {
   /** The rows `getProject` answers, by id — the explicit projectId path. */
   readonly projectsById = new Map<string, ProjectDto>();
 
-  bindings: CiBindingListResponse = bindingPage([]);
-  tokens: IngestTokenListResponse = tokenPage([]);
   runs: RunPage = runPage([]);
   readonly runStates = new Map<string, RunStateDto>();
   /** What `readPolicyActivation` answers; `null` is the contract's `404` (no activation). */
@@ -200,37 +157,21 @@ export class FakeOnboardingDataService {
 
   projectFailure: Error | null = null;
   projectReadFailure: Error | null = null;
-  bindingFailure: Error | null = null;
-  tokenFailure: Error | null = null;
   runStateFailure: Error | null = null;
   activationFailure: Error | null = null;
 
   readonly projectCalls: Array<{ orgId: string; query: ProjectListQuery }> = [];
   readonly projectReadIds: string[] = [];
-  readonly bindingQueries: unknown[] = [];
-  readonly tokenQueries: unknown[] = [];
   readonly runQueries: unknown[] = [];
   readonly activationIds: string[] = [];
-  bindingCalls = 0;
-  tokenCalls = 0;
   runCalls = 0;
   activationCalls = 0;
   readonly runIds: string[] = [];
 
-  /** When true the four project reads answer only when the test settles their slots. */
+  /** When true the project reads answer only when the test settles their slots. */
   deferProjectReads = false;
-  readonly pendingBindings: Array<(page: CiBindingListResponse) => void> = [];
-  readonly pendingTokens: Array<(page: IngestTokenListResponse) => void> = [];
   readonly pendingRuns: Array<(page: RunPage) => void> = [];
   readonly pendingActivations: Array<(state: PolicyActivationStateDto | null) => void> = [];
-
-  settleBindings(page: CiBindingListResponse): void {
-    this.pendingBindings.shift()?.(page);
-  }
-
-  settleTokens(page: IngestTokenListResponse): void {
-    this.pendingTokens.shift()?.(page);
-  }
 
   settleRuns(page: RunPage): void {
     this.pendingRuns.shift()?.(page);
@@ -257,30 +198,6 @@ export class FakeOnboardingDataService {
     return project === undefined
       ? Promise.reject(apiError('not_found', 404))
       : Promise.resolve(project);
-  }
-
-  listCiBindings(_projectId: string, query: unknown = {}): Promise<CiBindingListResponse> {
-    this.bindingCalls += 1;
-    this.bindingQueries.push(query);
-    if (this.bindingFailure !== null) {
-      return Promise.reject(this.bindingFailure);
-    }
-    if (this.deferProjectReads) {
-      return new Promise<CiBindingListResponse>((resolve) => this.pendingBindings.push(resolve));
-    }
-    return Promise.resolve(this.bindings);
-  }
-
-  listIngestTokens(_projectId: string, query: unknown = {}): Promise<IngestTokenListResponse> {
-    this.tokenCalls += 1;
-    this.tokenQueries.push(query);
-    if (this.tokenFailure !== null) {
-      return Promise.reject(this.tokenFailure);
-    }
-    if (this.deferProjectReads) {
-      return new Promise<IngestTokenListResponse>((resolve) => this.pendingTokens.push(resolve));
-    }
-    return Promise.resolve(this.tokens);
   }
 
   listRuns(_projectId: string, query: unknown = {}): Promise<RunPage> {

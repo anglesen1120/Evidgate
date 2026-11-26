@@ -1,25 +1,18 @@
-import type { CiBindingView, IngestTokenView } from '@evidgate/sdk';
+import type { IngestTokenView } from '@evidgate/sdk';
 
-export type ConnectionHealthState = 'healthy' | 'pending' | 'unhealthy' | 'unknown';
+export type ConnectionHealthState = 'healthy' | 'unhealthy' | 'unknown';
 
 export interface CredentialHealth {
-  kind: 'binding' | 'token';
   id: string;
   label: string;
-  status: CiBindingView['status'] | IngestTokenView['status'];
+  status: IngestTokenView['status'];
   usable: boolean;
-  detail: 'active' | 'rotating' | 'pending' | 'expired' | 'revoked' | 'disabled' | 'rotated-ended';
+  detail: 'active' | 'rotating' | 'expired' | 'revoked' | 'rotated-ended';
 }
 
 export interface ConnectionHealth {
   state: ConnectionHealthState;
-  reason:
-    | 'usable'
-    | 'rotating-only'
-    | 'pending-verification'
-    | 'truncated'
-    | 'all-unusable'
-    | 'no-credentials';
+  reason: 'usable' | 'rotating-only' | 'truncated' | 'all-unusable' | 'no-credentials';
   credentials: readonly CredentialHealth[];
   lastTokenUseAt: string | null;
   lastTokenUseIsLowerBound: boolean;
@@ -27,26 +20,12 @@ export interface ConnectionHealth {
 
 /** Metadata-only snapshot: credential availability is not proof of a successful ingest. */
 export function deriveConnectionHealth(input: {
-  bindings: readonly CiBindingView[];
   tokens: readonly IngestTokenView[];
-  bindingsTruncated: boolean;
   tokensTruncated: boolean;
   now: Date;
 }): ConnectionHealth {
   const now = input.now.getTime();
-  const credentials: CredentialHealth[] = input.bindings.map((binding) => ({
-    kind: 'binding',
-    id: binding.id,
-    label: binding.repository_full_name,
-    status: binding.status,
-    usable: binding.status === 'active',
-    detail:
-      binding.status === 'pending_verification'
-        ? 'pending'
-        : binding.status === 'disabled'
-          ? 'disabled'
-          : 'active',
-  }));
+  const credentials: CredentialHealth[] = [];
   let lastTokenUseAt: string | null = null;
   let lastTokenUseTime = -Infinity;
 
@@ -71,7 +50,6 @@ export function deriveConnectionHealth(input: {
         break;
     }
     credentials.push({
-      kind: 'token',
       id: token.id,
       label: `${token.name} (${token.prefix})`,
       status: token.status,
@@ -94,10 +72,7 @@ export function deriveConnectionHealth(input: {
     reason = credentials.some((credential) => credential.usable && credential.detail === 'active')
       ? 'usable'
       : 'rotating-only';
-  } else if (credentials.some((credential) => credential.detail === 'pending')) {
-    state = 'pending';
-    reason = 'pending-verification';
-  } else if (input.bindingsTruncated || input.tokensTruncated) {
+  } else if (input.tokensTruncated) {
     state = 'unknown';
     reason = 'truncated';
   } else {

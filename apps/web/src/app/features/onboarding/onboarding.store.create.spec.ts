@@ -68,7 +68,7 @@ describe('OnboardingStore (09.2.1-T1.1/T2)', () => {
     expect(store.consumeCreated(PROJECT.org_id, PROJECT.id)).toBe(false);
   });
 
-  it('adopts the created project, then resumes on step 2 (AC1)', async () => {
+  it('adopts the created project, then resumes on the sample-run step (AC1)', async () => {
     // An org with no project yet resolves step 1.
     await store.load('o-1', null);
     expect(store.currentStep()).toBe(1);
@@ -82,13 +82,13 @@ describe('OnboardingStore (09.2.1-T1.1/T2)', () => {
 
     expect(session.adopted).toEqual([PROJECT]);
     expect(store.status()).toBe('ready');
-    expect(store.currentStep()).toBe(2);
-    expect(store.viewStep()).toBe(2);
+    expect(store.currentStep()).toBe(3);
+    expect(store.viewStep()).toBe(3);
     expect(store.project()).toEqual(PROJECT);
     // The create's load is the one read after a creation: the activation its URL change causes
     // may take that result instead of reading again — once (S71 F1/N1).
     expect(store.consumeCreated(PROJECT.org_id, PROJECT.id)).toBe(true);
-    // The create opened step 2 on the user's behalf, so it cues the shell's focus move; the
+    // The create opened the next required step on the user's behalf, so it cues the shell's focus move; the
     // shell that the URL change activates is built after this, hence the token (S71 F2).
     expect(store.focusToken()).toBe(1);
   });

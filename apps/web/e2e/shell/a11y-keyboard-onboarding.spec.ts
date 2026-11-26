@@ -27,7 +27,6 @@ import {
 } from './onboarding-keyboard';
 import {
   expectNoReveal,
-  FIXTURE_BINDING_CHALLENGE,
   FIXTURE_TOKEN_SECRET,
   revealSlot,
   revealValue,
@@ -47,15 +46,6 @@ import {
 } from './onboarding-support';
 import { ORG_ACME, withVariant } from './support';
 
-/**
- * The OIDC form's values, exactly as `fixtures/web-api/ci-binding-create/input.json` records the
- * binding (`onboarding-connect-ci.spec.ts` types the same ones). The workflow ref is the
- * `job_workflow_ref` shape the API validates, not the `refs/heads/main:<path>` spelling.
- */
-const REPOSITORY_ID = '5012345';
-const REPOSITORY_NAME = 'acme/storefront-web';
-const REF_PATTERNS = 'refs/heads/main';
-const WORKFLOW_REFS = 'acme/storefront-web/.github/workflows/evidgate.yml@refs/heads/main';
 /** The name this walkthrough types into the token form; the corpus echoes its own name back. */
 const TOKEN_NAME = 'CI upload (keyboard)';
 
@@ -70,15 +60,8 @@ async function fillProject(page: Page, name: string, slug: string, seek = false)
   await typeHintedField(page, 'onboarding-project-slug', slug);
 }
 
-async function fillBinding(page: Page, seek = false) {
-  await typeHintedField(page, 'connect-oidc-repo-id', REPOSITORY_ID, seek);
-  await typeHintedField(page, 'connect-oidc-repo-name', REPOSITORY_NAME);
-  await typeHintedField(page, 'connect-oidc-refs', REF_PATTERNS);
-  await typeHintedField(page, 'connect-oidc-workflows', WORKFLOW_REFS);
-}
-
 test.describe('W1 — step 1, create project (keyboard walkthrough plan)', () => {
-  test('the skip link, the stepper, both fields and the submit carry the flow into step 2', async ({
+  test('the skip link, the stepper, both fields and the submit carry the flow to the first run', async ({
     page,
   }) => {
     await page.goto(onboardingUrl('en', 'onboarding-empty'));
@@ -127,18 +110,17 @@ test.describe('W1 — step 1, create project (keyboard walkthrough plan)', () =>
     await expect(backButton(page)).toBeDisabled();
     await expect(nextButton(page)).toBeDisabled();
 
-    // 7. Enter creates the project and the wizard opens step 2 on it, with focus on the new step's
-    //    own heading: the create marker tells the fresh activation the move is the user's.
+    // The create marker tells the fresh activation to focus the first-run step heading.
     await page.keyboard.press('Enter');
-    await expectCurrentStep(page, 2);
-    await expect(page.locator('[data-testid="connect-ci-page"]')).toBeVisible();
+    await expectCurrentStep(page, 3);
+    await expect(stepItem(page, 2)).toHaveAttribute('data-done', 'false');
     // The create opened the project the fixture answered: the wizard stands on the created
     // project's own address, and the step it left is reported done.
     await expect
       .poll(() => new URL(page.url()).pathname, 'the create opened the created project')
       .toBe(`/en/orgs/${ORG_ACME}/onboarding/${CREATED_PROJECT}`);
     await expect(stepItem(page, 1)).toHaveAttribute('data-done', 'true');
-    await expectKeyboardFocus(page, page.locator(STEP_TITLE), 'the step 2 heading after a create');
+    await expectKeyboardFocus(page, page.locator(STEP_TITLE), 'the first-run heading after create');
     // The created project's name is rendered from the server's answer, not from the typed draft.
     await expect(
       page
@@ -218,13 +200,13 @@ test.describe('W1 — step 1, create project (keyboard walkthrough plan)', () =>
   });
 });
 
-test.describe('W2 — step 2, connect CI (OIDC then token)', () => {
-  test('both connect forms, their reveals and Back are walkable by keyboard alone', async ({
+test.describe('W2 — step 2, connect CI with an ingest token', () => {
+  test('the token form, its one-time reveal and Back are walkable by keyboard alone', async ({
     page,
   }) => {
     await page.goto(onboardingUrl('en', 'onboarding-project'));
     await expect(shell(page)).toBeVisible();
-    await expectCurrentStep(page, 2);
+    await expectCurrentStep(page, 3);
 
     // The skip link enters one navigator; future steps remain focusable with a prerequisite.
     await enterMainByKeyboard(page);
@@ -235,15 +217,12 @@ test.describe('W2 — step 2, connect CI (OIDC then token)', () => {
       'Created resources',
     );
     await pressTab(page);
-    await expectKeyboardFocus(page, stepButton(page, 1), 'stepper 1 is enabled at step 2');
+    await expectKeyboardFocus(page, stepButton(page, 1), 'stepper 1');
     await pressTab(page);
-    await expectKeyboardFocus(page, stepButton(page, 2), 'stepper 2 is the current step');
-    await expect(stepButton(page, 2)).toHaveAttribute('aria-current', 'step');
-    for (const step of [3, 4, 5] as const) {
-      await pressTab(page);
-      await expectKeyboardFocus(page, stepButton(page, step), `blocked step ${step}`);
-      await expect(stepButton(page, step)).toHaveAttribute('aria-disabled', 'true');
-    }
+    await expectKeyboardFocus(page, stepButton(page, 2), 'the optional token setup');
+    await page.keyboard.press('Enter');
+    await expectCurrentStep(page, 2);
+    await expectKeyboardFocus(page, page.locator(STEP_TITLE), 'the token setup heading');
 
     await pressTab(page);
     const snippet = page.locator(QUICKSTART_SNIPPET);
@@ -256,45 +235,7 @@ test.describe('W2 — step 2, connect CI (OIDC then token)', () => {
     await pressTab(page);
     await expectKeyboardFocus(page, page.locator('[data-testid="cli-quickstart-copy"]'), 'Copy');
 
-    await fillBinding(page);
-
-    // 7. Enter on the submit opens the reveal, whose heading takes focus on its own.
-    await pressTab(page);
-    await expectKeyboardFocus(
-      page,
-      page.locator('[data-testid="connect-oidc-submit"]'),
-      'OIDC submit',
-    );
-    await page.keyboard.press('Enter');
-    const bindingRevealHeading = revealSlot(page).getByRole('heading');
-    await expectKeyboardFocus(page, bindingRevealHeading, 'the binding reveal heading');
-    await expect(revealValue(page)).toHaveValue(FIXTURE_BINDING_CHALLENGE);
-
-    // 8. The reveal's order is value → Copy → Dismiss: the action the warning recommends comes
-    //    before the one that destroys the value.
-    await pressTab(page);
-    await expectKeyboardFocus(page, revealValue(page), 'the revealed binding challenge');
-    await pressTab(page);
-    await expectKeyboardFocus(page, page.locator('[data-testid="reveal-copy"]'), 'reveal Copy');
-    await pressTab(page);
-    await expectKeyboardFocus(
-      page,
-      page.locator('[data-testid="reveal-dismiss"]'),
-      'reveal Dismiss',
-    );
-    await page.keyboard.press('Enter');
-    await expectNoReveal(page);
-    // Dismiss returns focus to the panel the reveal belonged to, not to the document body.
-    await expectKeyboardFocus(
-      page,
-      page.locator('#connect-oidc-heading'),
-      'the OIDC panel heading after Dismiss',
-    );
-
-    // Walk through the refreshed bindings to the token hint and then its input.
-    await typeHintedField(page, 'connect-token-name', TOKEN_NAME, true);
-
-    // 10.–11. The token reveal behaves the same way, and Dismiss lands on the token heading.
+    await typeHintedField(page, 'connect-token-name', TOKEN_NAME);
     await pressTab(page);
     await expectKeyboardFocus(
       page,
@@ -308,7 +249,12 @@ test.describe('W2 — step 2, connect CI (OIDC then token)', () => {
       'the ingest-token reveal heading',
     );
     await expect(revealValue(page)).toHaveValue(FIXTURE_TOKEN_SECRET);
-    await pressTab(page, 3);
+    await expect(revealValue(page)).toHaveJSProperty('readOnly', true);
+    await pressTab(page);
+    await expectKeyboardFocus(page, revealValue(page), 'the revealed ingest token');
+    await pressTab(page);
+    await expectKeyboardFocus(page, page.getByTestId('reveal-copy'), 'the ingest-token Copy');
+    await pressTab(page);
     await expectKeyboardFocus(
       page,
       page.locator('[data-testid="reveal-dismiss"]'),
@@ -322,50 +268,48 @@ test.describe('W2 — step 2, connect CI (OIDC then token)', () => {
       'the token panel heading after Dismiss',
     );
 
-    // 12.–13. The token panel is the last section, so Back follows it; the seed's own step 2 is not
-    //         done, so Next stays gated and is never a stop. Enter on Back returns to step 1.
+    // A project needs no credential to continue; going Back still returns to step 1.
     await tabUntil(page, '[data-testid="onboarding-back"]');
     await expectKeyboardFocus(page, backButton(page), 'Back after the token panel');
-    await expect(nextButton(page)).toBeDisabled();
+    await expect(nextButton(page)).toBeEnabled();
     await page.keyboard.press('Enter');
     await expectKeyboardFocus(page, page.locator(STEP_TITLE), 'the step-1 heading after Back');
     await expectCurrentStep(page, 1);
   });
-  test('a refused binding is announced once and hands focus to the refusal heading', async ({
+  test('a refused token name is announced once and hands focus to the refusal heading', async ({
     page,
   }) => {
     await page.goto(
       withVariant(
         onboardingPath('en'),
-        seedQueryWith('onboarding-project', ['fixture.variant.createCiBinding=validation']),
+        seedQueryWith('onboarding-project', ['fixture.variant.createIngestToken=name-invalid']),
       ),
     );
     await expect(shell(page)).toBeVisible();
-    await expectCurrentStep(page, 2);
+    await expectCurrentStep(page, 3);
     await enterMainByKeyboard(page);
 
-    await fillBinding(page, true);
-    await tabUntil(page, '[data-testid="connect-oidc-submit"]');
+    await tabUntil(page, '[data-testid="onboarding-select-step-2"]');
+    await page.keyboard.press('Enter');
+    await expectCurrentStep(page, 2);
+    await typeHintedField(page, 'connect-token-name', TOKEN_NAME, true);
+    await pressTab(page);
+    await expectKeyboardFocus(page, page.getByTestId('connect-token-submit'), 'token submit');
     await page.keyboard.press('Enter');
 
     await expectKeyboardFocus(
       page,
       page.locator('#connect-failure-heading'),
-      'the refusal heading after a refused binding',
+      'the refusal heading after a refused token name',
     );
     const details = page.getByTestId('connect-ci-details');
     await expect(details).toHaveAttribute('role', 'alert');
     await expect(details).toHaveAccessibleName(/the server refused these values/i);
-    await expect(details).toContainText('the GitHub App cannot read this repository');
-    const repository = page.locator('#connect-oidc-repo-name');
-    await expect(repository).toHaveAttribute('aria-invalid', 'true');
-    await expect(repository).toHaveAccessibleDescription(
-      /the GitHub App cannot read this repository/,
-    );
+    await expect(details).toContainText('a token with this name already exists');
+    const tokenName = page.locator('#connect-token-name');
+    await expect(tokenName).toHaveAttribute('aria-invalid', 'true');
+    await expect(tokenName).toHaveAccessibleDescription(/a token with this name already exists/);
     // The field's own node is not a live region while the details alert carries the sentence.
-    await expect(page.locator('#connect-oidc-repo-name-error')).not.toHaveAttribute(
-      'aria-live',
-      /.*/,
-    );
+    await expect(page.locator('#connect-token-name-error')).not.toHaveAttribute('aria-live', /.*/);
   });
 });

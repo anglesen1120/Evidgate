@@ -4,8 +4,8 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
-using Microsoft.IdentityModel.JsonWebTokens;
-using Microsoft.IdentityModel.Tokens;
+using Evidgate.Modules.Identity.Ci;
+using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
 using Xunit;
 using static Tenancy.IntegrationTests.RegistryApi;
@@ -128,30 +128,10 @@ public sealed class RunDecisionCiTokenTests
         return exchanged.Text("token")!;
     }
 
-    /// <summary>
-    /// An agent-pool service token: the same claim shape a mint produces, signed with the host's key, carrying
-    /// the <c>agent</c> role's set. A hand-signed token, because no route mints <c>agent</c> tokens yet.
-    /// </summary>
+    /// <summary>Use the real issuer with the agent permission set; the agent role has no decision grant.</summary>
     private static string AgentToken(World world) =>
-        new JsonWebTokenHandler().CreateToken(new SecurityTokenDescriptor
-        {
-            Issuer = CiTestKeys.Issuer,
-            Audience = CiTestKeys.Audience,
-            Expires = DateTime.UtcNow.AddMinutes(5),
-            SigningCredentials = new SigningCredentials(
-                new SymmetricSecurityKey(TenancyApiFactory.Keys.SigningKey), SecurityAlgorithms.HmacSha256),
-            Claims = new Dictionary<string, object>(StringComparer.Ordinal)
-            {
-                ["sub"] = $"agent:{world.Project:D}",
-                ["jti"] = Guid.CreateVersion7().ToString("D"),
-                ["token_use"] = "ci_producer",
-                ["org_id"] = world.Org.ToString("D"),
-                ["project_id"] = world.Project.ToString("D"),
-                ["binding_id"] = Guid.CreateVersion7().ToString("D"),
-                ["provider"] = "agent_pool",
-                ["perm"] = AgentPermissions,
-            },
-        });
+        world.Api.Services.GetRequiredService<CiProducerTokens>()
+            .Mint(new CiProducerRequest(world.Org, world.Project, Guid.CreateVersion7(), AgentPermissions)).Token;
 
     /// <summary>A run of the org's first project, seeded by the migration role so its parents exist.</summary>
     private async Task<Guid> SeedRunAsync(World world) =>

@@ -5,10 +5,6 @@ describe('onboarding field diagnostics', () => {
     ['project', '/name', 'Project name'],
     ['project', 'slug', 'Project slug'],
     ['connection', '/name', 'Token name'],
-    ['connection', '/repository_id', 'GitHub numeric repository ID'],
-    ['connection', '/repository_full_name', 'Repository (owner/repo)'],
-    ['connection', '/allowed_ref_patterns[0]', 'Allowed Git ref patterns'],
-    ['connection', '/allowed_workflow_refs/0', 'Allowed workflow refs'],
     ['collection', '/policy_revision_id', 'Policy revision'],
     ['collection', '/project_id', 'Project'],
     ['collection', '/mode', 'Mode'],
@@ -48,14 +44,12 @@ describe('onboarding field diagnostics', () => {
   it('keeps the first inline reason and every alert reason without changing the diagnostics', () => {
     const details = fieldDetails(
       [
-        { path: '/repository_id', reason: 'First refusal.' },
-        { path: '/repository_id', reason: 'Second refusal.' },
+        { path: '/name', reason: 'First refusal.' },
+        { path: '/name', reason: 'Second refusal.' },
       ],
       'connection',
     );
-    expect(reasonFor(details, 'repository_id')).toBe(
-      'GitHub numeric repository ID: First refusal.',
-    );
+    expect(reasonFor(details, 'name')).toBe('Token name: First refusal.');
     expect(details.map((detail) => detail.reason)).toEqual(['First refusal.', 'Second refusal.']);
     expect(fieldDetails([], 'collection')).toEqual([]);
   });

@@ -190,7 +190,7 @@ public sealed class EvidenceParseEnqueueTests(PostgresTenancyFixture fixture, Se
             database,
             org,
             project,
-            RequestPrincipal.Service(projectScope: null, [Permissions.Artifact.Write], credentialId: "jti-parse-enqueue"),
+            RequestPrincipal.Service(projectScope: null, [Permissions.Artifact.Write], credentialId: IngestTestWorld.OwnerId),
             configuration);
 
         return new World(api, host, host.CreateClient(), database, org, project);

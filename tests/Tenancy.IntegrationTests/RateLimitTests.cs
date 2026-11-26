@@ -126,7 +126,7 @@ public sealed class RateLimitTests
             _fixture.AppConnectionString(world.Database),
             world.Org,
             world.Project,
-            RequestPrincipal.Service(projectScope: null, [Permissions.Event.Write], credentialId: IngestTestWorld.Jti));
+            RequestPrincipal.Service(projectScope: null, [Permissions.Event.Write], credentialId: IngestTestWorld.OwnerId));
 
         using var client = unscoped.CreateClient();
 
@@ -179,7 +179,7 @@ public sealed class RateLimitTests
 
                 request.Headers.TryAddWithoutValidation("X-Forwarded-For", "203.0.113.7");
                 request.Headers.TryAddWithoutValidation("X-Project-Id", Guid.CreateVersion7().ToString("D"));
-                request.Headers.TryAddWithoutValidation("X-Token-Jti", IngestTestWorld.OtherJti);
+                request.Headers.TryAddWithoutValidation("X-Token-Jti", IngestTestWorld.OtherOwnerId);
                 request.Headers.TryAddWithoutValidation("X-Test-Service-Scope", Guid.CreateVersion7().ToString("D"));
             });
 

@@ -1,19 +1,12 @@
 import { TestBed } from '@angular/core/testing';
-import type {
-  CiBindingListResponse,
-  CiBindingView,
-  IngestTokenListResponse,
-  IngestTokenView,
-} from '@evidgate/sdk';
+import type { IngestTokenListResponse, IngestTokenView } from '@evidgate/sdk';
 import { vi } from 'vitest';
 import { SecretsDataService } from '../../../core/data/secrets-data.service';
 import { ApiRequestError } from '../../../core/http/api-error';
 import { SecretsStore } from './secrets.store';
 import tokenFixture from '../../../../../../../fixtures/web-api/ingest-tokens-list-onboarding-token/input.json';
-import bindingFixture from '../../../../../../../fixtures/web-api/ci-bindings-list-settings/input.json';
 
 const token = tokenFixture.body.items[0] as IngestTokenView;
-const binding = bindingFixture.body.items[0] as CiBindingView;
 const unavailable = new ApiRequestError({
   kind: 'unavailable',
   status: 503,
@@ -31,8 +24,6 @@ describe('SecretsStore cursor pages', () => {
       vi.fn<
         (project: string, cursor?: string, limit?: number) => Promise<IngestTokenListResponse>
       >(),
-    listCiBindings:
-      vi.fn<(project: string, cursor?: string, limit?: number) => Promise<CiBindingListResponse>>(),
   };
   let store: SecretsStore;
 
@@ -42,12 +33,6 @@ describe('SecretsStore cursor pages', () => {
       Promise.resolve({
         items: [{ ...token, id: cursor ?? 'first' }],
         next_cursor: cursor === 'last' ? null : cursor ? 'last' : 'middle',
-      }),
-    );
-    data.listCiBindings.mockImplementation((_project, cursor) =>
-      Promise.resolve({
-        items: [{ ...binding, id: cursor ?? 'first-binding' }],
-        next_cursor: cursor ? null : 'second-binding',
       }),
     );
     TestBed.configureTestingModule({
@@ -88,20 +73,13 @@ describe('SecretsStore cursor pages', () => {
     expect(store.loadError()).toBeNull();
   });
 
-  it('resets size to the first server page while preserving independent binding state', async () => {
+  it('resets to the first server page when the token page size changes', async () => {
     await store.load('project');
-    await store.loadCiBindings('project');
     await store.loadMore();
-    await store.loadMoreCiBindings();
     await store.setPageSize(50);
     expect(store.page()).toBe(1);
     expect(store.pageSize()).toBe(50);
     expect(data.listIngestTokens).toHaveBeenLastCalledWith('project', undefined, 50);
-    expect(store.ciBindingsPage()).toBe(2);
-    await store.setCiBindingsPageSize(100);
-    expect(store.ciBindingsPage()).toBe(1);
-    expect(data.listCiBindings).toHaveBeenLastCalledWith('project', undefined, 100);
-    expect(store.pageSize()).toBe(50);
   });
 
   it('keeps the current size and page on a failed size change and retries the requested size', async () => {
@@ -116,42 +94,22 @@ describe('SecretsStore cursor pages', () => {
     expect(store.pageSize()).toBe(100);
   });
 
-  it('replaces binding pages, retains them on failure and retries without affecting tokens', async () => {
+  it.each([
+    { label: 'empty', items: [] as IngestTokenView[] },
+    { label: 'one-page', items: [token] },
+  ])('does not navigate past a single $label token result', async ({ items }) => {
+    data.listIngestTokens.mockResolvedValue({ items, next_cursor: null });
     await store.load('project');
-    await store.loadCiBindings('project');
-    data.listCiBindings.mockRejectedValueOnce(unavailable);
-    await store.loadMoreCiBindings();
-    expect(store.ciBindings().map((row) => row.id)).toEqual(['first-binding']);
-    expect(store.ciBindingsPage()).toBe(1);
-    await store.retryCiBindingsPage();
-    expect(store.ciBindings().map((row) => row.id)).toEqual(['second-binding']);
-    expect(store.ciBindingsPage()).toBe(2);
-    await store.previousCiBindings();
-    expect(store.ciBindingsPage()).toBe(1);
-    expect(store.rows().map((row) => row.id)).toEqual(['first']);
-  });
-
-  it('does not fetch previous on first pages or next after empty and one-page results', async () => {
-    data.listIngestTokens.mockResolvedValue({ items: [], next_cursor: null });
-    data.listCiBindings.mockResolvedValue({ items: [binding], next_cursor: null });
-    await store.load('project');
-    await store.loadCiBindings('project');
     await store.previous();
-    await store.previousCiBindings();
     await store.loadMore();
-    await store.loadMoreCiBindings();
     expect(data.listIngestTokens).toHaveBeenCalledTimes(1);
-    expect(data.listCiBindings).toHaveBeenCalledTimes(1);
-    expect(store.rows()).toEqual([]);
-    expect(store.hasMoreCiBindings()).toBe(false);
+    expect(store.rows()).toEqual(items);
+    expect(store.hasMore()).toBe(false);
   });
 
   it('rejects unsupported page sizes without requests', async () => {
     await store.load('project');
-    await store.loadCiBindings('project');
     await store.setPageSize(200);
-    await store.setCiBindingsPageSize(25);
     expect(data.listIngestTokens).toHaveBeenCalledTimes(1);
-    expect(data.listCiBindings).toHaveBeenCalledTimes(1);
   });
 });

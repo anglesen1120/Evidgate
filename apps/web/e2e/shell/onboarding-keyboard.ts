@@ -159,10 +159,6 @@ export async function tabUntil(
 const hintedLabels = {
   'onboarding-project-name': 'Project name',
   'onboarding-project-slug': 'Project slug',
-  'connect-oidc-repo-id': 'GitHub numeric repository ID',
-  'connect-oidc-repo-name': 'Repository (owner/repo)',
-  'connect-oidc-refs': 'Allowed Git ref patterns',
-  'connect-oidc-workflows': 'Allowed workflow refs',
   'connect-token-name': 'Token name',
 } as const;
 

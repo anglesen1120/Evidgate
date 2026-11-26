@@ -75,7 +75,7 @@ internal static class EvidenceErrors
     internal static Error ReportNotFound => Error.NotFound("the report does not exist in this run");
 
     /// <summary>
-    /// 403: the caller has no token identity (<c>jti</c>) to bind a producer slot to (06.1.2 §5, T9/T85). A slot is
+    /// 403: the caller has no stable credential id to bind a producer slot to (06.1.2 §5, T9/T85). A slot is
     /// bound to the credential that first wrote it, so a caller without one can never bind — it is refused before
     /// the registry is called rather than binding an empty identity.
     /// </summary>

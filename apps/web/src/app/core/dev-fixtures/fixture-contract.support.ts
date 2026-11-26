@@ -21,9 +21,10 @@
 // plus the 403 and 412 fixtures AC10 names. The 01.6.1-T3 corpus shape (`web-api` /
 // `api-response`) is checked as well.
 //
-// 09.2.1-T2 added step 2's write path and its pin: the two one-time secret members of the whole
-// contract (`binding_challenge`, `secret`) may appear in the three documents whose operation mints
-// one and in no other, which is "metadata only after the reveal" held on the wire rather than in a
+// 09.2.1-T2 added step 2's write path and its pin: the one-time secret members of the whole
+// contract (`binding_challenge`, `secret`) may appear only in documents whose operation mints
+// one (`secret`; `binding_challenge` is minted by no operation any more, so no document may carry
+// it), which is "metadata only after the reveal" held on the wire rather than in a
 // component.
 //
 // 09.7.1-T3 extends that pin to `invite_token` (`InviteIssuedView`, answered by `createMembership`

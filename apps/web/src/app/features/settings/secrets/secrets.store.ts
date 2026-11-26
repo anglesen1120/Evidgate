@@ -1,4 +1,4 @@
-// Token metadata and CI bindings have independent pages and failure states.
+// Token metadata has its own page and failure state.
 // One-time rotation values remain return values, never stored with list metadata.
 
 import { computed, inject, Injectable, signal } from '@angular/core';
@@ -7,11 +7,9 @@ import type { IngestTokenView } from '@evidgate/sdk';
 import { MAX_CURSOR_PAGES } from '../../../core/data/identity-data.service';
 import { SecretsDataService } from '../../../core/data/secrets-data.service';
 import { isApiRequestError, type ApiError } from '../../../core/http/api-error';
-import { SecretsCiBindingsTrack } from './secrets-ci-bindings';
 import { settledRead } from './secrets-read';
 import { SecretsRotationTrack, type RotationResult, type RotationState } from './secrets-rotation';
 
-export type { CiBindingsPhase } from './secrets-ci-bindings';
 export type { RotationResult, RotationState };
 
 /** The tab's read state: `idle` before the first read, which the page renders as loading. */
@@ -44,8 +42,6 @@ export class SecretsStore {
     () => this.projectIdSignal(),
     (projectId) => this.refreshList(projectId),
   );
-  /** The independent, read-only CI-binding track (rule 8). */
-  private readonly bindings = new SecretsCiBindingsTrack(this.data);
 
   /** Only the current server page is retained. */
   readonly rows = this.rowsSignal.asReadonly();
@@ -65,22 +61,6 @@ export class SecretsStore {
   /** True while a rotate request is out; see {@link SecretsRotationTrack.rotating}. */
   readonly rotating = this.rotation.rotating;
 
-  /** Independent CI-binding metadata page. */
-  readonly ciBindings = this.bindings.rows;
-  /** The binding list's read state: see {@link CiBindingsPhase} for each phase. */
-  readonly ciBindingsPhase = this.bindings.phase;
-  /**
-   * The server's typed failure for the binding read; `null` when it never failed, and when the
-   * rejection was not the server's answer at all (then the phase is `unavailable`).
-   */
-  readonly ciBindingsError = this.bindings.error;
-  /** The project the loaded bindings belong to; `null` before the first read and after a reset. */
-  readonly ciBindingsProjectId = this.bindings.projectId;
-  /** True while the server named another binding page, so the page's next control can be offered. */
-  readonly hasMoreCiBindings = this.bindings.hasMore;
-  readonly ciBindingsPage = this.bindings.page;
-  readonly ciBindingsPageSize = this.bindings.pageSize;
-
   /**
    * Reads the named project's first token page and becomes `ready`.
    *
@@ -90,12 +70,6 @@ export class SecretsStore {
    * list the user is looking at.
    *
    * The rotate state is also cleared, because a rotation belongs to the view that started it.
-   *
-   * A scope switch drops the CI-binding track as well, but ONLY when that track belongs to another
-   * project: the project is the scope of the whole tab (rule 3), so p-1's bindings must not survive
-   * under p-2's heading even if the page has not re-read them yet. The guard matters in the other
-   * order — a page that reads the bindings of `p-2` FIRST and then calls `load('p-2')` keeps the
-   * rows it has just loaded, because they already belong to the project being loaded.
    *
    * Never rejects: the page calls `void store.load(...)` from an effect, so a rejection would be an
    * unhandled promise rejection. A cancellation or a bug leaves the typed error `null`, and the tab
@@ -108,10 +82,6 @@ export class SecretsStore {
       this.cursors = [undefined];
       this.pageSignal.set(1);
       this.failedPage = null;
-      const bindingProjectId = this.bindings.projectId();
-      if (bindingProjectId !== null && bindingProjectId !== projectId) {
-        this.bindings.reset();
-      }
     }
     this.resetRotation();
     await this.read(projectId);
@@ -214,33 +184,6 @@ export class SecretsStore {
     // `read` is async and settles its own state; this catch only keeps a rejection from becoming
     // an unhandled one. Nothing here is the caller's failure.
     void this.read(projectId).catch(() => undefined);
-  }
-
-  /** Reads the named project's first CI-binding page; see {@link SecretsCiBindingsTrack.load}. */
-  async loadCiBindings(projectId: string): Promise<void> {
-    await this.bindings.load(projectId);
-  }
-
-  /** Follows the independent CI-binding cursor. */
-  async loadMoreCiBindings(): Promise<void> {
-    await this.bindings.loadMore();
-  }
-
-  async previousCiBindings(): Promise<void> {
-    await this.bindings.previous();
-  }
-
-  async setCiBindingsPageSize(size: number): Promise<void> {
-    await this.bindings.setPageSize(size);
-  }
-
-  async retryCiBindingsPage(): Promise<void> {
-    await this.bindings.retryPage();
-  }
-
-  /** Drops the whole CI-binding track; see {@link SecretsCiBindingsTrack.reset}. */
-  resetCiBindings(): void {
-    this.bindings.reset();
   }
 
   /**

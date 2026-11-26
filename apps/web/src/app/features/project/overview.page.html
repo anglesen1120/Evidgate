@@ -162,51 +162,6 @@
           </p>
         </app-dashboard-widget>
       }
-      @if (store.bindings.visible()) {
-        <app-dashboard-widget
-          data-dashboard-ci
-          [title]="copy.ci"
-          [description]="copy.ciContext"
-          [loading]="store.bindings.loading()"
-          [error]="store.bindings.error()"
-          (retry)="store.bindings.reload()"
-        >
-          <dl class="m-0 grid gap-(--eg-space-3)">
-            <div class="flex justify-between gap-(--eg-space-3)">
-              <dt>{{ copy.activeBindings }}</dt>
-              <dd class="m-0 tabular-nums">{{ bindingCounts().active }}</dd>
-            </div>
-            <div class="flex justify-between gap-(--eg-space-3)">
-              <dt>{{ copy.pendingBindings }}</dt>
-              <dd class="m-0 tabular-nums">{{ bindingCounts().pending }}</dd>
-            </div>
-            <div class="flex justify-between gap-(--eg-space-3)">
-              <dt>{{ copy.disabledBindings }}</dt>
-              <dd class="m-0 tabular-nums">{{ bindingCounts().disabled }}</dd>
-            </div>
-          </dl>
-          @if (store.bindings.value()?.next_cursor) {
-            <p class="text-sm text-muted-foreground">{{ copy.moreBindings }}</p>
-          } @else if (!store.bindings.value()?.items?.length) {
-            <p class="text-sm text-muted-foreground">{{ copy.noBindings }}</p>
-          }
-          @if (bindingCounts().pending) {
-            <p class="text-sm">{{ copy.verifyBindings }}</p>
-          }
-          @if (bindingCounts().disabled) {
-            <p class="text-sm">{{ copy.disabledHint }}</p>
-          }
-          @if (setupLink(); as link) {
-            <a
-              hlmBtn
-              [variant]="'outline'"
-              class="mt-(--eg-space-4) eg-header-action"
-              [routerLink]="link"
-              >{{ copy.setup }}</a
-            >
-          }
-        </app-dashboard-widget>
-      }
       @if (store.usage.visible()) {
         <app-dashboard-widget
           data-dashboard-usage

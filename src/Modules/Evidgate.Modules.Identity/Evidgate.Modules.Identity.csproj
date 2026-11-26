@@ -14,8 +14,7 @@
          version is the solution's single pinned one (Directory.Packages.props); the
          pipeline already uses it, so no licence is added. -->
     <PackageReference Include="FluentValidation" />
-    <!-- 02.4.1-T1/T3.3: GitHub OIDC validation and the minted ci_producer JWT (D7). Already
-         pinned in Directory.Packages.props; MIT. -->
+    <!-- Validates login ID tokens and signs and validates producer JWTs. -->
     <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" />
     <!-- 02.3.1-T1.2: the Google login JWKS client gets one bounded retry and a total timeout from a
          resilience handler (P6). Already pinned in Directory.Packages.props and registered in

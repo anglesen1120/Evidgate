@@ -31,7 +31,7 @@ namespace Evidgate.Modules.Evidence.Application;
 /// <param name="RunId">The run the route names; the report must belong to it.</param>
 /// <param name="RawReportId">The stored report to reprocess.</param>
 /// <param name="ParserVersion">The catalogue release to parse it with, strictly newer than the report's own.</param>
-/// <param name="CredentialId">The caller's token id (<c>jti</c>), or <c>null</c> when it has none.</param>
+/// <param name="CredentialId">The caller's stable credential id, or <c>null</c> when it has none.</param>
 /// <param name="IdempotencyKey">The required <c>Idempotency-Key</c> header.</param>
 internal sealed record ReprocessRawReport(
     Guid RunId,
