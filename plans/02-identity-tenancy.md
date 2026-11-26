@@ -270,9 +270,10 @@ Sizes: XS 0.25 · S 0.5 · M 1 · L 2 · XL 3 (person-days). Version = V1/V2/V3;
 #### Story 02.8.1 Time-boxed operator access — acceptance: an operator has no tenant data access until a grant is approved by a tenant admin; every operator read/write is audited with the grant id; access ends at expiry without manual action.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 02.8.1-T1 | `support_grant` model, request/approve/revoke flow, expiry enforcement, notifications | M | V1 | G2 | 02.7.1-T2, 02.1.2-T1 |
-| 02.8.1-T2 | Operator access path: separate DB role, context switch, session banner, alerting on grant and on operator reads | M | V1 | G2 | 02.8.1-T1, 02.6.2-T1 |
+| 02.8.1-T1 | `support_grant` model, request/approve/revoke flow, expiry enforcement, notifications | M | V1 | G1 | 02.7.1-T2, 02.1.2-T1, 13.12.1-T2 |
+| 02.8.1-T2 | Operator access path: separate DB role, context switch, session banner, alerting on grant and on operator reads | M | V1 | G1 | 02.8.1-T1, 02.6.2-T1 |
 **Epic 02.8 total: 2.0**
+Notes (owner 2026-11-27, Epic 13.12): both tasks move G2 → G1 because the operator admin console needs the operator access path before the pilot; sizes are unchanged. Operator authentication (workforce sign-in with MFA, real `IOperatorGate`) is built once in 13.12.1-T2, the receiver the grant request path has been waiting for (OI-02-10); T1 depends on it.
 ### Epic 02.9 Cross-tenant isolation test suite (acceptance gate)
 #### Story 02.9.1 Isolation suite — acceptance: with two fully populated orgs, no API, FK or RLS test can read, write or infer another tenant's data; the suite is required to pass for M1 to close (00 §4).
 | ID | Task | Size | Version | Milestone | Depends on |
