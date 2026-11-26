@@ -38,7 +38,7 @@ internal static class IdentityAccessSql
     /// (billing, support, platform, agent-only) still grants nothing.
     /// </para>
     /// </summary>
-    private const string MemberGrantJoin = """
+    private const string MemberRoleJoin = """
              from active_member m
              join public.membership_role mr
                   on mr.membership_id = m.id
@@ -46,6 +46,10 @@ internal static class IdentityAccessSql
              join public.role r
                   on r.id = mr.role_id
                  and r.kind = 'member'
+        """;
+
+    /// <summary>The role→permission half of <see cref="MemberGrantJoin"/>, appended to <see cref="MemberRoleJoin"/>.</summary>
+    private const string PermissionJoin = """
              join public.role_permission rp
                   on rp.role_id = r.id
                  and rp.org_id is not distinct from r.org_id
@@ -54,14 +58,8 @@ internal static class IdentityAccessSql
             where p.tenant_assignable
         """;
 
-    /// <summary>
-    /// The member path of <c>IPermissionEvaluator</c> (02.2.1-T2.2, AC7, P3): ONE
-    /// statement that answers both "is the caller an active member of this org" and
-    /// "does that membership's role set grant this permission". The membership
-    /// subquery runs once (<c>with</c>) and the grant test is the shared
-    /// <see cref="MemberGrantJoin"/> limited to one code.
-    /// </summary>
-    internal static readonly string MemberGrant = """
+    /// <summary>The caller's active membership of the org, declared once for every member statement.</summary>
+    private const string ActiveMemberCte = """
         with active_member as (
             select m.id
               from public.membership m
@@ -69,6 +67,18 @@ internal static class IdentityAccessSql
                and m.user_id = @user_id
                and m.status = 'active'
         )
+        """;
+
+    private const string MemberGrantJoin = MemberRoleJoin + "\n" + PermissionJoin;
+
+    /// <summary>
+    /// The member path of <c>IPermissionEvaluator</c> (02.2.1-T2.2, AC7, P3): ONE
+    /// statement that answers both "is the caller an active member of this org" and
+    /// "does that membership's role set grant this permission". The membership
+    /// subquery runs once (<c>with</c>) and the grant test is the shared
+    /// <see cref="MemberGrantJoin"/> limited to one code.
+    /// </summary>
+    internal static readonly string MemberGrant = ActiveMemberCte + "\n" + """
         select (select count(*) from active_member)::int as active_memberships,
                exists (
                    select 1
@@ -86,18 +96,24 @@ internal static class IdentityAccessSql
     /// <see cref="MemberGrant"/> once per candidate code, so a create carrying 200 codes
     /// is still one round trip (P3's no-N+1 rule).
     /// </summary>
-    internal static readonly string MemberPermissionSet = """
-        with active_member as (
-            select m.id
-              from public.membership m
-             where m.org_id = @org_id
-               and m.user_id = @user_id
-               and m.status = 'active'
-        )
+    internal static readonly string MemberPermissionSet = ActiveMemberCte + "\n" + """
         select (select id from active_member order by id limit 1) as membership_id,
                array(
                    select distinct rp.permission_code
         """ + MemberGrantJoin + """
+               ) as codes
+        """;
+
+    /// <summary>
+    /// The role codes of the caller's active membership (<c>GET /v1/me/permissions</c>): the same
+    /// <see cref="MemberRoleJoin"/> as the grant statements, so the roles a caller sees are the rows
+    /// that produce its permissions. A role with no grants still counts; codes are ordinal-sorted.
+    /// </summary>
+    internal static readonly string MemberRoleCodes = ActiveMemberCte + "\n" + """
+        select array(
+                   select distinct r.code collate "C"
+        """ + MemberRoleJoin + """
+                    order by r.code collate "C"
                ) as codes
         """;
 
@@ -130,6 +146,10 @@ internal sealed record MemberGrantRow(int ActiveMemberships, bool Granted);
 /// </param>
 /// <param name="Codes">Every member-assignable code the caller's `member`-kind roles grant in the org (T79-filtered, W7-SEC-03/W7-SEC-05-joined).</param>
 internal sealed record MemberPermissionSetRow(Guid? MembershipId, string[] Codes);
+
+/// <summary>The one row of <see cref="IdentityAccessSql.MemberRoleCodes"/>.</summary>
+/// <param name="Codes">The caller's active member-kind role codes in the org, ordinal-sorted; empty without a membership.</param>
+internal sealed record MemberRoleCodesRow(string[] Codes);
 
 /// <summary>One row of <see cref="IdentityAccessSql.CatalogueFlags"/>.</summary>
 /// <param name="Code">The submitted <c>resource:action</c> string.</param>

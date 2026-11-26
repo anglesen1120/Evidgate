@@ -482,6 +482,7 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
             ["/v1/projects/{p}"] = $"/v1/projects/{project}",
             ["/v1/orgs/{o}/memberships"] = $"/v1/orgs/{org}/memberships",
             ["/v1/orgs/{o}/memberships/{m}"] = $"/v1/orgs/{org}/memberships/{membership}",
+            ["/v1/me/permissions"] = "/v1/me/permissions",
             ["/v1/permissions"] = "/v1/permissions",
             ["/v1/roles"] = "/v1/roles",
             // An active installation is seeded through the owner seam because the install flow needs GitHub;

@@ -974,6 +974,46 @@ paths:
           $ref: '#/components/responses/Unprocessable'
         '503':
           $ref: '#/components/responses/Unavailable'
+  /me/permissions:
+    get:
+      operationId: getMyPermissions
+      tags: [identity]
+      summary: Read the signed-in member's effective grants in the selected organization
+      description: >-
+        An active membership in the organization selected by `X-Evidgate-Org` is sufficient: the member
+        can read only their own roles and effective permission codes, so no catalogue permission is required.
+        Service credentials and operators cannot use this route. In V1 member roles are organization-wide;
+        the optional `project` is echoed as `project_id` and does not change the grants or establish access
+        to that project. A malformed project UUID is 422 `request_invalid` (path `project`, reason `malformed`).
+        The response carries `Cache-Control: no-store` because grants are caller-specific and may change.
+      x-permission: authenticated
+      x-auth: user_session
+      x-version: v1
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/TenantOrgHeader'
+        - $ref: '#/components/parameters/EffectiveGrantsProject'
+      responses:
+        '200':
+          description: The caller's active member roles and effective permission codes in the selected organization.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MyPermissionsResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '503':
+          $ref: '#/components/responses/Unavailable'
   /auth/sessions:
     get:
       operationId: listSessions
@@ -9177,6 +9217,22 @@ components:
       schema:
         type: string
         format: uuid
+    TenantOrgHeader:
+      name: X-Evidgate-Org
+      in: header
+      required: true
+      description: Selects the organization in which the caller must have an active membership.
+      schema:
+        type: string
+        format: uuid
+    EffectiveGrantsProject:
+      name: project
+      in: query
+      required: false
+      description: Project ID to echo. Member grants are organization-wide in V1.
+      schema:
+        type: string
+        format: uuid
     OrgHeader:
       name: X-Evidgate-Org
       in: header
@@ -14773,6 +14829,29 @@ components:
           description: >-
             `true` (default) revokes every other session and keeps the caller's; `false` revokes the current row
             too and the answer expires the session and antiforgery cookies, exactly like `POST /v1/auth/logout`.
+    MyPermissionsResponse:
+      type: object
+      required: [org_id, roles, permissions]
+      properties:
+        org_id:
+          type: string
+          format: uuid
+        project_id:
+          type: string
+          format: uuid
+          description: Present only when the request supplied a project.
+        roles:
+          type: array
+          description: The caller's active member-role codes in this organization, sorted ordinally.
+          uniqueItems: true
+          items:
+            type: string
+        permissions:
+          type: array
+          description: Effective catalogue permission codes, sorted ordinally.
+          uniqueItems: true
+          items:
+            type: string
     UserProfileDto:
       type: object
       description: >-

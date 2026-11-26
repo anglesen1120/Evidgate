@@ -1,9 +1,9 @@
 namespace Evidgate.BuildingBlocks.SharedKernel.Authorization;
 
 /// <summary>
-/// Marks the few handlers that run before the caller can hold any tenant permission:
-/// the request creates the tenant itself, so there is no membership to evaluate
-/// (02.1.1 §5: <c>POST /v1/orgs</c> is open to any authenticated user). The C2
+/// Marks the few handlers whose only requirement is an authenticated member: either the request
+/// creates the tenant itself, so there is no membership to evaluate (02.1.1 §5: <c>POST /v1/orgs</c>
+/// is open to any authenticated user), or the answer is the caller's own grants (<c>GET /v1/me/permissions</c>). The C2
 /// authorization stage grants such a handler to a <c>Member</c> principal with a
 /// user id and to nobody else — no service token, no operator, no anonymous caller.
 /// </summary>

@@ -577,6 +577,8 @@ public static partial class IsolationRouteCases
             new(HttpMethod.Delete, $"/v1/orgs/{o}/memberships/{m}/roles/{w.BuiltInRoleIds["viewer"]}"), grants: true),
 
         // ---- Identity (IdentityEndpoints.cs:59-84): org-scoped by X-Evidgate-Org, no {o} in the path ----------
+        HeaderCase("GET", "/v1/me/permissions", _ => new(HttpMethod.Get, "/v1/me/permissions"),
+            ownOrg: (route, w) => OwnObject(route, "member reads own grants in own org", OrgBAdmin(w), new(HttpMethod.Get, "/v1/me/permissions"))),
         HeaderCase("GET", "/v1/permissions", _ => new(HttpMethod.Get, "/v1/permissions")),
         HeaderCase("GET", "/v1/roles", _ => new(HttpMethod.Get, "/v1/roles")),
         HeaderCase("POST", "/v1/roles", _ => new(HttpMethod.Post, "/v1/roles", new JsonObject
