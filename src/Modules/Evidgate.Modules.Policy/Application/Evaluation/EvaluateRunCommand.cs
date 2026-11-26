@@ -1,10 +1,12 @@
 using System.Globalization;
 using Evidgate.BuildingBlocks.Canonicalization;
 using Evidgate.BuildingBlocks.Observability;
+using Evidgate.BuildingBlocks.Persistence.Outbox;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.Evaluation;
 using Evidgate.Modules.Policy.Infrastructure.Persistence;
+using Evidgate.Modules.Policy.Webhooks.Application;
 
 namespace Evidgate.Modules.Policy.Application.Evaluation;
 
@@ -75,7 +77,8 @@ internal sealed class EvaluateRunCommandHandler(
     IPolicyEvaluator evaluator,
     ITenantDb db,
     ITenantScopeAccessor scopes,
-    TimeProvider time)
+    TimeProvider time,
+    IOutboxWriter outbox)
 {
     /// <summary>
     /// One evaluation row: the values the insert sends, and the same shape the winner read-back returns, so one mapper
@@ -127,6 +130,13 @@ internal sealed class EvaluateRunCommandHandler(
         // rolled-back attempt and the conflict-loser path record nothing, and a repeat task records nothing new.
         scopes.Require().AfterCommit(() =>
             EvidgateTelemetry.RecordEvaluationDecisionLatency(inserted.CreatedAt - loaded.FrozenAt));
+
+        // A replay or shadow opinion is not the run's verdict, so only the live slot tells subscribers.
+        if (string.Equals(row.Mode, EvaluationModeCode.Of(EvaluationMode.Live), StringComparison.Ordinal))
+        {
+            await EvaluationCreatedPublisher.PublishAsync(outbox, row.Id, loaded.ProjectId, cancellationToken)
+                .ConfigureAwait(false);
+        }
 
         return Result.Success(ToRecord(row with { CreatedAt = inserted.CreatedAt }));
     }

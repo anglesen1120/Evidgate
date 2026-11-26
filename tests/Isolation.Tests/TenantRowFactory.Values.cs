@@ -220,6 +220,14 @@ internal sealed partial class TenantRowFactory
             // is inside its own CHECK and none is part of a unique key, so a constant serves every generated row.
             ("public.webhook_delivery", "provider") => "github",
             ("public.webhook_delivery", "payload_hash") => "sha256:" + new string('a', 64),
+            // webhook_endpoint (0131) closes `url` to https, `secret_hint` to exactly four characters and holds a
+            // partial unique key on (org_id, project_id, url): a fresh URL per row keeps a corrupt sibling from
+            // colliding on that key before the composite FK under test is reached. The delivery's one event type
+            // is a closed list.
+            ("public.webhook_endpoint", "url") =>
+                "https://probe" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture)[..12] + ".example/hook",
+            ("public.webhook_endpoint", "secret_hint") => "abcd",
+            ("public.webhook_outbound_delivery", "event_type") => "evaluation.created",
             ("public.git_repo_binding", "webhook_secret_ref") => "secret:probe",
             // commit_sha is a lowercase hex run; a fresh one per row keeps the (org_id, binding_id, commit_sha)
             // key from colliding with the valid row a corrupt sibling is generated next to.

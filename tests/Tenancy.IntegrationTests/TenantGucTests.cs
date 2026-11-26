@@ -513,6 +513,7 @@ public sealed partial class TenantGucTests
             ("project_id", projectId),
             ("policy_revision_id", policyRevisionId),
             ("activated_by", Guid.CreateVersion7()));
+        var evaluationId = Guid.CreateVersion7();
         await scope.ExecuteAsync(
             """
             insert into public.evaluation
@@ -521,7 +522,7 @@ public sealed partial class TenantGucTests
             values (@id, @org_id, @run_id, 1, @policy_revision_id, @hash, @manifest_hash, 'complete',
                     'all_passed', 'PASS', '1.0.0', 'live', @exceptions_hash, now())
             """,
-            ("id", Guid.CreateVersion7()),
+            ("id", evaluationId),
             ("org_id", orgId),
             ("run_id", runId),
             ("policy_revision_id", policyRevisionId),
@@ -570,6 +571,27 @@ public sealed partial class TenantGucTests
             ("project_id", projectId),
             ("case_id", caseId),
             ("owner", membershipId));
+        var endpointId = Guid.CreateVersion7();
+        await scope.ExecuteAsync(
+            """
+            insert into public.webhook_endpoint
+                (id, org_id, project_id, url, secret_ciphertext, secret_hint, created_by)
+            values (@id, @org_id, @project_id, 'https://receiver.example/hook', '\x00'::bytea, 'abcd', @created_by)
+            """,
+            ("id", endpointId),
+            ("org_id", orgId),
+            ("project_id", projectId),
+            ("created_by", membershipId));
+        await scope.ExecuteAsync(
+            """
+            insert into public.webhook_outbound_delivery (id, org_id, project_id, endpoint_id, event_type, event_id)
+            values (@id, @org_id, @project_id, @endpoint_id, 'evaluation.created', @event_id)
+            """,
+            ("id", Guid.CreateVersion7()),
+            ("org_id", orgId),
+            ("project_id", projectId),
+            ("endpoint_id", endpointId),
+            ("event_id", evaluationId));
         var artifactId = Guid.CreateVersion7();
         await scope.ExecuteAsync(
             """
