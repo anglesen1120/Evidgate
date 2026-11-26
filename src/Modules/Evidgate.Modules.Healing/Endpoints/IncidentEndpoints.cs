@@ -18,11 +18,11 @@ internal static class IncidentEndpoints
     internal static void MapIncidentEndpoints(this RouteGroupBuilder group)
     {
         group.MapGet("/projects/{p}/incidents", ListIncidentsAsync)
-            .Produces<IncidentPageView>(StatusCodes.Status200OK)
+            .Produces<IncidentPage>(StatusCodes.Status200OK)
             .WithSummary("Cursor list of a project's incidents, newest first (08.1.1)");
 
         group.MapGet("/incidents/{i}", GetIncidentAsync)
-            .Produces<IncidentView>(StatusCodes.Status200OK)
+            .Produces<Incident>(StatusCodes.Status200OK)
             .WithSummary("Read one incident (08.1.1)");
     }
 
@@ -30,7 +30,7 @@ internal static class IncidentEndpoints
     /// <c>state</c>, <c>execution_key</c> and <c>cursor</c> are single-valued: a blank or repeated value is a 422
     /// rather than a page quietly narrowed to its first occurrence. The handler validates the values.
     /// </summary>
-    private static async Task<Result<IncidentPageView>> ListIncidentsAsync(
+    private static async Task<Result<IncidentPage>> ListIncidentsAsync(
         Guid p,
         HttpContext context,
         IMediator mediator,
@@ -39,14 +39,14 @@ internal static class IncidentEndpoints
         var query = context.Request.Query;
         if (IncidentListRules.LimitError(query["limit"], out var limit) is { } limitError)
         {
-            return Result.Failure<IncidentPageView>(limitError);
+            return Result.Failure<IncidentPage>(limitError);
         }
 
         foreach (var name in new[] { "state", "execution_key", "cursor" })
         {
             if (query.TryGetValue(name, out var values) && (values.Count != 1 || (name != "cursor" && string.IsNullOrEmpty(values[0]))))
             {
-                return Result.Failure<IncidentPageView>(Error.Invalid(
+                return Result.Failure<IncidentPage>(Error.Invalid(
                     $"{name} has an invalid value",
                     [new ErrorDetail(name, "invalid_value")]));
             }
@@ -59,7 +59,7 @@ internal static class IncidentEndpoints
             .ConfigureAwait(false);
     }
 
-    private static async Task<Result<IncidentView>> GetIncidentAsync(
+    private static async Task<Result<Incident>> GetIncidentAsync(
         Guid i,
         IMediator mediator,
         CancellationToken cancellationToken) =>

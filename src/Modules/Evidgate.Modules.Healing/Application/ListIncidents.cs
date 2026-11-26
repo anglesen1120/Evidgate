@@ -16,7 +16,7 @@ namespace Evidgate.Modules.Healing.Application;
 /// <param name="Cursor">The cursor of the previous page, or null for the first.</param>
 /// <param name="Limit">The page size, 1 to 200.</param>
 internal sealed record ListIncidentsQuery(Guid ProjectId, string? State, string? ExecutionKey, string? Cursor, int Limit)
-    : IQuery<Result<IncidentPageView>>;
+    : IQuery<Result<IncidentPage>>;
 
 /// <summary>
 /// Handler of <see cref="ListIncidentsQuery"/>: <c>healing:triage</c> reads, a project outside the credential's or
@@ -28,21 +28,21 @@ internal sealed class ListIncidentsQueryHandler(
     IncidentReadStore store,
     IRequestPrincipalAccessor principals,
     IRequestTenantContextAccessor tenant)
-    : IQueryHandler<ListIncidentsQuery, Result<IncidentPageView>>
+    : IQueryHandler<ListIncidentsQuery, Result<IncidentPage>>
 {
     /// <inheritdoc />
-    public async ValueTask<Result<IncidentPageView>> Handle(ListIncidentsQuery query, CancellationToken cancellationToken)
+    public async ValueTask<Result<IncidentPage>> Handle(ListIncidentsQuery query, CancellationToken cancellationToken)
     {
         using var activity = EvidgateTelemetry.StartModuleActivity(ModuleName.Healing, nameof(ListIncidentsQuery));
 
         if (HealingScopeGuard.Project(query.ProjectId, principals, tenant) is { } mismatch)
         {
-            return Result.Failure<IncidentPageView>(mismatch);
+            return Result.Failure<IncidentPage>(mismatch);
         }
 
         if (IncidentListRules.Validate(query.State, query.ExecutionKey) is { } invalid)
         {
-            return Result.Failure<IncidentPageView>(invalid);
+            return Result.Failure<IncidentPage>(invalid);
         }
 
         (DateTimeOffset CreatedAt, Guid Id)? after = null;
@@ -50,7 +50,7 @@ internal sealed class ListIncidentsQueryHandler(
         {
             if (!KeysetCursor.TryDecodeDescending(query.Cursor, out var createdAt, out var id))
             {
-                return Result.Failure<IncidentPageView>(Error.Invalid(
+                return Result.Failure<IncidentPage>(Error.Invalid(
                     "the cursor is not a value this endpoint issued",
                     [new ErrorDetail("cursor", "malformed")]));
             }
@@ -63,8 +63,8 @@ internal sealed class ListIncidentsQueryHandler(
             .ConfigureAwait(false);
 
         var hasMore = rows.Count > query.Limit;
-        IReadOnlyList<IncidentView> page = hasMore ? [.. rows.Take(query.Limit)] : rows;
-        return Result.Success(new IncidentPageView(
+        IReadOnlyList<Incident> page = hasMore ? [.. rows.Take(query.Limit)] : rows;
+        return Result.Success(new IncidentPage(
             page,
             hasMore ? KeysetCursor.EncodeDescending(page[^1].CreatedAt, page[^1].Id) : null));
     }

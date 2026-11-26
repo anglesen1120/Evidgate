@@ -1274,5 +1274,5 @@ target)` and `session_revoke_audit_append(org, actor, object_type, object_id, me
 
 ## Notes on the incident read view (`0123`)
 
-- `public.incident_list` uses `security_invoker` to preserve the caller's RLS on incidents and retries. Only the app role gets a standing `SELECT` grant. The attempt count includes the first failure stored on `incident`; the page uses `0122`'s `(org_id, project_id, created_at DESC, id ASC)` index.
-- Deploy before enabling incident reads. To roll back, stop serving those reads and drop the view; no base rows or indexes change.
+- `public.incident_list` uses `security_invoker` to preserve the caller's RLS on incidents and retries. Only the app role gets a standing `SELECT` grant. The attempt count includes the first failure stored on `incident`; the unfiltered page uses `0122`'s `(org_id, project_id, created_at DESC, id ASC)` index and a `state`-filtered page uses `incident_project_state_list` `(org_id, project_id, state, created_at DESC, id ASC)`, added here because `0122`'s `incident_project_state` stops at `state` and would force a sort.
+- Deploy before enabling incident reads. To roll back, stop serving those reads and drop the view and `incident_project_state_list`; no base rows change.

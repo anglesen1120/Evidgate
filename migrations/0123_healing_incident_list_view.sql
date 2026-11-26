@@ -12,3 +12,8 @@ select i.org_id, i.id, i.project_id, i.run_id, i.attempt_id, i.case_id, i.case_r
 -- Default privileges also hand new relations to the other roles; only the app role reads incidents.
 revoke all on public.incident_list from public, evidgate_app, evidgate_operator, evidgate_worker, evidgate_worker_sched;
 grant select on public.incident_list to evidgate_app;
+
+-- A state-filtered page ordered by created_at desc, id would otherwise sort the rows incident_project_state returns,
+-- because that index stops at the state. Carrying the page order after the state lets the page stream and stop at the limit.
+create index if not exists incident_project_state_list
+  on public.incident (org_id, project_id, state, created_at desc, id);

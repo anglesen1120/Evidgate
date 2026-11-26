@@ -20,7 +20,7 @@ namespace Evidgate.Modules.Healing.Application;
 /// <param name="CreatedAt">When the incident was recorded.</param>
 /// <param name="UpdatedAt">When it last changed.</param>
 /// <param name="Version">The row version.</param>
-internal sealed record IncidentView(
+internal sealed record Incident(
     Guid Id,
     Guid ProjectId,
     Guid RunId,
@@ -39,7 +39,7 @@ internal sealed record IncidentView(
 /// <summary>A cursor page of incidents, newest first.</summary>
 /// <param name="Items">The page.</param>
 /// <param name="NextCursor">Opaque position of the next page, or null on the last one.</param>
-internal sealed record IncidentPageView(IReadOnlyList<IncidentView> Items, string? NextCursor);
+internal sealed record IncidentPage(IReadOnlyList<Incident> Items, string? NextCursor);
 
 /// <summary>The filters and bounds of one incident list read; shared by the endpoint binding and the handler.</summary>
 internal static class IncidentListRules
@@ -137,14 +137,14 @@ internal static class IncidentSql
 internal sealed class IncidentReadStore(ITenantDb db, ITenantScopeAccessor scopes)
 {
     /// <summary>One keyset page: <paramref name="take"/> rows (the caller asks for one more than it returns).</summary>
-    internal Task<IReadOnlyList<IncidentView>> ListAsync(
+    internal Task<IReadOnlyList<Incident>> ListAsync(
         Guid projectId,
         string? state,
         string? executionKey,
         (DateTimeOffset CreatedAt, Guid Id)? after,
         int take,
         CancellationToken cancellationToken) =>
-        db.QueryAsync<IncidentView>(
+        db.QueryAsync<Incident>(
             after is null ? IncidentSql.FirstPage : IncidentSql.NextPage,
             new
             {
@@ -159,8 +159,8 @@ internal sealed class IncidentReadStore(ITenantDb db, ITenantScopeAccessor scope
             cancellationToken);
 
     /// <summary>The incident, or null when no row of this tenant has the id.</summary>
-    internal Task<IncidentView?> GetAsync(Guid id, CancellationToken cancellationToken) =>
-        db.QuerySingleOrDefaultAsync<IncidentView>(
+    internal Task<Incident?> GetAsync(Guid id, CancellationToken cancellationToken) =>
+        db.QuerySingleOrDefaultAsync<Incident>(
             IncidentSql.ById,
             new { org_id = scopes.Require().OrgId, id },
             cancellationToken);

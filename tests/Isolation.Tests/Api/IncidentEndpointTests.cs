@@ -1,4 +1,5 @@
 using System.Net;
+using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Shouldly;
 using Xunit;
 
@@ -69,6 +70,31 @@ public sealed class IncidentEndpointTests(ApiIsolationFixture fixture)
         {
             (await runner.SendAsync(caller, Get(url + "?" + bad))).Status.ShouldBe((int)HttpStatusCode.UnprocessableEntity, bad);
         }
+    }
+
+    [Fact]
+    public async Task list_incidents_cursor_before_or_after_all_rows()
+    {
+        var runner = new RouteProbeRunner(fixture);
+        var org = fixture.World.Acme;
+        var project = org.Projects[0];
+        var caller = Triage(org);
+        var url = $"/v1/projects/{project.Id}/incidents";
+        var first = await runner.SendAsync(caller, Get(url + "?limit=1"));
+        first.Status.ShouldBe((int)HttpStatusCode.OK);
+        var instant = first.Json!.Value.GetProperty("items")[0].GetProperty("created_at").GetDateTimeOffset();
+
+        var older = KeysetCursor.EncodeDescending(instant.AddSeconds(-1), Guid.Empty);
+        var empty = await runner.SendAsync(caller, Get(url + "?cursor=" + Uri.EscapeDataString(older)));
+        empty.Status.ShouldBe((int)HttpStatusCode.OK);
+        Ids(empty).ShouldBeEmpty();
+        empty.Json!.Value.GetProperty("next_cursor").GetString().ShouldBeNull();
+
+        var newer = KeysetCursor.EncodeDescending(instant.AddSeconds(1), Guid.AllBitsSet);
+        var all = await runner.SendAsync(caller, Get(url + "?cursor=" + Uri.EscapeDataString(newer)));
+        all.Status.ShouldBe((int)HttpStatusCode.OK);
+        Ids(all).ShouldBe(project.IncidentIds);
+        all.Json!.Value.GetProperty("next_cursor").GetString().ShouldBeNull();
     }
 
     private static ProbeCaller Triage(IsolationOrg org) =>

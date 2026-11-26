@@ -10,7 +10,7 @@ namespace Evidgate.Modules.Healing.Application;
 
 /// <summary>One incident (<c>GET /v1/incidents/{i}</c>).</summary>
 /// <param name="IncidentId">The incident id from the route.</param>
-internal sealed record GetIncidentQuery(Guid IncidentId) : IQuery<Result<IncidentView>>;
+internal sealed record GetIncidentQuery(Guid IncidentId) : IQuery<Result<Incident>>;
 
 /// <summary>
 /// Handler of <see cref="GetIncidentQuery"/>: <c>healing:triage</c> reads. An unknown id and another tenant's id
@@ -22,10 +22,10 @@ internal sealed class GetIncidentQueryHandler(
     IncidentReadStore store,
     IRequestPrincipalAccessor principals,
     IRequestTenantContextAccessor tenant)
-    : IQueryHandler<GetIncidentQuery, Result<IncidentView>>
+    : IQueryHandler<GetIncidentQuery, Result<Incident>>
 {
     /// <inheritdoc />
-    public async ValueTask<Result<IncidentView>> Handle(GetIncidentQuery query, CancellationToken cancellationToken)
+    public async ValueTask<Result<Incident>> Handle(GetIncidentQuery query, CancellationToken cancellationToken)
     {
         using var activity = EvidgateTelemetry.StartModuleActivity(ModuleName.Healing, nameof(GetIncidentQuery));
 
@@ -34,11 +34,11 @@ internal sealed class GetIncidentQueryHandler(
         var incident = await store.GetAsync(query.IncidentId, cancellationToken).ConfigureAwait(false);
         if (incident is null)
         {
-            return Result.Failure<IncidentView>(Error.NotFound("no incident with that id is visible to this tenant"));
+            return Result.Failure<Incident>(Error.NotFound("no incident with that id is visible to this tenant"));
         }
 
         return HealingScopeGuard.Project(incident.ProjectId, principals, tenant) is { } mismatch
-            ? Result.Failure<IncidentView>(mismatch)
+            ? Result.Failure<Incident>(mismatch)
             : Result.Success(incident);
     }
 }

@@ -39,6 +39,36 @@ public sealed partial class ReconcileRunTests
     }
 
     [Fact]
+    public async Task Record_Incidents_Task_Unknown_Revision_DeadLetters_Without_Writes()
+    {
+        await using var owned = await _fixture.CreateDedicatedDatabaseAsync();
+        await using var world = await StartIncidentWorldAsync(owned.Name);
+        await FreezeWithFailedAttemptAsync(world);
+        await DispatchOutboxAsync(world);
+        await PollAsync(world, HealingDelivery);
+
+        var task = $"org_id = '{world.Org:D}' and task_type = '{RecordIncidents}'";
+        var audit = $"org_id = '{world.Org:D}' and action = 'incident.created'";
+        await _fixture.ExecuteAsync(
+            world.Database,
+            "update public.task set max_attempts = 1, payload = jsonb_set(payload, '{evidence_revision_no}', '2147483647') "
+            + $"where {task} and state = 'queued'");
+        await PollAsync(world, RecordIncidents);
+        (await TasksAsync(world, RecordIncidents, "state = 'dead_letter' and attempts = 1")).ShouldBe(1);
+        (await IncidentsAsync(world)).ShouldBe(0);
+        (await world.CountAsync("audit_log", audit)).ShouldBe(0);
+
+        await _fixture.ExecuteAsync(
+            world.Database,
+            "update public.task set state = 'queued', attempts = 0, available_at = now(), "
+            + $"payload = jsonb_set(payload, '{{evidence_revision_no}}', '1') where {task} and state = 'dead_letter'");
+        await PollAsync(world, RecordIncidents);
+        (await TasksAsync(world, RecordIncidents, "state = 'done' and attempts = 1")).ShouldBe(1);
+        (await IncidentsAsync(world)).ShouldBe(1);
+        (await world.CountAsync("audit_log", audit)).ShouldBe(1);
+    }
+
+    [Fact]
     public async Task Freeze_Commit_Writes_No_Incident_Synchronously()
     {
         await using var owned = await _fixture.CreateDedicatedDatabaseAsync();
