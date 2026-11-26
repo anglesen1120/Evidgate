@@ -1274,7 +1274,7 @@ target)` and `session_revoke_audit_append(org, actor, object_type, object_id, me
 
 ## Notes on the incident read view (`0123`)
 
-- `public.incident_list` uses `security_invoker` to preserve the caller's RLS on incidents and retries. Only the app role gets a standing `SELECT` grant. The attempt count includes the first failure stored on `incident`; the unfiltered page uses `0122`'s `(org_id, project_id, created_at DESC, id ASC)` index and a `state`-filtered page uses `incident_project_state_list` `(org_id, project_id, state, created_at DESC, id ASC)`, added here because `0122`'s `incident_project_state` stops at `state` and would force a sort.
+- (Superseded by `0125`, which drops the view.) `public.incident_list` uses `security_invoker` to preserve the caller's RLS on incidents and retries. Only the app role gets a standing `SELECT` grant. The attempt count includes the first failure stored on `incident`; the unfiltered page uses `0122`'s `(org_id, project_id, created_at DESC, id ASC)` index and a `state`-filtered page uses `incident_project_state_list` `(org_id, project_id, state, created_at DESC, id ASC)`, added here because `0122`'s `incident_project_state` stops at `state` and would force a sort.
 - Deploy before enabling incident reads. To roll back, stop serving those reads and drop the view and `incident_project_state_list`; no base rows change.
 
 ## Notes on the evaluation exception effects (`0124`)
@@ -1283,7 +1283,7 @@ target)` and `session_revoke_audit_append(org, actor, object_type, object_id, me
 - No grant, index, policy or trigger changes: `evidgate_app` keeps table-level `SELECT` + `INSERT` on `evaluation` (`0059`), so the new column is insertable like the others, and no UPDATE or DELETE path exists. The constant default means existing rows read `{}` without a rewrite, and both checks validate in place.
 - Locks: `ACCESS EXCLUSIVE` on `evaluation` for one `alter table` statement (the drops, the add column and both adds, one scan of the table) in one transaction under a 5 s `lock_timeout`; the table is insert-only and grows one row per evaluation. Deploy: the migrator before the worker that stores the new reasons. Rollback: drop `evaluation_quarantined_cases_check` and the column, then restore the `0109` reason list (only valid while no stored row holds a new token).
 
-## Notes on the incident list view barrier (`0125`)
+## Notes on dropping the incident list view (`0125`)
 
-- `0125` sets `security_barrier = true` on `public.incident_list` (created by `0123` with `security_invoker = true`, which stays). The role-and-privilege scan admits an `evidgate_app`-readable view only when it is allow-listed and carries the barrier.
-- No grant, index, policy or trigger changes. Locks: `ACCESS EXCLUSIVE` on the view for one `alter view`, under a 5 s `lock_timeout`; no table is rewritten.
+- `0125` drops `public.incident_list` (created by `0123`; the `0123` file is unchanged and its `incident_project_state_list` index stays). The role-and-privilege scan admits an `evidgate_app`-readable view only with `security_barrier = true`, and a barrier view stays a subquery scan, so the state-filtered keyset page sorted instead of streaming from `incident_project_state_list`.
+- `evidgate_app` already holds `SELECT` on `incident` and `incident_attempt` (`0122`), so the list statements read `incident` directly under FORCE RLS with an explicit `org_id` predicate and compute `attempt_count` inline. No grant, index, policy or trigger changes. Locks: `ACCESS EXCLUSIVE` on the view for one `drop view`, under a 5 s `lock_timeout`.

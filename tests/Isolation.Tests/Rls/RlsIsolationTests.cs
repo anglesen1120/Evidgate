@@ -97,10 +97,9 @@ public sealed partial class RlsIsolationTests : HarnessTest
     /// join of the two: they replace the app role's lost read of the mechanism tables, are owned by
     /// the migration role and carry <c>security_barrier</c> with an explicit
     /// <c>org_id = evidgate.current_org_id()</c> predicate (proven behaviourally by the worker-role
-    /// grant suite). <c>public.incident_list</c> (0123, barrier added by 0125) is the incident read model: security_invoker
-    /// keeps the caller's RLS on the base tables. A view added here must carry <c>security_barrier=true</c>, asserted below.
+    /// grant suite). A view added here must carry <c>security_barrier=true</c>, asserted below.
     /// </summary>
-    private static readonly string[] SelectableRelationAllowlist = ["public.task_in_scope", "public.outbox_in_scope", "public.outbox_task_in_scope", "public.incident_list"];
+    private static readonly string[] SelectableRelationAllowlist = ["public.task_in_scope", "public.outbox_in_scope", "public.outbox_task_in_scope"];
 
     private readonly ITestOutputHelper _output;
 
