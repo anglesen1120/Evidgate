@@ -1340,6 +1340,15 @@ target)` and `session_revoke_audit_append(org, actor, object_type, object_id, me
 - `evidgate.replay_webhook_delivery(p_event_id uuid, p_actor uuid)` returns `table (delivery_id uuid)`: owner-run, tenant-scoped, `EXECUTE` for `evidgate_app` only; it re-queues `dead_letter` deliveries of active endpoints and audits `webhook_delivery.replay` per row in the same transaction.
 - Locks: new tables only; `lock_timeout` is 5 s. Numbering: the migrator refuses a gap, so apply only on a tree that holds `0130`. Deploy: the migrator before any API or Worker that registers endpoints or queues deliveries. Rollback: stop those, then drop the function, `webhook_outbound_delivery`, then `webhook_endpoint`.
 
+## Notes on requirements (`0132`)
+
+- `0132` adds `public.requirement` (stable identity: kind, title, optional external ref, optional feature node, optional parent, `head_version_no`, soft-delete stamp) and `public.requirement_version` (append-only body log: `version_no`, NFC body capped at 20 000 code points, `content_hash`, `source`, author membership, reason). Both have `unique (org_id, id)`, FORCE RLS with `TO evidgate_app` and `TO evidgate_owner` policies.
+- Keys: every reference is composite. `requirement` references `project`, `feature_node (org_id, project_id, id)` and itself (`parent`), so a parent or node of another project cannot be named; `requirement_version` references `requirement (org_id, project_id, id)` and `membership`. `unique (org_id, requirement_id, version_no)` is the duplicate-number guard; `unique (org_id, requirement_id, id)` is the pin target of later link tables. There is deliberately no key from the head number to a version row: the single writer moves the head in the transaction that inserts the version.
+- Guards (SQLSTATE `23514`): `requirement_parent_acyclic` refuses a cycle under a per-project advisory lock; `requirement_head_step` lets `head_version_no` move only forward by one; `requirement_version_immutable` refuses every UPDATE of a version and any DELETE except by `evidgate_owner`.
+- Grants: `evidgate_app` holds SELECT and INSERT on both tables and column-scoped UPDATE on `requirement` only; no DELETE (removal is the `deleted_at` stamp). The operator and sweep roles hold nothing (no policy admits them).
+- Purge order (owner erasure): delete `requirement_version` rows first, then `requirement` rows. Deleting the identity first fails with `23503`.
+- Locks: new tables only; `lock_timeout` is 5 s. Numbering: the migrator refuses a gap, so apply only on a tree that holds `0131`. Rollback: stop the writer, then drop `requirement_version`, then `requirement`.
+
 ## Notes on the GitHub Actions exchange removal (`0134`)
 
 - `0134` drops `evidgate_resolve.resolve_ci_binding(text, bigint, bytea[])`, `evidgate.purge_expired_ci_token_issue(integer)` (the `0017`/`0019`/`0089` sweep and its worker-only ACL), `ci_token_issue_run_idx` (`0037`), then `public.ci_token_issue` and `public.ci_binding`, in that foreign-key order. Grants on the functions and tables are revoked first; there is no `CASCADE`, so an unexpected dependent object fails the file.

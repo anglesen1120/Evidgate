@@ -87,6 +87,11 @@ internal sealed partial class TenantRowFactory
             ("public.authoring_version", "entity_kind") => "feature_node",
             ("public.authoring_version", "change_kind") => "create",
             ("public.authoring_version", "content_hash") => "sha256:" + new string('c', 64),
+            // requirement and requirement_version (0132) close their vocabulary in CHECKs the generic text
+            // candidate cannot satisfy; every other member is generic or defaulted.
+            ("public.requirement", "kind") => "epic",
+            ("public.requirement_version", "source") => "manual",
+            ("public.requirement_version", "content_hash") => "sha256:" + new string('e', 64),
             // authoring_change (0067) closes change_type to four tokens and wants a non-empty
             // affected_versions object, so the generic text and '{}' candidates are both rejected before
             // a composite FK under test is reached. A comment payload needs its body and no other member,
