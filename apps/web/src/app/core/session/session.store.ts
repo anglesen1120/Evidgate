@@ -39,10 +39,7 @@ import type { ProjectDto } from '@evidgate/sdk';
 
 import { IdentityDataService } from '../data/identity-data.service';
 import { UnauthenticatedRelay } from '../http/unauthenticated-relay';
-import {
-  CataloguePermissionsSource,
-  EffectivePermissionsSource,
-} from './effective-permissions.source';
+import { EffectivePermissionsSource } from './effective-permissions.source';
 import { createScopeResolver } from './scope-resolution';
 import { createScopeState } from './scope-state';
 import { createSessionBoundary } from './session-boundary';
@@ -98,8 +95,7 @@ type SessionMethods = {
 function injectSessionDependencies(): SessionDependencies {
   return {
     identity: inject(IdentityDataService),
-    permissionsSource:
-      inject(EffectivePermissionsSource, { optional: true }) ?? inject(CataloguePermissionsSource),
+    permissionsSource: inject(EffectivePermissionsSource),
     tenant: inject(TenantStore),
     router: inject(Router),
     sessionEnder: inject(SESSION_ENDER),

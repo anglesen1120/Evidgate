@@ -1,0 +1,18 @@
+{
+  "operation_id": "getMyPermissions",
+  "variant": "forbidden",
+  "status": 403,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-00000000c001"
+  },
+  "latency_ms": 0,
+  "body": {
+    "error": {
+      "code": "forbidden",
+      "message": "the caller holds no active membership in this organization",
+      "request_id": "018f0000-0000-7000-8000-00000000c001",
+      "retryable": false,
+      "details": []
+    }
+  }
+}

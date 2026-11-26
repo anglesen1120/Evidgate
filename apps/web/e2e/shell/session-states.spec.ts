@@ -105,3 +105,23 @@ test.describe('a session that cannot be read (AC5)', () => {
     await expect.poll(() => new URL(page.url()).pathname).toBe('/en/unavailable');
   });
 });
+
+test.describe('grants that cannot be read', () => {
+  test('a failed grant read is unavailable, never "everything granted"', async ({ page }) => {
+    await page.goto(
+      withVariant(localePath('en', DEEP_LINK), '?fixture.variant.getMyPermissions=unavailable'),
+    );
+
+    await expect.poll(() => new URL(page.url()).pathname).toBe('/en/unavailable');
+    await expect(page.locator('#main-content h1')).toHaveText('Workspace unavailable');
+    await expect(page.locator('app-shell-nav nav a')).toHaveCount(0);
+  });
+
+  test('a refused membership read is unavailable too', async ({ page }) => {
+    await page.goto(
+      withVariant(localePath('en', DEEP_LINK), '?fixture.variant.getMyPermissions=forbidden'),
+    );
+
+    await expect.poll(() => new URL(page.url()).pathname).toBe('/en/unavailable');
+  });
+});
