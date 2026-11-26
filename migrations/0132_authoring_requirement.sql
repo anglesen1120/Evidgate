@@ -155,6 +155,29 @@ create trigger requirement_parent_acyclic
   before insert or update of parent_requirement_id on public.requirement
   for each row execute function evidgate.requirement_parent_acyclic();
 
+-- The head number only ever moves forward by one, in the writer's compare-and-set; a pointer move
+-- (for example a rewind) would make the next append collide with an existing version number.
+create or replace function evidgate.requirement_head_step() returns trigger
+  language plpgsql
+  as $$
+  begin
+    if new.head_version_no <> old.head_version_no + 1 then
+      raise exception 'requirement_head_step: head_version_no moves forward by exactly one'
+        using errcode = '23514';
+    end if;
+    return new;
+  end
+  $$;
+
+revoke all on function evidgate.requirement_head_step() from public;
+grant execute on function evidgate.requirement_head_step() to evidgate_app;
+
+drop trigger if exists requirement_head_step on public.requirement;
+create trigger requirement_head_step
+  before update of head_version_no on public.requirement
+  for each row when (new.head_version_no is distinct from old.head_version_no)
+  execute function evidgate.requirement_head_step();
+
 -- A version is append-only for every role: UPDATE raises always, DELETE raises except for the owner's erasure
 -- path (current_user is evidgate_owner inside an owner-owned purge function).
 create or replace function evidgate.requirement_version_immutable() returns trigger
@@ -214,10 +237,10 @@ revoke update, delete on public.requirement from evidgate_app;
 grant select, insert on public.requirement to evidgate_app;
 grant update (kind, title, external_ref, feature_node_id, parent_requirement_id, head_version_no, deleted_at)
   on public.requirement to evidgate_app;
-grant select on public.requirement to evidgate_operator;
+revoke all on public.requirement from evidgate_operator;
 revoke all on public.requirement from evidgate_worker_sched;
 
 revoke update, delete on public.requirement_version from evidgate_app;
 grant select, insert on public.requirement_version to evidgate_app;
-grant select on public.requirement_version to evidgate_operator;
+revoke all on public.requirement_version from evidgate_operator;
 revoke all on public.requirement_version from evidgate_worker_sched;

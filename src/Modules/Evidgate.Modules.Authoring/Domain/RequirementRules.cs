@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using Evidgate.BuildingBlocks.Canonicalization;
@@ -40,6 +41,31 @@ internal static partial class RequirementRules
         value is not null
         && value.Length is >= 1 and <= MaximumExternalRefLength
         && ExternalRefPattern().IsMatch(value);
+
+    /// <summary>False when the text holds a NUL (PostgreSQL <c>text</c> refuses it) or an unpaired surrogate (NFC throws on it).</summary>
+    /// <param name="value">The submitted text; null is storable (the caller decides if it is required).</param>
+    internal static bool IsStorable(string? value)
+    {
+        if (value is null)
+        {
+            return true;
+        }
+
+        for (var index = 0; index < value.Length; index++)
+        {
+            if (value[index] == '\0' || !Rune.TryGetRuneAt(value, index, out var rune))
+            {
+                return false;
+            }
+
+            if (!rune.IsBmp)
+            {
+                index++;
+            }
+        }
+
+        return true;
+    }
 
     /// <summary>
     /// The stored form of a body: NFC first, then the code-point cap, so a decomposed input that composes to the cap

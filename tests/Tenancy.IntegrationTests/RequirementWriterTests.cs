@@ -77,7 +77,7 @@ public sealed class RequirementWriterTests
 
         foreach (var (create, path) in cases)
         {
-            var result = await world.InScopeAsync((writer, token) => writer.CreateAsync(world.Org, create, token), commit: false);
+            var result = await world.InScopeAsync((writer, token) => writer.CreateAsync(world.Org, create, token), commit: true);
 
             result.IsSuccess.ShouldBeFalse(path);
             result.Error!.Status.ShouldBe(422, path);
@@ -96,7 +96,7 @@ public sealed class RequirementWriterTests
         var astral = await world.CreatedAsync(world.Create(body: CodePoints("\U0001F600", 20_000)));
         var tooLong = await world.InScopeAsync(
             (writer, token) => writer.CreateAsync(world.Org, world.Create(body: CodePoints("\U0001F600", 20_001)), token),
-            commit: false);
+            commit: true);
 
         astral.VersionNo.ShouldBe(1);
         tooLong.IsSuccess.ShouldBeFalse();
@@ -112,7 +112,7 @@ public sealed class RequirementWriterTests
         var atCap = await world.CreatedAsync(world.Create(body: CodePoints("e\u0301", 20_000)));
         var overCap = await world.InScopeAsync(
             (writer, token) => writer.CreateAsync(world.Org, world.Create(body: CodePoints("e\u0301", 20_000) + "x"), token),
-            commit: false);
+            commit: true);
 
         overCap.IsSuccess.ShouldBeFalse();
         var stored = await _fixture.ScalarAsync<string>(world.Database, $"select body from public.requirement_version where id = '{atCap.VersionId:D}'");
@@ -164,7 +164,7 @@ public sealed class RequirementWriterTests
         var head = await world.CreatedAsync(world.Create());
 
         var first = await world.InScopeAsync((writer, token) => writer.AppendVersionAsync(world.Org, world.Project, head.RequirementId, head.RowVersion, "one", "manual", null, null, token));
-        var stale = await world.InScopeAsync((writer, token) => writer.AppendVersionAsync(world.Org, world.Project, head.RequirementId, head.RowVersion, "two", "manual", null, null, token), commit: false);
+        var stale = await world.InScopeAsync((writer, token) => writer.AppendVersionAsync(world.Org, world.Project, head.RequirementId, head.RowVersion, "two", "manual", null, null, token), commit: true);
 
         first.IsSuccess.ShouldBeTrue(first.Error?.Message);
         stale.IsSuccess.ShouldBeFalse();
@@ -241,7 +241,7 @@ public sealed class RequirementWriterTests
 
         foreach (var (project, id, version, body, source, reason, status) in cases)
         {
-            var result = await world.InScopeAsync((writer, token) => writer.AppendVersionAsync(world.Org, project, id, version, body, source, null, reason, token), project, commit: false);
+            var result = await world.InScopeAsync((writer, token) => writer.AppendVersionAsync(world.Org, project, id, version, body, source, null, reason, token), project, commit: true);
 
             result.IsSuccess.ShouldBeFalse(source + reason);
             result.Error!.Status.ShouldBe(status, source + reason);

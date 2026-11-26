@@ -57,6 +57,11 @@ internal sealed partial class RequirementWriter(ITenantDb db, ITenantScopeAccess
         ArgumentNullException.ThrowIfNull(create);
         EnsureScope(orgId);
 
+        if (!RequirementRules.IsStorable(create.Title))
+        {
+            return Refuse("/title", "invalid_text", "the title holds a NUL or an unpaired surrogate");
+        }
+
         var title = AuthoringText.Normalize(create.Title)?.Trim() ?? string.Empty;
         if (title.Length == 0 || !AuthoringText.Fits(title, RequirementRules.MaximumTitleCodePoints))
         {
@@ -88,25 +93,34 @@ internal sealed partial class RequirementWriter(ITenantDb db, ITenantScopeAccess
             return Refuse("/parent_requirement_id", "not_found", "no live requirement with that id in this project");
         }
 
-        var requirementId = Guid.CreateVersion7();
-        var rowVersion = await db.ScalarAsync<int>(
-            RequirementSql.InsertRequirement,
-            new
-            {
-                id = requirementId,
-                org_id = orgId,
-                project_id = create.ProjectId,
-                kind = create.Kind,
-                title,
-                external_ref = create.ExternalRef,
-                feature_node_id = create.FeatureNodeId,
-                parent_requirement_id = create.ParentRequirementId,
-            },
-            cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await AuthoringLockGuard.SetLockTimeoutAsync(db, cancellationToken).ConfigureAwait(false);
 
-        var (versionId, hash) = await InsertVersionAsync(orgId, create.ProjectId, requirementId, 1, create.Body, create.Source, create.AuthorMembershipId, create.Reason, cancellationToken).ConfigureAwait(false);
+            var requirementId = Guid.CreateVersion7();
+            var rowVersion = await db.ScalarAsync<int>(
+                RequirementSql.InsertRequirement,
+                new
+                {
+                    id = requirementId,
+                    org_id = orgId,
+                    project_id = create.ProjectId,
+                    kind = create.Kind,
+                    title,
+                    external_ref = create.ExternalRef,
+                    feature_node_id = create.FeatureNodeId,
+                    parent_requirement_id = create.ParentRequirementId,
+                },
+                cancellationToken).ConfigureAwait(false);
 
-        return Result.Success(new RequirementHead(requirementId, versionId, 1, rowVersion, hash));
+            var (versionId, hash) = await InsertVersionAsync(orgId, create.ProjectId, requirementId, 1, create.Body, create.Source, create.AuthorMembershipId, create.Reason, cancellationToken).ConfigureAwait(false);
+
+            return Result.Success(new RequirementHead(requirementId, versionId, 1, rowVersion, hash));
+        }
+        catch (PostgresException exception) when (AuthoringLockGuard.IsContention(exception))
+        {
+            return Result.Failure<RequirementHead>(AuthoringErrors.Unavailable());
+        }
     }
 
     /// <summary>
@@ -203,6 +217,11 @@ internal sealed partial class RequirementWriter(ITenantDb db, ITenantScopeAccess
     /// <summary>Validates the three fields every version carries; the body is checked after NFC.</summary>
     private static Result<RequirementHead>? CheckVersionFields(string? body, string? source, string? reason)
     {
+        if (!RequirementRules.IsStorable(body) || !RequirementRules.IsStorable(reason))
+        {
+            return Refuse(RequirementRules.IsStorable(body) ? "/reason" : "/body", "invalid_text", "the text holds a NUL or an unpaired surrogate");
+        }
+
         if (body is null)
         {
             return Refuse("/body", "required", "the body is required");

@@ -73,8 +73,10 @@ internal static class RequirementSql
     /// </summary>
     internal const string SelectVersions = """
         select v.id, v.version_no, v.body, v.content_hash, v.source, v.author_membership_id, v.reason, v.created_at
-          from public.requirement_version v
-         where v.org_id = @org_id and v.requirement_id = @requirement_id and v.project_id = @project_id
+          from public.requirement r
+          join public.requirement_version v
+            on v.org_id = r.org_id and v.requirement_id = r.id
+         where r.org_id = @org_id and r.project_id = @project_id and r.id = @requirement_id
            and (@before_version_no::integer is null or v.version_no < @before_version_no)
          order by v.version_no desc
          limit @limit
