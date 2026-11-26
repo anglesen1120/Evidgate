@@ -68,11 +68,38 @@ public sealed class PolicyEvaluator : IPolicyEvaluator
         ArgumentNullException.ThrowIfNull(policy.RequiredArtifactKinds);
         ArgumentNullException.ThrowIfNull(exceptions.WaiverIds);
         ArgumentNullException.ThrowIfNull(exceptions.QuarantineIds);
+        ArgumentNullException.ThrowIfNull(exceptions.QuarantinedCaseIds);
+        ArgumentNullException.ThrowIfNull(exceptions.WaivedCaseIds);
 
-        var core = CoreEvaluation.Compute(evidence, policy);
+        var (core, failedCaseIds) = CoreEvaluation.Compute(evidence, policy, exceptions);
         var (decision, reasons) = ApplyLayers(evidence, policy, exceptions, core);
 
+        // A waiver only annotates a failure that gates; it is applied after the layers, so it can never move the decision.
+        if (decision == EvaluationDecision.Fail && AnyWaived(failedCaseIds, exceptions.WaivedCaseIds))
+        {
+            reasons = ReasonSet.Normalize([.. reasons, EvaluationReason.WaiverApproved]);
+        }
+
         return core with { Decision = decision, Reasons = reasons };
+    }
+
+    /// <summary>True when a still-gating failed case also holds a waiver; the empty sides short-circuit.</summary>
+    private static bool AnyWaived(IReadOnlySet<Guid> failedCaseIds, IReadOnlyList<Guid> waivedCaseIds)
+    {
+        if (failedCaseIds.Count == 0 || waivedCaseIds.Count == 0)
+        {
+            return false;
+        }
+
+        foreach (var id in waivedCaseIds)
+        {
+            if (failedCaseIds.Contains(id))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>

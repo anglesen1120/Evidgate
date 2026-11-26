@@ -303,4 +303,16 @@ describe('DataTableValueComponent', () => {
     expect(root.textContent).not.toMatch(/\bPASS\b|\bFAIL\b/);
     expect(root.querySelector('script')).toBeNull();
   });
+
+  it('wraps at each colon only on request, leaving the text unchanged', async () => {
+    fixture.componentRef.setInput('value', 'evidence:reprocess');
+    await fixture.whenStable();
+    expect(root.querySelectorAll('bdi > span')).toHaveLength(0);
+
+    fixture.componentRef.setInput('breakAfterColon', true);
+    await fixture.whenStable();
+    expect(root.querySelectorAll('bdi > span')).toHaveLength(2);
+    expect(value.textContent).toBe('evidence:reprocess');
+    expect(value.querySelector('bdi > span')?.textContent).toBe('evidence:');
+  });
 });

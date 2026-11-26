@@ -39,6 +39,34 @@ export type CursorList = {
     next_cursor: string | null;
 };
 
+/**
+ * One incident: a failing planned execution of a run that a frozen evidence revision verified (08.1.1). Carries no attempt payload and no error text. `attempt_count` is the first failing attempt plus its recorded retries.
+ */
+export type Incident = {
+    id: string;
+    project_id: string;
+    run_id: string;
+    attempt_id: string;
+    case_id: string;
+    case_revision_id: string;
+    execution_key: string;
+    engine: string;
+    state: 'open' | 'triaged' | 'closed';
+    context_state: 'pending' | 'complete' | 'partial';
+    attempt_count: number;
+    created_at: string;
+    updated_at: string;
+    version: number;
+};
+
+/**
+ * 00 §9.1 cursor page of incidents, newest first (`created_at` desc, `id` asc); `next_cursor` is null on the last page.
+ */
+export type IncidentPage = {
+    items: Array<Incident>;
+    next_cursor: string | null;
+};
+
 export type RunStateDto = {
     run_id: string;
     state: 'created' | 'queued' | 'running' | 'collecting' | 'complete' | 'incomplete' | 'canceled';
@@ -2826,6 +2854,22 @@ export type RevokeAllSessionsRequest = {
     keep_current?: boolean;
 };
 
+export type MyPermissionsResponse = {
+    org_id: string;
+    /**
+     * Present only when the request supplied a project.
+     */
+    project_id?: string;
+    /**
+     * The caller's active member-role codes in this organization, sorted ordinally.
+     */
+    roles: Array<string>;
+    /**
+     * Effective catalogue permission codes, sorted ordinally.
+     */
+    permissions: Array<string>;
+};
+
 /**
  * The signed-in account's own profile (02.3.1-T3), as `GET /v1/me` and both answers of `PATCH /v1/me` carry it. Only the account's own values are ever in it: the row is resolved from the session, so no field here can describe another user. The row's `version` is NOT a member — it travels as the response's `ETag` and comes back as `If-Match`, so a client cannot believe it wrote with a version it never read.
  */
@@ -3778,6 +3822,16 @@ export type SessionId = string;
 export type UserId = string;
 
 /**
+ * Selects the organization in which the caller must have an active membership.
+ */
+export type TenantOrgHeader = string;
+
+/**
+ * Project ID to echo. Member grants are organization-wide in V1.
+ */
+export type EffectiveGrantsProject = string;
+
+/**
  * Names the org in which the caller claims `membership:write` (02.3.2-T2.1). Absent, only the session's owner may be revoked; present, the caller must hold an active membership in this org with `membership:write` AND the target session's user an active membership in the same org, otherwise the answer is the same 404 an unknown id gets. The org is never taken from the path or the body of a pre-tenant route.
  */
 export type OrgHeader = string;
@@ -3948,6 +4002,16 @@ export type RunRerunScope = 'full' | 'failed_subset';
 export type RunParentRunId = string;
 
 /**
+ * `asc` (default) orders runs by `(created_at, id)` ascending, the oldest first. `desc` lists the newest `created_at` first; runs with an identical `created_at` stay ordered by `id` ascending. A cursor must be reused with the order that issued it; a cursor from the opposite order is 422 `request_invalid` (`details[].path` = `cursor`). An invalid order is 422 `request_invalid` (`details[].path` = `order`).
+ */
+export type RunListOrder = 'asc' | 'desc';
+
+/**
+ * Exact completeness of the run's current evidence revision: only the exact stored value matches. A run without a current revision, or with any other stored value, matches neither `complete` nor `incomplete`. AND-combined with every other present filter. An invalid value is 422 `request_invalid` (`details[].path` = `completeness`).
+ */
+export type RunCompleteness = 'complete' | 'incomplete';
+
+/**
  * Opaque cursor from `next_cursor` of `GET /v1/runs/{r}/attempts`; ordering `(execution_key, attempt_no)` (00 §9.1, F52/S143). A value this endpoint did not issue is 422 `request_invalid`.
  */
 export type RunAttemptCursor = string;
@@ -4050,6 +4114,16 @@ export type DraftId = string;
 export type TemplateId = string;
 
 export type IncidentId = string;
+
+/**
+ * One of `open`, `triaged`, `closed`; blank, repeated or any other value is 422 `request_invalid`.
+ */
+export type IncidentStateFilter = 'open' | 'triaged' | 'closed';
+
+/**
+ * Exact execution key, 64 lowercase hex; blank, repeated or any other value is 422 `request_invalid`.
+ */
+export type IncidentExecutionKey = string;
 
 export type JobId = string;
 
@@ -4733,6 +4807,54 @@ export type UpdateMyProfileResponses = {
 
 export type UpdateMyProfileResponse = UpdateMyProfileResponses[keyof UpdateMyProfileResponses];
 
+export type GetMyPermissionsData = {
+    body?: never;
+    headers: {
+        /**
+         * Selects the organization in which the caller must have an active membership.
+         */
+        'X-Evidgate-Org': string;
+    };
+    path?: never;
+    query?: {
+        /**
+         * Project ID to echo. Member grants are organization-wide in V1.
+         */
+        project?: string;
+    };
+    url: '/me/permissions';
+};
+
+export type GetMyPermissionsErrors = {
+    /**
+     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
+     */
+    403: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
+     */
+    422: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type GetMyPermissionsError = GetMyPermissionsErrors[keyof GetMyPermissionsErrors];
+
+export type GetMyPermissionsResponses = {
+    /**
+     * The caller's active member roles and effective permission codes in the selected organization.
+     */
+    200: MyPermissionsResponse;
+};
+
+export type GetMyPermissionsResponse = GetMyPermissionsResponses[keyof GetMyPermissionsResponses];
+
 export type ListSessionsData = {
     body?: never;
     path?: never;
@@ -5068,6 +5190,14 @@ export type ListRunsData = {
          * Exact `run.parent_run_id` (0031; F43, S143) — the run a rerun was created from. A present but non-UUID value is 422 `request_invalid` (`details[].path` = `parent_run_id`).
          */
         parent_run_id?: string;
+        /**
+         * `asc` (default) orders runs by `(created_at, id)` ascending, the oldest first. `desc` lists the newest `created_at` first; runs with an identical `created_at` stay ordered by `id` ascending. A cursor must be reused with the order that issued it; a cursor from the opposite order is 422 `request_invalid` (`details[].path` = `cursor`). An invalid order is 422 `request_invalid` (`details[].path` = `order`).
+         */
+        order?: 'asc' | 'desc';
+        /**
+         * Exact completeness of the run's current evidence revision: only the exact stored value matches. A run without a current revision, or with any other stored value, matches neither `complete` nor `incomplete`. AND-combined with every other present filter. An invalid value is 422 `request_invalid` (`details[].path` = `completeness`).
+         */
+        completeness?: 'complete' | 'incomplete';
     };
     url: '/projects/{p}/runs';
 };
@@ -10784,6 +10914,14 @@ export type ListIncidentsData = {
          */
         cursor?: string;
         limit?: number;
+        /**
+         * One of `open`, `triaged`, `closed`; blank, repeated or any other value is 422 `request_invalid`.
+         */
+        state?: 'open' | 'triaged' | 'closed';
+        /**
+         * Exact execution key, 64 lowercase hex; blank, repeated or any other value is 422 `request_invalid`.
+         */
+        execution_key?: string;
     };
     url: '/projects/{p}/incidents';
 };
@@ -10802,6 +10940,10 @@ export type ListIncidentsErrors = {
      */
     404: ErrorEnvelope;
     /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
+     */
+    422: ErrorEnvelope;
+    /**
      * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
      */
     429: ErrorEnvelope;
@@ -10817,7 +10959,7 @@ export type ListIncidentsResponses = {
     /**
      * Page of incidents
      */
-    200: CursorList;
+    200: IncidentPage;
 };
 
 export type ListIncidentsResponse = ListIncidentsResponses[keyof ListIncidentsResponses];
@@ -10860,8 +11002,10 @@ export type GetIncidentResponses = {
     /**
      * Incident detail
      */
-    200: unknown;
+    200: Incident;
 };
+
+export type GetIncidentResponse = GetIncidentResponses[keyof GetIncidentResponses];
 
 export type LabelIncidentData = {
     body: {

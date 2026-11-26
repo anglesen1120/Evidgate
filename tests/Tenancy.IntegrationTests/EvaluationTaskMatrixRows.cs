@@ -21,7 +21,8 @@ public sealed partial class EvaluationTaskTests
         string EvaluatorVersion,
         string Mode,
         string ExceptionsHash,
-        DateTime ExceptionsAsOf)
+        DateTime ExceptionsAsOf,
+        Guid[] QuarantinedCases)
     {
         /// <summary>The columns a recomputation must reproduce, arrays joined so equality is structural.</summary>
         public Deciding Deciding => new(
@@ -30,6 +31,7 @@ public sealed partial class EvaluationTaskTests
             Outcome,
             Decision,
             string.Join(",", Reasons),
+            string.Join(",", QuarantinedCases),
             PolicyHash,
             ManifestHash,
             EvaluatorVersion,
@@ -43,6 +45,7 @@ public sealed partial class EvaluationTaskTests
         string Outcome,
         string Decision,
         string Reasons,
+        string QuarantinedCases,
         string PolicyHash,
         string ManifestHash,
         string EvaluatorVersion,
@@ -54,6 +57,7 @@ public sealed partial class EvaluationTaskTests
         record.Outcome,
         record.Decision,
         string.Join(",", record.Reasons),
+        string.Join(",", record.QuarantinedCases),
         record.PolicyHash,
         record.ManifestHash,
         record.EvaluatorVersion,

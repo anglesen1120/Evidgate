@@ -16,4 +16,30 @@ public sealed record EvaluationResult(
     EvaluationOutcome Outcome,
     EvaluationDecision Decision,
     IReadOnlyList<EvaluationReason> Reasons,
-    EvaluationDecision CoreDecision);
+    EvaluationDecision CoreDecision)
+{
+    /// <summary>Creates a result that also names the quarantined cases whose failure was excluded.</summary>
+    /// <param name="completeness">Whether the evidence can decide the required scope on its own.</param>
+    /// <param name="missing">The closed <c>missing[]</c> codes behind an incomplete verdict.</param>
+    /// <param name="outcome">What the required scope's results say.</param>
+    /// <param name="decision">The final decision.</param>
+    /// <param name="reasons">The closed <c>reasons[]</c> codes.</param>
+    /// <param name="coreDecision">The decision before any layer ran.</param>
+    /// <param name="quarantinedCases">The excluded quarantined case ids, ascending and without duplicates.</param>
+    public EvaluationResult(
+        EvaluationCompleteness completeness,
+        IReadOnlyList<MissingReasonCode> missing,
+        EvaluationOutcome outcome,
+        EvaluationDecision decision,
+        IReadOnlyList<EvaluationReason> reasons,
+        EvaluationDecision coreDecision,
+        IReadOnlyList<Guid> quarantinedCases)
+        : this(completeness, missing, outcome, decision, reasons, coreDecision) =>
+        QuarantinedCases = quarantinedCases ?? throw new ArgumentNullException(nameof(quarantinedCases));
+
+    /// <summary>
+    /// The ids of non-critical quarantined cases whose confirmed failure was excluded from the gate, ascending and
+    /// without duplicates; empty when none was.
+    /// </summary>
+    public IReadOnlyList<Guid> QuarantinedCases { get; init; } = [];
+}

@@ -13,10 +13,10 @@ namespace Tenancy.IntegrationTests;
 /// pinned policy body, runs the evaluation command, reloads the committed row and compares its columns to the matrix
 /// values, so a stored verdict is proven and not only the in-memory function.
 /// <para>
-/// Rows M10–M12, M14, M15, M17 and M18 are absent because the layers they name have not landed: the evaluator is
-/// registered with no decision layer and the reason catalogue carries none of <c>flaky_within_budget</c>,
-/// <c>flaky_critical_retry_pass</c>, <c>quarantined_case_failed</c>, <c>waiver_approved</c>, <c>quarantine_expired</c>
-/// or <c>shadow_not_evidence</c>, so a stored row for them could only be invented. M8 is absent because the stored
+/// Rows M10–M12, M14, M15, M17 and M18 are absent: the flaky layers they name have not landed (the evaluator has no
+/// decision layer registered) and the catalogue lacks <c>flaky_within_budget</c>, <c>flaky_critical_retry_pass</c>,
+/// <c>quarantine_expired</c> and <c>shadow_not_evidence</c>, so a stored row could only be invented; quarantine and waiver
+/// effects are stored by the exceptions tests. M8 is absent because the stored
 /// policy body cannot allow an empty suite: the reader pins <c>emptySuiteAllowed</c> to false, so a catalog-declared
 /// empty suite never passes through this path and the row stays a property of the in-memory function; M7 seeds the same
 /// branch from the other side instead, a manifest that planned nothing while its suite still declares cases, with the
@@ -468,7 +468,7 @@ public sealed partial class EvaluationTaskTests
         command.CommandText =
             """
             select id, completeness, missing, outcome, decision, reasons, policy_hash, manifest_hash,
-                   evaluator_version, mode, exceptions_hash, exceptions_as_of
+                   evaluator_version, mode, exceptions_hash, exceptions_as_of, quarantined_cases
               from public.evaluation
              where org_id = @org_id and run_id = @run_id and evidence_revision = 1 and mode = @mode
             """;
@@ -492,6 +492,7 @@ public sealed partial class EvaluationTaskTests
             rows.GetString(8),
             rows.GetString(9),
             rows.GetString(10),
-            rows.GetDateTime(11));
+            rows.GetDateTime(11),
+            await rows.GetFieldValueAsync<Guid[]>(12, TestContext.Current.CancellationToken));
     }
 }

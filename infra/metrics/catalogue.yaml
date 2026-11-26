@@ -399,3 +399,12 @@ entries:
     description: Healing LLM calls refused before any provider was reached, by reason (no provider selected, the kill switch, or the project's daily budget). A refused call spends nothing and writes no healing_llm_call row.
     labels: [reason]
     source: src/BuildingBlocks/Observability/EvidgateTelemetry.HealingGateway.cs
+
+  - id: incident_created_total
+    instrument: evidgate_incident_created_total
+    meter: evidgate
+    kind: counter
+    unit: '{incident}'
+    description: Incidents the worker created from a frozen evidence revision, counted once per new incident after its transaction commits. A repeat of the same revision creates nothing and counts nothing.
+    labels: []
+    source: src/BuildingBlocks/Observability/EvidgateTelemetry.Incident.cs

@@ -6,10 +6,13 @@ import { expect, test } from '@playwright/test';
 
 import {
   ANONYMOUS_SESSION,
+  LIMITED_GRANTS,
   localePath,
   mainText,
   ORG_ACME,
   PROJECT_STOREFRONT,
+  settingsTabIds,
+  settingsTabPath,
   UNREADABLE_SESSION,
   withVariant,
 } from './support';
@@ -103,5 +106,50 @@ test.describe('a session that cannot be read (AC5)', () => {
       ),
     );
     await expect.poll(() => new URL(page.url()).pathname).toBe('/en/unavailable');
+  });
+});
+
+test.describe('grants that cannot be read', () => {
+  test('a failed grant read is unavailable, never "everything granted"', async ({ page }) => {
+    await page.goto(
+      withVariant(localePath('en', DEEP_LINK), '?fixture.variant.getMyPermissions=unavailable'),
+    );
+
+    await expect.poll(() => new URL(page.url()).pathname).toBe('/en/unavailable');
+    await expect(page.locator('#main-content h1')).toHaveText('Workspace unavailable');
+    await expect(page.locator('app-shell-nav nav a')).toHaveCount(0);
+  });
+
+  test('a refused membership read is unavailable too', async ({ page }) => {
+    await page.goto(
+      withVariant(localePath('en', DEEP_LINK), '?fixture.variant.getMyPermissions=forbidden'),
+    );
+
+    await expect.poll(() => new URL(page.url()).pathname).toBe('/en/unavailable');
+  });
+});
+
+test.describe('a limited role reads only its own grants', () => {
+  test('a settings tab its grants do not cover is refused and offers no tab strip', async ({
+    page,
+  }) => {
+    await page.goto(withVariant(settingsTabPath('en', 'quota-retention'), LIMITED_GRANTS));
+
+    await expect(page.locator('#main-content h1, #main-content h2').first()).toHaveText(
+      'Not authorized',
+    );
+    await expect(page.locator('app-settings-shell [data-settings-tab]')).toHaveCount(0);
+  });
+
+  test('a role that holds the grant sees the tab', async ({ page }) => {
+    await page.goto(
+      withVariant(
+        settingsTabPath('en', 'audit'),
+        '?fixture.variant.listPermissions=settings-audit-only',
+      ),
+    );
+
+    await expect(page.locator('app-settings-shell [data-settings-tab="audit"]')).toBeVisible();
+    expect(await settingsTabIds(page)).toContain('audit');
   });
 });

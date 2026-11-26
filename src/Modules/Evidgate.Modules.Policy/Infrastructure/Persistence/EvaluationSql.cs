@@ -10,8 +10,8 @@ namespace Evidgate.Modules.Policy.Infrastructure.Persistence;
 /// and runs on the caller's tenant scope, so row level security and the
 /// <c>evidgate.org_id</c> setting apply to it. The arrays travel as delimited scalars, not as
 /// <c>string[]</c>: the tenant Dapper path refuses a client-side array write (see
-/// <c>EvidenceRevisionSql.InsertRevision</c>), and the closed vocabularies of these two columns can never carry the
-/// unit separator.
+/// <c>EvidenceRevisionSql.InsertRevision</c>), and neither the closed vocabularies of the two token columns nor the
+/// text of a uuid can carry the unit separator.
 /// </remarks>
 internal static class EvaluationSql
 {
@@ -41,12 +41,12 @@ internal static class EvaluationSql
         insert into public.evaluation
           (id, org_id, run_id, evidence_revision, policy_revision_id, policy_hash, manifest_hash,
            completeness, missing, outcome, decision, reasons, evaluator_version, mode,
-           exceptions_hash, exceptions_as_of)
+           exceptions_hash, exceptions_as_of, quarantined_cases)
         values
           (@id, @org_id, @run_id, @evidence_revision, @policy_revision_id, @policy_hash, @manifest_hash,
            @completeness, string_to_array(@missing, @array_separator), @outcome, @decision,
            string_to_array(@reasons, @array_separator), @evaluator_version, @mode,
-           @exceptions_hash, @exceptions_as_of)
+           @exceptions_hash, @exceptions_as_of, string_to_array(@quarantined_cases, @array_separator)::uuid[])
         on conflict do nothing
         returning id as "Id", created_at as "CreatedAt"
         """;
@@ -72,6 +72,7 @@ internal static class EvaluationSql
                e.mode as "Mode",
                e.exceptions_hash as "ExceptionsHash",
                e.exceptions_as_of as "ExceptionsAsOf",
+               e.quarantined_cases::text[] as "QuarantinedCases",
                e.created_at as "CreatedAt"
           from public.evaluation e
          where e.org_id = @org_id

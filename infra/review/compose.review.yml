@@ -53,6 +53,10 @@ x-review-runtime-environment: &review-runtime-environment
   # accepted run cancel, measured from the request.
   EVIDGATE__RUNS__CANCEL__SOFTSTOPDELAY: ${EVIDGATE__RUNS__CANCEL__SOFTSTOPDELAY:?missing from .env.review}
   EVIDGATE__RUNS__CANCEL__KILLDELAY: ${EVIDGATE__RUNS__CANCEL__KILLDELAY:?missing from .env.review}
+  # Inviting a member hashes the link secret with this pepper; without it the
+  # invite routes answer 503. The Api, its debug replica and the Worker read it.
+  EVIDGATE__INVITE__PEPPER: ${EVIDGATE__INVITE__PEPPER:?missing from .env.review}
+  EVIDGATE__INVITE__PEPPERVERSION: ${EVIDGATE__INVITE__PEPPERVERSION:?missing from .env.review}
 
 # Development-only sign-in lane (POST /v1/dev/session): the Api maps the route only
 # when the environment is Development and both keys are present.
@@ -79,6 +83,8 @@ x-review-job-environment: &review-job-environment
   EVIDGATE__DATABASE__CONNECTIONSTRING: ${EVIDGATE__DATABASE__CONNECTIONSTRING:?missing from .env.review}
   EVIDGATE__CI__PEPPER: ${EVIDGATE__CI__PEPPER:?missing from .env.review}
   EVIDGATE__CI__SIGNINGKEY: ${EVIDGATE__CI__SIGNINGKEY:?missing from .env.review}
+  EVIDGATE__INVITE__PEPPER: ${EVIDGATE__INVITE__PEPPER:?missing from .env.review}
+  EVIDGATE__INVITE__PEPPERVERSION: ${EVIDGATE__INVITE__PEPPERVERSION:?missing from .env.review}
   # The seed job composes every module, so it validates this group at boot too.
   EVIDGATE__RUNS__CANCEL__SOFTSTOPDELAY: ${EVIDGATE__RUNS__CANCEL__SOFTSTOPDELAY:?missing from .env.review}
   EVIDGATE__RUNS__CANCEL__KILLDELAY: ${EVIDGATE__RUNS__CANCEL__KILLDELAY:?missing from .env.review}

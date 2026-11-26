@@ -323,6 +323,54 @@ public sealed class OutboxDispatcherTests
             "select has_column_privilege('evidgate_worker', 'public.outbox', 'dispatched_at', 'UPDATE')")).ShouldBeTrue();
     }
 
+    /// <summary>
+    /// A subscription adds one delivery task per matching outbox row and per subscriber, in the same batch and with the
+    /// same fate as the primary task. Each subscriber dedupes on its own key, so a re-dispatch adds none; a row no
+    /// subscription names gets only its primary task. Goes red when the subscriber key stops carrying the delivery type.
+    /// </summary>
+    [Fact]
+    public async Task Dispatcher_Subscriptions_AddOneTaskPerSubscriber_AndDedupeEach()
+    {
+        var database = await _fixture.CreateDatabaseAsync();
+        await using var host = DispatcherHost.Start(
+            _fixture,
+            database,
+            subscriptions:
+            [
+                (RoutedTaskType, "subscriber.a"),
+                (RoutedTaskType, "subscriber.b"),
+                (UnroutedTaskType, "subscriber.c"),
+            ]);
+        await SeedAsync(database, 3, RoutedTaskType, unroutedCount: 1);
+
+        var first = await host.Dispatcher.DispatchBatchAsync(Token);
+        first.Claimed.ShouldBe(4);
+        first.Enqueued.ShouldBe(4, "the primary tasks keep their own count");
+
+        await using var owner = new NpgsqlConnection(_fixture.OwnerConnectionString(database));
+        await owner.OpenAsync(Token);
+        async Task<long> CountAsync(string taskType) => await owner.ExecuteScalarAsync<long>(
+            "select count(*) from public.task where task_type = @taskType", new { taskType });
+
+        (await CountAsync(RoutedTaskType)).ShouldBe(3);
+        (await CountAsync("subscriber.a")).ShouldBe(3);
+        (await CountAsync("subscriber.b")).ShouldBe(3);
+        (await CountAsync("subscriber.c")).ShouldBe(1);
+        (await owner.ExecuteScalarAsync<long>("select count(distinct idempotency_key) from public.task")).ShouldBe(11);
+        (await owner.ExecuteScalarAsync<long>(
+            "select count(*) from public.task t join public.outbox o on t.idempotency_key like 'outbox:' || o.id::text || '%' "
+            + "where t.payload is distinct from o.payload")).ShouldBe(0, "a subscriber receives the event's own payload");
+        (await owner.ExecuteScalarAsync<long>(
+            "select count(*) from public.task where task_type = 'subscriber.a' and queue = @queue",
+            new { queue = DefaultQueue })).ShouldBe(3, "an unrouted subscriber falls to the default queue");
+
+        await owner.ExecuteAsync("update public.outbox set dispatched_at = null");
+        var again = await host.Dispatcher.DispatchBatchAsync(Token);
+        again.Claimed.ShouldBe(4);
+        again.Enqueued.ShouldBe(0);
+        (await owner.ExecuteScalarAsync<long>("select count(*) from public.task")).ShouldBe(11, "a re-dispatch adds no task");
+    }
+
     /// <summary>Seeds committed outbox rows directly (the app role's insert path of 01.5.1-T2).</summary>
     private async Task<SeededOutbox> SeedAsync(
         string database,
@@ -551,7 +599,8 @@ public sealed class OutboxDispatcherTests
             int batchSize = 200,
             string? applicationName = null,
             NpgsqlConnection? killerConnection = null,
-            string? killOnStatementContaining = null)
+            string? killOnStatementContaining = null,
+            IReadOnlyList<(string Source, string Delivery)>? subscriptions = null)
         {
             ArgumentNullException.ThrowIfNull(fixture);
 
@@ -580,6 +629,10 @@ public sealed class OutboxDispatcherTests
             services.AddLogging();
             values[$"{TasksOptions.SectionName}:WorkerConnectionString"] = fixture.WorkerConnectionString(database);
             services.AddEvidgateTasks(new ConfigurationBuilder().AddInMemoryCollection(values).Build());
+            foreach (var (source, delivery) in subscriptions ?? [])
+            {
+                services.AddOutboxSubscription(source, delivery);
+            }
 
             // The dispatcher opens the queue role's keyed source, so the instrumented source
             // has to answer under that same key. Registering it last wins the resolution and

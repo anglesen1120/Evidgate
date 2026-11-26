@@ -62,6 +62,7 @@ const EXPECTED = [
   // carried and no route value or body member names a user.
   ['/me', 'get', 'none', 'v1'],
   ['/me', 'patch', 'none', 'v1'],
+  ['/me/permissions', 'get', 'authenticated', 'v1'],
   ['/projects/{p}/manifests', 'post', 'run:create', 'v1'],
   ['/projects/{p}/runs', 'post', 'run:create', 'v1'],
   ['/runs/{r}', 'get', 'run:read', 'v1'],

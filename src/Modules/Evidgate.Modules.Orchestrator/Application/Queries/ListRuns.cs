@@ -17,128 +17,20 @@ using Mediator;
 namespace Evidgate.Modules.Orchestrator.Application.Queries;
 
 /// <summary>
-/// The optional, AND-combined, exact-match filters of the run list (05.2.2 §5, AC6; F43/S143 adds
-/// <c>state</c>, <c>decision</c>, <c>rerun_scope</c> and <c>parent_run_id</c>). Every member is a value a
-/// caller supplied and the endpoint already validated: <c>ref_name</c> an identity name (1..255 code points, no
-/// control character), <c>pr_number</c> at least 1 and inside <c>int</c>, <c>head_sha</c> a
-/// <c>^[0-9a-f]{40}([0-9a-f]{24})?$</c> commit, <c>trigger_event</c> one of the closed vocabulary,
-/// <c>is_fork</c> a boolean, <c>state</c> one of the seven 00 §8.1 states, <c>decision</c> <c>pending</c> or one
-/// verdict in lower snake (<c>pass</c>, <c>fail</c>, <c>inconclusive</c>, mapped to the stored 00 §7 verdict by
-/// <see cref="RunListFilterRules.StoredDecision"/>), <c>rerun_scope</c> <c>full</c> or <c>failed_subset</c>, and
-/// <c>parent_run_id</c> a uuid. A null
-/// member means "no filter on that column",
-/// never "match null" — a plain run (no parent, no rerun scope) matches neither of those two filters.
-/// <para>
-/// The four F43 members are declared with a default so a caller that only narrows the recorded identity
-/// (the <c>EXPLAIN</c> harness of <c>ListRunsIndexPlanTests</c>) keeps stating exactly the filters it binds;
-/// the produced statement and its parameters stay shape-driven either way.
-/// </para>
-/// </summary>
-/// <param name="RefName">Exact <c>ref_name</c>; the one filter the <c>run_project_ref_idx</c> keyset serves.</param>
-/// <param name="PrNumber">Exact <c>pr_number</c>.</param>
-/// <param name="HeadSha">Exact <c>head_sha</c>.</param>
-/// <param name="TriggerEvent">Exact <c>trigger_event</c>.</param>
-/// <param name="IsFork">Exact <c>is_fork</c>.</param>
-/// <param name="State">Exact <c>run.state</c>, one of the seven 00 §8.1 states; not index-served, so it scans.</param>
-/// <param name="Decision">
-/// The run's newest live evaluation verdict: <c>PASS</c>, <c>FAIL</c>, <c>INCONCLUSIVE</c>, or <c>pending</c> for a
-/// run with no live evaluation. The verdicts live in Policy, so this filter declares no SQL predicate and is applied
-/// by a bounded chunked scan of the keyset order; any other value is refused 422 <c>request_invalid</c>.
-/// </param>
-/// <param name="RerunScope">Exact <c>run.rerun_scope</c> (0031): <c>full</c> or <c>failed_subset</c>.</param>
-/// <param name="ParentRunId">Exact <c>run.parent_run_id</c> (0031): the run a rerun was created from.</param>
-internal sealed record RunListFilters(
-    string? RefName,
-    int? PrNumber,
-    string? HeadSha,
-    string? TriggerEvent,
-    bool? IsFork,
-    string? State = null,
-    string? Decision = null,
-    string? RerunScope = null,
-    Guid? ParentRunId = null);
-
-/// <summary>
-/// The closed vocabularies of the run list's F43 filters and the one refusal they own (00 §9.2 <c>422
-/// request_invalid</c> with <c>details[].path</c>). The endpoint validates a query-string value with the same
-/// rules, so a malformed value never reaches the handler; the handler re-checks the typed filters because the
-/// contract it serves is the handler's — a <c>decision</c> outside the vocabulary must be a 422 and never a silently
-/// narrowed (or silently widened) page, whatever bound the query.
-/// </summary>
-internal static class RunListFilterRules
-{
-    /// <summary>The <c>decision</c> value for a run whose newest live evaluation does not exist yet.</summary>
-    internal const string PendingDecision = "pending";
-
-    /// <summary>
-    /// The accepted <c>decision</c> filter vocabulary, lower snake because a filter is not a stored value: the
-    /// three verdicts plus <c>pending</c> for a run whose newest live evaluation does not exist. Mapped to the
-    /// stored (00 §7 upper case) verdict by <see cref="StoredDecision"/>; upper case is not accepted, so a filter
-    /// can never be confused with the value it selects.
-    /// </summary>
-    internal static readonly IReadOnlyList<string> Decisions = ["pending", "pass", "fail", "inconclusive"];
-
-    /// <summary>
-    /// The single filter-to-stored mapping: <c>pending</c> selects the absence of a live verdict (<c>null</c>),
-    /// every other token its 00 §7 verdict. Callers validate first, so an unknown token throws.
-    /// </summary>
-    internal static string? StoredDecision(string filter) => filter switch
-    {
-        PendingDecision => null,
-        "pass" => "PASS",
-        "fail" => "FAIL",
-        "inconclusive" => "INCONCLUSIVE",
-        _ => throw new ArgumentOutOfRangeException(
-            nameof(filter), filter, "not a run-list decision filter"),
-    };
-
-    /// <summary>The <c>run.rerun_scope</c> values 0031's <c>run_rerun_scope_check</c> admits.</summary>
-    internal static readonly IReadOnlyList<string> RerunScopes = ["full", "failed_subset"];
-
-    /// <summary>The 00 §9.2 reason of a filter value the column's own vocabulary cannot hold.</summary>
-    internal const string InvalidValue = "invalid_value";
-
-    /// <summary>True when <paramref name="state"/> is one of the seven 00 §8.1 run states (00 §8.1, 0031's <c>run_state_check</c>).</summary>
-    internal static bool IsKnownState(string state) => RunStateMachine.IsKnownState(state);
-
-    /// <summary>
-    /// The per-parameter failures of the F43 filter values, in parameter order; empty when every present value is
-    /// one the column can hold. <c>parent_run_id</c> is a <see cref="Guid"/> already, so a non-UUID value is the
-    /// endpoint's refusal and never reaches here.
-    /// </summary>
-    internal static List<ErrorDetail> Validate(RunListFilters filters)
-    {
-        var errors = new List<ErrorDetail>(3);
-
-        if (filters.State is { } state && !IsKnownState(state))
-        {
-            errors.Add(new ErrorDetail("state", InvalidValue));
-        }
-
-        if (filters.Decision is { } decision && !Decisions.Contains(decision, StringComparer.Ordinal))
-        {
-            errors.Add(new ErrorDetail("decision", InvalidValue));
-        }
-
-        if (filters.RerunScope is { } rerunScope && !RerunScopes.Contains(rerunScope, StringComparer.Ordinal))
-        {
-            errors.Add(new ErrorDetail("rerun_scope", InvalidValue));
-        }
-
-        return errors;
-    }
-}
-
-/// <summary>
-/// Cursor page of a project's runs (<c>GET /v1/projects/{p}/runs</c>, 05.2.2 §5, AC6): the project's runs ordered by
-/// <c>(created_at, id)</c> ascending, narrowed by the run's stored identity and — since F43/S143 — by its
-/// <c>state</c>, <c>decision</c>, <c>rerun_scope</c> and <c>parent_run_id</c>.
+/// A cursor page of the project's matching runs. The default is oldest first; newest first reverses the
+/// timestamp order but keeps <c>id</c> ascending for ties.
 /// </summary>
 /// <param name="ProjectId">The project from the route.</param>
 /// <param name="Filters">The validated filters, AND-combined and applied before the page is cut.</param>
-/// <param name="Cursor">Opaque cursor, or null for the first page.</param>
+/// <param name="Cursor">Opaque cursor issued under the same <paramref name="Order"/>, or null for the first page.</param>
 /// <param name="Limit">Page size, 1–200.</param>
-internal sealed record ListRunsQuery(Guid ProjectId, RunListFilters Filters, string? Cursor, int Limit)
+/// <param name="Order">The page order; the default keeps the oldest-first list and its cursors.</param>
+internal sealed record ListRunsQuery(
+    Guid ProjectId,
+    RunListFilters Filters,
+    string? Cursor,
+    int Limit,
+    RunListOrder Order = RunListOrder.Ascending)
     : IQuery<Result<RunPage>>;
 
 /// <summary>
@@ -153,16 +45,9 @@ internal sealed record ListRunsQuery(Guid ProjectId, RunListFilters Filters, str
 /// <c>evidence_revision.completeness</c> of the run's current revision and stays null while the run has none (never a
 /// fabricated <c>incomplete</c>); <c>parent_run_id</c> and <c>rerun_scope</c> are the run's own columns.
 /// <para>
-/// Order is <c>(created_at, id)</c> ascending and the cursor is the opaque <c>KeysetCursor</c> over the last row of
-/// the page, so <c>(created_at, id) &gt; (cursor)</c> is stable under concurrent inserts: a row created between two
-/// pages sorts after the cursor (or after the rows already read) and is neither repeated nor skipped. The cursor is
-/// not signed and carries no tenant: it is bound to the caller's own rows by the query itself, because the
-/// <c>org_id</c> predicate, the project scope and the <c>FORCE</c>d RLS policy are always applied — a well-formed
-/// cursor can only move the page position inside the caller's own project, never read another project's or tenant's
-/// rows. A <c>decision</c>-filtered scan that ends on its row budget answers the last <em>scanned</em> row as the
-/// cursor rather than the last returned one, so a short page still advances past everything it read; every returned
-/// row sorts before that position. A cursor this codec did not produce is <c>422 request_invalid</c>
-/// (<c>cursor</c>, <c>malformed</c>) rather than a guessed page position.
+/// Each page continues strictly past the cursor in the requested order. The cursor is unsigned: project and tenant
+/// isolation come from the query predicates and RLS, not from the encoded position. A budget-limited decision scan
+/// resumes after the last scanned row. An unparseable position or wrong order marker is <c>422 request_invalid</c>.
 /// </para>
 /// <para>
 /// The project must exist and be live, exactly like the module's other project-scoped reads: an unknown id and
@@ -211,9 +96,7 @@ internal sealed class ListRunsQueryHandler(
     {
         using var activity = EvidgateTelemetry.StartModuleActivity(ModuleName.Orchestrator, nameof(ListRunsQuery));
 
-        // The F43 vocabularies are re-checked here, before the project check, because the handler owns the contract
-        // it serves: a `decision` outside `pending` plus the three verdict tokens must be a 422, never a page. The
-        // endpoint refuses the same values first, so this only fires for a caller that did not come through it.
+        // Non-HTTP callers must receive the same validation errors rather than a page narrowed by an unknown value.
         if (RunListFilterRules.Validate(query.Filters) is { Count: > 0 } filterErrors)
         {
             return Result.Failure<RunPage>(Error.Invalid(
@@ -256,7 +139,7 @@ internal sealed class ListRunsQueryHandler(
         var firstPage = query.Cursor is null;
         DateTimeOffset cursorCreatedAt = default;
         Guid cursorId = default;
-        if (!firstPage && !KeysetCursor.TryDecode(query.Cursor, out cursorCreatedAt, out cursorId))
+        if (!firstPage && !TryDecodeCursor(query.Order, query.Cursor, out cursorCreatedAt, out cursorId))
         {
             return Result.Failure<RunPage>(Error.Invalid(
                 "the cursor is not a value this endpoint issued",
@@ -325,7 +208,7 @@ internal sealed class ListRunsQueryHandler(
 
         return new ScannedPage(
             page,
-            hasMore ? KeysetCursor.Encode(page[^1].CreatedAt, page[^1].RunId) : null);
+            hasMore ? EncodeCursor(query.Order, page[^1].CreatedAt, page[^1].RunId) : null);
     }
 
     /// <summary>
@@ -379,7 +262,7 @@ internal sealed class ListRunsQueryHandler(
         string? nextCursor;
         if (matches.Count > query.Limit)
         {
-            nextCursor = KeysetCursor.Encode(page[^1].CreatedAt, page[^1].RunId);
+            nextCursor = EncodeCursor(query.Order, page[^1].CreatedAt, page[^1].RunId);
         }
         else if (exhausted)
         {
@@ -387,15 +270,16 @@ internal sealed class ListRunsQueryHandler(
         }
         else
         {
-            nextCursor = KeysetCursor.Encode(lastScannedAt, lastScannedId);
+            nextCursor = EncodeCursor(query.Order, lastScannedAt, lastScannedId);
         }
 
         return new ScannedPage(page, nextCursor);
     }
 
     /// <summary>
-    /// One keyset chunk, forward of <paramref name="cursorCreatedAt"/>; a null cursor is the first page. The
-    /// <c>decision</c> filter declares no SQL predicate, because the <c>evaluation</c> table belongs to Policy.
+    /// One keyset chunk, past <paramref name="cursorCreatedAt"/> in the query's order; a null cursor is the first
+    /// page. The <c>decision</c> filter declares no SQL predicate, because the <c>evaluation</c> table belongs to
+    /// Policy.
     /// </summary>
     private Task<IReadOnlyList<RunListRow>> ReadChunkAsync(
         ListRunsQuery query,
@@ -405,9 +289,22 @@ internal sealed class ListRunsQueryHandler(
         int limit,
         CancellationToken cancellationToken) =>
         db.QueryAsync<RunListRow>(
-            cursorCreatedAt is null ? ListRunsSql.FirstPage(query.Filters) : ListRunsSql.NextPage(query.Filters),
+            cursorCreatedAt is null
+                ? ListRunsSql.FirstPage(query.Filters, query.Order)
+                : ListRunsSql.NextPage(query.Filters, query.Order),
             ListRunsSql.Parameters(orgId, query.ProjectId, query.Filters, cursorCreatedAt, cursorId, limit),
             cancellationToken);
+
+    /// <summary>The ascending cursor is the codec's original shape; the descending one carries its own marker.</summary>
+    private static string EncodeCursor(RunListOrder order, DateTimeOffset createdAt, Guid id) =>
+        order == RunListOrder.Descending
+            ? KeysetCursor.EncodeDescending(createdAt, id)
+            : KeysetCursor.Encode(createdAt, id);
+
+    private static bool TryDecodeCursor(RunListOrder order, string? cursor, out DateTimeOffset createdAt, out Guid id) =>
+        order == RunListOrder.Descending
+            ? KeysetCursor.TryDecodeDescending(cursor, out createdAt, out id)
+            : KeysetCursor.TryDecode(cursor, out createdAt, out id);
 
     /// <summary>Sets each row's stored verdict from one Policy batch read; a run Policy did not name stays null.</summary>
     private async ValueTask AttachDecisionsAsync(IReadOnlyList<RunListRow> rows, CancellationToken cancellationToken)

@@ -52,6 +52,8 @@ import membershipRoleGrantOk from '../../../../../../fixtures/web-api/membership
 import membershipRoleGrantUnknownRole from '../../../../../../fixtures/web-api/membership-role-grant-unknown-role/input.json';
 import membershipRoleRevokeLastAdmin from '../../../../../../fixtures/web-api/membership-role-revoke-last-admin/input.json';
 import membershipRoleRevokeOk from '../../../../../../fixtures/web-api/membership-role-revoke-ok/input.json';
+import meForbidden from '../../../../../../fixtures/web-api/me-permissions-forbidden/input.json';
+import meUnavailable from '../../../../../../fixtures/web-api/me-permissions-unavailable/input.json';
 import membershipsList from '../../../../../../fixtures/web-api/memberships-list/input.json';
 import membershipsListEmpty from '../../../../../../fixtures/web-api/memberships-list-empty/input.json';
 import orgsList from '../../../../../../fixtures/web-api/orgs-list/input.json';
@@ -189,6 +191,8 @@ export const FIXTURE_CATALOG_SESSION_ROWS: readonly FixtureCatalogRow[] = [
   { name: 'membership-role-revoke-ok', document: membershipRoleRevokeOk },
   { name: 'memberships-list', document: membershipsList },
   { name: 'memberships-list-empty', document: membershipsListEmpty },
+  { name: 'me-permissions-forbidden', document: meForbidden },
+  { name: 'me-permissions-unavailable', document: meUnavailable },
   { name: 'orgs-list', document: orgsList },
   { name: 'orgs-list-unauthenticated', document: orgsListUnauthenticated },
   { name: 'orgs-list-unavailable', document: orgsListUnavailable },

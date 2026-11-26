@@ -27,6 +27,7 @@ internal static class OrchestratorModule
         // 06.1.2-T1: the read-only run-scope lookup upload-url needs (00 §5.5 C5: another module reaches the
         // Orchestrator only through its .Contracts project).
         services.TryAddScoped<IRunPlanReader, RunPlanReader>();
+        services.TryAddScoped<IFrozenIncidentFailures, FrozenIncidentFailuresReader>();
 
         // The digest-match surface the evaluation path reads (build_mismatch): the stored bindings of a release/run
         // pair and the release components the run does not match, derived on read from the two rows, never stored.

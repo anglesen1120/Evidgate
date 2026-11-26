@@ -73,6 +73,7 @@ import {
   queryParameter,
   type FixtureRoute,
 } from './fixture-routes';
+import { findMyPermissionsFixture } from './fixture-my-permissions';
 import { findSettingsRetentionWriteFixture } from './fixture-settings-permissions';
 import { findCatalogOwnerPermissionsFixture } from './fixture-catalog-owner-permissions';
 import { findHealingPermissionsFixture } from './fixture-healing-permissions';
@@ -263,22 +264,21 @@ export class FixtureHttpBackend implements HttpBackend {
     // The retention writer session needs one grant no corpus row holds; a toggle that names no
     // specimen falls through, so every corpus variant answers exactly as before.
     if (request.method === 'GET' && relativePath === '/permissions') {
-      const aiPermissions = aiSettingsPermissions(this.toggles.variantFor('listPermissions'));
-      if (aiPermissions !== undefined) return aiPermissions;
-      const editorPermissions = authoringEditorPermissions(
-        this.toggles.variantFor('listPermissions'),
-      );
-      if (editorPermissions !== undefined) return editorPermissions;
-      const supplemental = findSettingsRetentionWriteFixture(
-        this.toggles.variantFor('listPermissions'),
-      );
+      const supplemental = this.supplementalPermissions(this.toggles.variantFor('listPermissions'));
       if (supplemental !== undefined) return supplemental;
-      const catalogOwner = findCatalogOwnerPermissionsFixture(
+    }
+    // The caller's own grants follow the session's `listPermissions` toggle; only a failure state is
+    // reached through its own toggle.
+    if (request.method === 'GET' && relativePath === '/me/permissions') {
+      const failure = this.toggles.variantFor('getMyPermissions');
+      if (failure !== 'ok') return findFixtureEntry('getMyPermissions', failure);
+      return findMyPermissionsFixture(
         this.toggles.variantFor('listPermissions'),
+        request.headers.get('X-Evidgate-Org'),
+        queryParameter(request.urlWithParams, 'project'),
+        (variant) =>
+          this.supplementalPermissions(variant) ?? findFixtureEntry('listPermissions', variant),
       );
-      if (catalogOwner !== undefined) return catalogOwner;
-      const healing = findHealingPermissionsFixture(this.toggles.variantFor('listPermissions'));
-      if (healing !== undefined) return healing;
     }
     // The catalogue's 200-row threshold is reviewed on a computed page, like usage summary: the
     // variant names no corpus file, and every other toggle still answers its directory.
@@ -298,6 +298,17 @@ export class FixtureHttpBackend implements HttpBackend {
     }
     const route = matchFixtureRoute(request.method, relativePath);
     return route === undefined ? undefined : this.selectEntry(route, relativePath, request);
+  }
+
+  /** The computed `listPermissions` sessions no corpus directory holds; `undefined` means the corpus answers. */
+  private supplementalPermissions(variant: string): FixtureEntry | undefined {
+    return (
+      aiSettingsPermissions(variant) ??
+      authoringEditorPermissions(variant) ??
+      findSettingsRetentionWriteFixture(variant) ??
+      findCatalogOwnerPermissionsFixture(variant) ??
+      findHealingPermissionsFixture(variant)
+    );
   }
 
   /** A matching resource id or cursor wins over the fallback variant selected in the URL. */

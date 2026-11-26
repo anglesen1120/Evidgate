@@ -19,12 +19,14 @@ public sealed class ReasonCatalogueTests
         "flaky_budget_exceeded",
         "missing_result",
         "missing_shard",
+        "quarantined_case_failed",
         "required_assertion_failed",
         "scope_build_policy_pinned",
         "setup_error",
         "stale_epoch_only",
         "unknown_required_artifact_kind",
         "unknown_status",
+        "waiver_approved",
     ];
 
     private static readonly string[] ContractMissing =

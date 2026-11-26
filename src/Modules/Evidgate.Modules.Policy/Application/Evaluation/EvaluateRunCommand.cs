@@ -34,6 +34,7 @@ internal sealed record EvaluateRunCommand(Guid RunId, int EvidenceRevision, Eval
 /// <param name="Mode">The stored <c>live</c>/<c>shadow</c> slot.</param>
 /// <param name="ExceptionsHash">The content address of the exception snapshot it was decided under.</param>
 /// <param name="ExceptionsAsOf">The instant that snapshot was read.</param>
+/// <param name="QuarantinedCases">The non-critical cases whose confirmed failure a quarantine entry excluded, sorted.</param>
 /// <param name="CreatedAt">When the row committed.</param>
 internal sealed record EvaluationRecord(
     Guid Id,
@@ -51,6 +52,7 @@ internal sealed record EvaluationRecord(
     string Mode,
     string ExceptionsHash,
     DateTimeOffset ExceptionsAsOf,
+    IReadOnlyList<Guid> QuarantinedCases,
     DateTimeOffset CreatedAt);
 
 /// <summary>
@@ -95,6 +97,7 @@ internal sealed class EvaluateRunCommandHandler(
         string Mode,
         string ExceptionsHash,
         DateTimeOffset ExceptionsAsOf,
+        string[] QuarantinedCases,
         DateTimeOffset CreatedAt);
 
     /// <summary>The id and commit stamp the insert returned, when the key was free.</summary>
@@ -158,7 +161,12 @@ internal sealed class EvaluateRunCommandHandler(
         var result = evaluator.Evaluate(
             loaded.Evidence,
             loaded.Policy,
-            new ExceptionsSnapshotInput(snapshot.AsOf, snapshot.WaiverIds, snapshot.QuarantineIds));
+            new ExceptionsSnapshotInput(
+                snapshot.AsOf,
+                snapshot.WaiverIds,
+                snapshot.QuarantineIds,
+                snapshot.QuarantinedCaseIds,
+                snapshot.WaivedCaseIds));
 
         return new Row(
             Guid.CreateVersion7(),
@@ -176,6 +184,7 @@ internal sealed class EvaluateRunCommandHandler(
             EvaluationModeCode.Of(loaded.IsReplay ? EvaluationMode.Shadow : command.Mode),
             snapshot.Hash,
             snapshot.AsOf,
+            [.. result.QuarantinedCases.Select(id => id.ToString("D", CultureInfo.InvariantCulture))],
             default);
     }
 
@@ -201,6 +210,7 @@ internal sealed class EvaluateRunCommandHandler(
                 mode = row.Mode,
                 exceptions_hash = row.ExceptionsHash,
                 exceptions_as_of = row.ExceptionsAsOf,
+                quarantined_cases = string.Join(EvaluationSql.ArraySeparator, row.QuarantinedCases),
                 array_separator = EvaluationSql.ArraySeparator,
             },
             cancellationToken).ConfigureAwait(false);
@@ -246,5 +256,6 @@ internal sealed class EvaluateRunCommandHandler(
             row.Mode,
             row.ExceptionsHash,
             row.ExceptionsAsOf,
+            [.. row.QuarantinedCases.Select(Guid.Parse)],
             row.CreatedAt);
 }

@@ -21,7 +21,7 @@ public sealed class TelemetryInstrumentBindingTests(ITestOutputHelper output)
         var holder = HolderMeter();
         var instruments = Instruments();
 
-        instruments.Count.ShouldBe(29);
+        instruments.Count.ShouldBe(30);
         foreach (var (field, instrument) in instruments)
         {
             instrument.ShouldNotBeNull($"{field} is null: its initialiser ran before the meter existed");
@@ -46,7 +46,7 @@ public sealed class TelemetryInstrumentBindingTests(ITestOutputHelper output)
             .Order(StringComparer.Ordinal)
             .ToList();
 
-        lines.Count.ShouldBe(29);
+        lines.Count.ShouldBe(30);
         output.WriteLine("INSTRUMENT-DUMP-BEGIN");
         lines.ForEach(output.WriteLine);
         output.WriteLine("INSTRUMENT-DUMP-END");

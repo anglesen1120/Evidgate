@@ -19,6 +19,7 @@ import { expectNoA11yViolations } from '../a11y/axe-scan';
 import {
   activeSettingsTabId,
   expectIndistinguishableNotFound,
+  LIMITED_GRANTS,
   LOCALES,
   SETTINGS_ADMIN_GRANTS,
   SETTINGS_AUDIT_ONLY_GRANTS,
@@ -144,6 +145,35 @@ test.describe('the tab strip names only tabs the caller may open (AC1)', () => {
     // (`organization:read`) opened the route, and the strip is simply empty.
     await expect(page.locator('app-shell')).toHaveCount(1);
     expect(new URL(page.url()).pathname).toBe(settingsPath('en'));
+  });
+});
+
+test.describe('a role holding membership:read but not organization:read (limited)', () => {
+  test('opens Settings and shows the Members tab with its list', async ({ page }) => {
+    await page.goto(withVariant(settingsTabPath('en', 'members'), LIMITED_GRANTS));
+
+    await expect(page.locator('app-settings-shell')).toHaveCount(1);
+    await expect(page.locator('app-forbidden-pattern')).toHaveCount(0);
+    await expect.poll(() => settingsTabIds(page)).toEqual(['members', 'audit']);
+    await expect(page.locator('app-members-page')).toHaveAttribute('data-members-phase', 'ready');
+    // Read-only: the write action stays gated by its own code.
+    await expect(page.locator('[data-members-invite-open]')).toHaveCount(0);
+  });
+
+  test('the Settings index lands on the first tab it may open, never a refused one', async ({
+    page,
+  }) => {
+    await page.goto(withVariant(settingsPath('en'), LIMITED_GRANTS));
+
+    await expect.poll(() => new URL(page.url()).pathname).toBe(settingsTabPath('en', 'members'));
+    await expect.poll(() => activeSettingsTabId(page)).toBe('members');
+  });
+
+  test('a role without membership:read is still refused the same tab', async ({ page }) => {
+    await page.goto(withVariant(settingsTabPath('en', 'members'), SETTINGS_AUDIT_ONLY_GRANTS));
+
+    await expect(page.locator('app-members-page')).toHaveCount(0);
+    await expect(page.locator('[data-settings-tab="members"]')).toHaveCount(0);
   });
 });
 

@@ -648,17 +648,50 @@ public sealed partial class TenantGucTests
             ("id", Guid.CreateVersion7()),
             ("org_id", orgId),
             ("run_id", runId));
+        var firstAttemptId = Guid.CreateVersion7();
+        var retryAttemptId = Guid.CreateVersion7();
+        foreach (var (attemptId, attemptNo) in new[] { (firstAttemptId, 1), (retryAttemptId, 2) })
+        {
+            await scope.ExecuteAsync(
+                """
+                insert into public.case_attempt
+                    (id, org_id, run_id, execution_key, case_id, attempt_no, raw_status, normalized_status)
+                values (@id, @org_id, @run_id, @execution_key, @case_id, @attempt_no, 'failed', 'failed')
+                """,
+                ("id", attemptId),
+                ("org_id", orgId),
+                ("run_id", runId),
+                ("execution_key", new string('a', 64)),
+                ("case_id", caseId),
+                ("attempt_no", attemptNo));
+        }
+
+        // 0122's incident and incident_attempt: the first failing attempt files the incident and the retry attaches
+        // to it, so both newly discovered tenant tables are populated for the fail-closed-zero read.
+        var incidentId = Guid.CreateVersion7();
         await scope.ExecuteAsync(
             """
-            insert into public.case_attempt
-                (id, org_id, run_id, execution_key, case_id, attempt_no, raw_status, normalized_status)
-            values (@id, @org_id, @run_id, @execution_key, @case_id, 1, 'passed', 'passed')
+            insert into public.incident
+                (id, org_id, project_id, run_id, attempt_id, case_id, case_revision_id, execution_key, engine)
+            values (@id, @org_id, @project_id, @run_id, @attempt_id, @case_id, @case_revision_id, @execution_key, 'playwright')
+            """,
+            ("id", incidentId),
+            ("org_id", orgId),
+            ("project_id", projectId),
+            ("run_id", runId),
+            ("attempt_id", firstAttemptId),
+            ("case_id", caseId),
+            ("case_revision_id", testRevisionId),
+            ("execution_key", new string('a', 64)));
+        await scope.ExecuteAsync(
+            """
+            insert into public.incident_attempt (id, org_id, incident_id, attempt_id, attempt_no, result)
+            values (@id, @org_id, @incident_id, @attempt_id, 2, 'failed')
             """,
             ("id", Guid.CreateVersion7()),
             ("org_id", orgId),
-            ("run_id", runId),
-            ("execution_key", new string('a', 64)),
-            ("case_id", caseId));
+            ("incident_id", incidentId),
+            ("attempt_id", retryAttemptId));
         // The 04.1.1-T1 tables (migration 0034): one event and its batch receipt, both naming the slot
         // inserted above, so the tenant tables this suite discovers are never empty.
         await scope.ExecuteAsync(

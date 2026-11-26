@@ -61,6 +61,23 @@ describe('Settings shell entry override (09.7.1-T1.1)', () => {
     expect(router.url).not.toBe('/forbidden');
   });
 
+  it('opens Settings on a tab grant alone, without organization:read', async () => {
+    const { harness } = await setUp(new FakeIdentityData(), new Set(['usage:read']));
+
+    await harness.navigateByUrl(urlOf(entryOf('settings')));
+
+    expect(TestBed.inject(Router).url).toBe(`/orgs/${ORG.id}/settings/quota-retention`);
+    expect(renderedMarker()).toBe('quota-panel');
+  });
+
+  it('still refuses Settings with neither organization:read nor any tab grant', async () => {
+    const { harness } = await setUp(new FakeIdentityData(), new Set(['project:read']));
+
+    await harness.navigateByUrl(urlOf(entryOf('settings')));
+
+    expect(TestBed.inject(Router).url).toBe('/forbidden');
+  });
+
   it('opens the quota panel from the AI credits shortcut with usage read alone', async () => {
     const quota = entryOf('quota');
     const { harness } = await setUp(new FakeIdentityData(), new Set(['usage:read']));

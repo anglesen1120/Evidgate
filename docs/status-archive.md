@@ -1751,3 +1751,27 @@ Closed by S663 (#1334, `86a08601`): screen 16 was re-skinned with the other sett
 | Shell e2e-a11y not LAN-green on fixed code (S657) | LAN round 2 on `c1b40c1b` ran `e2e-a11y` red with 16 `label-content-name-mismatch` violations (brand link, usage nav link). The fixes (`9f97657b`, `f0bc3dc7`) were verified on the Mac only (71 targeted shell e2e passed; core e2e incl. a11y 64 passed on an earlier tree) because no LAN round was left. | receiver: WAVE-GATE, confirm `e2e-a11y` green on the wave head |
 
 Closed by S666 (#1340, `716d6510`): `e2e-a11y` ran green on the wave head via the LAN round on `68bbe48a` (rc 0, 38 s), with the full shell (1223) and core (64) e2e green on the Mac.
+
+## Moved from status-carried.md by S684 (2026-11-26)
+
+| Client-side grants are the full catalogue (09.1.1-T4 hand-over, S68, D-S68-Q1) | No endpoint returns the caller's effective grants. `EffectivePermissionsSource` (`apps/web/src/app/core/session/effective-permissions.source.ts`) defaults to `CatalogPermissionsSource`, the `tenant_assignable` codes of `GET /v1/permissions`, so every signed-in member sees every navigation entry and `permissionGuard` never refuses a real user; the API 403 (T8 pattern) is the only real gate. Only the `permissions-list-limited` fixture spec proves the guard logic. Swap the source when 02.3.1-T3 or 09.1.1-T6 serves effective grants (09.1.1-T5 did not serve grants) (`GET /v1/me` or a grants endpoint [OPEN]); the source must stay server-provided codes with no role-to-permission mapping on the client.  A feature screen must not rely on `permissionGuard` to hide data until the source is replaced (review S4, medium hardening). Plan Notes: `plans/features/09-web-ui/09.1.1-app-scaffold-and-build-acceptance-npm.md:160` | receiver: 09.1.1-T5; hand-over Notes: `plans/features/09-web-ui/09.1.1-app-scaffold-and-build-acceptance-npm.md:160` |
+
+Closed by S684 (#1421, `4e79ed5b`): `GET /v1/me/permissions` (`getMyPermissions`) serves the caller's effective roles and permission codes from `ICallerPermissionSet`; coordinator decision: this is the endpoint the row waited for. The web swap of `EffectivePermissionsSource` to it is carried below (row "Web swap to GET /v1/me/permissions").
+
+## Moved from status-carried.md by S686 (2026-11-26)
+
+| Web swap to GET /v1/me/permissions (S684, #1421) | `EffectivePermissionsSource` still defaults to `CatalogPermissionsSource` (full catalogue); the route now serves the caller's server-provided codes, no role-to-permission map on the client. No web fixture exists for `getMyPermissions` (same as `GET /v1/me`; a corpus file would force the full gate tier); the swap adds a derived fixture row in `fixture-catalog-entries.ts`. | receiver: later UI lane (web swap) |
+
+Closed by S686 (#1428, `a6e30cd4`): `EffectivePermissionsSource` now defaults to `ApiPermissionsSource`, which reads `GET /v1/me/permissions` for the published tenant; the catalogue source is deleted. A failed read leaves the workspace unavailable and grants nothing. Fixtures derive grants from the `listPermissions` toggle and add forbidden/unavailable rows.
+
+## Moved from status-carried.md by S689 (2026-11-26)
+
+| Settings members tab refuses a limited role holding membership:read (S686) | Under the `limited` fixture session (`membership:read` granted) `/en/orgs/<org>/settings/members` renders 'Not authorized' and no tab strip, although the members tab's own permission is held. Cause not investigated (settings shell gate or the members page's own read). A limited role is the first case where this shows, so it is a real defect, not a fixture artefact. | receiver: web follow-up lane |
+
+Closed by S689 (#1431, cbe7554f): the cause was the `settings` navigation entry gate (`organization:read`), not the tab guard; the Settings route now also opens for a caller holding any tab's own read code, and the index lands on the first openable tab.
+
+## Moved from status-carried.md by S688 (2026-11-26)
+
+| Evaluator ignores quarantine on a critical case (07.3.1-T2 hand-over, from PR #58) | Evaluator must ignore an active exception for a pinned-policy critical case (T23). Activation now refuses a newly critical quarantined case; that refusal does not replace evaluator defense in depth. | receiver: 07.3.2-T1; hand-over Notes: `plans/features/07-policy-decisions/07.3.1-waiver-and-quarantine-lifecycles.md:142` |
+
+Closed by S688 (#1430, 56b477ff): the evaluator ignores a quarantine id for a critical case (`RequiredScope`), pinned by `Evaluation.UnitTests.QuarantineWaiverEffectsTests.M18_CriticalFailure_IgnoresQuarantine`.

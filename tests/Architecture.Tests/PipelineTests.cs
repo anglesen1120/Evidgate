@@ -60,7 +60,7 @@ public class PipelineTests
         violations.ShouldContain(v =>
             v.Contains(nameof(Evidgate.Modules.Sample.Domain.HandlerWithBothGates))
                 && v.Contains("exactly one gate"));
-        ArchitectureRules.AuthenticatedMemberAllowlist.Count.ShouldBe(1);
+        ArchitectureRules.AuthenticatedMemberAllowlist.Count.ShouldBe(2);
     }
 
     /// <summary>02.1.1 security review: only allowlisted code publishes the request tenant.</summary>

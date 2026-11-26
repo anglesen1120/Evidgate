@@ -631,6 +631,7 @@ internal static class RouteRequests
             new(HttpMethod.Delete, $"/v1/orgs/{ctx.OrgId}/memberships/{ctx.MembershipId}/roles/{ctx.RoleId}", IfMatch: "\"1\""));
 
         // ---- Identity ----------------------------------------------------------------------------------------
+        Add("GET", "/v1/me/permissions", _ => new(HttpMethod.Get, "/v1/me/permissions"));
         Add("GET", "/v1/permissions", _ => new(HttpMethod.Get, "/v1/permissions"));
         Add("GET", "/v1/roles", _ => new(HttpMethod.Get, "/v1/roles"));
         Add("POST", "/v1/roles", _ => new(HttpMethod.Post, "/v1/roles",
@@ -900,6 +901,8 @@ internal static class RouteRequests
         // The switch routes carry no path id: the read answers the three scope rows of the caller's org, and the
         // write sets the org row (a shape-valid body of the closed `healing-switch-set.v1` schema, with the
         // mandatory Idempotency-Key of 00 §9.1). The matrices only assert the authz outcome.
+        Add("GET", "/v1/projects/{p}/incidents", ctx => new(HttpMethod.Get, $"/v1/projects/{ctx.ProjectId}/incidents"));
+        Add("GET", "/v1/incidents/{i}", _ => new(HttpMethod.Get, $"/v1/incidents/{Guid.CreateVersion7()}"));
         Add("GET", "/v1/healing/switch", _ => new(HttpMethod.Get, "/v1/healing/switch"));
         Add("PUT", "/v1/healing/switch", _ => new(HttpMethod.Put, "/v1/healing/switch",
             new JsonObject { ["scope"] = "tenant", ["mode"] = "shadow" }, IdempotencyKey: Key()));

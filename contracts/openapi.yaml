@@ -974,6 +974,46 @@ paths:
           $ref: '#/components/responses/Unprocessable'
         '503':
           $ref: '#/components/responses/Unavailable'
+  /me/permissions:
+    get:
+      operationId: getMyPermissions
+      tags: [identity]
+      summary: Read the signed-in member's effective grants in the selected organization
+      description: >-
+        An active membership in the organization selected by `X-Evidgate-Org` is sufficient: the member
+        can read only their own roles and effective permission codes, so no catalogue permission is required.
+        Service credentials and operators cannot use this route. In V1 member roles are organization-wide;
+        the optional `project` is echoed as `project_id` and does not change the grants or establish access
+        to that project. A malformed project UUID is 422 `request_invalid` (path `project`, reason `malformed`).
+        The response carries `Cache-Control: no-store` because grants are caller-specific and may change.
+      x-permission: authenticated
+      x-auth: user_session
+      x-version: v1
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/TenantOrgHeader'
+        - $ref: '#/components/parameters/EffectiveGrantsProject'
+      responses:
+        '200':
+          description: The caller's active member roles and effective permission codes in the selected organization.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MyPermissionsResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '503':
+          $ref: '#/components/responses/Unavailable'
   /auth/sessions:
     get:
       operationId: listSessions
@@ -1301,20 +1341,21 @@ paths:
       summary: Cursor list of runs with state, decision and rerun/reprocess labels
       description: >-
         Cursor list (00 §9.1) of a project's runs, ordered by `(created_at, id)`
-        ascending, with state, decision and rerun/reprocess labels (09). Since
-        05.2.2 it is narrowed by the run's recorded identity: `ref_name`,
+        ascending by default or newest `created_at` first with `order=desc`
+        (ties by `id` ascending), with state, decision
+        and rerun/reprocess labels (09). Since 05.2.2 it is narrowed by the run's recorded identity: `ref_name`,
         `pr_number`, `head_sha`, `trigger_event` and `is_fork`, all optional and
         AND-combined exact matches, and every row carries `created_at`, `ref` and
-        `unverified_ref`. The opaque `cursor` is the last row's `(created_at, id)`
-        of the previous page and is not signed — it is bound to the caller's own
-        project and tenant by the query, so a well-formed cursor only moves the
-        page position inside those rows; a cursor this endpoint did not issue is
-        422 `request_invalid`. An unknown project (or another tenant's) is 404
-        `not_found`, the same body as an unknown one. Since F43 (S143) the four
-        further optional, AND-combined, exact-match filters `state`, `decision`,
-        `rerun_scope` and `parent_run_id` narrow the same page, and every item
-        carries `completeness` (from the run's current evidence revision),
-        `parent_run_id`, `rerun_scope` and `decision`. `decision` is the verdict
+        `unverified_ref`. The opaque `cursor` identifies the previous page's last
+        position in the requested order. The query restricts that position to
+        the caller's project and tenant. A malformed cursor or one issued for
+        the opposite order is 422 `request_invalid`. An unknown project (or
+        another tenant's) is 404 `not_found`, the same body as an unknown one.
+        The optional exact-match filters `state`, `decision`, `rerun_scope`,
+        `parent_run_id` and `completeness` also narrow the page and are
+        AND-combined. Every item carries `completeness` (from the run's current
+        evidence revision), `parent_run_id`, `rerun_scope` and `decision`.
+        `decision` is the verdict
         of the run's newest `live` evaluation — `PASS`, `FAIL` or
         `INCONCLUSIVE`, `null` while the run has none; a `shadow` evaluation is
         a second opinion and never the verdict. The verdict is
@@ -1348,6 +1389,8 @@ paths:
         - $ref: '#/components/parameters/RunDecision'
         - $ref: '#/components/parameters/RunRerunScope'
         - $ref: '#/components/parameters/RunParentRunId'
+        - $ref: '#/components/parameters/RunListOrder'
+        - $ref: '#/components/parameters/RunCompleteness'
       responses:
         '200':
           description: Page of runs
@@ -6226,6 +6269,8 @@ paths:
         - $ref: '#/components/parameters/ProjectId'
         - $ref: '#/components/parameters/Cursor'
         - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/IncidentStateFilter'
+        - $ref: '#/components/parameters/IncidentExecutionKey'
       responses:
         '200':
           description: Page of incidents
@@ -6235,13 +6280,15 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CursorList'
+                $ref: '#/components/schemas/IncidentPage'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
         '429':
           $ref: '#/components/responses/RateLimited'
         '503':
@@ -6261,6 +6308,10 @@ paths:
           headers:
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Incident'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -9174,6 +9225,22 @@ components:
       schema:
         type: string
         format: uuid
+    TenantOrgHeader:
+      name: X-Evidgate-Org
+      in: header
+      required: true
+      description: Selects the organization in which the caller must have an active membership.
+      schema:
+        type: string
+        format: uuid
+    EffectiveGrantsProject:
+      name: project
+      in: query
+      required: false
+      description: Project ID to echo. Member grants are organization-wide in V1.
+      schema:
+        type: string
+        format: uuid
     OrgHeader:
       name: X-Evidgate-Org
       in: header
@@ -9541,6 +9608,34 @@ components:
       schema:
         type: string
         format: uuid
+    RunListOrder:
+      name: order
+      in: query
+      required: false
+      description: >-
+        `asc` (default) orders runs by `(created_at, id)` ascending, the oldest
+        first. `desc` lists the newest `created_at` first; runs with an
+        identical `created_at` stay ordered by `id` ascending. A cursor must be
+        reused with the order that issued it; a cursor from the opposite order
+        is 422 `request_invalid` (`details[].path` = `cursor`). An invalid
+        order is 422 `request_invalid` (`details[].path` = `order`).
+      schema:
+        type: string
+        enum: [asc, desc]
+        default: asc
+    RunCompleteness:
+      name: completeness
+      in: query
+      required: false
+      description: >-
+        Exact completeness of the run's current evidence revision: only the
+        exact stored value matches. A run without a current revision, or with
+        any other stored value, matches neither `complete` nor `incomplete`.
+        AND-combined with every other present filter. An invalid value is 422
+        `request_invalid` (`details[].path` = `completeness`).
+      schema:
+        type: string
+        enum: [complete, incomplete]
     RunAttemptCursor:
       name: cursor
       in: query
@@ -9814,6 +9909,22 @@ components:
       schema:
         type: string
         format: uuid
+    IncidentStateFilter:
+      name: state
+      in: query
+      required: false
+      description: One of `open`, `triaged`, `closed`; blank, repeated or any other value is 422 `request_invalid`.
+      schema:
+        type: string
+        enum: [open, triaged, closed]
+    IncidentExecutionKey:
+      name: execution_key
+      in: query
+      required: false
+      description: Exact execution key, 64 lowercase hex; blank, repeated or any other value is 422 `request_invalid`.
+      schema:
+        type: string
+        pattern: '^[0-9a-f]{64}$'
     JobId:
       name: j
       in: path
@@ -10395,6 +10506,59 @@ components:
           type: array
           items:
             type: object
+        next_cursor:
+          type: [string, 'null']
+    Incident:
+      type: object
+      additionalProperties: false
+      description: >-
+        One incident: a failing planned execution of a run that a frozen evidence revision verified (08.1.1).
+        Carries no attempt payload and no error text. `attempt_count` is the first failing attempt plus its
+        recorded retries.
+      required:
+        [
+          id,
+          project_id,
+          run_id,
+          attempt_id,
+          case_id,
+          case_revision_id,
+          execution_key,
+          engine,
+          state,
+          context_state,
+          attempt_count,
+          created_at,
+          updated_at,
+          version,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        project_id: { type: string, format: uuid }
+        run_id: { type: string, format: uuid }
+        attempt_id: { type: string, format: uuid }
+        case_id: { type: string, format: uuid }
+        case_revision_id: { type: string, format: uuid }
+        execution_key:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
+        engine: { type: string, minLength: 1, maxLength: 64 }
+        state: { type: string, enum: [open, triaged, closed] }
+        context_state: { type: string, enum: [pending, complete, partial] }
+        attempt_count: { type: integer, minimum: 1 }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        version: { type: integer, minimum: 1 }
+    IncidentPage:
+      type: object
+      additionalProperties: false
+      description: 00 §9.1 cursor page of incidents, newest first (`created_at` desc, `id` asc); `next_cursor` is null on the last page.
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Incident'
         next_cursor:
           type: [string, 'null']
     RunStateDto:
@@ -14742,6 +14906,29 @@ components:
           description: >-
             `true` (default) revokes every other session and keeps the caller's; `false` revokes the current row
             too and the answer expires the session and antiforgery cookies, exactly like `POST /v1/auth/logout`.
+    MyPermissionsResponse:
+      type: object
+      required: [org_id, roles, permissions]
+      properties:
+        org_id:
+          type: string
+          format: uuid
+        project_id:
+          type: string
+          format: uuid
+          description: Present only when the request supplied a project.
+        roles:
+          type: array
+          description: The caller's active member-role codes in this organization, sorted ordinally.
+          uniqueItems: true
+          items:
+            type: string
+        permissions:
+          type: array
+          description: Effective catalogue permission codes, sorted ordinally.
+          uniqueItems: true
+          items:
+            type: string
     UserProfileDto:
       type: object
       description: >-
