@@ -45,16 +45,6 @@ const envPattern = /^[a-z0-9][a-z0-9._-]{0,31}$/;
 /** Whitespace, C0/C1 controls and Unicode format characters are all rejected. */
 const projectForbidden = /[\s\p{Cc}\p{Cf}]/u;
 
-/** The secret fields as read from the environment, before any validation. */
-interface TokenEnv {
-  readonly oidcToken: string | undefined;
-  readonly actionsIdTokenRequestUrl: string | undefined;
-  readonly actionsIdTokenRequestToken: string | undefined;
-  readonly ingestToken: string | undefined;
-  readonly devToken: string | undefined;
-  readonly bindingChallenge: string | undefined;
-}
-
 /**
  * Resolves the whole `EVIDGATE_*` surface into one frozen object. Every missing
  * required name is collected before throwing, so one run reports them all.
@@ -84,12 +74,7 @@ export function resolveConfig(input: ResolveConfigInput): ResolvedConfig {
     project: validateProject(required.project),
     cacheDir,
     env: environment,
-    oidcToken: tokens.oidcToken,
-    actionsIdTokenRequestUrl: tokens.actionsIdTokenRequestUrl,
-    actionsIdTokenRequestToken: tokens.actionsIdTokenRequestToken,
-    ingestToken: tokens.ingestToken,
-    devToken: tokens.devToken,
-    bindingChallenge: tokens.bindingChallenge,
+    ...tokens,
     spoolSettings: lazySpoolSettings(env),
     verbose: flags.verbose === true,
     json: flags.json === true,
@@ -106,14 +91,10 @@ function resolveEnvironment(env: Readonly<Record<string, string | undefined>>): 
 }
 
 /** Every secret-bearing env value, read raw (empty counts as unset). */
-function readTokenEnv(env: Readonly<Record<string, string | undefined>>): TokenEnv {
+function readTokenEnv(env: Readonly<Record<string, string | undefined>>): TokenSourceFields {
   return {
-    oidcToken: rawEnv(env, envNames.oidcToken),
-    actionsIdTokenRequestUrl: rawEnv(env, envNames.actionsIdTokenRequestUrl),
-    actionsIdTokenRequestToken: rawEnv(env, envNames.actionsIdTokenRequestToken),
     ingestToken: rawEnv(env, envNames.ingestToken),
     devToken: rawEnv(env, envNames.devToken),
-    bindingChallenge: rawEnv(env, envNames.bindingChallenge),
   };
 }
 
@@ -125,7 +106,7 @@ function requireConfiguration(
   input: ResolveConfigInput,
   apiUrlRaw: string | undefined,
   projectRaw: string | undefined,
-  tokens: TokenEnv,
+  tokens: TokenSourceFields,
 ): { readonly apiUrl: string; readonly project: string } {
   const hasTokenSource = resolveTokenSource(tokens) !== undefined;
   const needToken = input.requireToken === true && !hasTokenSource;
@@ -161,15 +142,6 @@ function lazySpoolSettings(env: Readonly<Record<string, string | undefined>>): (
 
 /** The token source §5 would use, or `undefined` when none is configured. */
 export function resolveTokenSource(config: TokenSourceFields): TokenSource | undefined {
-  if (config.oidcToken !== undefined) {
-    return 'oidc';
-  }
-  if (
-    config.actionsIdTokenRequestUrl !== undefined &&
-    config.actionsIdTokenRequestToken !== undefined
-  ) {
-    return 'actions-id-token';
-  }
   if (config.ingestToken !== undefined) {
     return 'ingest';
   }
@@ -187,12 +159,8 @@ export function formatConfigForVerbose(config: ResolvedConfig): string {
     `  project=${config.project}`,
     `  cache_dir=${config.cacheDir}`,
     `  env=${config.env ?? 'unset'}`,
-    `  oidc_token=${maskSecret(config.oidcToken)}`,
-    `  actions_id_token_request_url=${maskSecret(config.actionsIdTokenRequestUrl)}`,
-    `  actions_id_token_request_token=${maskSecret(config.actionsIdTokenRequestToken)}`,
     `  ingest_token=${maskSecret(config.ingestToken)}`,
     `  dev_token=${maskSecret(config.devToken)}`,
-    `  binding_challenge=${maskSecret(config.bindingChallenge)}`,
     // Paths and counts are not secrets: the operator needs to see which spool and cap a
     // send will use.
     ...spoolDumpLines(config),

@@ -10,7 +10,6 @@ import cliManifest from '../../../../../../../packages/cli/package.json';
 const cliPin = `--package @evidgate/cli@${cliManifest.version}`;
 
 const token = { name: 'ci-main', prefix: 'egt_ab12cd' };
-const binding = { repository_full_name: 'example/widgets' };
 
 class QuickstartHarness extends ComponentHarness {
   static hostSelector = 'app-cli-quickstart';
@@ -45,13 +44,12 @@ describe('CliQuickstartComponent', () => {
     fixture = TestBed.createComponent(CliQuickstartComponent);
     fixture.componentRef.setInput('projectRef', 'widgets');
     fixture.componentRef.setInput('token', token);
-    fixture.componentRef.setInput('binding', binding);
     fixture.detectChanges();
     root = fixture.nativeElement as HTMLElement;
     await fixture.whenStable();
   });
 
-  it('keeps both commands and the copy action reachable by keyboard focus', async () => {
+  it('keeps the snippet and the copy action reachable by keyboard focus', async () => {
     const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, QuickstartHarness);
     const commands = await harness.snippet();
     await commands.focus();
@@ -85,21 +83,17 @@ describe('CliQuickstartComponent', () => {
     ]
       .map((part) => part.replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, ''))
       .join('.');
-    const challenge = ['binding', crypto.randomUUID(), 'challenge'].join('-');
     const tokenWithUnlistedFields = { ...token, secret, jwt };
-    const bindingWithUnlistedFields = { ...binding, binding_challenge: challenge };
     fixture.componentRef.setInput('token', tokenWithUnlistedFields);
-    fixture.componentRef.setInput('binding', bindingWithUnlistedFields);
     fixture.detectChanges();
 
     expect(snippet().textContent).toBe(
       buildQuickstartSnippet({
         projectRef: 'widgets',
         token: tokenWithUnlistedFields,
-        binding: bindingWithUnlistedFields,
       }),
     );
-    for (const value of [secret, jwt, challenge]) {
+    for (const value of [secret, jwt]) {
       expect(root.textContent).not.toContain(value);
       expect(root.outerHTML).not.toContain(value);
     }
@@ -110,7 +104,7 @@ describe('CliQuickstartComponent', () => {
     fixture.detectChanges();
     expect(writeText).toHaveBeenCalledExactlyOnceWith(snippet().textContent);
     const copied = writeText.mock.calls[0]![0] as string;
-    for (const value of [secret, jwt, challenge]) {
+    for (const value of [secret, jwt]) {
       expect(copied).not.toContain(value);
       expect(root.textContent).not.toContain(value);
     }
@@ -118,16 +112,13 @@ describe('CliQuickstartComponent', () => {
     expect(copied).toContain(token.prefix);
   });
 
-  it('sets non-secret CI configuration and the documented auth and quickstart commands', () => {
+  it('sets non-secret CI configuration and the documented auth command', () => {
     const text = snippet().textContent;
     expect(text).toContain("export EVIDGATE_API_URL='<your-evidgate-api-url>'");
     expect(text).toContain("export EVIDGATE_PROJECT='widgets'");
     expect(text).toContain('non-secret CI variables');
     expect(text).toContain('EVIDGATE_INGEST_TOKEN from your CI masked secret store');
     expect(text).toContain(`npx --yes ${cliPin} -- evidgate auth login`);
-    expect(text).toContain(
-      `npx --yes ${cliPin} -- evidgate quickstart --write .github/workflows/evidgate.yml`,
-    );
     expect(text).not.toContain('EVIDGATE_INGEST_TOKEN=');
   });
 
@@ -140,33 +131,13 @@ describe('CliQuickstartComponent', () => {
     expect(snippet().textContent).not.toContain("export EVIDGATE_PROJECT='widgets'");
   });
 
-  it('renders the OIDC path when the token is null and references the challenge only by variable name', () => {
-    fixture.componentRef.setInput('token', null);
-    fixture.detectChanges();
-    expect(snippet().textContent).toContain(binding.repository_full_name);
-    expect(snippet().textContent).toContain('EVIDGATE_BINDING_CHALLENGE repository variable');
-    expect(snippet().textContent).toContain('id-token: write');
-    expect(snippet().textContent).not.toContain(token.prefix);
-    expect(snippet().textContent).not.toContain('EVIDGATE_BINDING_CHALLENGE=');
-  });
-
-  it('renders token metadata without a binding', () => {
-    fixture.componentRef.setInput('binding', null);
-    fixture.detectChanges();
-    expect(snippet().textContent).toContain(token.name);
-    expect(snippet().textContent).toContain(token.prefix);
-    expect(snippet().textContent).not.toContain('EVIDGATE_BINDING_CHALLENGE');
-  });
-
   it('uses a project-slug placeholder and create-token guidance when no credentials exist', () => {
     fixture.componentRef.setInput('projectRef', null);
     fixture.componentRef.setInput('token', null);
-    fixture.componentRef.setInput('binding', null);
     fixture.detectChanges();
     expect(snippet().textContent).toContain("export EVIDGATE_PROJECT='<project-slug>'");
     expect(snippet().textContent).toContain('Create an ingest token first');
     expect(snippet().textContent).not.toContain(token.name);
-    expect(snippet().textContent).not.toContain('EVIDGATE_BINDING_CHALLENGE');
   });
 
   it('announces successful copying in a persistent polite live region', async () => {
@@ -277,7 +248,6 @@ describe('buildQuickstartSnippet', () => {
     const text = buildQuickstartSnippet({
       projectRef: "project'quoted",
       token: { name: 'ci-main\nnot-a-command', prefix: token.prefix },
-      binding: null,
     });
     expect(text).toContain(`export EVIDGATE_PROJECT='project'"'"'quoted'`);
     expect(text).toContain('# Ingest token: ci-main not-a-command');
@@ -288,17 +258,16 @@ describe('buildQuickstartSnippet', () => {
     const text = buildQuickstartSnippet({
       projectRef: 'project',
       token: { name: `ci\u001b[201~main\u202Eevil\u0085`, prefix: token.prefix },
-      binding: { repository_full_name: 'acme/re\u0007po' },
     });
     expect(text).toContain('# Ingest token: ci [201~main evil');
     expect([...text].filter((char) => char !== '\n' && /[\p{Cc}\p{Cf}]/u.test(char))).toEqual([]);
   });
 
-  it('pins both npx commands to the version in packages/cli/package.json', () => {
+  it('pins the npx command to the version in packages/cli/package.json', () => {
     expect(cliManifest.version).toMatch(/^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/);
-    const text = buildQuickstartSnippet({ projectRef: 'widgets', token, binding });
+    const text = buildQuickstartSnippet({ projectRef: 'widgets', token });
     const commands = text.split('\n').filter((line) => line.startsWith('npx '));
-    expect(commands).toHaveLength(2);
+    expect(commands).toHaveLength(1);
     for (const command of commands) expect(command).toContain(`${cliPin} `);
     expect(text).not.toContain('--package @evidgate/cli --');
   });
@@ -307,14 +276,13 @@ describe('buildQuickstartSnippet', () => {
     const hostile = buildQuickstartSnippet({
       projectRef: 'pro\u0000ject\nrm -rf /\r\u007ftail\u0085\u2028\u2029',
       token,
-      binding,
     });
     const lines = hostile.split('\n');
     expect(lines).toContain("export EVIDGATE_PROJECT='projectrm -rf /tail'");
     expect(lines).not.toContain('rm -rf /');
-    expect(lines.filter((line) => line.startsWith('npx '))).toHaveLength(2);
+    expect(lines.filter((line) => line.startsWith('npx '))).toHaveLength(1);
     expect(hostile.split('\n')).toHaveLength(
-      buildQuickstartSnippet({ projectRef: 'widgets', token, binding }).split('\n').length,
+      buildQuickstartSnippet({ projectRef: 'widgets', token }).split('\n').length,
     );
   });
 
@@ -322,7 +290,6 @@ describe('buildQuickstartSnippet', () => {
     const text = buildQuickstartSnippet({
       projectRef: 'my project "quoted" $(touch /tmp/x) `id` & ;',
       token: null,
-      binding: null,
     });
     expect(text).toContain(
       `export EVIDGATE_PROJECT='my project "quoted" $(touch /tmp/x) \`id\` & ;'`,

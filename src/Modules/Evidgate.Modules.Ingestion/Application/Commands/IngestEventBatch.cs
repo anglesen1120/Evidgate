@@ -172,7 +172,7 @@ internal sealed class IngestEventBatchHandler(
         var principal = principals.Current;
         if (principal is null || string.IsNullOrEmpty(principal.CredentialId))
         {
-            // Fail closed: the batch's producer binding needs the caller's token identity (T9).
+            // Fail closed: the slot owner is the caller's stable credential id (T9).
             return Result.Failure<BatchAckResult>(new Error(
                 ApiErrorCode.Unauthenticated,
                 "no authenticated producer could be resolved",
@@ -312,13 +312,13 @@ internal sealed class IngestEventBatchHandler(
         var afterCancel = admission.AfterCancel;
         var late = admission.Late;
 
-        // (c) One bind-or-check per batch: the first accepted write of a slot binds it to this token (T9).
+        // (c) One bind-or-check per batch: the first accepted write of a slot binds it to this credential (T9).
         // It runs before the planned-key gate below (shared contract, T9/T10): a foreign or mismatching
         // token always gets 403 producer_slot_taken - or 422 unknown_producer when the run has no such slot
         // - and never learns which execution keys the run planned. A refusal after the bind rolls the bind
         // back, because this handler runs inside the C2 pipeline's one tenant transaction.
         var bound = await producers
-            .BindOrCheckAsync(command.RunId, producerId, principal.CredentialId, principal.CiRun?.ToBindingReference(), cancellationToken)
+            .BindOrCheckAsync(command.RunId, producerId, principal.CredentialId, cancellationToken)
             .ConfigureAwait(false);
         if (!bound.IsSuccess)
         {

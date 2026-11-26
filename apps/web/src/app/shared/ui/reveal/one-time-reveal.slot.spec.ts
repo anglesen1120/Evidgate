@@ -24,7 +24,7 @@ describe('RevealSlot', () => {
     ).toEqual([]);
   });
 
-  it.each<RevealSource>(['binding-challenge', 'ingest-token', 'ingest-token-rotation'])(
+  it.each<RevealSource>(['ingest-token', 'ingest-token-rotation', 'invite-token', 'api-token'])(
     'shows and replaces a %s value rather than accumulating credentials',
     (source) => {
       const slot = new RevealSlot();
@@ -52,7 +52,7 @@ describe('RevealSlot', () => {
 
   it('clears on ngOnDestroy even when called repeatedly', () => {
     const slot = new RevealSlot();
-    slot.show({ source: 'binding-challenge', value: 'one-time-value' });
+    slot.show({ source: 'ingest-token', value: 'one-time-value' });
     slot.ngOnDestroy();
     slot.ngOnDestroy();
     expect(slot.current()).toBeNull();
@@ -69,7 +69,7 @@ describe('RevealSlot', () => {
     const secondSlot = second.componentInstance.reveal;
     expect(firstSlot).not.toBe(secondSlot);
     firstSlot.show({ source: 'ingest-token', value: 'first-owner-value' });
-    secondSlot.show({ source: 'binding-challenge', value: 'second-owner-value' });
+    secondSlot.show({ source: 'ingest-token-rotation', value: 'second-owner-value' });
     first.destroy();
     expect(firstSlot.current()).toBeNull();
     expect(secondSlot.current()?.value).toBe('second-owner-value');

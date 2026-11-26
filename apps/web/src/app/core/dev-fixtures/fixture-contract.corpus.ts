@@ -18,11 +18,13 @@ import {
 const RUNS_LIST_FIXTURE = 'runs-list';
 
 /**
- * 09.2.1-T2: the two body members a step-2 response can carry a one-time secret in —
- * `CiBindingCreatedResponse.binding_challenge` and `IngestTokenCreatedResponse.secret`
- * (contracts/openapi.yaml:6607-6615, 6708-6719). Only the three creates the wizard's step 2 calls
- * answer with them; no list or detail read may carry either, which is what AC2's "metadata only on
- * resume" reduces to on the wire. (The contract's other secret-bearing body is the CI-side
+ * 09.2.1-T2: the body members a response can carry a one-time secret in —
+ * `IngestTokenCreatedResponse.secret` (contracts/openapi.yaml:6708-6719) and the retired
+ * `binding_challenge`. Only the token creates and rotation answer with `secret`; no operation mints
+ * `binding_challenge` any more, so any corpus document carrying it is a leak. No list or detail read
+ * may carry either, which is what AC2's "metadata only on resume" reduces to on the wire. (The
+ * contract's other secret-bearing
+ * body is the CI-side
  * `CiTokenResponse.token`, answered by `POST /v1/ci/token` — a pre-tenant route the browser never
  * calls, `contracts/openapi.yaml:71-81`, kept out of the web by decision (2) of the task's §10
  * entry.)
@@ -38,12 +40,6 @@ export const ONE_TIME_SECRET_MEMBERS: readonly string[] = [
   'secret',
   'invite_token',
 ];
-
-/**
- * 09.7.1-F15: the `Storefront web` project the Settings area's pages are authored on — the first
- * row of `projects-list`, `PROJECT_STOREFRONT` in `apps/web/e2e/shell/support.ts`.
- */
-export const STOREFRONT_PROJECT_ID = '018f0000-0000-7000-8000-000000000011';
 
 /** The exact member names of the T12.1 `input.json` document contract. */
 const DOCUMENT_MEMBERS: readonly string[] = [
@@ -98,24 +94,7 @@ export interface FixtureRouteShape {
   readonly cursorQueryParameter?: string;
 }
 
-/**
- * The `CiBindingView` members the two paged CI-binding fixtures are asserted through
- * (09.7.1-F15 note 4): the id the store de-duplicates by, the project the page belongs to, the
- * verification state, and the creation instant the keyset cursor is derived from.
- *
- * The `evidgate/no-hand-written-wire-dto` exemption is `FixtureDocumentShape`'s above: these are
- * `input.json` members, read to prove the two corpus pages continue one walk, not a body the app
- * reads. The row type belongs to `@evidgate/sdk`; nothing here is imported by production code.
- */
-/* eslint-disable evidgate/no-hand-written-wire-dto -- the corpus members of a fixture page (see above). */
-export interface CiBindingRowShape {
-  readonly id: string;
-  readonly project_id: string;
-  readonly status: string;
-  readonly activated_at?: string | null;
-  readonly created_at: string;
-}
-
+/* eslint-disable evidgate/no-hand-written-wire-dto -- the corpus members of a fixture page: `input.json` members, not a body the app reads. */
 /**
  * The `RunSummary` members the two paged run-list fixtures are asserted through (09.3.1-T1): the id
  * the store de-duplicates by and the creation instant `KeysetCursor` derives the cursor from. The

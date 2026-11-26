@@ -50,7 +50,7 @@ describe('ProjectDashboardStore', () => {
       ]),
     );
     data = Object.fromEntries(
-      ['waivers', 'quarantine', 'bindings', 'tree', 'cases', 'changes', 'audit'].map((name) => [
+      ['waivers', 'quarantine', 'tree', 'cases', 'changes', 'audit'].map((name) => [
         name,
         vi.fn(empty),
       ]),

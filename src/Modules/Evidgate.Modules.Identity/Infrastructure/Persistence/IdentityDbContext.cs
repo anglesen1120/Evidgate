@@ -31,10 +31,6 @@ internal sealed class IdentityDbContext(DbContextOptions<IdentityDbContext> opti
     /// <summary>The roles a membership holds (02.1.2-T1.2).</summary>
     public DbSet<MembershipRole> MembershipRoles => Set<MembershipRole>();
 
-    public DbSet<CiBinding> CiBindings => Set<CiBinding>();
-
-    public DbSet<CiTokenIssue> CiTokenIssues => Set<CiTokenIssue>();
-
     public DbSet<IngestToken> IngestTokens => Set<IngestToken>();
 
     /// <summary>The project API tokens (create/revoke only; the list is the Dapper read path).</summary>

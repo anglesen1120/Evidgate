@@ -191,10 +191,10 @@ The checks it runs are the acceptance criteria, not a rerun of the build:
 `docker inspect` says `Config.User=1654` (non-root, AC1); the built image's first
 layers are the pinned runtime base's layers for _both_ platforms (AC1 — the
 comparison target is read from the registry manifest, because a local multi-arch
-pin resolves to one platform image; the Api is compared against its `-extra`
-base and Worker/Migrator against theirs); the published `runtimeconfig.json`
+pin resolves to one platform image; the Api and Worker are compared against their
+`-extra` base and the Migrator against its plain one); the published `runtimeconfig.json`
 carries `System.GC.Server` plus the per-image `System.Globalization.Invariant`
-(`true` for Worker, `false`/absent for the Api) and the main assembly has a
+(`false`/absent for the Api and the Worker; the Worker image's parse child is `true`) and the main assembly has a
 ReadyToRun header (00 §5.7 P7); the baked expected-migration-head is the
 repository's head (01.1.2-T1.3); and `docker run <migrator> --help` prints the
 01.4.1 §5 CLI (AC5). `--with-db` adds a throwaway PostgreSQL 18 (the
@@ -223,8 +223,8 @@ then come from `/manifests/<digest>` and `/blobs/<config digest>`):
 | Role                           | Tag + digest (the Dockerfile's `FROM`)                                                                                                 | Per-platform manifests (amd64 / arm64)  |
 | ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
 | Builder                        | `mcr.microsoft.com/dotnet/sdk:10.0.100@sha256:c7445f141c04f1a6b454181bd098dcfa606c61ba0bd213d0a702489e5bd4cd71`                        | `sha256:b84b696e…` / `sha256:4c85fffe…` |
-| Runtime (`api`)                | `mcr.microsoft.com/dotnet/aspnet:10.0.12-noble-chiseled-extra@sha256:00e0ad6a7ef8c0c1391b87f05c7ac757a15740455688f2bfcd146a3f4b987efd` | `sha256:69c87e30…` / `sha256:c4b3500d…` |
-| Runtime (`worker`, `migrator`) | `mcr.microsoft.com/dotnet/aspnet:10.0.12-noble-chiseled@sha256:9651fa59abcdf177c30392cb44a820605ca5d618429ab37acbf6e7c644510b02`       | `sha256:0053105f…` / `sha256:46587ed1…` |
+| Runtime (`api`, `worker`, ICU) | `mcr.microsoft.com/dotnet/aspnet:10.0.12-noble-chiseled-extra@sha256:00e0ad6a7ef8c0c1391b87f05c7ac757a15740455688f2bfcd146a3f4b987efd` | `sha256:69c87e30…` / `sha256:c4b3500d…` |
+| Runtime (`migrator`, plain)    | `mcr.microsoft.com/dotnet/aspnet:10.0.12-noble-chiseled@sha256:9651fa59abcdf177c30392cb44a820605ca5d618429ab37acbf6e7c644510b02`       | `sha256:0053105f…` / `sha256:46587ed1…` |
 
 - The builder tag equals `global.json`'s `sdk.version` — the SDK CI installs — so
   the image and the test build compile with one toolchain. `--check-pins` fails
@@ -233,13 +233,18 @@ then come from `/manifests/<digest>` and `/blobs/<config digest>`):
 - Both runtime bases are chiseled: no shell, no package manager, and
   `Config.User=1654` (the base's `APP_UID`), which the Dockerfiles re-assert with
   `USER $APP_UID` so the contract survives a base swap.
-- **The Api runs the `-extra` variant and Worker/Migrator the plain one.** The
+- **The Api and the Worker run the `-extra` variant and the Migrator the plain one.** The
   plain chiseled base is globalization-invariant by construction: it sets
   `DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=true` and ships no `libicu` and no
-  `zoneinfo`. Authoring text must be stored composed (13.1.1 AC14) and
-  `string.Normalize(FormC)` is a _silent no-op_ in invariant mode, so the Api
-  cannot run that base: `Directory.Build.props` keeps `InvariantGlobalization`
-  for `Evidgate.Worker` only, and `Dockerfile.api` pins the `-extra` image.
+  `zoneinfo`. Stored text must be composed (13.1.1 AC14: authoring writes in the
+  Api, intake extraction in the Worker) and `string.Normalize(FormC)` is a _silent
+  no-op_ in invariant mode, so neither can run that base: `Directory.Build.props`
+  leaves `InvariantGlobalization` off for both, and `Dockerfile.api` and
+  `Dockerfile.worker` pin the same `-extra` image. The Worker image's parse child
+  (`Evidgate.Parser`) stays invariant through its own runtimeconfig.json, which
+  declares it, so the Worker's ICU does not reach the process that reads untrusted
+  bytes; the parse runner clears the child's environment and adds
+  `DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1` only if that declaration is missing.
   `-extra` is the same distroless chiseled image plus `icu` and `tzdata`
   ([dotnet-docker image variants: "`extra` images contain everything that the
   default images do, plus `icu` and `tzdata`"][variants]); measured 2026-10-23 by
@@ -247,9 +252,10 @@ then come from `/manifests/<digest>` and `/blobs/<config digest>`):
   entries and the `DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=true` variable, while
   `-extra` has the 12 ICU shared objects (`libicu{data,i18n,io,test,tu,uc}.so.74`)
   and 1 246 `zoneinfo` entries and sets no such variable.
-  `scripts/build-images.sh --check-pins` fails if the Api base stops being the
-  `-extra` sibling of the Worker/Migrator tag, and the P7 check fails if the
-  Api's runtimeconfig or image environment is invariant.
+  `scripts/build-images.sh --check-pins` fails if the Worker base differs from the
+  Api's, or if that base stops being the `-extra` sibling of the Migrator tag, and
+  the P7 check fails if the Api's or the Worker's runtimeconfig or image environment
+  is invariant (the Worker boots only with ICU: it refuses to start otherwise).
 - Licence: the .NET container images are MIT — [dotnet/dotnet-docker `LICENSE`]
   (MIT, © .NET Foundation) — with the container legal notice in the README's
   [License section] (`aka.ms/mcr/osslegalnotice`) and the Linux image contents
@@ -360,9 +366,9 @@ Error: libgssapi_krb5.so.2: cannot open shared object file: No such file or dire
 ```
 
 That is Npgsql probing for the optional Kerberos native library at driver
-initialisation; neither chiseled base ships `libgssapi-krb5-2` — the Api's
+initialisation; neither chiseled base ships `libgssapi-krb5-2` — the
 `-extra` base adds ICU + tzdata only (measured 2026-10-23: no `libgssapi`/`libkrb5`
-file in either image), so **the Api now runs `-extra` and still logs these two
+file in either image), so **the Api (and, with the same driver, the Worker) runs `-extra` and still logs these two
 lines**; `-extra` is not a remedy for them. Password authentication is unaffected
 — measured on the built images 2026-09-27 (plain base): the Migrator applied the
 whole migration set (eleven files at that measurement) and the Api reported

@@ -119,8 +119,7 @@ internal sealed class ProducerRegistry(
     public async ValueTask<Result<ProducerSlotBinding>> BindOrCheckAsync(
         Guid runId,
         string producerId,
-        string tokenJti,
-        string? ciRunRef,
+        string ownerId,
         CancellationToken cancellationToken)
     {
         using var activity = EvidgateTelemetry.StartModuleActivity(ModuleName.Ingestion, nameof(BindOrCheckAsync));
@@ -128,8 +127,7 @@ internal sealed class ProducerRegistry(
         // The column bounds are checked before any SQL (00 §5.5 C6): an empty or over-long identity
         // would otherwise reach the table and surface as an unhandled 23514 from the CHECK.
         if (!ProducerSlotArguments.IsValidProducerId(producerId)
-            || !ProducerSlotArguments.IsWithin(tokenJti, ProducerSlotLimits.MaxTokenJtiLength)
-            || !ProducerSlotArguments.IsWithinOrNull(ciRunRef, ProducerSlotLimits.MaxCiRunRefLength))
+            || !ProducerSlotArguments.IsWithin(ownerId, ProducerSlotLimits.MaxOwnerIdLength))
         {
             return Result.Failure<ProducerSlotBinding>(ProducerSlotErrors.ArgumentOutOfRange);
         }
@@ -148,20 +146,9 @@ internal sealed class ProducerRegistry(
             return Result.Failure<ProducerSlotBinding>(ProducerSlotErrors.UnknownProducer);
         }
 
-        // T88: when the run carries a CI reference (set at run create from the caller's OIDC claims), the
-        // caller's claims must equal it exactly - a different CI run is a different identity even for an
-        // already-bound slot. A run created without one has nothing to compare, and the slot's own binding
-        // below is then the whole identity. Both answer the same 403 producer_slot_taken, so a foreign CI
-        // run learns nothing about the slot beyond that code (T9).
-        if (RunReferenceMismatch(existing, ciRunRef))
-        {
-            return Result.Failure<ProducerSlotBinding>(ProducerSlotErrors.SlotTaken);
-        }
-
         if (existing.BoundTokenJti is not null)
         {
-            return string.Equals(existing.BoundTokenJti, tokenJti, StringComparison.Ordinal)
-                && string.Equals(existing.BoundCiRunRef, ciRunRef, StringComparison.Ordinal)
+            return string.Equals(existing.BoundTokenJti, ownerId, StringComparison.Ordinal)
                 ? Result.Success(new ProducerSlotBinding(existing.Id, existing.ShardIndex, existing.ProducerId, false))
                 : Result.Failure<ProducerSlotBinding>(ProducerSlotErrors.SlotTaken);
         }
@@ -170,7 +157,7 @@ internal sealed class ProducerRegistry(
         // first writers cannot both win - the loser's WHERE matches no row and falls through below.
         var bound = await db.QuerySingleOrDefaultAsync<SlotRow>(
             ProducerSlotSql.BindIfUnbound,
-            new { org_id = orgId, run_id = runId, producer_id = producerId, jti = tokenJti, ci_run_ref = ciRunRef },
+            new { org_id = orgId, run_id = runId, producer_id = producerId, owner_id = ownerId },
             cancellationToken).ConfigureAwait(false);
 
         if (bound is not null)
@@ -178,7 +165,7 @@ internal sealed class ProducerRegistry(
             return Result.Success(new ProducerSlotBinding(bound.Id, bound.ShardIndex, bound.ProducerId, true));
         }
 
-        // The race was lost: one re-read decides idempotent (the winner bound this same identity) or taken.
+        // The race was lost: one re-read decides idempotent (the winner bound this same owner) or taken.
         var after = await db.QuerySingleOrDefaultAsync<SlotRow>(
             ProducerSlotSql.ReadByProducer,
             new { org_id = orgId, run_id = runId, producer_id = producerId },
@@ -189,15 +176,7 @@ internal sealed class ProducerRegistry(
             return Result.Failure<ProducerSlotBinding>(ProducerSlotErrors.UnknownProducer);
         }
 
-        // The same T88 comparison as the read path above: the race loser decides against the row the
-        // winner wrote, so a mismatching CI run is refused here too.
-        if (RunReferenceMismatch(after, ciRunRef))
-        {
-            return Result.Failure<ProducerSlotBinding>(ProducerSlotErrors.SlotTaken);
-        }
-
-        return string.Equals(after.BoundTokenJti, tokenJti, StringComparison.Ordinal)
-            && string.Equals(after.BoundCiRunRef, ciRunRef, StringComparison.Ordinal)
+        return string.Equals(after.BoundTokenJti, ownerId, StringComparison.Ordinal)
             ? Result.Success(new ProducerSlotBinding(after.Id, after.ShardIndex, after.ProducerId, false))
             : Result.Failure<ProducerSlotBinding>(ProducerSlotErrors.SlotTaken);
     }
@@ -206,8 +185,7 @@ internal sealed class ProducerRegistry(
     public async ValueTask<Result<ProducerSlotClosure>> CloseSlotAsync(
         Guid runId,
         string producerId,
-        string tokenJti,
-        string? ciRunRef,
+        string ownerId,
         long declaredLastSequence,
         int declaredCount,
         CancellationToken cancellationToken)
@@ -217,14 +195,13 @@ internal sealed class ProducerRegistry(
         // The column bounds are checked before any SQL (00 §5.5 C6), exactly like the bind's identity
         // arguments: a negative declared value would otherwise surface as an unhandled 23514.
         if (!ProducerSlotArguments.IsValidProducerId(producerId)
-            || !ProducerSlotArguments.IsWithin(tokenJti, ProducerSlotLimits.MaxTokenJtiLength)
-            || !ProducerSlotArguments.IsWithinOrNull(ciRunRef, ProducerSlotLimits.MaxCiRunRefLength))
+            || !ProducerSlotArguments.IsWithin(ownerId, ProducerSlotLimits.MaxOwnerIdLength))
         {
             return Result.Failure<ProducerSlotClosure>(ProducerSlotErrors.ArgumentOutOfRange);
         }
 
-        // The declared values carry their own 422: the identity message above names producerId/tokenJti/
-        // ciRunRef, so reusing it for a negative declared value would misdescribe the failure.
+        // The declared values carry their own 422: the identity message above names producerId/ownerId,
+        // so reusing it for a negative declared value would misdescribe the failure.
         if (declaredLastSequence < 0 || declaredCount < 0)
         {
             return Result.Failure<ProducerSlotClosure>(ProducerSlotErrors.DeclaredOutOfRange);
@@ -244,13 +221,11 @@ internal sealed class ProducerRegistry(
             return Result.Failure<ProducerSlotClosure>(ProducerSlotErrors.UnknownProducer);
         }
 
-        // T9/T88: only the bound identity may finalize the slot. An unbound slot has no bound identity,
-        // so nobody may close it - 05.3.2-T1's handler binds through BindOrCheckAsync first, so a finalize
-        // arriving before the events still closes the slot (05.3.2 AC7).
+        // T9: only the bound owner may finalize the slot. An unbound slot has no owner, so nobody may
+        // close it - the finalize handler binds through BindOrCheckAsync first, so a finalize arriving
+        // before the events still closes the slot (05.3.2 AC7).
         if (existing.BoundTokenJti is null
-            || RunReferenceMismatch(existing, ciRunRef)
-            || !string.Equals(existing.BoundTokenJti, tokenJti, StringComparison.Ordinal)
-            || !string.Equals(existing.BoundCiRunRef, ciRunRef, StringComparison.Ordinal))
+            || !string.Equals(existing.BoundTokenJti, ownerId, StringComparison.Ordinal))
         {
             return Result.Failure<ProducerSlotClosure>(ProducerSlotErrors.SlotTaken);
         }
@@ -276,8 +251,7 @@ internal sealed class ProducerRegistry(
                 org_id = orgId,
                 run_id = runId,
                 producer_id = producerId,
-                jti = tokenJti,
-                ci_run_ref = ciRunRef,
+                owner_id = ownerId,
                 declared_last_sequence = declaredLastSequence,
                 declared_count = declaredCount,
             },
@@ -344,19 +318,6 @@ internal sealed class ProducerRegistry(
 
     private static ProducerSlotRef ToRef(SlotRow row) => new(row.Id, row.ShardIndex, row.ProducerId);
 
-    /// <summary>
-    /// True when the run carries a CI reference (T88) that is not exactly the caller's. Only the run's
-    /// side is compared: a run created without a CI reference has nothing to compare, and the slot's own
-    /// binding is then the whole identity. A run that carries one but whose composed reference came back
-    /// null (L1: a member of <c>ci_run_ref</c> is JSON null, so the concatenation is null) is also a
-    /// mismatch — the reference is present and unreadable, so it fails closed rather than open. Every
-    /// mismatch is another identity and answers 403 <c>producer_slot_taken</c>, never a distinct code that
-    /// would leak whether a slot exists (T9).
-    /// </summary>
-    private static bool RunReferenceMismatch(SlotRow row, string? ciRunRef) =>
-        row.RunHasCiRef
-        && (row.RunCiRunRef is null || !string.Equals(row.RunCiRunRef, ciRunRef, StringComparison.Ordinal));
-
     /// <summary>One slot row as the registry's statements return it.</summary>
     private sealed class SlotRow
     {
@@ -366,9 +327,8 @@ internal sealed class ProducerRegistry(
 
         public string ProducerId { get; set; } = string.Empty;
 
+        /// <summary>The bound owner; the column keeps its historical name <c>bound_token_jti</c>.</summary>
         public string? BoundTokenJti { get; set; }
-
-        public string? BoundCiRunRef { get; set; }
 
         public long LastSequence { get; set; }
 
@@ -377,11 +337,5 @@ internal sealed class ProducerRegistry(
         public long? DeclaredLastSequence { get; set; }
 
         public int? DeclaredCount { get; set; }
-
-        /// <summary>The run's CI reference as <c>repository_id/run_id/run_attempt</c> (T88), or null; only <c>ReadByProducer</c> selects it.</summary>
-        public string? RunCiRunRef { get; set; }
-
-        /// <summary>Whether the run's <c>ci_run_ref</c> is not null (L1); only <c>ReadByProducer</c> selects it.</summary>
-        public bool RunHasCiRef { get; set; }
     }
 }

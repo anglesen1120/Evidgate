@@ -25,50 +25,6 @@ namespace Evidgate.Modules.Orchestrator.Application.Runs;
 internal sealed partial class CreateRunCommandHandler
 {
     /// <summary>
-    /// The verified <c>ref</c>/<c>sha</c> claims of the caller's credential (05.2.2-T1.3): the <c>ci_token_issue</c>
-    /// row the 02.4.1 exchange wrote for the presented <c>ci_producer</c> token, found by the run reference the minted
-    /// token carries (<c>repository_id</c>, <c>run_id</c>, <c>run_attempt</c>). The exchange mints the token's
-    /// <c>jti</c> as a fresh GUID and stores the GitHub OIDC <c>jti</c> separately, so that key is not a link between
-    /// the token in hand and the row; the run reference is (owner decision D-S45-Q2). Only a principal that carries a
-    /// <see cref="CiRunReference"/> can be a <c>ci_producer</c>, so every other caller short-circuits without a
-    /// statement (00 §5.7 P3).
-    /// <para>
-    /// The Identity module owns <c>ci_token_issue</c>; this module reads it as raw SQL like the Evidence module reads
-    /// <c>run</c> (the cross-module read precedent), so no Identity type or contract is involved. RLS already scopes
-    /// the row to this tenant (<c>ci_token_issue_app_tenant</c>); <c>org_id</c> and <c>project_id</c> repeat the scope
-    /// in the statement as defence in depth (00 §5.4). A row that is not there — purged after its replay window,
-    /// another project's, or another run attempt's — means NOT verified: the caller's body values are stored and
-    /// labelled <c>unverified_ref</c> rather than trusted. <c>ref</c>/<c>sha</c> are fixed per run attempt, so the
-    /// newest row for the attempt is authoritative and the statement takes it with <c>limit 1</c>.
-    /// </para>
-    /// </summary>
-    private async ValueTask<CiRefClaim?> ReadVerifiedClaimAsync(
-        IRequestPrincipal? principal,
-        Guid projectId,
-        Guid orgId,
-        CancellationToken cancellationToken)
-    {
-        if (principal?.CiRun is not { } ciRun)
-        {
-            return null;
-        }
-
-        var row = await db.QuerySingleOrDefaultAsync<CiTokenIssueRow>(
-            OrchestratorSql.CiTokenIssueClaim,
-            new
-            {
-                org_id = orgId,
-                project_id = projectId,
-                repository_id = ciRun.RepositoryId,
-                run_id = ciRun.RunId,
-                run_attempt = ciRun.RunAttempt,
-            },
-            cancellationToken).ConfigureAwait(false);
-
-        return row is null ? null : new CiRefClaim(row.Ref, row.Sha);
-    }
-
-    /// <summary>
     /// Builds the planned executions from the manifest document: case ids through Catalog, variant hashes through
     /// Catalog's normaliser (computed once per distinct params object), the server-side <c>execution_key</c>, and the
     /// shard id from the shard plan's 1-based ordinal. Any unresolved case revision or variant, or a duplicate
@@ -201,18 +157,6 @@ internal sealed partial class CreateRunCommandHandler
         public bool SuiteKnown { get; set; }
 
         public bool EnvironmentKnown { get; set; }
-    }
-
-    /// <summary>
-    /// One <c>ci_token_issue</c> row as <see cref="OrchestratorSql.CiTokenIssueClaim"/> returns it (Dapper maps the
-    /// snake_case columns): the two verified claims 05.2.2-T1.3 reads. <c>ref</c> and <c>sha</c> are fixed per run
-    /// attempt, so the statement returns the newest row of the attempt and the read is a single row or none.
-    /// </summary>
-    private sealed class CiTokenIssueRow
-    {
-        public string Ref { get; set; } = string.Empty;
-
-        public string Sha { get; set; } = string.Empty;
     }
 
     /// <summary>The one <c>jsonb</c> batch parameter of the planned-execution insert, plus the shard count for the slot registration.</summary>

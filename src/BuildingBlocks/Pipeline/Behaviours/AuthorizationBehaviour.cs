@@ -68,8 +68,8 @@ public sealed class AuthorizationBehaviour<TMessage, TResponse>(
         if (permission is null
             && HandlerLookup.IsCredentialAuthenticated(services, typeof(TMessage), typeof(TResponse)))
         {
-            // 02.4.1/02.4.2: the endpoint verified a CI credential before the pipeline and published the tenant and
-            // a service principal from it. Nothing else may reach these handlers.
+            // The exchange has resolved the public prefix, not yet proven the secret. Its scoped handler
+            // verifies the secret and lifecycle before issuing a credential.
             _ = tenant.Require();
 
             return principals.Current is { Kind: PrincipalKind.ServicePrincipal }

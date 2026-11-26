@@ -1,7 +1,8 @@
 # Evidgate.Migrator container image — 10.2.1-T1.2, AC5.
 #
-# A separate image on the same builder pin and runtime base as the Worker image
-# (ruling T41; the Api's runtime base is the `-extra` variant, 13.1.1-T2): the
+# A separate image on the same builder pin as the Worker image, on the plain
+# chiseled runtime base (ruling T41; the Api and Worker run the `-extra` variant
+# because they store NFC text, which the one-shot migrator never does): the
 # deploy runs it as a one-shot job with the owner-role connection string
 # (10.2.2-T1, FR-10-3). It is never a second tag on the Api or Worker image —
 # different Dockerfile, different published project, different entry point.

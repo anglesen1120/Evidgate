@@ -5,7 +5,7 @@ import { LOCALES, THEMES, overviewPath, seedStoredTheme, waitForDialogAnimations
 
 const FIXTURE = '?fixture.variant.listPermissions=dashboard';
 const WIDGETS =
-  '[data-dashboard-kpis], [data-dashboard-trend], [data-dashboard-recent], [data-dashboard-attention], [data-dashboard-authoring], [data-dashboard-ci], [data-dashboard-usage], [data-dashboard-activity]';
+  '[data-dashboard-kpis], [data-dashboard-trend], [data-dashboard-recent], [data-dashboard-attention], [data-dashboard-authoring], [data-dashboard-usage], [data-dashboard-activity]';
 
 for (const locale of LOCALES) {
   for (const theme of THEMES) {
@@ -16,7 +16,7 @@ for (const locale of LOCALES) {
         await page.goto(overviewPath(locale) + FIXTURE);
         await expect(page.locator('app-project-overview')).toBeVisible();
         await expect(page.locator('app-project-overview [aria-busy="true"]')).toHaveCount(0);
-        await expect(page.locator(WIDGETS)).toHaveCount(8);
+        await expect(page.locator(WIDGETS)).toHaveCount(7);
         await expect(page.locator('[data-dashboard-run-view]')).toHaveCount(5);
         const wrapped = await page.locator('[data-dashboard-run-view]').evaluateAll((buttons) =>
           buttons.some((button) => {
@@ -159,12 +159,8 @@ test('successful empty runs remain empty rather than a green decision', async ({
 
 test('restricted widgets are hidden instead of rendering forbidden cards', async ({ page }) => {
   await page.goto(overviewPath('en') + '?fixture.variant.listPermissions=dashboard-limited');
-  await expect(page.locator('[data-dashboard-ci]')).toBeVisible();
-  await expect(
-    page.locator(
-      '[data-dashboard-kpis], [data-dashboard-usage], [data-dashboard-authoring], [data-dashboard-activity], [data-dashboard-attention]',
-    ),
-  ).toHaveCount(0);
+  await expect(page.locator('app-project-overview app-empty-pattern')).toBeVisible();
+  await expect(page.locator(WIDGETS)).toHaveCount(0);
   await expect(page.locator('app-project-overview app-error-pattern')).toHaveCount(0);
 });
 

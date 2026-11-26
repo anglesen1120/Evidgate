@@ -31,10 +31,16 @@ public static class ArtifactKinds
     /// <summary>A UI hierarchy dump.</summary>
     public const string UiHierarchy = "ui_hierarchy";
 
-    /// <summary>The eight kinds, in contract order.</summary>
-    public static readonly IReadOnlyList<string> All =
-        [Trace, Video, Screenshot, RawReport, DomSnapshot, A11ySnapshot, Patch, UiHierarchy];
+    /// <summary>A requirement document (DOCX or PDF) a reviewer uploads for test generation.</summary>
+    public const string RequirementDocument = "requirement_document";
 
-    /// <summary>True when <paramref name="kind"/> is one of the eight contract kinds.</summary>
+    /// <summary>A requirement image (PNG, JPEG or WebP) a reviewer uploads for test generation.</summary>
+    public const string RequirementImage = "requirement_image";
+
+    /// <summary>The ten kinds, in contract order.</summary>
+    public static readonly IReadOnlyList<string> All =
+        [Trace, Video, Screenshot, RawReport, DomSnapshot, A11ySnapshot, Patch, UiHierarchy, RequirementDocument, RequirementImage];
+
+    /// <summary>True when <paramref name="kind"/> is one of the ten contract kinds.</summary>
     public static bool IsKnown(string? kind) => kind is not null && All.Contains(kind, StringComparer.Ordinal);
 }

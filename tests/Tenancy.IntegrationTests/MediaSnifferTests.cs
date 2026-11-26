@@ -9,9 +9,10 @@ namespace Tenancy.IntegrationTests;
 /// <summary>
 /// 06.3.1-T2.2 (AC5; 00 §5.7 P1): the media sniff over EVERY media type the product accepts — the XML family
 /// (UTF-8, UTF-16 and UTF-32 by BOM), the JSON family, <c>text/html</c>, <c>application/zip</c>,
-/// <c>image/png</c>, <c>image/jpeg</c> and <c>video/mp4</c>. Every other declared type is a
+/// <c>image/png</c>, <c>image/jpeg</c>, <c>image/webp</c>, <c>video/mp4</c>, <c>application/pdf</c> and the DOCX
+/// type. Every other declared type is a
 /// <see cref="SniffResult.Mismatch"/> (fail closed): <c>image/svg+xml</c>, <c>text/plain</c>,
-/// <c>application/octet-stream</c>, <c>application/pdf</c> and everything else can never become evidence. The T1
+/// <c>application/octet-stream</c> and everything else can never become evidence. The T1
 /// <c>NotSniffed</c> verdict and the <c>IsSniffed</c> skip-the-read optimisation are gone.
 /// <para>
 /// Prefixes are written as Latin-1 strings so a binary prefix (<c>\u0089PNG</c>) is readable inline. The sniff
@@ -224,9 +225,7 @@ public sealed class MediaSnifferTests
     /// </summary>
     [Theory]
     [InlineData("image/svg+xml")]
-    [InlineData("image/webp")]
     [InlineData("video/webm")]
-    [InlineData("application/pdf")]
     [InlineData("application/octet-stream")]
     [InlineData("text/plain")]
     [InlineData("application/xmlx")]
@@ -265,13 +264,60 @@ public sealed class MediaSnifferTests
     [InlineData("image/svg+xml", false)]
     [InlineData("text/plain", false)]
     [InlineData("application/octet-stream", false)]
-    [InlineData("application/pdf", false)]
+    [InlineData("application/pdf", true)]
+    [InlineData("APPLICATION/PDF; x=y", true)]
+    [InlineData("application/vnd.openxmlformats-officedocument.wordprocessingml.document", true)]
+    [InlineData("image/webp", true)]
+    [InlineData("application/msword", false)]
+    [InlineData("application/vnd.ms-word.document.macroEnabled.12", false)]
     [InlineData("application/xmlx", false)]
     [InlineData("application/jsonx", false)]
     [InlineData("", false)]
     [InlineData("   ", false)]
     public void HasSignatureAgreesWithTheTable(string declared, bool expected) =>
         MediaSniffer.HasSignature(declared).ShouldBe(expected);
+
+    private const string DocxType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+    private static readonly byte[] PdfMagic = [(byte)'%', (byte)'P', (byte)'D', (byte)'F', (byte)'-', (byte)'1', (byte)'.', (byte)'7'];
+    private static readonly byte[] WebpMagic =
+        [(byte)'R', (byte)'I', (byte)'F', (byte)'F', 0x24, 0x00, 0x00, 0x00, (byte)'W', (byte)'E', (byte)'B', (byte)'P'];
+
+    [Fact]
+    public void DeclaredPdfMatchesOnlyPercentPdfDashAtOffsetZero()
+    {
+        MediaSniffer.Check("application/pdf", PdfMagic).ShouldBe(SniffResult.Match);
+        MediaSniffer.Check("APPLICATION/PDF; charset=x", PdfMagic).ShouldBe(SniffResult.Match);
+
+        MediaSniffer.Check("application/pdf", PdfMagic.AsSpan(..4)).ShouldBe(SniffResult.Mismatch);
+        Sniff("application/pdf", " %PDF-1.7").ShouldBe(SniffResult.Mismatch);
+        MediaSniffer.Check("application/pdf", PngMagic).ShouldBe(SniffResult.Mismatch);
+        MediaSniffer.Check("application/pdf", ZipMagic).ShouldBe(SniffResult.Mismatch);
+        MediaSniffer.Check("application/pdf", ReadOnlySpan<byte>.Empty).ShouldBe(SniffResult.Mismatch);
+    }
+
+    [Fact]
+    public void DeclaredDocxMatchesOnlyALocalFileHeaderNotAnEmptyArchive()
+    {
+        MediaSniffer.Check(DocxType, ZipMagic).ShouldBe(SniffResult.Match);
+
+        // Positive control: the generic zip type still takes the empty-archive record the DOCX type refuses.
+        MediaSniffer.Check("application/zip", EmptyZipMagic).ShouldBe(SniffResult.Match);
+        MediaSniffer.Check(DocxType, EmptyZipMagic).ShouldBe(SniffResult.Mismatch);
+        MediaSniffer.Check(DocxType, PdfMagic).ShouldBe(SniffResult.Mismatch);
+        MediaSniffer.Check(DocxType, ZipMagic.AsSpan(..3)).ShouldBe(SniffResult.Mismatch);
+        MediaSniffer.Check(DocxType, ReadOnlySpan<byte>.Empty).ShouldBe(SniffResult.Mismatch);
+    }
+
+    [Fact]
+    public void DeclaredWebpNeedsRiffAndWebpAtOffsetEight()
+    {
+        MediaSniffer.Check("image/webp", WebpMagic).ShouldBe(SniffResult.Match);
+
+        MediaSniffer.Check("image/webp", WebpMagic.AsSpan(..11)).ShouldBe(SniffResult.Mismatch);
+        Sniff("image/webp", "RIFF\u0024\u0000\u0000\u0000WAVE").ShouldBe(SniffResult.Mismatch);
+        Sniff("image/webp", "XIFF\u0024\u0000\u0000\u0000WEBP").ShouldBe(SniffResult.Mismatch);
+        MediaSniffer.Check("image/webp", PngMagic).ShouldBe(SniffResult.Mismatch);
+    }
 
     /// <summary>
     /// 06.3.1-T2.2: a declared type with no signature is a <see cref="SniffResult.Mismatch"/> for EVERY prefix, so
@@ -282,7 +328,7 @@ public sealed class MediaSnifferTests
     {
         foreach (var declared in new[]
                  {
-                     "image/svg+xml", "text/plain", "application/octet-stream", "application/pdf",
+                     "image/svg+xml", "text/plain", "application/octet-stream", "application/x-pdf",
                      "application/xmlx", string.Empty,
                  })
         {
@@ -310,6 +356,8 @@ public sealed class MediaSnifferTests
             ("image/png", PngMagic),
             ("image/jpeg", JpegMagic),
             ("video/mp4", Mp4Magic),
+            ("application/pdf", PdfMagic),
+            ("image/webp", WebpMagic),
         };
 
         for (var declaredIndex = 0; declaredIndex < magics.Length; declaredIndex++)

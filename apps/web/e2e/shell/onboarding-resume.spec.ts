@@ -33,7 +33,7 @@ const RELOAD_SEEDS: readonly OnboardingSeed[] = [
 ];
 
 test.describe('a reload mid-flow resumes from the server (AC1)', () => {
-  test('creating the project advances to step 2 and a reload still shows step 2', async ({
+  test('creating the project resumes at the first run and a reload still shows it', async ({
     page,
   }) => {
     await page.goto(onboardingUrl('en', 'onboarding-empty'));
@@ -61,8 +61,9 @@ test.describe('a reload mid-flow resumes from the server (AC1)', () => {
       'the create navigation carried the fixture toggles to the new address',
     ).toBe('');
 
-    await expectCurrentStep(page, 2);
+    await expectCurrentStep(page, 3);
     await expectStepDone(page, 1, true);
+    await expectStepDone(page, 2, false);
     await expectNoStepInStorage(page, 'after the create');
 
     // The reload of AC1: a browser boot re-reads the permission catalogue, and the default page
@@ -70,7 +71,7 @@ test.describe('a reload mid-flow resumes from the server (AC1)', () => {
     // step itself must come from the server's resources — the seed the flow started from is gone.
     await page.goto(grantsOnlyUrl('en', CREATED_PROJECT));
     await expect(shell(page)).toBeVisible();
-    await expectCurrentStep(page, 2);
+    await expectCurrentStep(page, 3);
     await expectStepDone(page, 1, true);
     await expectStepDone(page, 5, false);
     expect(new URL(page.url()).pathname, 'the reload left the address the wizard resumed on').toBe(
@@ -80,7 +81,7 @@ test.describe('a reload mid-flow resumes from the server (AC1)', () => {
 
     await page.reload();
     await expect(shell(page)).toBeVisible();
-    await expectCurrentStep(page, 2);
+    await expectCurrentStep(page, 3);
     await expectNoStepInStorage(page, 'after the second reload');
   });
 

@@ -515,7 +515,6 @@ internal sealed record RouteRequestContext(
     Guid ManifestId,
     Guid WaiverId,
     Guid QuarantineId,
-    Guid CiBindingId,
     Guid IngestTokenId,
     Guid ApiTokenId,
     Guid WebhookEndpointId,
@@ -530,7 +529,6 @@ internal sealed record RouteRequestContext(
     internal static RouteRequestContext Fresh(Guid orgId, Guid projectId) => new(
         orgId,
         projectId,
-        Guid.CreateVersion7(),
         Guid.CreateVersion7(),
         Guid.CreateVersion7(),
         Guid.CreateVersion7(),
@@ -654,12 +652,6 @@ internal static class RouteRequests
             new(HttpMethod.Get, $"/v1/orgs/{ctx.OrgId}/usage/summary?project_id={ctx.ProjectId}"));
 
         // ---- CI admin ----------------------------------------------------------------------------------------
-        Add("POST", "/v1/projects/{p}/ci-bindings", ctx => new(HttpMethod.Post, $"/v1/projects/{ctx.ProjectId}/ci-bindings",
-            Binding(), IdempotencyKey: Key()));
-        Add("GET", "/v1/projects/{p}/ci-bindings", ctx => new(HttpMethod.Get, $"/v1/projects/{ctx.ProjectId}/ci-bindings"));
-        Add("PATCH", "/v1/ci-bindings/{b}", ctx => new(HttpMethod.Patch, $"/v1/ci-bindings/{ctx.CiBindingId}",
-            new JsonObject { ["status"] = "disabled" }, IfMatch: "\"1\""));
-        Add("DELETE", "/v1/ci-bindings/{b}", ctx => new(HttpMethod.Delete, $"/v1/ci-bindings/{ctx.CiBindingId}", IfMatch: "\"1\""));
         Add("POST", "/v1/projects/{p}/ingest-tokens", ctx => new(HttpMethod.Post, $"/v1/projects/{ctx.ProjectId}/ingest-tokens",
             new JsonObject { ["name"] = "probe" }, IdempotencyKey: Key()));
         Add("GET", "/v1/projects/{p}/ingest-tokens", ctx => new(HttpMethod.Get, $"/v1/projects/{ctx.ProjectId}/ingest-tokens"));
@@ -1121,6 +1113,15 @@ internal static class RouteRequests
                 new JsonObject { ["change_ids"] = new JsonArray(Guid.NewGuid().ToString("D")) },
                 IfMatch: "\"order:" + new string('0', 64) + "\"", IdempotencyKey: Key()));
 
+        // The intake pair: a probe that carries a well-formed text body, so a denied caller is refused by the permission
+        // stage rather than by request validation, and a granted one only records an intake of the project.
+        Add("POST", "/v1/projects/{p}/authoring/intakes", ctx =>
+            new(HttpMethod.Post, $"/v1/projects/{ctx.ProjectId}/authoring/intakes",
+                new JsonObject { ["kind"] = "text", ["feature_node_id"] = ctx.NodeId.ToString(), ["text"] = "probe requirement" },
+                IdempotencyKey: Key()));
+        Add("GET", "/v1/projects/{p}/authoring/intakes/{i}", ctx =>
+            new(HttpMethod.Get, $"/v1/projects/{ctx.ProjectId}/authoring/intakes/{Guid.NewGuid():D}"));
+
         // 13.1.1-T5: route 25, the import/export pair. The import probe is a dry run of a valid one-row JSON document —
         // a body the readers refuse would answer 422 before the permission stage, so a denied probe could not observe
         // the 403 it asserts — and a dry run writes nothing even for a granted caller.
@@ -1180,15 +1181,6 @@ internal static class RouteRequests
                 },
             },
         },
-    };
-
-    private static JsonObject Binding() => new()
-    {
-        ["provider"] = "github_actions",
-        ["repository_id"] = 900_000_000L + Random.Shared.NextInt64(1, 99_999_999),
-        ["repository_full_name"] = "probe/repo",
-        ["allowed_ref_patterns"] = new JsonArray("refs/heads/main"),
-        ["allowed_workflow_refs"] = new JsonArray("probe/repo/.github/workflows/ci.yml@refs/heads/main"),
     };
 
     private static JsonObject Environment() => new()

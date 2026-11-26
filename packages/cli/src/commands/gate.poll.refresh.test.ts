@@ -9,7 +9,6 @@ import {
   cacheDirs,
   capture,
   decided,
-  devEnv,
   evaluated,
   gateArgv,
   ingestEnv,
@@ -185,82 +184,5 @@ describe('gate --wait', () => {
       '/v1/ci/token',
     ]);
     expect(elapsed).toBeLessThan(750);
-  });
-
-  it('bounds a hanging Actions-ID token request by the wait deadline', async () => {
-    const env = await devEnv(dirs, {
-      ACTIONS_ID_TOKEN_REQUEST_URL: 'http://127.0.0.1:8080/id-token',
-      ACTIONS_ID_TOKEN_REQUEST_TOKEN: 'request-token-value',
-    });
-    let time = 0;
-    const clock = {
-      sleeps: [] as number[],
-      now: () => time,
-      sleep: (milliseconds: number) => {
-        clock.sleeps.push(milliseconds);
-        time += milliseconds;
-        return Promise.resolve();
-      },
-    };
-    const started = Date.now();
-    let idRequests = 0;
-    let exchanges = 0;
-    let decisions = 0;
-    let noteAborted: () => void = () => undefined;
-    // Resolves once the refresh's request is aborted: the signal the process waits on.
-    const aborted = new Promise<void>((resolve) => {
-      noteAborted = resolve;
-    });
-    const fetchImpl: typeof fetch = (input, init) => {
-      const request = input instanceof Request ? input : new Request(input, init);
-      const path = new URL(request.url).pathname;
-      if (path === '/id-token') {
-        idRequests += 1;
-        if (idRequests > 1) {
-          // The refresh's ID-token request never answers on its own: only the signal, which
-          // must carry the wait's deadline and not just the 30 s request timeout, ends it.
-          const signal = init?.signal ?? request.signal;
-          return new Promise<Response>((_resolve, reject) => {
-            signal.addEventListener(
-              'abort',
-              () => {
-                noteAborted();
-                reject(new DOMException('the operation was aborted', 'AbortError'));
-              },
-              { once: true },
-            );
-          });
-        }
-        return Promise.resolve(jsonResponse(200, { value: 'id-token-value' }));
-      }
-      if (path === '/v1/ci/token') {
-        exchanges += 1;
-        return Promise.resolve(jsonResponse(200, exchangeBody(`egt-token-${exchanges}`)));
-      }
-      decisions += 1;
-      if (decisions === 1) {
-        return Promise.resolve(decided(pending()));
-      }
-      time += 900;
-      return Promise.resolve(refusal(401, 'token_invalid'));
-    };
-    const out = capture();
-
-    const { code } = await invoke(gateArgv(['--run', runId, '--wait', '2s']), env, out, fetchImpl, {
-      clock,
-    });
-    const elapsed = Date.now() - started;
-
-    // Exit 3 and nothing on stdout: the wait ended on the credential, never on a verdict.
-    expect(code).toBe(3);
-    expect(out.stdout.join('')).toBe('');
-    expect(idRequests).toBe(2);
-    expect(exchanges).toBe(1);
-    expect(decisions).toBe(2);
-    expect(elapsed).toBeLessThan(750);
-    // Aborted at the deadline rather than at the 30 s request timeout, so no socket outlives
-    // the command. Awaiting the abort itself keeps this deterministic; a missing deadline
-    // bound surfaces as this spec timing out, which is the failure it exists to catch.
-    await aborted;
   });
 });

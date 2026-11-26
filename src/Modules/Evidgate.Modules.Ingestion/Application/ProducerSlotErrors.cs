@@ -31,10 +31,9 @@ internal static class ProducerSlotErrors
     /// </summary>
     internal static Error ArgumentOutOfRange => Error.Unprocessable(
         ApiErrorCode.RequestInvalid,
-        $"producerId must match {ProducerSlotLimits.ProducerIdPattern}, tokenJti 1..{ProducerSlotLimits.MaxTokenJtiLength} "
-        + $"and ciRunRef null or 1..{ProducerSlotLimits.MaxCiRunRefLength}");
+        $"producerId must match {ProducerSlotLimits.ProducerIdPattern} and ownerId 1..{ProducerSlotLimits.MaxOwnerIdLength}");
 
-    /// <summary>403: the slot is bound to another token identity or CI reference (T9).</summary>
+    /// <summary>403: the slot is bound to another authenticated owner (T9).</summary>
     internal static Error SlotTaken => Error.Denied(
         ApiErrorCode.ProducerSlotTaken,
         "the producer slot is bound to another token identity");

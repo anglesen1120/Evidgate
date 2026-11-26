@@ -151,7 +151,8 @@ test.describe('the onboarding wizard is WCAG 2.2 AA clean', () => {
         await seedStoredTheme(page, theme);
         const wizard = new OnboardingWizard(page);
         await wizard.open(locale, 'onboarding-project');
-        await wizard.expectStep(2);
+        await wizard.expectStep(3);
+        await wizard.retreatTo(2);
         expect(await currentTheme(page)).toBe(theme);
 
         await expectNoA11yViolations(page, `onboarding step 2 ${locale}/${theme}`);

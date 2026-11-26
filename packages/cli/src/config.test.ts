@@ -24,10 +24,8 @@ describe('resolveConfig', () => {
     expect(error.message).toContain('EVIDGATE_API_URL (or --api-url)');
     expect(error.message).toContain('EVIDGATE_PROJECT (or --project)');
     expect(error.message).toContain(tokenSourceNames);
-    expect(error.message).toContain('EVIDGATE_OIDC_TOKEN');
-    expect(error.message).toContain(
-      'ACTIONS_ID_TOKEN_REQUEST_URL + ACTIONS_ID_TOKEN_REQUEST_TOKEN',
-    );
+    expect(error.message).not.toContain('EVIDGATE_OIDC_TOKEN');
+    expect(error.message).not.toContain('ACTIONS_ID_TOKEN_REQUEST_URL');
     expect(error.message).toContain('EVIDGATE_INGEST_TOKEN');
     expect(error.message).toContain('EVIDGATE_DEV_TOKEN');
   });
@@ -126,9 +124,9 @@ describe('resolveConfig', () => {
           ACTIONS_ID_TOKEN_REQUEST_URL: 'https://actions.test',
           ACTIONS_ID_TOKEN_REQUEST_TOKEN: 'a',
         },
-        'actions-id-token',
+        undefined,
       ],
-      [{ ...baseEnv, EVIDGATE_OIDC_TOKEN: 'o' }, 'oidc'],
+      [{ ...baseEnv, EVIDGATE_OIDC_TOKEN: 'o' }, undefined],
     ];
     for (const [env, expected] of cases) {
       expect(resolveTokenSource(resolveConfig({ env }))).toBe(expected);
@@ -147,22 +145,11 @@ describe('resolveConfig', () => {
     resolveConfig({
       env: {
         ...baseEnv,
-        EVIDGATE_OIDC_TOKEN: 'oidc-secret',
-        ACTIONS_ID_TOKEN_REQUEST_URL: 'https://actions.test/oidc?token=url-secret',
-        ACTIONS_ID_TOKEN_REQUEST_TOKEN: 'actions-secret',
         EVIDGATE_INGEST_TOKEN: 'ingest-secret',
         EVIDGATE_DEV_TOKEN: 'dev-secret',
-        EVIDGATE_BINDING_CHALLENGE: 'challenge-secret',
       },
     });
-    for (const secret of [
-      'oidc-secret',
-      'https://actions.test/oidc?token=url-secret',
-      'actions-secret',
-      'ingest-secret',
-      'dev-secret',
-      'challenge-secret',
-    ]) {
+    for (const secret of ['ingest-secret', 'dev-secret']) {
       expect(redact(`value=${secret}`)).toBe(`value=${redacted}`);
     }
   });
@@ -245,23 +232,12 @@ describe('registerEnvSecrets', () => {
     resetSecrets();
   });
 
-  it('registers the six secret env values for redaction (QA-D1, D4/S2)', () => {
+  it('registers supported credential values for redaction', () => {
     registerEnvSecrets({
-      EVIDGATE_OIDC_TOKEN: 'oidc-secret',
-      ACTIONS_ID_TOKEN_REQUEST_URL: 'https://actions.test/oidc?token=url-secret',
-      ACTIONS_ID_TOKEN_REQUEST_TOKEN: 'actions-secret',
       EVIDGATE_INGEST_TOKEN: 'ingest-secret',
       EVIDGATE_DEV_TOKEN: 'dev-secret',
-      EVIDGATE_BINDING_CHALLENGE: 'challenge-secret',
     });
-    for (const secret of [
-      'oidc-secret',
-      'https://actions.test/oidc?token=url-secret',
-      'actions-secret',
-      'ingest-secret',
-      'dev-secret',
-      'challenge-secret',
-    ]) {
+    for (const secret of ['ingest-secret', 'dev-secret']) {
       expect(redact(`value=${secret}`)).toBe(`value=${redacted}`);
     }
   });
@@ -365,33 +341,5 @@ describe('resolveConfig cacheDir', () => {
       env: { ...baseEnv, EVIDGATE_CACHE_DIR: '/tmp/evidgate-cache' },
     });
     expect(formatConfigForVerbose(config)).toContain('cache_dir=/tmp/evidgate-cache');
-  });
-});
-
-// 04.2.1-T1.1 / D4, S2: the Actions ID-token request URL is a secret (it carries a
-// signed query), so the `--verbose` dump redacts it like every other secret.
-describe('formatConfigForVerbose', () => {
-  beforeEach(() => {
-    resetSecrets();
-  });
-
-  it('redacts ACTIONS_ID_TOKEN_REQUEST_URL and never prints it (D4, S2)', () => {
-    const url = 'https://actions.test/oidc?token=url-secret';
-    const config = resolveConfig({
-      env: {
-        ...baseEnv,
-        ACTIONS_ID_TOKEN_REQUEST_URL: url,
-        ACTIONS_ID_TOKEN_REQUEST_TOKEN: 'actions-secret',
-      },
-    });
-    const dump = formatConfigForVerbose(config);
-    expect(dump).toContain('actions_id_token_request_url=[REDACTED]');
-    expect(dump).not.toContain(url);
-    expect(dump).not.toContain('url-secret');
-  });
-
-  it('prints unset when ACTIONS_ID_TOKEN_REQUEST_URL is absent', () => {
-    const dump = formatConfigForVerbose(resolveConfig({ env: baseEnv }));
-    expect(dump).toContain('actions_id_token_request_url=unset');
   });
 });

@@ -11,7 +11,6 @@ import {
 
 /** The operations that mint one, and the only ones allowed to answer with a secret member. */
 const SECRET_MINTING_OPERATIONS: readonly string[] = [
-  'createCiBinding',
   'createIngestToken',
   'rotateIngestToken',
   'createMembership',
@@ -59,21 +58,7 @@ describe('Fixture contract check (09.1.1-T12.2, AC10)', () => {
       ).toEqual([]);
     }
 
-    // 2. The three creates do carry theirs, and their values are obviously fake: the corpus has no
-    //    real issuer, and 00 §5.7 S3 forbids a credential-shaped value.
-    const bindingCreate = corpusDocument('ci-binding-create');
-    expect([bindingCreate.operation_id, bindingCreate.status]).toEqual(['createCiBinding', 201]);
-    const bindingBody = bindingCreate.body as {
-      binding: { status: string };
-      binding_challenge: string;
-    };
-    expect(bindingBody.binding.status).toBe('pending_verification');
-    expect(bindingBody.binding_challenge).toContain('fixture_only');
-    // A JWT carries three dot-separated segments; a challenge that looked like one would read as
-    // a bearer credential in a page that shows it.
-    expect(bindingBody.binding_challenge.split('.')).toHaveLength(1);
-    expect(bindingBody.binding_challenge).not.toContain('eyJ');
-
+    // The issue and rotation responses must carry unmistakable fixture placeholders.
     const tokenCreate = corpusDocument('ingest-token-create');
     expect([tokenCreate.operation_id, tokenCreate.status]).toEqual(['createIngestToken', 201]);
     const tokenBody = tokenCreate.body as {
@@ -214,5 +199,13 @@ describe('Fixture contract check (09.1.1-T12.2, AC10)', () => {
     expect(body.error.code).toBe('rate_limited');
     expect(body.error.retryable).toBe(true);
     expect(oneTimeSecretMembers(refusal.body)).toEqual([]);
+  });
+
+  it('flags a retired binding_challenge wherever a document carries it, and ignores a null one', () => {
+    expect(
+      oneTimeSecretMembers({ items: [{ id: 'b-1', binding_challenge: 'fixture_only' }] }),
+    ).toEqual(['binding_challenge']);
+    expect(oneTimeSecretMembers({ binding: { id: 'b-1' }, binding_challenge: null })).toEqual([]);
+    expect(oneTimeSecretMembers({ items: [{ id: 'b-1' }], next_cursor: null })).toEqual([]);
   });
 });

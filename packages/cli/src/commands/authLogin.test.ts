@@ -93,19 +93,19 @@ describe('auth login / auth logout', () => {
     return dir;
   }
 
-  async function oidcEnv(extra: Record<string, string> = {}) {
+  async function ingestEnv(extra: Record<string, string> = {}) {
     const cacheDir = await tempCacheDir();
     return {
       EVIDGATE_API_URL: 'https://api.evidgate.test',
       EVIDGATE_PROJECT: 'proj-1',
       EVIDGATE_CACHE_DIR: cacheDir,
-      EVIDGATE_OIDC_TOKEN: 'jwt-value',
+      EVIDGATE_INGEST_TOKEN: 'ingest-value',
       ...extra,
     };
   }
 
-  it('oidc_env_exchanges_and_caches', async () => {
-    const env = await oidcEnv();
+  it('ingest_env_exchanges_and_caches', async () => {
+    const env = await ingestEnv();
     const { fetchImpl, calls } = stubFetch(() => jsonResponse(200, successBody()));
     const { io, stdout, stderr } = capture();
 
@@ -113,7 +113,7 @@ describe('auth login / auth logout', () => {
 
     expect(stdout.join('')).toBe(`ok expires_at=2030-01-01T00:00:00Z project_id=${projectId}\n`);
     expect(stderr.join('')).toBe('');
-    expect(calls[0]?.request.headers.get('authorization')).toBe('Bearer jwt-value');
+    expect(calls[0]?.request.headers.get('authorization')).toBeNull();
     const cached = JSON.parse(await readFile(tokenCachePath(resolveConfig({ env })), 'utf8')) as {
       token: string;
       expires_at: string;
@@ -147,7 +147,7 @@ describe('auth login / auth logout', () => {
 
   it('auth_failure_exit3', async () => {
     for (const status of [401, 403]) {
-      const env = await oidcEnv();
+      const env = await ingestEnv();
       const config = resolveConfig({ env });
       // A pre-existing cache entry must be purged so the next run re-authenticates.
       await writeCachedToken(config, {
@@ -174,7 +174,7 @@ describe('auth login / auth logout', () => {
     expect(text).toContain('evidgate: error missing_config:');
     expect(text).toContain('EVIDGATE_API_URL (or --api-url)');
     expect(text).toContain('EVIDGATE_PROJECT (or --project)');
-    expect(text).toContain('EVIDGATE_OIDC_TOKEN');
+    expect(text).not.toContain('EVIDGATE_OIDC_TOKEN');
     expect(text).toContain('EVIDGATE_INGEST_TOKEN');
 
     // A dev source is not exchangeable: the exchange names the sources it needs.
@@ -186,11 +186,11 @@ describe('auth login / auth logout', () => {
       EVIDGATE_DEV_TOKEN: 'dev-token-value',
     };
     await expect(main(['auth', 'login'], devEnv, dev.io)).resolves.toBe(3);
-    expect(dev.stderr.join('')).toContain('an exchange token source');
+    expect(dev.stderr.join('')).toContain('EVIDGATE_INGEST_TOKEN');
   });
 
   it('login_json_never_contains_token', async () => {
-    const env = await oidcEnv();
+    const env = await ingestEnv();
     const { fetchImpl } = stubFetch(() => jsonResponse(200, successBody()));
     const { io, stdout, stderr } = capture();
 
@@ -213,7 +213,7 @@ describe('auth login / auth logout', () => {
       EVIDGATE_API_URL: 'https://api.evidgate.test',
       EVIDGATE_PROJECT: 'proj-1',
       EVIDGATE_CACHE_DIR: cacheDir,
-      EVIDGATE_OIDC_TOKEN: 'jwt-value',
+      EVIDGATE_INGEST_TOKEN: 'ingest-value',
       GITHUB_ENV: githubEnvPath,
     };
     const { fetchImpl } = stubFetch(() => jsonResponse(200, successBody()));
@@ -235,7 +235,7 @@ describe('auth login / auth logout', () => {
   });
 
   it('github_env_unset_exit3', async () => {
-    const env = await oidcEnv();
+    const env = await ingestEnv();
     const { fetchImpl, calls } = stubFetch(() => jsonResponse(200, successBody()));
     const { io, stderr } = capture();
 
@@ -251,7 +251,7 @@ describe('auth login / auth logout', () => {
   });
 
   it('purge_failure_surfaces_server_code', async () => {
-    const env = await oidcEnv();
+    const env = await ingestEnv();
     const config = resolveConfig({ env });
     // A directory at the cache path makes the purge fail (EISDIR); the server's code
     // must still be the one reported (C2).
@@ -266,29 +266,8 @@ describe('auth login / auth logout', () => {
     expect(text).not.toContain('token_cache_error');
   });
 
-  it('binding_errors_exit3', async () => {
-    const cases = [
-      { status: 403, code: 'binding_pending', hint: 'EVIDGATE_BINDING_CHALLENGE' },
-      { status: 409, code: 'binding_conflict', hint: 'disable that binding first' },
-    ];
-    for (const { status, code, hint } of cases) {
-      const env = await oidcEnv();
-      const { fetchImpl, calls } = stubFetch(() => jsonResponse(status, envelope(code)));
-      const { io, stderr } = capture();
-
-      await expect(main(['auth', 'login'], env, io, { fetch: fetchImpl })).resolves.toBe(3);
-
-      const text = stderr.join('');
-      expect(text).toContain(`evidgate: error ${code}:`);
-      expect(text).toContain('evidgate: request_id: req-1');
-      expect(text).toContain('evidgate: hint:');
-      expect(text).toContain(hint);
-      expect(calls).toHaveLength(1);
-    }
-  });
-
   it('transport_error_exit3', async () => {
-    const env = await oidcEnv();
+    const env = await ingestEnv();
     const fetchImpl: typeof fetch = () => Promise.reject(new TypeError('fetch failed'));
     const { io, stderr } = capture();
 

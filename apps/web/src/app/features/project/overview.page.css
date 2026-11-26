@@ -15,10 +15,6 @@
   font-size: var(--eg-text-sm);
 }
 @media (min-width: 768px) {
-  .dashboard-grid:has([data-dashboard-ci]) > [data-dashboard-authoring],
-  .dashboard-grid:has([data-dashboard-authoring]) > [data-dashboard-ci] {
-    grid-column: span 6;
-  }
   .dashboard-grid:has([data-dashboard-attention]) > [data-dashboard-trend] {
     grid-column: span 7;
   }

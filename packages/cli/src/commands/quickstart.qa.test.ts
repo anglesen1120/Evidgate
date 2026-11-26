@@ -139,7 +139,7 @@ describe('quickstart independent QA', () => {
   });
 });
 
-describe('quickstart file and OIDC cache QA', () => {
+describe('quickstart file and ingest-token cache', () => {
   let originalCwd: string;
   let cwd: string;
   const dirs: string[] = [];
@@ -217,13 +217,12 @@ describe('quickstart file and OIDC cache QA', () => {
     );
   });
 
-  it('exchanges the Actions JWT once, then uploads with the cached token without github-env', async () => {
+  it('exchanges the ingest token once, then uploads with the cached producer token', async () => {
     const cache = join(cwd, 'cache');
     const authEnv = {
       ...env,
       EVIDGATE_CACHE_DIR: cache,
-      ACTIONS_ID_TOKEN_REQUEST_URL: 'https://actions.evidgate.test/token',
-      ACTIONS_ID_TOKEN_REQUEST_TOKEN: 'qa-request-credential',
+      EVIDGATE_INGEST_TOKEN: 'qa-ingest-credential',
     };
     const calls: { url: string; authorization: string | null; method: string }[] = [];
     const fetchImpl: typeof fetch = (input, init) => {
@@ -234,8 +233,7 @@ describe('quickstart file and OIDC cache QA', () => {
         method: request.method,
       });
       let body: unknown;
-      if (request.url.startsWith('https://actions.evidgate.test/')) body = { value: 'qa-oidc-jwt' };
-      else if (request.url.endsWith('/v1/ci/token'))
+      if (request.url.endsWith('/v1/ci/token'))
         body = {
           token: 'qa-producer-token',
           expires_at: new Date(Date.now() + 600_000).toISOString(),
@@ -269,13 +267,8 @@ describe('quickstart file and OIDC cache QA', () => {
     ).toBe(0);
     expect(calls).toEqual([
       {
-        url: 'https://actions.evidgate.test/token?audience=evidgate',
-        authorization: 'bearer qa-request-credential',
-        method: 'GET',
-      },
-      {
         url: 'https://api.evidgate.test/v1/ci/token',
-        authorization: 'Bearer qa-oidc-jwt',
+        authorization: null,
         method: 'POST',
       },
       {
@@ -285,7 +278,7 @@ describe('quickstart file and OIDC cache QA', () => {
       },
     ]);
     const output = [...login.stdout, ...login.stderr, ...upload.stdout, ...upload.stderr].join('');
-    for (const secret of ['qa-request-credential', 'qa-oidc-jwt', 'qa-producer-token'])
+    for (const secret of ['qa-ingest-credential', 'qa-producer-token'])
       expect(output).not.toContain(secret);
   });
 });

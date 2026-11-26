@@ -20,10 +20,11 @@ internal enum SniffResult
 /// the leading bytes of the object must agree. The table is complete for every media type the product accepts
 /// (06.3.1-T2.2) — the XML family (<c>application/xml</c>, <c>text/xml</c>, <c>application/*+xml</c> in UTF-8,
 /// UTF-16 or UTF-32 by BOM), the JSON family (<c>application/json</c>, <c>application/*+json</c>),
-/// <c>text/html</c>, <c>application/zip</c>, <c>image/png</c>, <c>image/jpeg</c> and <c>video/mp4</c> — and a
-/// declared type outside it is a <see cref="SniffResult.Mismatch"/> (fail closed). <c>image/svg+xml</c>,
-/// <c>text/plain</c>, <c>application/octet-stream</c>, <c>application/pdf</c> and every other type are therefore
-/// explicitly rejected rather than waved through.
+/// <c>text/html</c>, <c>application/zip</c>, <c>image/png</c>, <c>image/jpeg</c>, <c>image/webp</c>,
+/// <c>video/mp4</c>, <c>application/pdf</c> and the DOCX type — and a declared type outside it is a
+/// <see cref="SniffResult.Mismatch"/> (fail closed). <c>image/svg+xml</c>, <c>text/plain</c>,
+/// <c>application/octet-stream</c> and every other type are therefore explicitly rejected rather than waved
+/// through.
 /// <para>
 /// The check is pure and allocation-free: it walks a <see cref="ReadOnlySpan{T}"/> of at most
 /// <see cref="ParsingLimits.SniffPrefixBytes"/> bytes, never throws and never puts a byte into anything it
@@ -41,6 +42,9 @@ internal static partial class MediaSniffer
     private const string PngType = "image/png";
     private const string JpegType = "image/jpeg";
     private const string Mp4Type = "video/mp4";
+    private const string WebpType = "image/webp";
+    private const string PdfType = "application/pdf";
+    private const string DocxType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
     private const string ApplicationPrefix = "application/";
 
     /// <summary>
@@ -75,31 +79,50 @@ internal static partial class MediaSniffer
             return CheckHtml(prefix);
         }
 
-        if (bare.Equals(ZipType.AsSpan(), StringComparison.OrdinalIgnoreCase))
+        return CheckBinary(bare, prefix);
+    }
+
+    /// <summary>
+    /// The binary types. Anything not listed is a mismatch (fail closed): image/svg+xml, text/plain,
+    /// application/octet-stream and every policy allow-list entry with no signature land here.
+    /// </summary>
+    private static SniffResult CheckBinary(ReadOnlySpan<char> bare, ReadOnlySpan<byte> prefix)
+    {
+        if (Is(bare, ZipType))
         {
             return CheckZip(prefix);
         }
 
-        if (bare.Equals(PngType.AsSpan(), StringComparison.OrdinalIgnoreCase))
+        if (Is(bare, DocxType))
+        {
+            return CheckDocx(prefix);
+        }
+
+        if (Is(bare, PdfType))
+        {
+            return CheckPdf(prefix);
+        }
+
+        if (Is(bare, PngType))
         {
             return CheckPng(prefix);
         }
 
-        if (bare.Equals(JpegType.AsSpan(), StringComparison.OrdinalIgnoreCase))
+        if (Is(bare, JpegType))
         {
             return CheckJpeg(prefix);
         }
 
-        if (bare.Equals(Mp4Type.AsSpan(), StringComparison.OrdinalIgnoreCase))
+        if (Is(bare, WebpType))
         {
-            return CheckMp4(prefix);
+            return CheckWebp(prefix);
         }
 
-        // Fail closed (06.3.1-T2.2): a declared type the table does not know can never be verified, so it is a
-        // mismatch, never a pass. image/svg+xml, text/plain, application/octet-stream, application/pdf and every
-        // other type — including any policy allow-list entry with no signature — land here.
-        return SniffResult.Mismatch;
+        return Is(bare, Mp4Type) ? CheckMp4(prefix) : SniffResult.Mismatch;
     }
+
+    private static bool Is(ReadOnlySpan<char> bare, string type) =>
+        bare.Equals(type.AsSpan(), StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// True when the profile holds a signature for <paramref name="declaredMediaType"/> (06.3.1-T2.2), so
@@ -123,10 +146,13 @@ internal static partial class MediaSniffer
         return IsXml(bare)
             || IsJson(bare)
             || bare.Equals(HtmlType.AsSpan(), StringComparison.OrdinalIgnoreCase)
-            || bare.Equals(ZipType.AsSpan(), StringComparison.OrdinalIgnoreCase)
-            || bare.Equals(PngType.AsSpan(), StringComparison.OrdinalIgnoreCase)
-            || bare.Equals(JpegType.AsSpan(), StringComparison.OrdinalIgnoreCase)
-            || bare.Equals(Mp4Type.AsSpan(), StringComparison.OrdinalIgnoreCase);
+            || Is(bare, ZipType)
+            || Is(bare, DocxType)
+            || Is(bare, PdfType)
+            || Is(bare, PngType)
+            || Is(bare, JpegType)
+            || Is(bare, WebpType)
+            || Is(bare, Mp4Type);
     }
 
     /// <summary>The bare type: the parameters after the first <c>;</c> are dropped, surrounding whitespace trimmed.</summary>
@@ -294,6 +320,31 @@ internal static partial class MediaSniffer
     /// <summary>JPEG must start with the SOI marker (<c>FF D8</c>) followed by another marker byte (<c>FF</c>).</summary>
     private static SniffResult CheckJpeg(ReadOnlySpan<byte> prefix) =>
         prefix.Length >= 3 && prefix[0] == 0xFF && prefix[1] == 0xD8 && prefix[2] == 0xFF
+            ? SniffResult.Match
+            : SniffResult.Mismatch;
+
+    /// <summary>
+    /// A DOCX is a zip that begins with a local file header: <c>PK\x03\x04</c> only. The empty-archive record
+    /// (<c>PK\x05\x06</c>) is no document, so unlike <c>application/zip</c> it is a mismatch.
+    /// </summary>
+    private static SniffResult CheckDocx(ReadOnlySpan<byte> prefix) =>
+        prefix.Length >= 4 && prefix[0] == (byte)'P' && prefix[1] == (byte)'K' && prefix[2] == 0x03 && prefix[3] == 0x04
+            ? SniffResult.Match
+            : SniffResult.Mismatch;
+
+    /// <summary>A PDF starts with the five bytes <c>%PDF-</c> at offset 0 (no leading junk is tolerated).</summary>
+    private static SniffResult CheckPdf(ReadOnlySpan<byte> prefix) =>
+        prefix.Length >= 5
+        && prefix[0] == (byte)'%' && prefix[1] == (byte)'P' && prefix[2] == (byte)'D' && prefix[3] == (byte)'F'
+        && prefix[4] == (byte)'-'
+            ? SniffResult.Match
+            : SniffResult.Mismatch;
+
+    /// <summary>WebP is a RIFF container: <c>RIFF</c>, a four-byte size, then <c>WEBP</c> at offset 8.</summary>
+    private static SniffResult CheckWebp(ReadOnlySpan<byte> prefix) =>
+        prefix.Length >= 12
+        && prefix[0] == (byte)'R' && prefix[1] == (byte)'I' && prefix[2] == (byte)'F' && prefix[3] == (byte)'F'
+        && prefix[8] == (byte)'W' && prefix[9] == (byte)'E' && prefix[10] == (byte)'B' && prefix[11] == (byte)'P'
             ? SniffResult.Match
             : SniffResult.Mismatch;
 

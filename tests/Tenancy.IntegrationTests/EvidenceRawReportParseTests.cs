@@ -340,7 +340,7 @@ public sealed partial class EvidenceRawReportParseTests(PostgresTenancyFixture f
             project = await CreateProjectAsync(setup, user, org, Unique.Slug("checkout"));
         }
 
-        var principal = RequestPrincipal.Service(projectScope: null, [Permissions.Artifact.Write], credentialId: "jti-report-1");
+        var principal = RequestPrincipal.Service(projectScope: null, [Permissions.Artifact.Write], credentialId: IngestTestWorld.OwnerId);
         var applicationName = "evidgate-raw-report-" + Guid.NewGuid().ToString("N");
         var hostConnection = new NpgsqlConnectionStringBuilder(_fixture.AppConnectionString(database))
         {

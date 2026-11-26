@@ -33,8 +33,6 @@ public sealed partial class EvidenceCaptureOptionsTests : IClassFixture<TenancyH
 
     private const string ProducerId = "shard-1";
 
-    private const string Jti = "jti-capture-options-1";
-
     /// <summary>The object-store configuration the upload route needs: presigning never connects.</summary>
     private static readonly Dictionary<string, string?> ObjectStorage = new(StringComparer.Ordinal)
     {
@@ -217,7 +215,7 @@ public sealed partial class EvidenceCaptureOptionsTests : IClassFixture<TenancyH
 
         answer.Status.ShouldBe(HttpStatusCode.OK, answer.ErrorMessage);
         // The raw answer, not only the parsed map: one entry per contract kind, in contract order, every kind once.
-        answer.Body.GetProperty("kinds").GetArrayLength().ShouldBe(8);
+        answer.Body.GetProperty("kinds").GetArrayLength().ShouldBe(10);
         answer.Body.GetProperty("kinds").EnumerateArray()
             .Select(kind => kind.GetProperty("kind").GetString())
             .ShouldBe(ArtifactKinds.All);
@@ -229,6 +227,8 @@ public sealed partial class EvidenceCaptureOptionsTests : IClassFixture<TenancyH
         // a capture the upload route would refuse.
         options["dom_snapshot"].Enabled.ShouldBeFalse();
         options["ui_hierarchy"].Enabled.ShouldBeFalse();
+        options["requirement_document"].Enabled.ShouldBeTrue();
+        options["requirement_image"].Enabled.ShouldBeTrue();
     }
 
     [Fact]
@@ -419,7 +419,7 @@ public sealed partial class EvidenceCaptureOptionsTests : IClassFixture<TenancyH
 
         var runId = await SeedRunAsync(world);
         var writer = world.ClientFor(RequestPrincipal.Service(
-            projectScope: null, [Permissions.Artifact.Write], credentialId: Jti));
+            projectScope: null, [Permissions.Artifact.Write], credentialId: IngestTestWorld.OwnerId));
 
         var answer = await writer.SendAsync(
             HttpMethod.Post, "/v1/artifacts/upload-url", NoCaller,
@@ -465,9 +465,9 @@ public sealed partial class EvidenceCaptureOptionsTests : IClassFixture<TenancyH
 
         (await scope.ExecuteAsync(
             "insert into public.producer_slot (id, org_id, run_id, shard_index, producer_id, bound_token_jti) "
-            + "values (@id, @org_id, @run_id, 1, @producer_id, @jti)",
+            + "values (@id, @org_id, @run_id, 1, @producer_id, @owner_id)",
             ("id", Guid.CreateVersion7()), ("org_id", world.Org), ("run_id", runId), ("producer_id", ProducerId),
-            ("jti", Jti))).ShouldBe(1);
+            ("owner_id", IngestTestWorld.OwnerId))).ShouldBe(1);
 
         await scope.CommitAsync();
 

@@ -5,10 +5,9 @@ import { OnboardingDataService } from '../../../core/data/onboarding-data.servic
 import { SessionStore } from '../../../core/session/session.store';
 import { RevealSlot } from '../../../shared/ui/reveal/one-time-reveal.slot';
 import { OnboardingStore } from '../onboarding.store';
-import { TOKEN } from '../onboarding.store.test-support';
 import { provideDesktopOnboardingViewport } from '../onboarding-viewport.testing';
 import { ConnectCiPage } from './connect-ci.page';
-
+import { TOKEN, provideTokenInventory } from './connect-ci.page.test-support';
 function required<T extends Element>(root: HTMLElement, selector: string): T {
   const result = root.querySelector<T>(selector);
   if (!result) throw new Error(`Missing ${selector}`);
@@ -31,6 +30,7 @@ describe('ConnectCiPage command lifetime boundaries', () => {
         }),
     );
     refresh.mockReset().mockResolvedValue(undefined);
+    provideTokenInventory({ tokens: signal([]), refreshTokens: refresh });
     TestBed.configureTestingModule({
       imports: [ConnectCiPage],
       providers: [
@@ -40,16 +40,7 @@ describe('ConnectCiPage command lifetime boundaries', () => {
         {
           provide: OnboardingStore,
           useValue: {
-            bindings: signal([]),
-            tokens: signal([]),
-            bindingsTruncated: signal(false),
-            tokensTruncated: signal(false),
             project: signal({ slug: 'web' }),
-            done: signal({ 2: true }),
-            canGoNext: signal(true),
-            refreshing: signal(false),
-            refreshFailure: signal(null),
-            refresh,
           },
         },
         {
@@ -120,28 +111,30 @@ describe('ConnectCiPage command lifetime boundaries', () => {
     },
   );
 
-  it('does not resurrect a late answer after leaving and returning to the same step', async () => {
+  it('reconciles a committed token after re-entry without resurrecting its secret', async () => {
     await startCommand();
     fixture.componentRef.setInput('active', false);
     await fixture.whenStable();
     fixture.componentRef.setInput('active', true);
     await fixture.whenStable();
     resolveCommand({ token: TOKEN, secret: 'synthetic-late-answer' });
-    await fixture.whenStable();
+    await vi.waitFor(() => expect(refresh).toHaveBeenCalledExactlyOnceWith('org-1', 'project-1'));
     fixture.detectChanges();
     expectNoReveal();
     expect(required<HTMLInputElement>(root, '#connect-token-name').value).toBe('Non-secret draft');
   });
 
-  it('reconciles metadata once for a late answer while the step is hidden and reveals nothing', async () => {
+  it('does not reload the optional inventory or reveal a late answer while the step is hidden', async () => {
     await startCommand();
     fixture.componentRef.setInput('active', false);
     await fixture.whenStable();
     resolveCommand({ token: TOKEN, secret: 'synthetic-late-answer' });
-    await vi.waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
-    expect(refresh).toHaveBeenCalledWith('org-1', 'project-1');
     await fixture.whenStable();
+    expect(refresh).not.toHaveBeenCalled();
     expectNoReveal();
+    expect(root.querySelector('#connect-token-name')).toBeNull();
+    fixture.componentRef.setInput('active', true);
+    await fixture.whenStable();
     expect(required<HTMLInputElement>(root, '#connect-token-name').value).toBe('Non-secret draft');
   });
 
@@ -162,5 +155,6 @@ describe('ConnectCiPage command lifetime boundaries', () => {
     await fixture.whenStable();
     fixture.detectChanges();
     expectNoReveal();
+    expect(refresh).not.toHaveBeenCalled();
   });
 });

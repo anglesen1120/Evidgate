@@ -9,12 +9,8 @@ export const envNames = {
   apiUrl: 'EVIDGATE_API_URL',
   project: 'EVIDGATE_PROJECT',
   env: 'EVIDGATE_ENV',
-  oidcToken: 'EVIDGATE_OIDC_TOKEN',
-  actionsIdTokenRequestUrl: 'ACTIONS_ID_TOKEN_REQUEST_URL',
-  actionsIdTokenRequestToken: 'ACTIONS_ID_TOKEN_REQUEST_TOKEN',
   ingestToken: 'EVIDGATE_INGEST_TOKEN',
   devToken: 'EVIDGATE_DEV_TOKEN',
-  bindingChallenge: 'EVIDGATE_BINDING_CHALLENGE',
   cacheDir: 'EVIDGATE_CACHE_DIR',
   spoolDir: 'EVIDGATE_SPOOL_DIR',
   spoolMaxBytes: 'EVIDGATE_SPOOL_MAX_BYTES',
@@ -25,9 +21,7 @@ export const apiUrlNames = `${envNames.apiUrl} (or --api-url)`;
 export const projectNames = `${envNames.project} (or --project)`;
 
 /** The single `missing_config` entry for "no token source is set". */
-export const tokenSourceNames =
-  `a token source: ${envNames.oidcToken}, ${envNames.actionsIdTokenRequestUrl} + ` +
-  `${envNames.actionsIdTokenRequestToken}, ${envNames.ingestToken} or ${envNames.devToken}`;
+export const tokenSourceNames = `a token source: ${envNames.ingestToken} or ${envNames.devToken}`;
 
 /**
  * Registers every secret env value for redaction. `main` calls it before parsing argv
@@ -35,13 +29,8 @@ export const tokenSourceNames =
  * calls it too, so a direct caller is covered.
  */
 export function registerEnvSecrets(env: Readonly<Record<string, string | undefined>>): void {
-  registerSecret(rawEnv(env, envNames.oidcToken));
-  // The request URL carries a signed query, so it is a secret too.
-  registerSecret(rawEnv(env, envNames.actionsIdTokenRequestUrl));
-  registerSecret(rawEnv(env, envNames.actionsIdTokenRequestToken));
   registerSecret(rawEnv(env, envNames.ingestToken));
   registerSecret(rawEnv(env, envNames.devToken));
-  registerSecret(rawEnv(env, envNames.bindingChallenge));
 }
 
 /** Raw env read: an empty string counts as unset. */

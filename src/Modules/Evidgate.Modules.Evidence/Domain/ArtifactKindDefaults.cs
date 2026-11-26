@@ -78,12 +78,14 @@ internal sealed record EffectiveKindPolicy(
 /// <summary>
 /// The static per-kind defaults of DECISIONS §8.1 D-A9 and their resolution against a project's
 /// <c>artifact_kind_policy</c> row (06.1.2-T3.1, 06.1.2 §10 T3.1 "seeded as <c>artifact_kind_policy</c> fallback
-/// when no project row exists"). Four of the eight 00 §7 kinds get a default:
+/// when no project row exists"). Six of the ten 00 §7 kinds get a default:
 /// <list type="table">
 /// <item><term><c>trace</c></term><description>100 MiB, <c>application/zip</c></description></item>
 /// <item><term><c>video</c></term><description>200 MiB, <c>video/mp4</c></description></item>
 /// <item><term><c>screenshot</c></term><description>10 MiB, <c>image/png</c>, <c>image/jpeg</c></description></item>
 /// <item><term><c>raw_report</c></term><description>256 MiB, the XML family, <c>application/json</c>, <c>text/html</c>, <c>application/zip</c></description></item>
+/// <item><term><c>requirement_document</c></term><description>25 MiB, DOCX, PDF</description></item>
+/// <item><term><c>requirement_image</c></term><description>10 MiB, <c>image/png</c>, <c>image/jpeg</c>, <c>image/webp</c></description></item>
 /// </list>
 /// D-A9's <c>html_report</c> (100 MiB) folds into <c>raw_report</c>, whose 256 MiB cap is the higher of the two;
 /// D-A9's <c>log</c> (20 MiB) has no kind in the 00 §7 closed list and is therefore unmapped, not implemented.
@@ -124,6 +126,15 @@ internal static class ArtifactKindDefaults
     /// <summary>A screenshot's JPEG.</summary>
     private const string JpegType = "image/jpeg";
 
+    /// <summary>A requirement image's WebP.</summary>
+    private const string WebpType = "image/webp";
+
+    /// <summary>A requirement document's DOCX (an OOXML zip container).</summary>
+    private const string DocxType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+
+    /// <summary>A requirement document's PDF.</summary>
+    private const string PdfType = "application/pdf";
+
     /// <summary>The recorded video type (the only video container the sniffer recognises).</summary>
     private const string Mp4Type = "video/mp4";
 
@@ -139,6 +150,12 @@ internal static class ArtifactKindDefaults
     /// <summary>The XML family, JSON, HTML and the plain zip a runner report may be.</summary>
     private static readonly string[] RawReportTypes = [XmlType, TextXmlType, JsonType, HtmlType, ZipType];
 
+    /// <summary>The two document types a requirement document may be.</summary>
+    private static readonly string[] RequirementDocumentTypes = [DocxType, PdfType];
+
+    /// <summary>The three image types a requirement image may be.</summary>
+    private static readonly string[] RequirementImageTypes = [PngType, JpegType, WebpType];
+
     /// <summary>
     /// The table, in the 00 §7 contract order of the kinds that have a default: the single source both the lookup
     /// and <see cref="Kinds"/> are built from, so the published contract file (06.1.2-T3.2) and the code cannot
@@ -150,6 +167,8 @@ internal static class ArtifactKindDefaults
         (ArtifactKind.Video, new ArtifactKindDefault(200L * 1024 * 1024, VideoTypes)),
         (ArtifactKind.Screenshot, new ArtifactKindDefault(10L * 1024 * 1024, ScreenshotTypes)),
         (ArtifactKind.RawReport, new ArtifactKindDefault(256L * 1024 * 1024, RawReportTypes)),
+        (ArtifactKind.RequirementDocument, new ArtifactKindDefault(25L * 1024 * 1024, RequirementDocumentTypes)),
+        (ArtifactKind.RequirementImage, new ArtifactKindDefault(10L * 1024 * 1024, RequirementImageTypes)),
     ];
 
     private static readonly Dictionary<string, ArtifactKindDefault> ByKind =

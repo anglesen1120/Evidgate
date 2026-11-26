@@ -37,9 +37,6 @@ public sealed class EvidenceUploadUrlBodyLimitTests(PostgresTenancyFixture fixtu
 
     private const string ZipType = "application/zip";
 
-    /// <summary>The caller's token id (the slot-binding identity, T9).</summary>
-    private const string Jti = "jti-body-limit-1";
-
     private const string ProducerId = "shard-1";
 
     private sealed record World(
@@ -60,7 +57,7 @@ public sealed class EvidenceUploadUrlBodyLimitTests(PostgresTenancyFixture fixtu
 
     /// <summary>A service principal holding <c>artifact:write</c> and a token id (the slot-binding identity).</summary>
     private static RequestPrincipal Writer() =>
-        RequestPrincipal.Service(projectScope: null, [Permissions.Artifact.Write], credentialId: Jti);
+        RequestPrincipal.Service(projectScope: null, [Permissions.Artifact.Write], credentialId: IngestTestWorld.OwnerId);
 
     private async Task<World> StartAsync()
     {
@@ -211,7 +208,7 @@ public sealed class EvidenceUploadUrlBodyLimitTests(PostgresTenancyFixture fixtu
 
         answer.Status.ShouldBe(HttpStatusCode.OK, answer.ErrorMessage);
         (await ArtifactRowsAsync(world)).ShouldBe(1);
-        (await SlotBindingAsync(world, runId)).ShouldBe(Jti);
+        (await SlotBindingAsync(world, runId)).ShouldBe(IngestTestWorld.OwnerId);
     }
 
     /// <summary>
@@ -267,14 +264,14 @@ public sealed class EvidenceUploadUrlBodyLimitTests(PostgresTenancyFixture fixtu
 
         atLimit.Status.ShouldBe(HttpStatusCode.OK, atLimit.ErrorMessage);
         (await ArtifactRowsAsync(world)).ShouldBe(1);
-        (await SlotBindingAsync(world, runId)).ShouldBe(Jti);
+        (await SlotBindingAsync(world, runId)).ShouldBe(IngestTestWorld.OwnerId);
 
         var overLimit = await SendStreamedAsync(
             world.Client, Encoding.UTF8.GetBytes(PaddedBody(runId, UploadUrlLimits.MaxBodyBytes + 1)), NewKey());
 
         ShouldBeOverTheLimit(overLimit);
         (await ArtifactRowsAsync(world)).ShouldBe(1);
-        (await SlotBindingAsync(world, runId)).ShouldBe(Jti);
+        (await SlotBindingAsync(world, runId)).ShouldBe(IngestTestWorld.OwnerId);
     }
 
     /// <summary>

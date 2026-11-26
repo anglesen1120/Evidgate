@@ -9,7 +9,7 @@ import {
   LOCALE_ID,
   output,
 } from '@angular/core';
-import type { CiBindingView, IngestTokenView } from '@evidgate/sdk';
+import type { IngestTokenView } from '@evidgate/sdk';
 import { HlmCardImports } from '@evidgate/ui/card';
 import { HlmAlertImports } from '@evidgate/ui/alert';
 import { HlmTableImports } from '@evidgate/ui/table';
@@ -90,12 +90,12 @@ import type {
             </tr>
           </thead>
           <tbody hlmTBody>
-            @for (row of rows(); track row.credential.kind + ':' + row.credential.id) {
+            @for (row of rows(); track row.credential.id) {
               <tr hlmTr class="h-(--eg-space-11)" data-testid="connection-health-credential">
                 <th hlmTh scope="row">
                   <bdi class="font-semibold text-foreground">{{ row.credential.label }}</bdi
                   ><span class="block text-xs font-normal text-muted-foreground">{{
-                    row.credential.kind === 'token' ? tokenKind : bindingKind
+                    tokenKind
                   }}</span>
                 </th>
                 <td hlmTd>
@@ -120,7 +120,7 @@ import type {
                     <dl class="hlm-field-grid">
                       <div>
                         <dt>{{ copy.credential }}</dt>
-                        <dd>{{ row.credential.kind === 'token' ? tokenKind : bindingKind }}</dd>
+                        <dd>{{ tokenKind }}</dd>
                       </div>
                       <div class="hlm-field-wide">
                         <dt>{{ copy.identifier }}</dt>
@@ -171,7 +171,7 @@ import type {
       </div>
       <app-onboarding-table-range
         [appOnboardingTableRange]="rows().length"
-        [truncated]="bindingsTruncated() || tokensTruncated()"
+        [truncated]="tokensTruncated()"
       />
       <p
         class="grid min-w-0 gap-(--eg-space-1) rounded-(--eg-radius-md) bg-muted p-(--eg-space-4) [&_strong]:text-foreground [&_time]:tabular-nums"
@@ -188,7 +188,7 @@ import type {
       @if (health().lastTokenUseIsLowerBound) {
         <p>{{ lowerBoundHint }}</p>
       }
-      @if (bindingsTruncated() || tokensTruncated()) {
+      @if (tokensTruncated()) {
         <p hlmAlert role="note" class="text-sm">{{ truncationHint }}</p>
       }
     </section>
@@ -200,19 +200,17 @@ export class ConnectionHealthComponent {
   readonly fetching = input(false);
   readonly health = input.required<ConnectionHealth>();
   readonly tokens = input.required<readonly IngestTokenView[]>();
-  readonly bindingsTruncated = input(false);
   readonly tokensTruncated = input(false);
   readonly viewRecord = output<OnboardingRecordView>();
   protected readonly copy = RECORD_COPY;
   protected readonly credentialHealth = $localize`:@@onboarding.record.health-caption:Credential health`;
   protected readonly tokenKind = $localize`:@@onboarding.connect.token-title:Ingest token`;
-  protected readonly bindingKind = $localize`:@@onboarding.record.binding-kind:CI binding`;
   protected readonly subsectionHeadingSize = 'subsection' as const;
 
   protected readonly rows = computed(() => {
     const tokens = new Map(this.tokens().map((token) => [token.id, token]));
     return this.health().credentials.map((credential) => {
-      const token = credential.kind === 'token' ? tokens.get(credential.id) : undefined;
+      const token = tokens.get(credential.id);
       return {
         credential,
         expiresAt: token?.expires_at ?? null,
@@ -226,36 +224,28 @@ export class ConnectionHealthComponent {
   protected readonly overlapLabel = $localize`:@@onboarding.health.overlap:Rotation overlap ends (UTC):`;
   protected readonly lastUseLabel = $localize`:@@onboarding.health.last-use:Last successful token use (UTC)`;
   protected readonly notRecorded = $localize`:@@onboarding.health.not-recorded:Not recorded`;
-  protected readonly lastUseHint = $localize`:@@onboarding.health.last-use-hint:Token use is not a project-wide ingest timestamp. OIDC-only activity is not shown, and token-use timestamps are updated at most once every 60 seconds.`;
+  protected readonly lastUseHint = $localize`:@@onboarding.health.last-use-hint:Token use is not a project-wide ingest timestamp. Token-use timestamps are updated at most once every 60 seconds.`;
   protected readonly lowerBoundHint = $localize`:@@onboarding.health.lower-bound:The token list is incomplete. The latest token use shown may be older than the newest use; an unlisted token may have been used more recently.`;
   protected readonly truncationHint = $localize`:@@onboarding.health.truncated:Only part of the credential list is shown. Health reflects the listed credentials; an unlisted credential may still be usable.`;
   protected readonly stateLabels: Record<ConnectionHealthState, string> = {
     healthy: $localize`:@@onboarding.health.state-healthy:Healthy`,
-    pending: $localize`:@@onboarding.health.state-pending:Pending`,
     unhealthy: $localize`:@@onboarding.health.state-unhealthy:Unhealthy`,
     unknown: $localize`:@@onboarding.health.state-unknown:Unknown`,
   };
   protected readonly tones: Record<ConnectionHealthState, StatusTone> = {
     healthy: 'success',
-    pending: 'neutral',
     unhealthy: 'danger',
     unknown: 'neutral',
   };
   protected readonly reasonLabels: Record<ConnectionHealth['reason'], string> = {
     usable: $localize`:@@onboarding.health.reason-usable:At least one listed credential is usable. This does not confirm a successful ingest.`,
     'rotating-only': $localize`:@@onboarding.health.reason-rotating:Only tokens in their rotation overlap are usable. Update CI to use the replacement before the overlap ends.`,
-    'pending-verification': $localize`:@@onboarding.health.reason-pending:No listed credential is usable yet. Run the first CI exchange to verify the pending binding.`,
     truncated: $localize`:@@onboarding.health.reason-truncated:No usable credential is shown, but the list is incomplete. Connection health cannot be determined from this list.`,
-    'all-unusable': $localize`:@@onboarding.health.reason-unusable:None of the listed credentials is usable. Create an ingest token or enable a CI binding.`,
-    'no-credentials': $localize`:@@onboarding.health.reason-empty:No connection credentials are recorded. Create a CI binding or an ingest token.`,
+    'all-unusable': $localize`:@@onboarding.health.reason-unusable:None of the listed credentials is usable. Create an ingest token.`,
+    'no-credentials': $localize`:@@onboarding.health.reason-empty:No connection credentials are recorded. Create an ingest token.`,
   };
-  protected readonly statusLabels: Record<
-    CiBindingView['status'] | IngestTokenView['status'],
-    string
-  > = {
+  protected readonly statusLabels: Record<IngestTokenView['status'], string> = {
     active: $localize`:@@onboarding.health.status-active:Active`,
-    pending_verification: $localize`:@@onboarding.health.status-awaiting:Awaiting CI`,
-    disabled: $localize`:@@onboarding.health.status-disabled:Disabled`,
     rotated: $localize`:@@onboarding.health.status-rotated:Rotated`,
     expired: $localize`:@@onboarding.health.status-expired:Expired`,
     revoked: $localize`:@@onboarding.health.status-revoked:Revoked`,
@@ -263,15 +253,12 @@ export class ConnectionHealthComponent {
   protected readonly detailLabels: Record<CredentialHealth['detail'], string> = {
     active: $localize`:@@onboarding.health.detail-active:Usable.`,
     rotating: $localize`:@@onboarding.health.detail-rotating:Usable during the rotation overlap. Switch CI to the replacement token before it ends.`,
-    pending: $localize`:@@onboarding.health.detail-pending:Not usable until the first CI exchange verifies this binding.`,
     expired: $localize`:@@onboarding.health.detail-expired:Not usable: the token has expired.`,
     revoked: $localize`:@@onboarding.health.detail-revoked:Not usable: the token has been revoked.`,
-    disabled: $localize`:@@onboarding.health.detail-disabled:Not usable: the binding is disabled.`,
     'rotated-ended': $localize`:@@onboarding.health.detail-rotated-ended:Not usable: the rotation overlap has ended. Use the replacement token.`,
   };
 
   protected credentialTone(credential: CredentialHealth): StatusTone {
-    if (credential.detail === 'pending') return 'neutral';
     if (credential.detail === 'rotating') return 'warning';
     return credential.usable ? 'success' : 'danger';
   }

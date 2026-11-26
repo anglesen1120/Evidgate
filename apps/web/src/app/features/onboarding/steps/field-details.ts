@@ -5,10 +5,6 @@ type FieldContext = 'project' | 'connection' | 'collection';
 
 const FIELD_LABELS: Readonly<Record<string, string>> = {
   slug: $localize`:@@onboarding.create.slug:Project slug`,
-  repository_id: $localize`:@@onboarding.connect.repo-id:GitHub numeric repository ID`,
-  repository_full_name: $localize`:@@onboarding.connect.repo-name:Repository (owner/repo)`,
-  allowed_ref_patterns: $localize`:@@onboarding.connect.refs:Allowed Git ref patterns`,
-  allowed_workflow_refs: $localize`:@@onboarding.connect.workflows:Allowed workflow refs`,
   project_id: $localize`:@@onboarding.enable.project:Project`,
   policy_revision_id: $localize`:@@onboarding.enable.revision:Policy revision`,
   mode: $localize`:@@onboarding.enable.mode:Mode`,
@@ -21,7 +17,7 @@ const FIELD_LABELS: Readonly<Record<string, string>> = {
 
 /** One sanitized server detail plus a localized message for inline and summary errors. */
 export interface FieldDetail {
-  /** The path without its JSON-pointer prefix or index: `/repository_id[0]` → `repository_id`. */
+  /** The path without its JSON-pointer prefix or index: `/required_cases[0]` → `required_cases`. */
   readonly field: string;
   /** Sanitized diagnostic pointer; render only as escaped, bidi-isolated text. */
   readonly path: string;

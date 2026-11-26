@@ -3,8 +3,7 @@
   data-testid="connect-ci-page"
   [attr.aria-busy]="busy()"
 >
-  <p class="max-w-[65ch]">{{ intro }}</p>
-  @if (bindingPermitted() || tokenPermitted()) {
+  @if (tokenPermitted()) {
     <app-desktop-required-notice />
   }
   <p
@@ -20,7 +19,7 @@
   @if (slot.current(); as entry) {
     <div data-testid="connect-reveal">
       <app-connect-step-reveal
-        [heading]="entry.source === 'binding-challenge' ? bindingRevealHeading : tokenRevealHeading"
+        [heading]="tokenRevealHeading"
         [value]="entry.value"
         [warning]="revealWarning"
         [copyLabel]="copyLabel"
@@ -76,7 +75,7 @@
       />
     }
   }
-  @if (store.refreshFailure()) {
+  @if (inventory.tokensRefreshFailure()) {
     <app-inline-feedback
       [tone]="'destructive'"
       [title]="refreshFailedLabel"
@@ -86,6 +85,7 @@
       <!-- Not natively disabled while the re-read runs: the press must keep the focus it was made
            with, and `refresh()` itself refuses a second press. -->
       <button
+        #metadataRetry
         hlmBtn
         feedbackAction
         [variant]="'outline'"
@@ -112,202 +112,23 @@
       {{ busyLabel }}
     }
   </p>
-  <div class="grid min-w-0 items-start gap-(--eg-space-5) xl:grid-cols-2">
-    <app-connection-health
-      [fetching]="store.refreshing()"
-      class="block min-w-0"
-      [health]="health()"
-      [tokens]="store.tokens()"
-      [bindingsTruncated]="store.bindingsTruncated()"
-      [tokensTruncated]="store.tokensTruncated()"
-      (viewRecord)="viewRecord.emit($event)"
-    />
-    <app-cli-quickstart
-      class="block min-w-0"
-      [projectRef]="quickstartProjectRef()"
-      [token]="quickstartToken()"
-      [binding]="quickstartBinding()"
-    />
-  </div>
-  <app-form-required-note *appDesktopMutation />
-  <div class="grid min-w-0 gap-(--eg-space-5) min-[1280px]:grid-cols-2 min-[1280px]:items-start">
-    <section
-      hlmCard
-      class="min-w-0 gap-(--eg-space-4) overflow-visible p-(--eg-space-5) md:p-(--eg-space-6)"
-      data-testid="connect-oidc-panel"
-      aria-labelledby="connect-oidc-heading"
-    >
-      <h3
-        hlmCardTitle
-        [size]="subsectionHeadingSize"
-        class="m-0 border-b border-border pb-(--eg-space-4) text-foreground focus:outline-solid focus:outline-(length:--eg-focus-width) focus:outline-offset-(--eg-focus-offset) focus:outline-ring"
-        #bindingHeading
-        id="connect-oidc-heading"
-        tabindex="-1"
-      >
-        {{ oidcTitle }}
-      </h3>
-      <p>{{ oidcHint }}</p>
-      <p>{{ workflowHint }}</p>
-      @if (!bindingPermitted()) {
-        <p id="connect-binding-permission">{{ bindingPermission }}</p>
-      }
-      @if (policy.narrow()) {
-        <dl
-          data-testid="connect-oidc-draft"
-          class="rounded-(--eg-radius-md) bg-muted p-(--eg-space-4) whitespace-pre-wrap"
-        >
-          <div>
-            <dt>{{ repoIdField.label }}</dt>
-            <dd>{{ repositoryId() || noneLabel }}</dd>
-          </div>
-          <div>
-            <dt>{{ repoNameField.label }}</dt>
-            <dd>{{ repositoryName() || noneLabel }}</dd>
-          </div>
-          <div>
-            <dt>{{ refsField.label }}</dt>
-            <dd>{{ refs() || noneLabel }}</dd>
-          </div>
-          <div>
-            <dt>{{ workflowsField.label }}</dt>
-            <dd>{{ workflows() || noneLabel }}</dd>
-          </div>
-        </dl>
-      }
-      <form
-        *appDesktopMutation
-        class="grid min-w-0 max-w-[65ch] gap-(--eg-space-5)"
-        novalidate
-        (ngSubmit)="createBinding()"
-      >
-        <app-form-error-summary [summaryId]="'connect-oidc-errors'" [feedback]="bindingFeedback" />
-        <div class="grid min-w-0 gap-(--eg-space-3)">
-          <ng-container *ngTemplateOutlet="fieldLabel; context: { $implicit: repoIdField }" />
-          <input
-            hlmInput
-            class="min-h-(--eg-control-touch) w-full min-w-0"
-            id="connect-oidc-repo-id"
-            data-testid="connect-oidc-repo-id"
-            name="repositoryId"
-            type="text"
-            [attr.inputmode]="'numeric'"
-            autocomplete="off"
-            required
-            #repoIdInput
-            [value]="repositoryId()"
-            (input)="repositoryId.set(repoIdInput.value); dismissServerReason('repository_id')"
-            (blur)="repoIdField.blur()"
-            [disabled]="busy() || !bindingPermitted()"
-            [forceInvalid]="repoIdField.invalid()"
-            [attr.aria-invalid]="repoIdField.ariaInvalid()"
-            [aria-describedby]="repoIdField.describedBy()"
-          />
-          <app-field-feedback [field]="repoIdField" />
-        </div>
-        <div class="grid min-w-0 gap-(--eg-space-3)">
-          <ng-container *ngTemplateOutlet="fieldLabel; context: { $implicit: repoNameField }" />
-          <input
-            hlmInput
-            class="min-h-(--eg-control-touch) w-full min-w-0"
-            id="connect-oidc-repo-name"
-            data-testid="connect-oidc-repo-name"
-            name="repositoryName"
-            type="text"
-            autocomplete="off"
-            [attr.autocapitalize]="'none'"
-            spellcheck="false"
-            required
-            #repoNameInput
-            [value]="repositoryName()"
-            (input)="
-              repositoryName.set(repoNameInput.value); dismissServerReason('repository_full_name')
-            "
-            (blur)="repoNameField.blur()"
-            [disabled]="busy() || !bindingPermitted()"
-            [forceInvalid]="repoNameField.invalid()"
-            [attr.aria-invalid]="repoNameField.ariaInvalid()"
-            [aria-describedby]="repoNameField.describedBy()"
-          />
-          <app-field-feedback [field]="repoNameField" />
-        </div>
-        <div class="grid min-w-0 gap-(--eg-space-3)">
-          <ng-container *ngTemplateOutlet="fieldLabel; context: { $implicit: refsField }" />
-          <textarea
-            hlmInput
-            class="min-h-(--eg-control-lg) w-full min-w-0 resize-y font-mono"
-            id="connect-oidc-refs"
-            data-testid="connect-oidc-refs"
-            name="refs"
-            rows="3"
-            autocomplete="off"
-            [attr.autocapitalize]="'none'"
-            spellcheck="false"
-            required
-            #refsInput
-            [value]="refs()"
-            (input)="refs.set(refsInput.value); dismissServerReason('allowed_ref_patterns')"
-            (blur)="refsField.blur()"
-            [disabled]="busy() || !bindingPermitted()"
-            [forceInvalid]="refsField.invalid()"
-            [attr.aria-invalid]="refsField.ariaInvalid()"
-            [aria-describedby]="refsField.describedBy()"
-          ></textarea>
-          <app-field-feedback [field]="refsField" />
-        </div>
-        <div class="grid min-w-0 gap-(--eg-space-3)">
-          <ng-container *ngTemplateOutlet="fieldLabel; context: { $implicit: workflowsField }" />
-          <textarea
-            hlmInput
-            class="min-h-(--eg-control-lg) w-full min-w-0 resize-y font-mono"
-            id="connect-oidc-workflows"
-            data-testid="connect-oidc-workflows"
-            name="workflows"
-            rows="3"
-            autocomplete="off"
-            [attr.autocapitalize]="'none'"
-            spellcheck="false"
-            required
-            #workflowsInput
-            [value]="workflows()"
-            (input)="
-              workflows.set(workflowsInput.value); dismissServerReason('allowed_workflow_refs')
-            "
-            (blur)="workflowsField.blur()"
-            [disabled]="busy() || !bindingPermitted()"
-            [forceInvalid]="workflowsField.invalid()"
-            [attr.aria-invalid]="workflowsField.ariaInvalid()"
-            [aria-describedby]="workflowsField.describedBy()"
-          ></textarea>
-          <app-field-feedback [field]="workflowsField" />
-        </div>
-        <button
-          hlmBtn
-          [variant]="bindingVariant()"
-          class="h-auto max-w-full justify-self-start whitespace-normal wrap-anywhere"
-          data-testid="connect-oidc-submit"
-          type="submit"
-          [disabled]="busy() || !bindingPermitted()"
-          [attr.aria-describedby]="!bindingPermitted() ? 'connect-binding-permission' : null"
-        >
-          {{ bindingSubmit }}
-        </button>
-      </form>
-      <app-connect-ci-binding-table
-        [fetching]="store.refreshing()"
-        [bindings]="store.bindings()"
-        [truncated]="store.bindingsTruncated()"
+  @if (inventoryReady()) {
+    <div class="grid min-w-0 items-start gap-(--eg-space-5) xl:grid-cols-2">
+      <app-connection-health
+        [fetching]="inventory.tokensRefreshing()"
+        class="block min-w-0"
+        [health]="health()"
+        [tokens]="inventory.tokens()"
+        [tokensTruncated]="inventory.tokensTruncated()"
         (viewRecord)="viewRecord.emit($event)"
       />
-      @if (store.bindingsTruncated()) {
-        <app-inline-feedback
-          [tone]="'warning'"
-          [title]="truncatedLabel"
-          [announcement]="'off'"
-          data-testid="connect-bindings-truncated"
-        />
-      }
-    </section>
+      <app-cli-quickstart
+        class="block min-w-0"
+        [projectRef]="quickstartProjectRef()"
+        [token]="quickstartToken()"
+      />
+    </div>
+    <app-form-required-note *appDesktopMutation />
     <section
       hlmCard
       class="min-w-0 gap-(--eg-space-4) overflow-visible p-(--eg-space-5) md:p-(--eg-space-6)"
@@ -347,7 +168,13 @@
       >
         <app-form-error-summary [summaryId]="'connect-token-errors'" [feedback]="tokenFeedback" />
         <div class="grid min-w-0 gap-(--eg-space-3)">
-          <ng-container *ngTemplateOutlet="fieldLabel; context: { $implicit: tokenNameField }" />
+          <app-field-hint
+            [descriptionId]="tokenNameField.hintId"
+            [label]="tokenNameField.label"
+            [text]="tokenNameField.hint"
+          >
+            <label hlmLabel [for]="tokenNameField.id">{{ tokenNameField.label }}</label>
+          </app-field-hint>
           <input
             hlmInput
             class="min-h-(--eg-control-touch) w-full min-w-0"
@@ -382,11 +209,11 @@
       </form>
       <app-loading-pattern
         [layout]="'table'"
-        [busy]="store.refreshing()"
-        [hasRows]="store.tokens().length > 0"
+        [busy]="inventory.tokensRefreshing()"
+        [hasRows]="inventory.tokens().length > 0"
       />
       <div hlmTableContainer class="min-w-0 max-w-full">
-        <table [attr.aria-busy]="store.refreshing()" hlmTable class="wrap-normal">
+        <table [attr.aria-busy]="inventory.tokensRefreshing()" hlmTable class="wrap-normal">
           <caption hlmCaption class="caption-top text-start">
             {{
               tokensLabel
@@ -399,7 +226,7 @@
             </tr>
           </thead>
           <tbody hlmTBody>
-            @for (token of store.tokens(); track token.id) {
+            @for (token of inventory.tokens(); track token.id) {
               <tr
                 hlmTr
                 class="*:align-top"
@@ -478,10 +305,10 @@
         </table>
       </div>
       <app-onboarding-table-range
-        [appOnboardingTableRange]="store.tokens().length"
-        [truncated]="store.tokensTruncated()"
+        [appOnboardingTableRange]="inventory.tokens().length"
+        [truncated]="inventory.tokensTruncated()"
       />
-      @if (store.tokensTruncated()) {
+      @if (inventory.tokensTruncated()) {
         <app-inline-feedback
           [tone]="'warning'"
           [title]="truncatedLabel"
@@ -490,11 +317,7 @@
         />
       }
     </section>
-  </div>
+  } @else if (inventory.tokensRefreshing()) {
+    <app-loading-pattern [layout]="'table'" [busy]="true" [hasRows]="false" />
+  }
 </section>
-
-<ng-template #fieldLabel let-field>
-  <app-field-hint [descriptionId]="field.hintId" [label]="field.label" [text]="field.hint">
-    <label hlmLabel [for]="field.id">{{ field.label }}</label>
-  </app-field-hint>
-</ng-template>

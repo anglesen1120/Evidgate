@@ -24,7 +24,7 @@ namespace Evidgate.Modules.Evidence.Application.Artifacts;
 /// chain shows who made it.
 /// </summary>
 /// <param name="ProjectId">The project whose policy is overridden.</param>
-/// <param name="Kind">One of the eight contract kinds; an unknown one is refused 422.</param>
+/// <param name="Kind">One of the ten contract kinds; an unknown one is refused 422.</param>
 /// <param name="MaxBytes">The largest artifact of the kind the project accepts, greater than zero.</param>
 /// <param name="MediaTypes">
 /// The accepted media types, between one and 64, each 1–255 characters with no control or format character.

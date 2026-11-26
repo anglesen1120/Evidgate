@@ -1,8 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
-using Evidgate.BuildingBlocks.Pipeline.Authorization;
-using Evidgate.BuildingBlocks.SharedKernel.Authorization;
 using Shouldly;
 using Xunit;
 using static Tenancy.IntegrationTests.RegistryApi;
@@ -17,7 +15,7 @@ public sealed partial class FinalizeEndpointTests
     public async Task Finalize_BoundIdentity_ManifestHashMatches_202_SlotClosed_RunCollecting()
     {
         await using var world = await IngestTestWorld.StartAsync(
-            _fixture, IngestTestWorld.Writer(), boundJti: IngestTestWorld.Jti, hosts: _hosts);
+            _fixture, IngestTestWorld.Writer(), boundOwnerId: IngestTestWorld.OwnerId, hosts: _hosts);
         await world.SetRunStateAsync("running");
         var runVersion = await RunVersionAsync(world);
         var slotVersion = await SlotVersionAsync(world);
@@ -51,23 +49,17 @@ public sealed partial class FinalizeEndpointTests
         payload.GetProperty("declared_count").GetInt32().ShouldBe(3);
     }
 
-    // ------------------------------------------------------------------ AC2: bound identity (T9/T88)
-
-    /// <summary>
-    /// 04.1.2 line 145's "finalize under foreign identity -> 403": a second token id and a second CI run reference
-    /// both answer <c>producer_slot_taken</c> and change nothing — the slot stays open, no transition, no row.
-    /// </summary>
+    /// <summary>A second token cannot close the bound slot or change the run.</summary>
     [Fact]
     public async Task Finalize_WrongIdentity_403ProducerSlotTaken()
     {
         await using var world = await IngestTestWorld.StartAsync(
-            _fixture, IngestTestWorld.Writer(), boundJti: IngestTestWorld.Jti, hosts: _hosts);
+            _fixture, IngestTestWorld.Writer(), boundOwnerId: IngestTestWorld.OwnerId, hosts: _hosts);
         await world.SetRunStateAsync("running");
         var runVersion = await RunVersionAsync(world);
         var body = await BodyAsync(world);
 
-        // (a) another token id.
-        await using (var foreign = HostFor(world, IngestTestWorld.Writer(jti: IngestTestWorld.OtherJti)))
+        await using (var foreign = HostFor(world, IngestTestWorld.Writer(IngestTestWorld.OtherOwnerId, world.Project)))
         {
             using var foreignClient = foreign.CreateClient();
             var answer = await FinalizeAsync(foreignClient, world.RunId, body);
@@ -76,31 +68,23 @@ public sealed partial class FinalizeEndpointTests
             answer.ErrorCode.ShouldBe("producer_slot_taken");
         }
 
-        // (b) the bound token id claiming a DIFFERENT GitHub run: a different identity even for the same jti (T88).
-        await using (var otherCi = HostFor(world, CiWriter(
-            IngestTestWorld.Jti, projectScope: null, ciRun: new CiRunReference("github_actions", 42, 7, 1))))
-        {
-            using var otherCiClient = otherCi.CreateClient();
-            var answer = await FinalizeAsync(otherCiClient, world.RunId, body);
-
-            answer.Status.ShouldBe(HttpStatusCode.Forbidden);
-            answer.ErrorCode.ShouldBe("producer_slot_taken");
-        }
-
-        // Neither refusal closed the slot or moved the run, and neither wrote an outbox row.
         (await SlotClosedAsync(world)).ShouldBeFalse();
         (await SlotDeclaresNothingAsync(world)).ShouldBeTrue();
-        (await SlotBoundJtiAsync(world)).ShouldBe(IngestTestWorld.Jti);
+        (await SlotBoundOwnerIdAsync(world)).ShouldBe(IngestTestWorld.OwnerId);
         (await RunStateAsync(world)).ShouldBe("running");
         (await RunVersionAsync(world)).ShouldBe(runVersion);
         (await OutboxRowsAsync(world)).ShouldBe(0);
+
+        var accepted = await FinalizeAsync(world.Client, world.RunId, body);
+        accepted.Status.ShouldBe(HttpStatusCode.Accepted, accepted.ErrorMessage);
+        (await SlotClosedAsync(world)).ShouldBeTrue();
     }
 
     [Fact]
     public async Task Finalize_UnknownProducer_422()
     {
         await using var world = await IngestTestWorld.StartAsync(
-            _fixture, IngestTestWorld.Writer(), boundJti: IngestTestWorld.Jti, hosts: _hosts);
+            _fixture, IngestTestWorld.Writer(), boundOwnerId: IngestTestWorld.OwnerId, hosts: _hosts);
         await world.SetRunStateAsync("running");
         var runVersion = await RunVersionAsync(world);
 
@@ -121,7 +105,7 @@ public sealed partial class FinalizeEndpointTests
     public async Task Finalize_ShardMismatch_422_RequestInvalid_PointerShard()
     {
         await using var world = await IngestTestWorld.StartAsync(
-            _fixture, IngestTestWorld.Writer(), boundJti: IngestTestWorld.Jti, hosts: _hosts);
+            _fixture, IngestTestWorld.Writer(), boundOwnerId: IngestTestWorld.OwnerId, hosts: _hosts);
         await world.SetRunStateAsync("running");
         var runVersion = await RunVersionAsync(world);
 
@@ -144,7 +128,7 @@ public sealed partial class FinalizeEndpointTests
     public async Task Finalize_HashMismatch_422_ManifestInvalid_SlotStaysOpen_RunUnchanged()
     {
         await using var world = await IngestTestWorld.StartAsync(
-            _fixture, IngestTestWorld.Writer(), boundJti: IngestTestWorld.Jti, hosts: _hosts);
+            _fixture, IngestTestWorld.Writer(), boundOwnerId: IngestTestWorld.OwnerId, hosts: _hosts);
         await world.SetRunStateAsync("running");
         var runVersion = await RunVersionAsync(world);
         var expectedHash = await ManifestHashAsync(world);
@@ -169,15 +153,15 @@ public sealed partial class FinalizeEndpointTests
 
         // The hash check runs AFTER the identity check, so a foreign caller sending the same wrong hash is 403 —
         // it cannot use the 422/403 difference to probe the run's manifest.
-        await using var foreign = HostFor(world, IngestTestWorld.Writer(jti: IngestTestWorld.OtherJti));
+        await using var foreign = HostFor(world, IngestTestWorld.Writer(IngestTestWorld.OtherOwnerId, world.Project));
         using var foreignClient = foreign.CreateClient();
         var foreignAnswer = await FinalizeAsync(foreignClient, world.RunId, body);
 
         foreignAnswer.Status.ShouldBe(HttpStatusCode.Forbidden);
         foreignAnswer.ErrorCode.ShouldBe("producer_slot_taken");
 
-        // The foreign attempt neither re-bound nor closed the slot: the binding still names the original jti.
-        (await SlotBoundJtiAsync(world)).ShouldBe(IngestTestWorld.Jti);
+        // The foreign attempt neither re-bound nor closed the slot: the binding still names the original owner.
+        (await SlotBoundOwnerIdAsync(world)).ShouldBe(IngestTestWorld.OwnerId);
         (await SlotClosedAsync(world)).ShouldBeFalse();
         (await OutboxRowsAsync(world)).ShouldBe(0);
     }
@@ -188,7 +172,7 @@ public sealed partial class FinalizeEndpointTests
     public async Task Finalize_Duplicate_SameValues_202_NoSecondTransition_OneOutboxRow()
     {
         await using var world = await IngestTestWorld.StartAsync(
-            _fixture, IngestTestWorld.Writer(), boundJti: IngestTestWorld.Jti, hosts: _hosts);
+            _fixture, IngestTestWorld.Writer(), boundOwnerId: IngestTestWorld.OwnerId, hosts: _hosts);
         await world.SetRunStateAsync("running");
 
         var first = await FinalizeAsync(world.Client, world.RunId, await BodyAsync(world, lastSequence: 3, count: 3));
@@ -219,7 +203,7 @@ public sealed partial class FinalizeEndpointTests
     public async Task Finalize_Repeat_DifferentValues_202_StoredValuesUnchanged()
     {
         await using var world = await IngestTestWorld.StartAsync(
-            _fixture, IngestTestWorld.Writer(), boundJti: IngestTestWorld.Jti, hosts: _hosts);
+            _fixture, IngestTestWorld.Writer(), boundOwnerId: IngestTestWorld.OwnerId, hosts: _hosts);
         await world.SetRunStateAsync("running");
 
         var first = await FinalizeAsync(world.Client, world.RunId, await BodyAsync(world, lastSequence: 3, count: 3));
@@ -277,7 +261,7 @@ public sealed partial class FinalizeEndpointTests
         (await StateHistoryAsync(world)).ShouldEndWith("queued->running,running->collecting");
 
         (await SlotClosedAsync(world, "shard-1")).ShouldBeTrue();
-        (await SlotBoundJtiAsync(world, "shard-1")).ShouldBe(IngestTestWorld.Jti);
+        (await SlotBoundOwnerIdAsync(world, "shard-1")).ShouldBe(IngestTestWorld.OwnerId);
 
         // shard 2 finalizes while the run is already collecting: closed, but no further transition.
         var second = await FinalizeAsync(
@@ -304,7 +288,7 @@ public sealed partial class FinalizeEndpointTests
     public async Task Finalize_TerminalRun_202_SlotClosed_NoStateChange(string state)
     {
         await using var world = await IngestTestWorld.StartAsync(
-            _fixture, IngestTestWorld.Writer(), boundJti: IngestTestWorld.Jti, hosts: _hosts);
+            _fixture, IngestTestWorld.Writer(), boundOwnerId: IngestTestWorld.OwnerId, hosts: _hosts);
         await world.SetRunStateAsync(state);
         var runVersion = await RunVersionAsync(world);
 
@@ -324,7 +308,7 @@ public sealed partial class FinalizeEndpointTests
     public async Task Finalize_CanceledRun_202_SlotClosed_NoStateChange()
     {
         await using var world = await IngestTestWorld.StartAsync(
-            _fixture, IngestTestWorld.Writer(), boundJti: IngestTestWorld.Jti, hosts: _hosts);
+            _fixture, IngestTestWorld.Writer(), boundOwnerId: IngestTestWorld.OwnerId, hosts: _hosts);
         await world.SetRunStateAsync("canceled");
         var runVersion = await RunVersionAsync(world);
 
@@ -379,7 +363,7 @@ public sealed partial class FinalizeEndpointTests
     public async Task Finalize_MemberSession_Refused()
     {
         await using var world = await IngestTestWorld.StartAsync(
-            _fixture, IngestTestWorld.Writer(), boundJti: IngestTestWorld.Jti, hosts: _hosts);
+            _fixture, IngestTestWorld.Writer(), boundOwnerId: IngestTestWorld.OwnerId, hosts: _hosts);
         await world.SetRunStateAsync("running");
         var runVersion = await RunVersionAsync(world);
 

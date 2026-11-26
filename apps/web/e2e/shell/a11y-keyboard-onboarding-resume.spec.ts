@@ -115,17 +115,6 @@ test.describe('W4 — resume at step 3, Back into step 2, health panel and quick
     ).toBeFocused();
     await expect(snippet).not.toBeFocused();
 
-    // Resume traverses each named hint, its input, and the two distinct submit buttons.
-    for (const field of [
-      'connect-oidc-repo-id',
-      'connect-oidc-repo-name',
-      'connect-oidc-refs',
-      'connect-oidc-workflows',
-    ] as const) {
-      await tabToHintedField(page, field);
-    }
-    await pressTab(page);
-    await expectKeyboardFocus(page, page.getByTestId('connect-oidc-submit'), 'create binding');
     await tabToHintedField(page, 'connect-token-name');
     await pressTab(page);
     await expectKeyboardFocus(page, page.getByTestId('connect-token-submit'), 'create token');

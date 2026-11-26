@@ -2,7 +2,7 @@
 // commands never create an Idempotency intent and never auto-retry.
 import { LoadingPatternComponent } from '../../../shared/ui/states/loading-pattern.component';
 import { FieldHintComponent } from '../../../shared/ui/forms/field-hint.component';
-import { DatePipe, DOCUMENT, NgTemplateOutlet } from '@angular/common';
+import { DatePipe, DOCUMENT } from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -17,6 +17,7 @@ import {
   linkedSignal,
   output,
   signal,
+  untracked,
   viewChild,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
@@ -55,13 +56,13 @@ import { StatusPillComponent } from '../../../shared/ui/chips/status-pill.compon
 import { ConnectStepRevealComponent } from '../../../shared/ui/reveal/connect-step-reveal.component';
 import { RevealSlot } from '../../../shared/ui/reveal/one-time-reveal.slot';
 import { ErrorPatternComponent, InlineFeedbackComponent } from '../../../shared/ui/states';
-import { CONNECT_LIST_LIMIT } from '../data/onboarding-progress.service';
 import { CliQuickstartComponent } from '../health/cli-quickstart.component';
 import { ConnectionHealthComponent } from '../health/connection-health.component';
 import { deriveConnectionHealth, type ConnectionHealth } from '../health/connection-health';
 import { CiRotateConfirmComponent, type RotateScope } from './connect-ci-rotate-confirm.component';
 import { HealthBoundaryClock } from '../health/health-boundary';
 import { OnboardingStore } from '../onboarding.store';
+import { OnboardingTokenStore, TOKEN_LIST_LIMIT } from '../onboarding-token.store';
 import {
   OnboardingRecordButtonComponent,
   OnboardingTableRangeComponent,
@@ -69,15 +70,8 @@ import {
   type OnboardingRecordView,
 } from '../onboarding-record-view.component';
 import { CREDENTIAL_STATUS, CredentialRecordComponent } from './credential-record.component';
-import { ConnectCiBindingTableComponent } from './connect-ci-binding-table.component';
-import { createBindingFeedback, createTokenFeedback } from './connect-ci.form-feedback';
-import {
-  connectionLines,
-  invalidRepositoryId,
-  invalidRepositoryName,
-  invalidTokenName,
-  validConnectionLines,
-} from './connect-ci.validation';
+import { createTokenFeedback } from './connect-ci.form-feedback';
+import { invalidTokenName } from './connect-ci.validation';
 import { fieldDetails, reasonFor } from './field-details';
 import {
   NO_DISMISSED_REASONS,
@@ -92,14 +86,12 @@ import {
     LoadingPatternComponent,
     FieldHintComponent,
     DatePipe,
-    NgTemplateOutlet,
     FormsModule,
     StatusPillComponent,
     HlmTableImports,
     OnboardingRecordButtonComponent,
     OnboardingTableRangeComponent,
     CredentialRecordComponent,
-    ConnectCiBindingTableComponent,
     ConnectStepRevealComponent,
     ConnectionHealthComponent,
     CliQuickstartComponent,
@@ -117,13 +109,14 @@ import {
     HlmInput,
     HlmLabel,
   ],
-  providers: [RevealSlot],
+  providers: [RevealSlot, OnboardingTokenStore],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './connect-ci.page.html',
   host: { class: 'block min-w-0' },
 })
 export class ConnectCiPage {
   protected readonly store = inject(OnboardingStore);
+  protected readonly inventory = inject(OnboardingTokenStore);
   protected readonly slot = inject(RevealSlot);
   private readonly data = inject(OnboardingDataService);
   private readonly session = inject(SessionStore);
@@ -137,12 +130,16 @@ export class ConnectCiPage {
   readonly active = input(true);
   readonly viewRecord = output<OnboardingRecordView>();
   protected readonly recordCopy = RECORD_COPY;
+  protected readonly inventoryReady = computed(
+    () => this.active() && this.inventory.tokensLoaded() && !this.inventory.tokensRefreshFailure(),
+  );
   private scopeVersion = 0;
-  private readonly healthClock = new HealthBoundaryClock(() => this.store.tokens());
+  private sessionVersion = 0;
+  private readonly healthClock = new HealthBoundaryClock(() => this.inventory.tokens());
   /** The place a re-read may take, held from the press until the pass that spends it. */
   private readonly refreshFocus = new RefreshFocusSession(this.document);
-  private readonly bindingHeading = viewChild<ElementRef<HTMLHeadingElement>>('bindingHeading');
   private readonly tokenHeading = viewChild<ElementRef<HTMLHeadingElement>>('tokenHeading');
+  private readonly metadataRetry = viewChild<ElementRef<HTMLButtonElement>>('metadataRetry');
   private readonly failureHeadingRef = viewChild<ElementRef<HTMLElement>>('failureHeadingEl');
   private readonly busyStatusRef = viewChild<ElementRef<HTMLElement>>('busyStatus');
   /** Only this page's own refused command requests a focus handoff. */
@@ -162,25 +159,10 @@ export class ConnectCiPage {
     orgId: this.orgId(),
     projectId: this.projectId(),
   }));
-  protected readonly repositoryId = linkedSignal({
-    source: this.draftScope,
-    computation: () => '',
-  });
-  protected readonly repositoryName = linkedSignal({
-    source: this.draftScope,
-    computation: () => '',
-  });
-  protected readonly refs = linkedSignal({ source: this.draftScope, computation: () => '' });
-  protected readonly workflows = linkedSignal({ source: this.draftScope, computation: () => '' });
   protected readonly tokenName = linkedSignal({ source: this.draftScope, computation: () => '' });
   // Metadata only: this timestamp is safe to retain after a rotation reveal is dismissed.
   protected readonly overlapEndsAt = signal<string | null>(null);
-  protected readonly bindingPermitted = computed(() => this.session.has('ci_binding:write'));
   protected readonly tokenPermitted = computed(() => this.session.has('ingest_token:write'));
-  protected readonly repoIdInvalid = computed(() => invalidRepositoryId(this.repositoryId()));
-  protected readonly repoNameInvalid = computed(() => invalidRepositoryName(this.repositoryName()));
-  protected readonly refsInvalid = computed(() => !validConnectionLines(this.refs()));
-  protected readonly workflowsInvalid = computed(() => !validConnectionLines(this.workflows()));
   protected readonly tokenNameInvalid = computed(() => invalidTokenName(this.tokenName()));
   protected readonly details = computed(() =>
     fieldDetails(this.failure()?.details ?? [], 'connection'),
@@ -198,14 +180,8 @@ export class ConnectCiPage {
     this.dismissed.set(dismissFieldReason(this.dismissed(), this.failure(), field));
   }
 
-  protected readonly intro = $localize`:@@onboarding.connect.intro:Choose one connection method. Next becomes available only after the server confirms a binding or token.`;
-  protected readonly oidcTitle = $localize`:@@onboarding.connect.oidc-title:GitHub Actions (OIDC)`;
-  protected readonly oidcHint = $localize`:@@onboarding.connect.oidc-hint:Set the one-time challenge as the repository variable EVIDGATE_BINDING_CHALLENGE. The binding becomes active after the first CI exchange; the browser never exchanges CI credentials.`;
-  protected readonly workflowHint = $localize`:@@onboarding.connect.workflow-hint:In your workflow, grant permissions: id-token: write. Pass the GitHub OIDC JWT and EVIDGATE_BINDING_CHALLENGE to your CI-side Evidgate exchange. Keep the challenge out of workflow files and logs.`;
-  protected readonly bindingSubmit = $localize`:@@onboarding.connect.binding-submit:Create CI binding`;
-  protected readonly bindingPermission = $localize`:@@onboarding.connect.binding-permission:Ask your organisation owner for permission to create CI bindings.`;
   protected readonly tokenTitle = $localize`:@@onboarding.connect.token-title:Ingest token`;
-  protected readonly tokenHint = $localize`:@@onboarding.connect.token-hint:Use an ingest token when OIDC is not available. Save the one-time value in your CI secret manager, never in source control.`;
+  protected readonly tokenHint = $localize`:@@onboarding.connect.token-hint:Save the one-time value in your CI secret manager, never in source control.`;
   protected readonly tokenSubmit = $localize`:@@onboarding.connect.token-submit:Create ingest token`;
   protected readonly tokenPermission = $localize`:@@onboarding.connect.token-permission:Ask your organisation owner for permission to create or rotate ingest tokens.`;
   protected readonly busyLabel = $localize`:@@onboarding.connect.busy:Saving connection…`;
@@ -216,49 +192,30 @@ export class ConnectCiPage {
   protected readonly noneLabel = $localize`:@@onboarding.connect.not-set:Not set`;
   protected readonly rotateLabel = $localize`:@@onboarding.connect.rotate:Rotate token`;
   protected readonly overlapLabel = $localize`:@@onboarding.connect.overlap:The previous token continues verifying until (UTC):`;
-  protected readonly bindingRevealHeading = $localize`:@@onboarding.connect.challenge-heading:Save your binding challenge`;
   protected readonly tokenRevealHeading = $localize`:@@onboarding.connect.token-heading:Save your ingest token`;
   protected readonly revealWarning = $localize`:@@onboarding.connect.reveal-warning:Shown only once. Save this value before leaving this step. If copying fails, select and copy the value manually.`;
   protected readonly copyLabel = $localize`:@@onboarding.connect.copy:Copy value`;
   protected readonly copiedLabel = $localize`:@@onboarding.connect.copied:Value copied.`;
   protected readonly dismissLabel = $localize`:@@onboarding.connect.dismiss:Dismiss secret`;
-  protected readonly refreshFailedLabel = $localize`:@@onboarding.connect.refresh-failed:The connection was saved, but progress could not be refreshed. Retry loading metadata; do not create the connection again.`;
+  protected readonly refreshFailedLabel = $localize`:@@onboarding.evidence.unavailable:Created resources are unavailable.`;
   protected readonly failureHeading = $localize`:@@onboarding.connect.failure-heading:The connection was not saved`;
   protected readonly detailsLabel = $localize`:@@onboarding.connect.details-label:The server refused these values`;
   protected readonly refreshLabel = $localize`:@@onboarding.connect.refresh:Retry loading metadata`;
   protected readonly uncertainLabel = $localize`:@@onboarding.connect.response-uncertain:It may have been saved. Reload the connection data before trying again.`;
   protected readonly revealShownLabel = $localize`:@@onboarding.connect.reveal-shown:A one-time value is shown. Save it before leaving this step.`;
-  protected readonly truncatedLabel = $localize`:@@onboarding.connect.list-truncated:Showing the first ${CONNECT_LIST_LIMIT}:CONNECT_LIST_LIMIT: entries; more exist, so a newer entry may not appear here.`;
+  protected readonly truncatedLabel = $localize`:@@onboarding.connect.list-truncated:Showing the first ${TOKEN_LIST_LIMIT}:CONNECT_LIST_LIMIT: entries; more exist, so a newer entry may not appear here.`;
   protected readonly subsectionHeadingSize = 'subsection' as const;
-  protected readonly bindingVariant = computed(() =>
-    this.store.bindings().length + this.store.tokens().length > 0 ? 'outline' : 'default',
-  );
-  protected readonly bindingFeedback = createBindingFeedback(
-    {
-      repositoryId: this.repositoryId,
-      repositoryName: this.repositoryName,
-      refs: this.refs,
-      workflows: this.workflows,
-    },
-    (field) => this.serverReason(field),
-  );
   protected readonly tokenFeedback = createTokenFeedback(this.tokenName, (field) =>
     this.serverReason(field),
   );
-  protected readonly repoIdField = this.bindingFeedback.fields[0]!;
-  protected readonly repoNameField = this.bindingFeedback.fields[1]!;
-  protected readonly refsField = this.bindingFeedback.fields[2]!;
-  protected readonly workflowsField = this.bindingFeedback.fields[3]!;
   protected readonly tokenNameField = this.tokenFeedback.fields[0]!;
   protected readonly statusLabels = CREDENTIAL_STATUS;
 
   /** Uses only metadata already read for this step, never one-time values. */
   protected readonly health = computed<ConnectionHealth>(() =>
     deriveConnectionHealth({
-      bindings: this.store.bindings(),
-      tokens: this.store.tokens(),
-      bindingsTruncated: this.store.bindingsTruncated(),
-      tokensTruncated: this.store.tokensTruncated(),
+      tokens: this.inventory.tokens(),
+      tokensTruncated: this.inventory.tokensTruncated(),
       now: this.healthClock.now(),
     }),
   );
@@ -266,22 +223,12 @@ export class ConnectCiPage {
   protected readonly quickstartToken = computed<{ name: string; prefix: string } | null>(() => {
     const credentials = this.health().credentials;
     const preferred =
-      credentials.find(
-        (credential) => credential.kind === 'token' && credential.detail === 'active',
-      ) ??
-      credentials.find(
-        (credential) => credential.kind === 'token' && credential.detail === 'rotating',
-      );
+      credentials.find((credential) => credential.detail === 'active') ??
+      credentials.find((credential) => credential.detail === 'rotating');
     const token = preferred
-      ? this.store.tokens().find((candidate) => candidate.id === preferred.id)
+      ? this.inventory.tokens().find((candidate) => candidate.id === preferred.id)
       : undefined;
     return token ? { name: token.name, prefix: token.prefix } : null;
-  });
-  /** The repository the snippet references: the first active binding, else the first one. */
-  protected readonly quickstartBinding = computed<{ repository_full_name: string } | null>(() => {
-    const bindings = this.store.bindings();
-    const binding = bindings.find((candidate) => candidate.status === 'active') ?? bindings[0];
-    return binding ? { repository_full_name: binding.repository_full_name } : null;
   });
   /** The project slug the loaded progress carries; the snippet keeps its placeholder without it. */
   protected readonly quickstartProjectRef = computed(() => this.store.project()?.slug ?? null);
@@ -290,13 +237,16 @@ export class ConnectCiPage {
     effect(() => {
       this.orgId();
       this.projectId();
-      this.bindingFeedback.reset();
       this.tokenFeedback.reset();
     });
     effect(() => {
-      this.orgId();
-      this.projectId();
-      this.active();
+      const orgId = this.orgId();
+      const projectId = this.projectId();
+      const active = this.active();
+      untracked(() => {
+        if (active) this.inventory.setTokenScope(orgId, projectId);
+        else this.inventory.clearTokenScope();
+      });
       this.scopeVersion += 1;
       this.busy.set(false);
       this.slot.clear();
@@ -304,14 +254,16 @@ export class ConnectCiPage {
       this.overlapEndsAt.set(null);
     });
     effect((onCleanup) => {
-      this.store.tokens();
+      this.inventory.tokens();
       if (this.active()) this.healthClock.arm();
       else this.healthClock.stop();
       onCleanup(() => this.healthClock.stop());
     });
     // A retained step must discard one-time values when its session ends.
     const endOfSession = this.session.onSessionEnd(() => {
+      this.sessionVersion += 1;
       this.scopeVersion += 1;
+      this.inventory.clearTokenScope();
       this.healthClock.stop();
       this.slot.clear();
     });
@@ -327,10 +279,12 @@ export class ConnectCiPage {
         const handoff = this.refreshFocus.spend();
         if (handoff === null) return;
         releaseRefreshFocus(this.document, handoff);
-        restoreRefreshFocus(this.document, handoff, this.scopeVersion, {
-          binding: this.bindingHeading()?.nativeElement,
-          token: this.tokenHeading()?.nativeElement,
-        });
+        restoreRefreshFocus(
+          this.document,
+          handoff,
+          this.scopeVersion,
+          this.tokenHeading()?.nativeElement,
+        );
       },
     });
     this.destroyRef.onDestroy(() => {
@@ -342,12 +296,8 @@ export class ConnectCiPage {
   }
 
   protected dismissReveal(): void {
-    const heading =
-      this.slot.current()?.source === 'binding-challenge'
-        ? this.bindingHeading()
-        : this.tokenHeading();
     this.slot.clear();
-    heading?.nativeElement.focus();
+    (this.tokenHeading() ?? this.metadataRetry())?.nativeElement.focus();
   }
 
   /** The accessible name of one row's Rotate button: the visible label repeats per row. */
@@ -355,41 +305,14 @@ export class ConnectCiPage {
     return $localize`:@@onboarding.connect.rotate-named:Rotate token ${name}:TOKEN_NAME:`;
   }
 
-  protected async createBinding(): Promise<void> {
-    if (!this.policy.allowsMutation() || this.busy() || !this.bindingPermitted() || !this.active())
-      return;
-    this.bindingFeedback.submit();
-    if (
-      this.repoIdInvalid() ||
-      this.repoNameInvalid() ||
-      this.refsInvalid() ||
-      this.workflowsInvalid()
-    )
-      return;
-    const orgId = this.orgId();
-    const projectId = this.projectId();
-    const version = this.scopeVersion;
-    await this.perform(
-      async () => {
-        const response = await this.data.createCiBinding(projectId, {
-          provider: 'github_actions',
-          repository_id: Number(this.repositoryId()),
-          repository_full_name: this.repositoryName().trim(),
-          allowed_ref_patterns: connectionLines(this.refs()),
-          allowed_workflow_refs: connectionLines(this.workflows()),
-        });
-        if (!this.isCurrent(version, orgId, projectId)) return;
-        this.overlapEndsAt.set(null);
-        this.slot.show({ source: 'binding-challenge', value: response.binding_challenge });
-      },
-      version,
-      orgId,
-      projectId,
-    );
-  }
-
   protected async createToken(): Promise<void> {
-    if (!this.policy.allowsMutation() || this.busy() || !this.tokenPermitted() || !this.active())
+    if (
+      !this.policy.allowsMutation() ||
+      this.busy() ||
+      !this.inventoryReady() ||
+      !this.tokenPermitted() ||
+      !this.active()
+    )
       return;
     this.tokenFeedback.submit();
     if (this.tokenNameInvalid()) return;
@@ -414,11 +337,14 @@ export class ConnectCiPage {
   protected async rotate(token: IngestTokenView, scope: RotateScope): Promise<void> {
     if (
       scope !== this.draftScope() ||
+      !this.inventoryReady() ||
       !this.policy.allowsMutation() ||
       !this.active() ||
       this.busy() ||
       !this.tokenPermitted() ||
-      !this.store.tokens().some((current) => current.id === token.id && current.status === 'active')
+      !this.inventory
+        .tokens()
+        .some((current) => current.id === token.id && current.status === 'active')
     )
       return;
     const orgId = this.orgId();
@@ -438,15 +364,20 @@ export class ConnectCiPage {
   }
 
   protected async refresh(): Promise<void> {
-    if (this.destroyRef.destroyed || this.busy() || this.refreshing()) return;
+    if (
+      this.destroyRef.destroyed ||
+      !this.active() ||
+      this.busy() ||
+      this.refreshing() ||
+      this.inventory.tokensRefreshing()
+    )
+      return;
     // Where the visitor is, captured before the read can replace what they pressed. Whether that
     // place survives is only knowable once the DOM has committed, so the move is decided there.
-    this.refreshFocus.capture(this.host.nativeElement, this.scopeVersion, (control) =>
-      control.closest('[data-testid="connect-token-panel"]') === null ? 'binding' : 'token',
-    );
+    this.refreshFocus.capture(this.host.nativeElement, this.scopeVersion);
     this.refreshing.set(true);
     try {
-      await this.store.refresh(this.orgId(), this.projectId());
+      await this.inventory.refreshTokens(this.orgId(), this.projectId());
     } finally {
       // A destroyed page owes no move: onDestroy already released the place this read held.
       if (!this.destroyRef.destroyed) {
@@ -457,10 +388,13 @@ export class ConnectCiPage {
   }
 
   private isCurrent(version: number, orgId: string, projectId: string): boolean {
+    return version === this.scopeVersion && this.isActiveScope(orgId, projectId);
+  }
+
+  private isActiveScope(orgId: string, projectId: string): boolean {
     return (
       !this.destroyRef.destroyed &&
       this.active() &&
-      version === this.scopeVersion &&
       this.orgId() === orgId &&
       this.projectId() === projectId
     );
@@ -474,24 +408,28 @@ export class ConnectCiPage {
   ): Promise<void> {
     // Every command disables the control it was pressed from, so the waiting line takes the place
     // before that happens and holds it until the answer hands it on (a reveal, or a refusal).
+    const session = this.sessionVersion;
     focusWaitingLine(this.busyStatusRef);
     this.busy.set(true);
     this.failure.set(null);
     try {
       await action();
-      // A stale answer still means the server committed: the one-time value stays dropped, and the
-      // metadata of the scope the command was issued in is reconciled instead of going missing.
-      if (!this.destroyRef.destroyed && this.orgId() === orgId && this.projectId() === projectId)
-        await this.store.refresh(orgId, projectId);
+      // Re-entry may have read the inventory before this write committed. Refresh metadata only.
+      if (session === this.sessionVersion && this.isActiveScope(orgId, projectId))
+        await this.inventory.refreshTokens(orgId, projectId);
     } catch (error: unknown) {
       if (!isApiRequestError(error)) throw error;
       if (this.isCurrent(version, orgId, projectId)) {
         this.failure.set(error.error);
         requestRefusalFocus(this.announceFailure, this.failure());
-        if (error.error.kind === 'timeout' || error.error.kind === 'network') {
-          // Reconcile metadata only: the failed response may hide a committed write.
-          await this.store.refresh(orgId, projectId);
-        }
+      }
+      if (
+        (error.error.kind === 'timeout' || error.error.kind === 'network') &&
+        session === this.sessionVersion &&
+        this.isActiveScope(orgId, projectId)
+      ) {
+        // The failed response may hide a committed write; never replay the command.
+        await this.inventory.refreshTokens(orgId, projectId);
       }
     } finally {
       if (this.isCurrent(version, orgId, projectId)) this.busy.set(false);

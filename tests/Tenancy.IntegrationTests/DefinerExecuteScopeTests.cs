@@ -24,7 +24,6 @@ public sealed class DefinerExecuteScopeTests
     public static TheoryData<string, string, string> Functions => new()
     {
         { "evidgate.audit_org_ids(uuid, integer)", "select count(*) from evidgate.audit_org_ids(null, 1)", "evidgate_worker_sched" },
-        { "evidgate.purge_expired_ci_token_issue(integer)", "select evidgate.purge_expired_ci_token_issue(1)", "evidgate_worker_sched" },
         {
             "evidgate.usage_price_insert_global(uuid, text, numeric, text, timestamptz, timestamptz, numeric, text)",
             "select evidgate.usage_price_insert_global(gen_random_uuid(), 'results', 0.0100, 'USD', "

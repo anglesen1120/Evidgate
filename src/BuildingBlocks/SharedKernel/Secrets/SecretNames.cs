@@ -28,7 +28,7 @@ public static class SecretNames
     /// <summary>Base64 HS256 key that signs the minted <c>ci_producer</c> JWTs (D7).</summary>
     public const string CiSigningKey = "EVIDGATE__CI__SIGNINGKEY";
 
-    /// <summary>Base64 current pepper for ingest-token and binding-challenge HMACs (T5, D-A4).</summary>
+    /// <summary>Base64 current pepper for ingest-token HMACs.</summary>
     public const string CiPepper = "EVIDGATE__CI__PEPPER";
 
     /// <summary>Base64 previous pepper, kept while tokens made with it are still valid.</summary>

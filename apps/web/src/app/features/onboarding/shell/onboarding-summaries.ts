@@ -1,4 +1,4 @@
-import type { StepNumber } from '../data/step-derivation';
+import { REQUIRED_STEPS, type StepNumber } from '../data/step-derivation';
 
 /** One navigator step: the number the store derives with, and its visible label. */
 export interface OnboardingStep {
@@ -22,13 +22,10 @@ export const ONBOARDING_STEP_ICONS = {
   upcoming: 'lucideCircle',
 } as const;
 
-/** How many of the steps the server-confirmed derivation marks done. */
-export function completedStepCount(
-  done: Readonly<Record<StepNumber, boolean>>,
-  steps: readonly OnboardingStep[],
-): number {
+/** How many of the required steps the server-confirmed derivation marks done. */
+export function completedStepCount(done: Readonly<Record<StepNumber, boolean>>): number {
   let completed = 0;
-  for (const step of steps) if (done[step.number]) completed += 1;
+  for (const step of REQUIRED_STEPS) if (done[step]) completed += 1;
   return completed;
 }
 
@@ -55,7 +52,8 @@ export function nextSummary(
 ): string {
   const total = steps.length;
   if (current === 'enabled') {
-    return $localize`:@@onboarding.shell.all-complete:All ${total}:TOTAL: steps complete.`;
+    const required = REQUIRED_STEPS.length;
+    return $localize`:@@onboarding.shell.all-complete:All ${required}:TOTAL: steps complete.`;
   }
   const label = steps[current - 1]?.label ?? '';
   return $localize`:@@onboarding.shell.next-summary:Next required ${current}:NUMBER: of ${total}:TOTAL:: ${label}:LABEL:.`;

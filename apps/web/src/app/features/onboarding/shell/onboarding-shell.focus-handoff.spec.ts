@@ -130,7 +130,7 @@ describe('OnboardingShellComponent focus handoff', () => {
   function createdStore(options: SetupOptions): ShellStore {
     return shellStore({
       createdScope: options.createdScope ?? (() => ({ orgId: 'org-1', projectId: 'project-1' })),
-      viewStep: 2,
+      viewStep: 3,
       done: { 1: true, 2: false, 3: false, 4: false, 5: false },
       focusToken: 1,
     });

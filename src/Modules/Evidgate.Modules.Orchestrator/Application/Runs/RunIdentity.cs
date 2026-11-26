@@ -23,23 +23,17 @@ namespace Evidgate.Modules.Orchestrator.Application.Runs;
 /// </param>
 /// <param name="PrNumber">The pull request number of a <c>refs/pull/&lt;N&gt;/merge</c> ref; null otherwise.</param>
 /// <param name="HeadSha">
-/// The commit the run was built from, as <c>^[0-9a-f]{40}([0-9a-f]{24})?$</c>. It is the verified <c>sha</c> claim
-/// only for a <c>branch</c>/<c>tag</c> ref: for a pull request GitHub reports the test-merge commit, which is not the
-/// head, so the value comes from the body (or stays null).
+/// The commit the run was built from, as <c>^[0-9a-f]{40}([0-9a-f]{24})?$</c>, as the producer declared it.
 /// </param>
-/// <param name="BaseSha">The base commit; the body is the only source (no claim carries one).</param>
+/// <param name="BaseSha">The base commit the producer declared.</param>
 /// <param name="TriggerEvent">
-/// <c>push</c>, <c>pull_request</c>, <c>schedule</c>, <c>manual</c> or <c>dispatch</c>; the body is the only source
-/// (the exchange does not record <c>event_name</c>).
+/// <c>push</c>, <c>pull_request</c>, <c>schedule</c>, <c>manual</c> or <c>dispatch</c>, as the producer declared it.
 /// </param>
-/// <param name="IsFork">
-/// True only when the body says so: a fork PR exchange is refused 403 by 02.4.1, so a verified caller is never a fork
-/// and the create path stores <c>false</c> for it, ignoring a conflicting body value.
-/// </param>
+/// <param name="IsFork">True only when the body says so; a fork run stays advisory-only and never binds to a release.</param>
 /// <param name="UnverifiedRef">
-/// True when at least one stored identity value came from the request body, i.e. the run carries an identity no
-/// verified claim covers; such a run is advisory input, never a gating one (05.2.2 §8, 07). False when every value was
-/// verified, and false when the request carried no identity at all (all fields null).
+/// True when any ref member was supplied: all stored identity values are producer-declared. False without identity.
+/// A declared non-fork default-branch or configured release-branch-glob match may gate;
+/// declared forks are advisory-only and never bind to a release.
 /// </param>
 internal sealed record RunIdentity(
     string? RefKind,
@@ -67,35 +61,12 @@ internal sealed record RunRefInput(
     bool IsFork);
 
 /// <summary>
-/// The verified <c>ref</c>/<c>sha</c> pair of the caller's credential, read from the <c>ci_token_issue</c> row the
-/// 02.4.1 GitHub OIDC exchange wrote from the token it had already verified (T1.3). It is the only source of a
-/// <em>verified</em> identity: the body cannot reach the create path with one.
-/// </summary>
-/// <param name="Ref">The <c>ref</c> claim, e.g. <c>refs/heads/main</c> or <c>refs/pull/12/merge</c>.</param>
-/// <param name="Sha">The <c>sha</c> claim: the commit the workflow ran from.</param>
-internal sealed record CiRefClaim(string Ref, string Sha);
-
-/// <summary>
 /// The run-identity rules of 05.2.2-T1.3 as pure functions, so the trust policy is unit-testable without a database:
-/// parse the body's <c>ref</c> block (shape only, AC4), map the verified <c>ref</c>/<c>sha</c> claim to the identity
-/// members it covers, and merge the two under the claim-wins rule (AC1–AC3).
+/// parse the body's <c>ref</c> block (shape only, AC4) and resolve it to the identity a run stores.
 /// <para>
-/// Trust policy (owner/coordinator decision D-S45-Q1, 05.2.2 §8):
-/// (1) for the members a verified claim covers — <c>ref_kind</c>, <c>ref_name</c>, <c>pr_number</c>,
-/// <c>is_fork</c> and (for a <c>branch</c>/<c>tag</c> ref) <c>head_sha</c> — the claim always wins and a conflicting
-/// body value is ignored rather than refused, including when the claim's ref has a shape this version does not parse
-/// (then those members stay null and the body is still ignored for them).
-/// (2) <c>base_sha</c> and <c>trigger_event</c> have no verified source: they come from the body, or stay null.
-/// (3) <c>unverified_ref</c> is true exactly when a stored member came from the body, so "verified claims only" is
-/// false and "claims plus a body-only member" is true.
-/// (4) A caller whose <c>ci_token_issue</c> row is missing is not verified at all: it is treated as a body-only
-/// caller, never as a trusted one (fail toward advisory).
-/// </para>
-/// <para>
-/// The claim's <c>ref</c>/<c>sha</c> are re-shaped here even though the exchange produced them from a verified token:
-/// the exchange validates the ref against the binding's glob patterns (so a 512-character branch name is reachable)
-/// but does not constrain the <c>sha</c> at all, and a value the column CHECKs refuse would surface as a 500. A value
-/// this version cannot store is therefore dropped (null/absent) instead.
+/// Every supplied ref member is producer-declared, so <c>unverified_ref</c> records provenance, not gate eligibility.
+/// A declared non-fork default-branch or configured release-branch-glob match may gate;
+/// declared forks are advisory-only and never bind to a release.
 /// </para>
 /// </summary>
 internal static class RunIdentityRules
@@ -115,23 +86,12 @@ internal static class RunIdentityRules
     /// <summary>The <c>trigger_event</c> values <c>run.trigger_event</c> admits (migration 0037).</summary>
     internal static readonly IReadOnlyList<string> TriggerEvents = ["push", "pull_request", "schedule", "manual", "dispatch"];
 
-    private const string BranchRefPrefix = "refs/heads/";
-    private const string TagRefPrefix = "refs/tags/";
-    private const string PullRefPrefix = "refs/pull/";
-    private const string PullRefSuffix = "/merge";
-
-    /// <summary>The <c>ref_kind</c> of a branch ref.</summary>
-    internal const string BranchKind = "branch";
-
-    /// <summary>The <c>ref_kind</c> of a tag ref.</summary>
-    internal const string TagKind = "tag";
-
     /// <summary>The <c>ref_kind</c> of a pull-request ref.</summary>
     internal const string PullRequestKind = "pull_request";
 
     /// <summary>
-    /// Parses the body's optional <c>ref</c> object, shape-checking every member (AC4). The body is validated whether
-    /// or not a claim later overrides it, so a malformed block is always a 422 before any write.
+    /// Parses the body's optional <c>ref</c> object, shape-checking every member (AC4), so a malformed block is
+    /// always a 422 before any write.
     /// </summary>
     /// <param name="body">The request body root (already known to be a JSON object).</param>
     /// <returns>
@@ -264,65 +224,41 @@ internal static class RunIdentityRules
     }
 
     /// <summary>
-    /// The identity a run is created with: the body's values, with every member a verified claim covers replaced by the
-    /// claim's (AC1–AC3), and <c>unverified_ref</c> set when a stored member came from the body.
+    /// The identity a run is created with: the body's declared values, stored as they are, with
+    /// <c>unverified_ref</c> set whenever any member was supplied. No credential carries a ref claim, so a
+    /// producer's identity is never verified here.
     /// </summary>
     /// <param name="body">The body's validated <c>ref</c> block, or null when the body carried none.</param>
-    /// <param name="claim">The verified claim of the caller's <c>ci_token_issue</c> row, or null when the caller has no usable one.</param>
-    internal static RunIdentity Resolve(RunRefInput? body, CiRefClaim? claim)
+    internal static RunIdentity Resolve(RunRefInput? body)
     {
-        if (claim is null)
-        {
-            var kind = body?.Kind;
-            var name = body?.Name;
-            var prNumber = body?.PrNumber;
-            var headSha = body?.HeadSha;
-            var baseSha = body?.BaseSha;
-            var triggerEvent = body?.TriggerEvent;
-            var isFork = body?.IsFork ?? false;
-
-            return new RunIdentity(
-                kind,
-                name,
-                prNumber,
-                headSha,
-                baseSha,
-                triggerEvent,
-                isFork,
-                kind is not null
-                || name is not null
-                || prNumber is not null
-                || headSha is not null
-                || baseSha is not null
-                || triggerEvent is not null
-                || isFork);
-        }
-
-        var (claimKind, claimName, claimPrNumber) = MapClaim(claim.Ref);
-
-        // A claim covers head_sha only for a branch/tag ref; for a pull request the sha is the test-merge commit, and an
-        // unparseable ref covers nothing. Either way the body is what the caller has for head_sha, and using it labels
-        // the run unverified.
-        var claimCoversHead = claimKind is BranchKind or TagKind;
-        var bodyHead = claimCoversHead ? null : body?.HeadSha;
-        var baseShaFromBody = body?.BaseSha;
-        var triggerFromBody = body?.TriggerEvent;
+        var kind = body?.Kind;
+        var name = body?.Name;
+        var prNumber = body?.PrNumber;
+        var headSha = body?.HeadSha;
+        var baseSha = body?.BaseSha;
+        var triggerEvent = body?.TriggerEvent;
+        var isFork = body?.IsFork ?? false;
 
         return new RunIdentity(
-            claimKind,
-            claimName,
-            claimPrNumber,
-            claimCoversHead ? ClaimShaOrNull(claim.Sha) : bodyHead,
-            baseShaFromBody,
-            triggerFromBody,
-            IsFork: false,
-            UnverifiedRef: bodyHead is not null || baseShaFromBody is not null || triggerFromBody is not null);
+            kind,
+            name,
+            prNumber,
+            headSha,
+            baseSha,
+            triggerEvent,
+            isFork,
+            kind is not null
+            || name is not null
+            || prNumber is not null
+            || headSha is not null
+            || baseSha is not null
+            || triggerEvent is not null
+            || isFork);
     }
 
     /// <summary>
     /// The one rule that runs on the <em>effective</em> values rather than the body: a <c>pull_request</c> identity
-    /// without a number is unusable (AC4). It can only be violated by a body-only caller, because a claim's two members
-    /// are produced together.
+    /// without a number is unusable (AC4).
     /// </summary>
     /// <param name="identity">The resolved identity.</param>
     /// <returns>The failure detail, or null when the identity is admissible.</returns>
@@ -330,59 +266,6 @@ internal static class RunIdentityRules
         identity.RefKind == PullRequestKind && identity.PrNumber is null
             ? new ErrorDetail("/ref/pr_number", "required")
             : null;
-
-    /// <summary>
-    /// Maps a verified <c>ref</c> claim to the three members it covers: <c>refs/heads/&lt;n&gt;</c> to a
-    /// <c>branch</c> called <c>&lt;n&gt;</c>, <c>refs/tags/&lt;n&gt;</c> to a <c>tag</c>, and
-    /// <c>refs/pull/&lt;N&gt;/merge</c> to a <c>pull_request</c> whose name is GitHub's <c>&lt;N&gt;/merge</c> and whose
-    /// number is <c>N</c>. The name is built from the parsed number's canonical decimal, so a ref with leading zeros
-    /// (<c>refs/pull/007/merge</c>) stores <c>7/merge</c>, never the raw digits. Any other shape — including a name
-    /// over 255 characters, a name with a control character, or a number that does not fit <c>integer</c> — covers
-    /// nothing: the three members stay null and the body is still ignored for them.
-    /// </summary>
-    /// <param name="gitRef">The verified <c>ref</c> claim.</param>
-    internal static (string? Kind, string? Name, int? PrNumber) MapClaim(string gitRef)
-    {
-        if (gitRef.StartsWith(BranchRefPrefix, StringComparison.Ordinal))
-        {
-            var name = gitRef[BranchRefPrefix.Length..];
-            return IsStorableName(name) ? (BranchKind, name, null) : (null, null, null);
-        }
-
-        if (gitRef.StartsWith(TagRefPrefix, StringComparison.Ordinal))
-        {
-            var name = gitRef[TagRefPrefix.Length..];
-            return IsStorableName(name) ? (TagKind, name, null) : (null, null, null);
-        }
-
-        // The length guard keeps the slice below in range when the prefix and the suffix would overlap
-        // (`refs/pull/merge`), which a bare StartsWith/EndsWith pair would not.
-        if (gitRef.Length > PullRefPrefix.Length + PullRefSuffix.Length
-            && gitRef.StartsWith(PullRefPrefix, StringComparison.Ordinal)
-            && gitRef.EndsWith(PullRefSuffix, StringComparison.Ordinal))
-        {
-            var digits = gitRef[PullRefPrefix.Length..^PullRefSuffix.Length];
-            // Digits only, at least one, and a positive number that fits `integer`: anything else cannot be stored in
-            // run.pr_number (CHECK pr_number > 0) and must not abort the run with a 22003.
-            if (digits.Length > 0
-                && IsAsciiDigits(digits)
-                && int.TryParse(digits, NumberStyles.None, CultureInfo.InvariantCulture, out var number)
-                && number > 0)
-            {
-                // The canonical decimal of the parsed number, so `refs/pull/007/merge` stores `7/merge` (the digits
-                // slice may carry leading zeros, which are not a name GitHub ever writes).
-                return (PullRequestKind, number.ToString(CultureInfo.InvariantCulture) + PullRefSuffix, number);
-            }
-        }
-
-        return (null, null, null);
-    }
-
-    /// <summary>
-    /// The verified <c>sha</c> claim as a storable <c>head_sha</c>, or null when it is not the
-    /// <c>sha</c>-shaped value the column CHECK admits (the exchange does not constrain it).
-    /// </summary>
-    internal static string? ClaimShaOrNull(string sha) => IsSha(sha) ? sha : null;
 
     /// <summary>A string member, or false when the JSON value is not a string (null is never returned as a value).</summary>
     private static bool TryString(JsonElement value, out string? text)
@@ -437,20 +320,6 @@ internal static class RunIdentityRules
         foreach (var character in sha)
         {
             if (character is not ((>= '0' and <= '9') or (>= 'a' and <= 'f')))
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    /// <summary>True when every character is an ASCII decimal digit.</summary>
-    private static bool IsAsciiDigits(string text)
-    {
-        foreach (var character in text)
-        {
-            if (character is < '0' or > '9')
             {
                 return false;
             }

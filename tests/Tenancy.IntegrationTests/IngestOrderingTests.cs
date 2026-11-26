@@ -330,8 +330,52 @@ public sealed class IngestOrderingTests
         (await LastSequenceAsync(world)).ShouldBe(4L);
         (await world.ScalarAsync<string>(
             $"select bound_token_jti from public.producer_slot where run_id = '{world.RunId:D}' and producer_id = 'shard-1'"))
-            .ShouldBe(IngestTestWorld.Jti);
+            .ShouldBe(IngestTestWorld.OwnerId);
         (await EventRowsAsync(world)).ShouldBe(4);
+    }
+
+    // ---------------------------------------------------------------- the slot bind is decided before the unknown-key answer
+
+    /// <summary>A well-formed execution key (sha256 hex) that no seeded plan contains.</summary>
+    private static readonly string UnplannedKey = new('f', 64);
+
+    [Fact]
+    public async Task foreign_owner_unplanned_key_403_taken_not_422_unknown_key()
+    {
+        // A caller that does not own the slot must not learn which execution keys the run plans.
+        await using var world = await IngestTestWorld.StartAsync(
+            _fixture, IngestTestWorld.Writer(), planned: 2, slots: 1, boundOwnerId: IngestTestWorld.OtherOwnerId);
+
+        var answer = await IngestQaRequests.PostEventsAsync(
+            world.Client,
+            world.RunId,
+            IngestQaRequests.Batch(IngestQaRequests.Event(Guid.CreateVersion7(), UnplannedKey, sequence: 1)));
+
+        answer.Status.ShouldBe(HttpStatusCode.Forbidden, answer.ErrorMessage);
+        answer.ErrorCode.ShouldBe("producer_slot_taken");
+        (await world.CountAsync("event", $"run_id = '{world.RunId:D}'")).ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task owning_caller_unplanned_keys_422_lists_all_indices()
+    {
+        // The positive control of the case above: the same batch shape from the slot's owner is answered 422 with
+        // every failing index, so the 403 above comes from slot ownership and not from the keys.
+        await using var world = await IngestTestWorld.StartAsync(
+            _fixture, IngestTestWorld.Writer(), planned: 2, slots: 1, boundOwnerId: IngestTestWorld.OwnerId);
+
+        var answer = await IngestQaRequests.PostEventsAsync(
+            world.Client,
+            world.RunId,
+            IngestQaRequests.Batch(
+                IngestQaRequests.Event(Guid.CreateVersion7(), IngestQaRequests.KeyOf(world, 0), sequence: 1),
+                IngestQaRequests.Event(Guid.CreateVersion7(), UnplannedKey, sequence: 2),
+                IngestQaRequests.Event(Guid.CreateVersion7(), new string('e', 64), sequence: 3)));
+
+        answer.Status.ShouldBe(HttpStatusCode.UnprocessableEntity, answer.ErrorMessage);
+        answer.ErrorCode.ShouldBe("unknown_execution_key");
+        IngestQaRequests.Details(answer).Select(IngestQaRequests.IndexOf).ShouldBe([1, 2]);
+        (await world.CountAsync("event", $"run_id = '{world.RunId:D}'")).ShouldBe(0);
     }
 
     // ---------------------------------------------------------------- a refusal after the transition

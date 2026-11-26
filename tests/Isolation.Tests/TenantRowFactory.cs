@@ -128,6 +128,10 @@ internal sealed partial class TenantRowFactory
 
     private static int _authoringCode;
 
+    // A fresh extraction slot number per generated slot row (migration 0133): the slot is unique per org, so a
+    // constant would collide with the valid row the corrupt one is generated next to before the FK is reached.
+    private static int _intakeSlot;
+
     // A fresh case-code prefix per generated project: 0039 makes `case_prefix` NOT NULL with the
     // grammar ^[A-Z][A-Z0-9]{1,7}$ and a per-org unique index, and each generated project row is a
     // different one, so a constant is either invalid or a duplicate ("P0001", "P0002", …).

@@ -76,13 +76,6 @@ export class ProjectOverviewPage {
       .map((id) => items.find((item) => item.id === id))
       .find((item) => item !== undefined);
   });
-  protected readonly setupLink = computed(
-    () =>
-      this.nav
-        .groups()
-        .flatMap((group) => group.items)
-        .find((item) => item.id === 'onboarding')?.link,
-  );
   protected readonly registerScope = computed(() => {
     if (!this.store.runs.value() || !this.latest().length) return '';
     const count = formatNumber(this.latest().length, this.locale);
@@ -173,14 +166,6 @@ export class ProjectOverviewPage {
     () =>
       this.store.tree.value()?.items.reduce((total, node) => total + node.item_count, 0) ?? null,
   );
-  protected readonly bindingCounts = computed(() => {
-    const rows = this.store.bindings.value()?.items ?? [];
-    return {
-      active: rows.filter((row) => row.status === 'active').length,
-      pending: rows.filter((row) => row.status === 'pending_verification').length,
-      disabled: rows.filter((row) => row.status === 'disabled').length,
-    };
-  });
   protected readonly incidentsVisible = computed(() => this.session.has('healing:triage'));
   protected readonly attentionVisible = computed(
     () =>
@@ -197,7 +182,6 @@ export class ProjectOverviewPage {
       this.store.runs.visible() ||
       this.attentionVisible() ||
       this.authoringVisible() ||
-      this.store.bindings.visible() ||
       this.store.usage.visible() ||
       this.store.audit.visible(),
   );

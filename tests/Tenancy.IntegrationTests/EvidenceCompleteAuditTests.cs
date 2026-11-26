@@ -37,9 +37,6 @@ public sealed class EvidenceCompleteAuditTests(PostgresTenancyFixture fixture, S
 
     private const string ZipType = "application/zip";
 
-    /// <summary>The caller's token id (the slot-binding identity, T9).</summary>
-    private const string Jti = "jti-complete-audit-1";
-
     private const string ProducerId = "shard-1";
 
     /// <summary>The kind-policy cap every seeded policy row carries; the happy-path body is exactly this size.</summary>
@@ -74,8 +71,8 @@ public sealed class EvidenceCompleteAuditTests(PostgresTenancyFixture fixture, S
     }
 
     /// <summary>A service principal holding <c>artifact:write</c> and a token id (the slot-binding identity).</summary>
-    private static RequestPrincipal Writer(string jti = Jti) =>
-        RequestPrincipal.Service(projectScope: null, [Permissions.Artifact.Write], credentialId: jti);
+    private static RequestPrincipal Writer() =>
+        RequestPrincipal.Service(projectScope: null, [Permissions.Artifact.Write], credentialId: IngestTestWorld.OwnerId);
 
     /// <summary>
     /// One migrated database with an org and a project created through the real registry routes, plus a host whose
@@ -237,7 +234,7 @@ public sealed class EvidenceCompleteAuditTests(PostgresTenancyFixture fixture, S
 
         return await provider.GetRequiredService<IMediator>()
             .Send(
-                new CompleteArtifactUpload(artifactId, verdict, Jti, idempotencyKey ?? NewKey()),
+                new CompleteArtifactUpload(artifactId, verdict, IngestTestWorld.OwnerId, idempotencyKey ?? NewKey()),
                 TestContext.Current.CancellationToken);
     }
 
