@@ -525,6 +525,7 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
             ["/v1/projects/{p}/artifact-kind-policy"] = $"/v1/projects/{project}/artifact-kind-policy",
             ["/v1/projects/{p}/quarantine"] = $"/v1/projects/{project}/quarantine",
             ["/v1/projects/{p}/runs"] = $"/v1/projects/{project}/runs",
+            ["/v1/projects/{p}/runs/decision-counts"] = $"/v1/projects/{project}/runs/decision-counts",
             // 13.1.1-T2's three authoring lists: one page each, empty for a project with no authoring rows, so the
             // scan covers them like every other list (their detail route is the one skipped entry). 13.1.1-T3's
             // version timeline list is the same shape — an empty page carries no secret — while its detail route

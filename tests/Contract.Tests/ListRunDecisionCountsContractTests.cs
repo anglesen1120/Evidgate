@@ -33,7 +33,12 @@ public sealed class ListRunDecisionCountsContractTests
         schema["type"].ShouldNotBeNull().GetValue<string>().ShouldBe("string");
         schema["format"].ShouldNotBeNull().GetValue<string>().ShouldBe("date-time");
         schema.ContainsKey("default").ShouldBeFalse("the default is a moving window, not a constant");
-        var description = parameter["description"].ShouldNotBeNull().GetValue<string>();
+
+        // The spec reader drops folded prose, so the wording is read from the raw file.
+        var yaml = File.ReadAllText(Path.Combine(ContractPaths.ContractsDirectory, "openapi.yaml"));
+        var start = yaml.IndexOf("    RunDecisionCountsSince:", StringComparison.Ordinal);
+        var end = yaml.IndexOf("    RunState:", start, StringComparison.Ordinal);
+        var description = string.Join(' ', yaml[start..end].Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
         description.ShouldContain("explicit offset");
         description.ShouldContain("422 `request_invalid`");
     }
