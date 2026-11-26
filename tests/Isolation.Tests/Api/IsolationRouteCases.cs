@@ -1026,6 +1026,16 @@ public static partial class IsolationRouteCases
         QuarantineRemoveCase(),
         ProjectCase("GET", "/v1/projects/{p}/quarantine", p => new(HttpMethod.Get, $"/v1/projects/{p}/quarantine"), list: true),
 
+        // ---- Policy deploy targets (DeployTargetEndpoints.cs) ----------------------------------------------------
+        // Every route names its project in {p}; a foreign project is the same 404 an unknown one gets, so the
+        // project case covers cross-tenant and cross-project reads and writes. The target id is a fresh one.
+        ProjectCase("GET", "/v1/projects/{p}/deploy-targets", p => new(HttpMethod.Get, $"/v1/projects/{p}/deploy-targets"), ownControl: true),
+        ProjectCase("POST", "/v1/projects/{p}/deploy-targets", p => new(HttpMethod.Post, $"/v1/projects/{p}/deploy-targets", new JsonObject { ["name"] = "probe" })),
+        ProjectCase("GET", "/v1/projects/{p}/deploy-targets/{t}", p => new(HttpMethod.Get, $"/v1/projects/{p}/deploy-targets/{Guid.CreateVersion7()}")),
+        ProjectCase("PATCH", "/v1/projects/{p}/deploy-targets/{t}", p => new(HttpMethod.Patch, $"/v1/projects/{p}/deploy-targets/{Guid.CreateVersion7()}",
+            new JsonObject { ["order"] = 1 }, IfMatch: "\"1\"")),
+        ProjectCase("DELETE", "/v1/projects/{p}/deploy-targets/{t}", p => new(HttpMethod.Delete, $"/v1/projects/{p}/deploy-targets/{Guid.CreateVersion7()}", IfMatch: "\"1\"")),
+
         .. IncidentCases(),
         // ---- Healing switch (HealingEndpoints.cs; 08.6.3-T1) ----------------------------------------------------
         HealingSwitchReadCase(),

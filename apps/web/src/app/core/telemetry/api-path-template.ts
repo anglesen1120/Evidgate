@@ -50,6 +50,7 @@ export const KNOWN_API_SEGMENTS: ReadonlySet<string> = new Set<string>([
   'confirm',
   'decision',
   'decision-counts',
+  'deploy-targets',
   'dev',
   'diff',
   'discard',

@@ -2195,6 +2195,48 @@ export type QuarantineEntryPage = {
 };
 
 /**
+ * One deploy target: a named, ordered release destination of a project. `policy_revision_id` is the pinned revision of the same project, or null when the active revision applies. `version` is also the `ETag`.
+ */
+export type DeployTargetDto = {
+    id: string;
+    project_id: string;
+    name: string;
+    order: number;
+    policy_revision_id: string | null;
+    state: 'active' | 'disabled';
+    created_at: string;
+    updated_at: string;
+    version: number;
+};
+
+/**
+ * Body of `POST /v1/projects/{p}/deploy-targets`; `order` defaults to 0.
+ */
+export type DeployTargetCreateRequest = {
+    name: string;
+    order?: number;
+    policy_revision_id?: string | null;
+};
+
+/**
+ * Body of `PATCH /v1/projects/{p}/deploy-targets/{t}`: at least one member; an absent member is unchanged and `policy_revision_id: null` clears the pin.
+ */
+export type DeployTargetPatchRequest = {
+    name?: string;
+    order?: number;
+    policy_revision_id?: string | null;
+    state?: 'active' | 'disabled';
+};
+
+/**
+ * The project's targets ordered by `order`, then name; one page of at most 50, `next_cursor` always null.
+ */
+export type DeployTargetPage = {
+    items: Array<DeployTargetDto>;
+    next_cursor: string | null;
+};
+
+/**
  * 200 body of `POST /v1/artifacts/upload-url` (06.1.2 §5, AC1). `object_key` is the `pending/<org_id>/<artifact_id>` staging key the client `PUT`s to; `required_headers` are the signed headers the client must send verbatim (`Content-Length` = the declared `bytes`, `x-amz-checksum-sha256` = the base64 of the declared digest); `expires_at` is at most 15 minutes out.
  */
 export type UploadUrlResponse = {
@@ -4176,6 +4218,8 @@ export type CandidateId = string;
 export type WaiverId = string;
 
 export type QuarantineEntryId = string;
+
+export type DeployTargetId = string;
 
 /**
  * Feature-tree node id (13.1.1).
@@ -12146,6 +12190,294 @@ export type ListQuarantineEntriesResponses = {
 };
 
 export type ListQuarantineEntriesResponse = ListQuarantineEntriesResponses[keyof ListQuarantineEntriesResponses];
+
+export type ListDeployTargetsData = {
+    body?: never;
+    path: {
+        p: string;
+    };
+    query?: never;
+    url: '/projects/{p}/deploy-targets';
+};
+
+export type ListDeployTargetsErrors = {
+    /**
+     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type ListDeployTargetsError = ListDeployTargetsErrors[keyof ListDeployTargetsErrors];
+
+export type ListDeployTargetsResponses = {
+    /**
+     * Targets in display order
+     */
+    200: DeployTargetPage;
+};
+
+export type ListDeployTargetsResponse = ListDeployTargetsResponses[keyof ListDeployTargetsResponses];
+
+export type CreateDeployTargetData = {
+    body: DeployTargetCreateRequest;
+    headers: {
+        /**
+         * Client-supplied, ≤ 128 chars, unique per `(org_id, project_id, operation)` ≥ 24 h (00 §7/§9.1).
+         */
+        'Idempotency-Key': string;
+        /**
+         * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
+         */
+        'X-XSRF-TOKEN'?: string;
+    };
+    path: {
+        p: string;
+    };
+    query?: never;
+    url: '/projects/{p}/deploy-targets';
+};
+
+export type CreateDeployTargetErrors = {
+    /**
+     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 409 conflict — e.g. `idempotency_conflict`, `run_closed` (00 §9.1/§9.2)
+     */
+    409: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type CreateDeployTargetError = CreateDeployTargetErrors[keyof CreateDeployTargetErrors];
+
+export type CreateDeployTargetResponses = {
+    /**
+     * Target created
+     */
+    201: DeployTargetDto;
+};
+
+export type CreateDeployTargetResponse = CreateDeployTargetResponses[keyof CreateDeployTargetResponses];
+
+export type DisableDeployTargetData = {
+    body?: never;
+    headers: {
+        /**
+         * ETag for optimistic concurrency; stale → 412 (00 §9.1).
+         */
+        'If-Match': string;
+        /**
+         * Client-supplied, ≤ 128 chars, unique per `(org_id, project_id, operation)` ≥ 24 h (00 §7/§9.1).
+         */
+        'Idempotency-Key': string;
+        /**
+         * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
+         */
+        'X-XSRF-TOKEN'?: string;
+    };
+    path: {
+        p: string;
+        t: string;
+    };
+    query?: never;
+    url: '/projects/{p}/deploy-targets/{t}';
+};
+
+export type DisableDeployTargetErrors = {
+    /**
+     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 409 conflict — e.g. `idempotency_conflict`, `run_closed` (00 §9.1/§9.2)
+     */
+    409: ErrorEnvelope;
+    /**
+     * 412 precondition failed — stale ETag; current revision id in `error.details` (00 §9.1/§9.2)
+     */
+    412: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type DisableDeployTargetError = DisableDeployTargetErrors[keyof DisableDeployTargetErrors];
+
+export type DisableDeployTargetResponses = {
+    /**
+     * The disabled target
+     */
+    200: DeployTargetDto;
+};
+
+export type DisableDeployTargetResponse = DisableDeployTargetResponses[keyof DisableDeployTargetResponses];
+
+export type GetDeployTargetData = {
+    body?: never;
+    path: {
+        p: string;
+        t: string;
+    };
+    query?: never;
+    url: '/projects/{p}/deploy-targets/{t}';
+};
+
+export type GetDeployTargetErrors = {
+    /**
+     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type GetDeployTargetError = GetDeployTargetErrors[keyof GetDeployTargetErrors];
+
+export type GetDeployTargetResponses = {
+    /**
+     * The target
+     */
+    200: DeployTargetDto;
+};
+
+export type GetDeployTargetResponse = GetDeployTargetResponses[keyof GetDeployTargetResponses];
+
+export type UpdateDeployTargetData = {
+    body: DeployTargetPatchRequest;
+    headers: {
+        /**
+         * ETag for optimistic concurrency; stale → 412 (00 §9.1).
+         */
+        'If-Match': string;
+        /**
+         * Client-supplied, ≤ 128 chars, unique per `(org_id, project_id, operation)` ≥ 24 h (00 §7/§9.1).
+         */
+        'Idempotency-Key': string;
+        /**
+         * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
+         */
+        'X-XSRF-TOKEN'?: string;
+    };
+    path: {
+        p: string;
+        t: string;
+    };
+    query?: never;
+    url: '/projects/{p}/deploy-targets/{t}';
+};
+
+export type UpdateDeployTargetErrors = {
+    /**
+     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 409 conflict — e.g. `idempotency_conflict`, `run_closed` (00 §9.1/§9.2)
+     */
+    409: ErrorEnvelope;
+    /**
+     * 412 precondition failed — stale ETag; current revision id in `error.details` (00 §9.1/§9.2)
+     */
+    412: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type UpdateDeployTargetError = UpdateDeployTargetErrors[keyof UpdateDeployTargetErrors];
+
+export type UpdateDeployTargetResponses = {
+    /**
+     * The target in its new state, its new version in the ETag
+     */
+    200: DeployTargetDto;
+};
+
+export type UpdateDeployTargetResponse = UpdateDeployTargetResponses[keyof UpdateDeployTargetResponses];
 
 export type ListAuthoringTreeData = {
     body?: never;

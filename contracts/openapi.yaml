@@ -7155,6 +7155,222 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '503':
           $ref: '#/components/responses/Unavailable'
+  /projects/{p}/deploy-targets:
+    get:
+      operationId: listDeployTargets
+      tags: [policy]
+      summary: A project's deploy targets in display order
+      description: >-
+        Every member role may read (`project:read`). Targets are ordered by `order`, then name;
+        disabled targets are listed with their `state`. A project holds at most 50 targets, so the
+        list is one page and `next_cursor` is always null. Another tenant's project is 404; a
+        credential scoped to another project is 403 `project_scope_mismatch`.
+      x-permission: project:read
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '200':
+          description: Targets in display order
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeployTargetPage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    post:
+      operationId: createDeployTarget
+      tags: [policy]
+      summary: Create a deploy target; a duplicate name (any case) is 409 target_exists
+      description: >-
+        Requires `project:write`. `name` is a slug (letters, digits, `.`, `_`, `-`; 1..63
+        characters, starting with a letter or digit) unique per project ignoring case, across
+        active and disabled targets. `policy_revision_id` pins a revision of this project; a
+        revision of another project or tenant is 422 `request_invalid` (path
+        `policy_revision_id`). A project holds at most 50 targets. The answer carries the new
+        `version` as `ETag`. Idempotency-Key required.
+      x-permission: project:write
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeployTargetCreateRequest'
+      responses:
+        '201':
+          description: Target created
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeployTargetDto'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /projects/{p}/deploy-targets/{t}:
+    get:
+      operationId: getDeployTarget
+      tags: [policy]
+      summary: One deploy target, its version in the ETag
+      description: >-
+        Requires `project:read`. A target of another project or tenant is 404.
+      x-permission: project:read
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/DeployTargetId'
+      responses:
+        '200':
+          description: The target
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeployTargetDto'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    patch:
+      operationId: updateDeployTarget
+      tags: [policy]
+      summary: Change a deploy target; a stale If-Match is 412
+      description: >-
+        Requires `project:write`. `If-Match` is required and carries the `ETag` of the target the
+        client read: absent or unparsable is 422, a version that is no longer current is 412
+        `precondition_failed` (details `If-Match`, `version`). The body names the members to change
+        (`name`, `order`, `policy_revision_id`, `state`); `policy_revision_id: null` clears the pin,
+        an empty body or an unknown member is 422. A renamed target that collides with another
+        (any case) is 409 `target_exists`. `state` moves between `active` and `disabled` and is never
+        a delete. Idempotency-Key required.
+      x-permission: project:write
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/DeployTargetId'
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeployTargetPatchRequest'
+      responses:
+        '200':
+          description: The target in its new state, its new version in the ETag
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeployTargetDto'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    delete:
+      operationId: disableDeployTarget
+      tags: [policy]
+      summary: Disable a deploy target; the row is kept
+      description: >-
+        Requires `project:write`. Moves an `active` target to `disabled` and returns it: a target is
+        never removed, so its name stays reserved and anything that references it keeps resolving.
+        `If-Match` is required (stale is 412). An already disabled target is 409 `invalid_transition`.
+        Idempotency-Key required.
+      x-permission: project:write
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/DeployTargetId'
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XsrfToken'
+      responses:
+        '200':
+          description: The disabled target
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeployTargetDto'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
   /projects/{p}/authoring/tree:
     get:
       operationId: listAuthoringTree
@@ -10029,6 +10245,13 @@ components:
         format: uuid
     QuarantineEntryId:
       name: q
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    DeployTargetId:
+      name: t
       in: path
       required: true
       schema:
@@ -14064,6 +14287,53 @@ components:
         items:
           type: array
           items: { $ref: '#/components/schemas/QuarantineEntry' }
+        next_cursor: { type: [string, 'null'] }
+    DeployTargetDto:
+      type: object
+      description: >-
+        One deploy target: a named, ordered release destination of a project. `policy_revision_id`
+        is the pinned revision of the same project, or null when the active revision applies.
+        `version` is also the `ETag`.
+      required:
+        [id, project_id, name, order, policy_revision_id, state, created_at, updated_at, version]
+      properties:
+        id: { type: string, format: uuid }
+        project_id: { type: string, format: uuid }
+        name: { type: string, pattern: '^[A-Za-z0-9][A-Za-z0-9._-]{0,62}$' }
+        order: { type: integer, minimum: 0, maximum: 10000 }
+        policy_revision_id: { type: [string, 'null'], format: uuid }
+        state: { type: string, enum: [active, disabled] }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        version: { type: integer, minimum: 1 }
+    DeployTargetCreateRequest:
+      type: object
+      description: Body of `POST /v1/projects/{p}/deploy-targets`; `order` defaults to 0.
+      required: [name]
+      properties:
+        name: { type: string, pattern: '^[A-Za-z0-9][A-Za-z0-9._-]{0,62}$' }
+        order: { type: integer, minimum: 0, maximum: 10000 }
+        policy_revision_id: { type: [string, 'null'], format: uuid }
+    DeployTargetPatchRequest:
+      type: object
+      description: >-
+        Body of `PATCH /v1/projects/{p}/deploy-targets/{t}`: at least one member; an absent member
+        is unchanged and `policy_revision_id: null` clears the pin.
+      minProperties: 1
+      additionalProperties: false
+      properties:
+        name: { type: string, pattern: '^[A-Za-z0-9][A-Za-z0-9._-]{0,62}$' }
+        order: { type: integer, minimum: 0, maximum: 10000 }
+        policy_revision_id: { type: [string, 'null'], format: uuid }
+        state: { type: string, enum: [active, disabled] }
+    DeployTargetPage:
+      type: object
+      description: The project's targets ordered by `order`, then name; one page of at most 50, `next_cursor` always null.
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/DeployTargetDto' }
         next_cursor: { type: [string, 'null'] }
     UploadUrlResponse:
       type: object
