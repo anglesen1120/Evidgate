@@ -60,9 +60,8 @@ export type { ScopeResolution, SessionState } from './session.types';
 type SessionDependencies = {
   readonly identity: IdentityDataService;
   /**
-   * The effective-grant seam. The token is optional so the app boots with no binding: until the API
-   * offers the caller's own grants, the catalogue default answers. A replacement registered anywhere
-   * in the injector wins, and this store stays unchanged.
+   * The effective-grant seam: by default the caller's own grants from the API. A replacement
+   * registered anywhere in the injector wins, and this store stays unchanged.
    */
   readonly permissionsSource: EffectivePermissionsSource;
   /** The tenant the requests are scoped by; this store is its only writer. */

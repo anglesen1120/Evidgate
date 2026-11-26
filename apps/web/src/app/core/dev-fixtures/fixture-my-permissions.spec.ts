@@ -29,6 +29,11 @@ describe('getMyPermissions fixture', () => {
     expect([...limited].sort()).toEqual(limited);
   });
 
+  it('never grants a code a member cannot hold, even if the session page lists it', () => {
+    expect(codes('ok')).not.toContain('billing:read');
+    expect(codes('ok')).not.toContain('billing:write');
+  });
+
   it('echoes the tenant and project it was asked for', () => {
     const body = findMyPermissionsFixture('ok', 'o-9', 'p-9', lookup)?.document.body;
 

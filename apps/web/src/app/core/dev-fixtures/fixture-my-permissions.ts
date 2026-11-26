@@ -4,8 +4,14 @@
 // source of truth per session instead of a second copy of each grant list. A `getMyPermissions`
 // toggle other than `ok` (`forbidden`, `unavailable`) is answered by its corpus row.
 
+import permissionsCatalogue from '../../../../../../contracts/permissions.json';
 import type { FixtureDocument } from './fixture-document';
 import type { FixtureEntry } from './fixture-catalog-entries';
+
+/** Codes only an operator holds: the member endpoint never returns them. */
+const NOT_MEMBER_GRANTABLE: ReadonlySet<string> = new Set(
+  permissionsCatalogue.permissions.filter((row) => !row.tenant_assignable).map((row) => row.code),
+);
 
 /** The grant page of `variant`, as `listPermissions` would serve it; `undefined` when it has none. */
 export type GrantPageLookup = (variant: string) => FixtureEntry | undefined;
@@ -25,6 +31,7 @@ export function findMyPermissionsFixture(
   if (page?.status !== 200 || !Array.isArray(body?.items)) return undefined;
   const permissions = (body.items as ReadonlyArray<{ readonly code: string }>)
     .map((row) => row.code)
+    .filter((code) => !NOT_MEMBER_GRANTABLE.has(code))
     .sort((left, right) => (left < right ? -1 : left > right ? 1 : 0));
   const document: FixtureDocument = {
     operation_id: 'getMyPermissions',
