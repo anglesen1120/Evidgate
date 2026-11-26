@@ -11,11 +11,11 @@ public sealed partial class EvaluationSchemaTests
         """
         insert into public.evaluation
           (id, org_id, run_id, evidence_revision, policy_revision_id, policy_hash, manifest_hash, completeness,
-           missing, outcome, decision, reasons, evaluator_version, mode, exceptions_hash, exceptions_as_of)
+           missing, outcome, decision, reasons, evaluator_version, mode, exceptions_hash, exceptions_as_of, quarantined_cases)
         values
           (@id, @org_id, @run_id, @evidence_revision, @policy_revision_id, @policy_hash, @manifest_hash,
            @completeness, @missing, @outcome, @decision, @reasons, @evaluator_version, @mode, @exceptions_hash,
-           now())
+           now(), @quarantined_cases::uuid[])
         """;
 
     private static (string Name, object Value)[] Parameters(EvaluationSpec spec) =>
@@ -35,6 +35,7 @@ public sealed partial class EvaluationSchemaTests
         ("evaluator_version", spec.EvaluatorVersion),
         ("mode", spec.Mode),
         ("exceptions_hash", spec.ExceptionsHash),
+        ("quarantined_cases", spec.QuarantinedCases),
     ];
 
     /// <summary>One evaluation INSERT as the app role in its own committed transaction.</summary>

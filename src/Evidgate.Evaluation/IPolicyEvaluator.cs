@@ -11,7 +11,7 @@ public interface IPolicyEvaluator
     /// Bumped only when the observable behaviour of <see cref="Evaluate"/> changes; stored verbatim on the persisted
     /// evaluation so a past decision stays explainable.
     /// </summary>
-    public const string EvaluatorVersion = "1.0.0";
+    public const string EvaluatorVersion = "1.1.0";
 
     /// <summary>Computes completeness, outcome and decision for one evidence and policy revision pair.</summary>
     EvaluationResult Evaluate(

@@ -26,7 +26,10 @@ public enum EvaluationOutcome
 /// <summary>The release decision of one evidence revision against one policy revision.</summary>
 public enum EvaluationDecision
 {
-    /// <summary>Every required case passed and the evidence is complete; never produced from missing evidence.</summary>
+    /// <summary>
+    /// Complete evidence and no failure that still gates (a quarantined non-critical failure does not gate); never
+    /// produced from missing evidence.
+    /// </summary>
     Pass = 0,
 
     /// <summary>A required assertion failed; kept even when other evidence is missing.</summary>
@@ -88,12 +91,15 @@ public enum CaseStatus
 
 /// <summary>
 /// The closed <c>reasons[]</c> catalogue of an evaluation: codes only, never report text, artifact content or a
-/// producer value. The first fourteen members are emitted by the core computation; the last is reserved for the
+/// producer value. The core computation emits most members; <see cref="FlakyBudgetExceeded"/> is reserved for the
 /// flaky layer the contract names, which may only downgrade a pass.
 /// </summary>
 public enum EvaluationReason
 {
-    /// <summary>The pinned scope, build and policy passed: the only reason a core pass carries.</summary>
+    /// <summary>
+    /// The pinned scope, build and policy passed: the core pass's reason. A pass that excluded a quarantined failure
+    /// also carries <see cref="QuarantinedCaseFailed"/>.
+    /// </summary>
     ScopeBuildPolicyPinned = 0,
 
     /// <summary>A required assertion failed.</summary>
@@ -140,4 +146,10 @@ public enum EvaluationReason
 
     /// <summary>The run is advisory-only (a fork run): complete evidence is held at inconclusive and never passes.</summary>
     AdvisoryOnlyRun = 15,
+
+    /// <summary>A non-critical quarantined case failed; its failure was excluded from the gate and stays visible.</summary>
+    QuarantinedCaseFailed = 16,
+
+    /// <summary>A required case that failed also holds an approved waiver; the waiver annotates and never passes it.</summary>
+    WaiverApproved = 17,
 }

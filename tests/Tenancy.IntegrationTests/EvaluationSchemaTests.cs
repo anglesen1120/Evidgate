@@ -266,6 +266,9 @@ public sealed partial class EvaluationSchemaTests(PostgresTenancyFixture fixture
                 s => s with { Completeness = "incomplete", Missing = ["not_a_reason"], Decision = "INCONCLUSIVE" },
                 "evaluation_missing_check"),
             ("reasons", s => s with { Reasons = ["not_a_reason"] }, "evaluation_reasons_check"),
+            ("null case", s => s with { QuarantinedCases = "{NULL}" }, "evaluation_quarantined_cases_check"),
+            ("nested cases", s => s with { QuarantinedCases = "{{00000000-0000-0000-0000-000000000001}}" },
+                "evaluation_quarantined_cases_check"),
         };
 
         foreach (var (column, change, constraint) in refusals)
@@ -287,7 +290,8 @@ public sealed partial class EvaluationSchemaTests(PostgresTenancyFixture fixture
             Missing = ["setup_error", "missing_result"],
             Outcome = "no_results",
             Decision = "INCONCLUSIVE",
-            Reasons = ["setup_error", "critical_not_executed", "flaky_budget_exceeded"],
+            Reasons = ["setup_error", "critical_not_executed", "flaky_budget_exceeded", "quarantined_case_failed", "waiver_approved"],
+            QuarantinedCases = "{00000000-0000-0000-0000-000000000001,00000000-0000-0000-0000-000000000002}",
             Mode = "shadow",
         })).ShouldBe(1);
     }
@@ -409,7 +413,8 @@ public sealed partial class EvaluationSchemaTests(PostgresTenancyFixture fixture
         string[] Reasons,
         string EvaluatorVersion,
         string Mode,
-        string ExceptionsHash);
+        string ExceptionsHash,
+        string QuarantinedCases = "{}");
 
     private delegate EvaluationSpec SpecChange(EvaluationSpec spec);
 
