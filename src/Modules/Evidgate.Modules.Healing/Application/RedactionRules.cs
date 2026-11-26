@@ -22,8 +22,9 @@ internal static class RedactionRules
 
     // Rules without look-around use the linear-time engine, so a long run of rule-shaped characters cannot cost
     // more than its length; the rest carry a match timeout, and a timeout masks the whole window.
-    // An input value is left alone only when it is exactly the generated marker; any other text, including a marker
-    // prefix or a different marker, is masked. Names are matched without case; a two-argument call is masked before
+    // An input value is left alone only when it is exactly the generated marker (an unquoted one also needs a closing
+    // delimiter after it: whitespace, > or />); any other text, including a marker prefix, a marker followed by a tail
+    // or a different marker, is masked. Names are matched without case; a two-argument call is masked before
     // the one-argument form so the selector of fill('#sel', 'x') is never taken for the value.
     private static readonly Rule[] Catalogue =
     [
@@ -35,7 +36,7 @@ internal static class RedactionRules
         new("phone", @"(?<![\w+])\+\d[\d\s.\-()]{8,16}\d"),
         new("input_value", @"(\bvalue\s*=\s*)""(?!\[redacted:input_value\]"")[^""]*""", Replacement: "$1\"[redacted:input_value]\"", Prefilter: "value"),
         new("input_value", @"(\bvalue\s*=\s*)'(?!\[redacted:input_value\]')[^']*'", Replacement: "$1'[redacted:input_value]'", Prefilter: "value"),
-        new("input_value", @"(\bvalue\s*=\s*)(?![""'\s]|\[redacted:input_value\](?:[\s/>]|\z))[^\s""'<>`=]+", Replacement: "$1\"[redacted:input_value]\"", Prefilter: "value"),
+        new("input_value", @"(\bvalue\s*=\s*)(?![""'\s]|\[redacted:input_value\](?:\s|/?>|\z))[^\s""'<>`=]+", Replacement: "$1\"[redacted:input_value]\"", Prefilter: "value"),
         new("input_value", @"(""value""\s*:\s*)""(?!\[redacted:input_value\]"")(?:\\.|[^""\\])*""", Replacement: "$1\"[redacted:input_value]\"", Prefilter: "\"value\""),
         new(
             "input_value",

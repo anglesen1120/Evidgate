@@ -32,6 +32,83 @@ public sealed class RedactionPipelineBoundaryTests
     }
 
     [Theory]
+    [InlineData("key", false)]
+    [InlineData("key", true)]
+    [InlineData("pwd", false)]
+    [InlineData("pwd", true)]
+    public void Redact_ShortestBase64Assignment_BlocksEgress(string keyword, bool unpadded)
+    {
+        var value = string.Concat(keyword, "=", "q");
+        var encoded = Convert.ToBase64String(Encoding.UTF8.GetBytes(value));
+        encoded.Length.ShouldBe(8);
+        var benign = Convert.ToBase64String(Encoding.UTF8.GetBytes("doc=q"));
+        if (unpadded)
+        {
+            encoded = encoded.TrimEnd('=');
+            benign = benign.TrimEnd('=');
+        }
+
+        var control = Pipeline.Redact(benign);
+        control.Blocked.ShouldBeFalse();
+        control.Text.ShouldBe(benign);
+        var outcome = Pipeline.Redact(encoded);
+
+        outcome.Blocked.ShouldBeTrue();
+        outcome.Text.ShouldBeEmpty();
+        outcome.Report.Findings.ShouldContain(finding => finding.RuleId == "residual_base64");
+    }
+
+    [Theory]
+    [InlineData('\u0001')]
+    [InlineData('\u007F')]
+    public void Redact_ShortBase64ValueWithControlCharacter_BlocksEgress(char control)
+    {
+        var benign = Convert.ToBase64String(Encoding.UTF8.GetBytes("doc=q" + control));
+        var unmasked = Pipeline.Redact(benign);
+        unmasked.Blocked.ShouldBeFalse();
+        unmasked.Text.ShouldBe(benign);
+
+        var outcome = Pipeline.Redact(Convert.ToBase64String(Encoding.UTF8.GetBytes("key=q" + control)));
+
+        outcome.Blocked.ShouldBeTrue();
+        outcome.Text.ShouldBeEmpty();
+        outcome.Report.Findings.ShouldContain(finding => finding.RuleId == "residual_base64");
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData(" ")]
+    [InlineData("\t")]
+    [InlineData(">")]
+    [InlineData("/>")]
+    public void Redact_CompleteUnquotedInputMarker_PreservesValidDelimiter(string delimiter)
+    {
+        var payload = "<input value=[redacted:input_value]" + delimiter;
+
+        var outcome = Pipeline.Redact(payload);
+
+        outcome.Blocked.ShouldBeFalse();
+        outcome.Text.ShouldBe(payload);
+        outcome.Report.Findings.ShouldBeEmpty();
+    }
+
+    [Theory]
+    [InlineData("/")]
+    [InlineData("//")]
+    public void Redact_UnquotedInputMarkerWithPrivateTail_MasksTheTail(string separator)
+    {
+        var tail = string.Concat("private", "-tail");
+        var control = Pipeline.Redact("<input value=[redacted:input_value]/>");
+        control.Blocked.ShouldBeFalse();
+        control.Report.Findings.ShouldBeEmpty();
+
+        var outcome = Pipeline.Redact("<input value=[redacted:input_value]" + separator + tail + ">");
+
+        outcome.Text.ShouldNotContain(tail);
+        outcome.Report.Findings.ShouldContain(finding => finding.RuleId == "input_value");
+    }
+
+    [Theory]
     [InlineData(1)]
     [InlineData(2)]
     public void Redact_NestedBase64WithinDecodeDepth_BlocksEgress(int layers)

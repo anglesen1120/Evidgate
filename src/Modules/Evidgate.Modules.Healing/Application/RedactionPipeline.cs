@@ -22,7 +22,8 @@ internal interface IRedactionPipeline
 /// <summary>
 /// Two passes over the payload, window by window. Pass one is <see cref="RedactionRules.Apply"/>. Pass two applies the
 /// same rules to the result and requires that nothing changes (a changed text means a value survived pass one), and
-/// also to the percent-decoded, <c>\uXXXX</c>-decoded, JSON-unescaped and base64-decoded forms of the text, and
+/// also to the percent-decoded, <c>\uXXXX</c>-decoded, JSON-unescaped and base64-decoded forms of the text, and to its
+/// form without invisible format characters and with fullwidth look-alikes mapped to ASCII, and
 /// compares the HTML-entity-decoded form of the window with its masked text, so a secret that was only encoded is
 /// still caught. A payload that cannot be scanned inside its time budget, whose base64 decode budget runs out, or
 /// whose window cannot be cut where no rule spans the seam, is refused, never sent unscanned.
@@ -33,7 +34,7 @@ internal interface IRedactionPipeline
 /// that is itself longer than a window (a quoted value or key body that closes more than one window past the cut) are
 /// not seen. A window with no cut where the rules mask the same text joined and apart is refused.
 /// </remarks>
-internal sealed class RedactionPipeline(TimeProvider clock) : IRedactionPipeline
+internal sealed partial class RedactionPipeline(TimeProvider clock) : IRedactionPipeline
 {
     /// <summary>The longest text one rule pass is given.</summary>
     internal const int MaxWindowChars = 64 * 1024;
@@ -49,9 +50,10 @@ internal sealed class RedactionPipeline(TimeProvider clock) : IRedactionPipeline
 
     private static readonly UTF8Encoding StrictUtf8 = new(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
 
-    // 12 characters is the base64 of the nine bytes of "password=", the shortest keyword the rules know.
+    // Seven characters is the base64 of five bytes, the shortest text a rule matches ("key=a", "a@b.c"). Only tokens
+    // that decode to valid UTF-8 count against the budget, which a word of prose rarely does.
     private static readonly Regex Base64Token = new(
-        @"[A-Za-z0-9+/_\-]{12,}={0,2}",
+        @"[A-Za-z0-9+/_\-]{7,}={0,2}",
         RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.NonBacktracking);
 
     private static readonly Regex UnicodeEscape = new(
@@ -242,6 +244,11 @@ internal sealed class RedactionPipeline(TimeProvider clock) : IRedactionPipeline
             {
                 yield return (unescaped, "residual_json_escape");
             }
+        }
+
+        if (Normalised(text) is { } normalised)
+        {
+            yield return (normalised, "residual_normalised");
         }
     }
 
