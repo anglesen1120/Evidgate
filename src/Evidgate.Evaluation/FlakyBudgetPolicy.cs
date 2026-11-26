@@ -6,6 +6,13 @@ namespace Evidgate.Evaluation;
 /// </summary>
 internal static class FlakyBudgetPolicy
 {
+    /// <summary>The cases whose recovered retry forced a critical failure; what a waiver may annotate.</summary>
+    public static IReadOnlySet<Guid> CriticalCaseIds(IReadOnlyList<FlakyFact> facts, PolicyRevisionInput policy)
+    {
+        var critical = new HashSet<Guid>(policy.CriticalCaseIds);
+        return facts.Where(fact => critical.Contains(fact.CaseId)).Select(fact => fact.CaseId).ToHashSet();
+    }
+
     /// <summary>Adds the flaky reasons to <paramref name="reasons"/> and returns the decision they leave.</summary>
     public static EvaluationDecision Apply(
         IReadOnlyList<FlakyFact> facts,

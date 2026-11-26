@@ -150,6 +150,36 @@ public sealed class FlakyBudgetTests
     }
 
     [Fact]
+    public void Evaluate_WaivedCriticalFlakyCase_StaysFailAndIsAnnotated()
+    {
+        var policy = Scenarios.Policy(criticalCaseIds: [Scenarios.CheckoutCaseId]);
+        var evidence = Scenarios.Evidence() with { Attempts = Scenarios.Attempts(CaseStatus.Failed, CaseStatus.Passed) };
+
+        var result = new PolicyEvaluator().Evaluate(evidence, policy, Scenarios.NoExceptions with
+        {
+            WaivedCaseIds = [Scenarios.CheckoutCaseId],
+        });
+
+        result.Decision.ShouldBe(EvaluationDecision.Fail);
+        result.Reasons.ShouldBe([EvaluationReason.FlakyCriticalRetryPass, EvaluationReason.WaiverApproved]);
+    }
+
+    [Fact]
+    public void Evaluate_WaiverOnAnotherCase_DoesNotAnnotateACriticalFlakyFail()
+    {
+        var policy = Scenarios.Policy(criticalCaseIds: [Scenarios.CheckoutCaseId]);
+        var evidence = Scenarios.Evidence() with { Attempts = Scenarios.Attempts(CaseStatus.Failed, CaseStatus.Passed) };
+
+        var result = new PolicyEvaluator().Evaluate(evidence, policy, Scenarios.NoExceptions with
+        {
+            WaivedCaseIds = [Guid.CreateVersion7()],
+        });
+
+        result.Decision.ShouldBe(EvaluationDecision.Fail);
+        result.Reasons.ShouldBe([EvaluationReason.FlakyCriticalRetryPass]);
+    }
+
+    [Fact]
     public void Evaluate_SinglePassAttempt_AddsNoFlakyReason()
     {
         var result = new PolicyEvaluator().Evaluate(

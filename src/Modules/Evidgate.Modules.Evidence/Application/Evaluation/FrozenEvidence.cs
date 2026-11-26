@@ -32,6 +32,7 @@ internal sealed class FrozenEvidence(ITenantDb db) : IFrozenEvidence
         var header = rows[0];
         var history = new List<FrozenAttemptRecord>(rows.Count);
         var latest = new List<FrozenAttemptStatus>();
+        InputRow? pending = null;
         foreach (var row in rows)
         {
             if (row.ExecutionKey is null || row.AttemptNo is null || row.Status is null)
@@ -41,16 +42,19 @@ internal sealed class FrozenEvidence(ITenantDb db) : IFrozenEvidence
 
             history.Add(new FrozenAttemptRecord(row.ExecutionKey, row.AttemptNo.Value, row.Status));
 
-            // Rows arrive by key then ascending attempt number, so the last row of a key is its highest attempt.
-            var status = new FrozenAttemptStatus(row.ExecutionKey, row.Status);
-            if (latest.Count > 0 && string.Equals(latest[^1].ExecutionKey, row.ExecutionKey, StringComparison.Ordinal))
+            // Rows arrive by key then ascending attempt number, so the last row of a key is its highest attempt; one
+            // status record per key is built when the key changes instead of one per attempt.
+            if (pending is not null && !string.Equals(pending.ExecutionKey, row.ExecutionKey, StringComparison.Ordinal))
             {
-                latest[^1] = status;
+                latest.Add(new FrozenAttemptStatus(pending.ExecutionKey!, pending.Status!));
             }
-            else
-            {
-                latest.Add(status);
-            }
+
+            pending = row;
+        }
+
+        if (pending is not null)
+        {
+            latest.Add(new FrozenAttemptStatus(pending.ExecutionKey!, pending.Status!));
         }
 
         return new FrozenEvidenceInput(

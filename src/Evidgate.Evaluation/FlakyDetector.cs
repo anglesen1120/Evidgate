@@ -29,6 +29,12 @@ public sealed class FlakyDetector : IFlakyDetector
     {
         ArgumentNullException.ThrowIfNull(attempts);
 
+        // With no retries allowed only attempt one is considered, and one attempt cannot be a retry that recovered.
+        if (maxRetries is <= 0)
+        {
+            return [];
+        }
+
         // Widened so a limit of int.MaxValue cannot wrap into a negative bound.
         var lastConsidered = maxRetries is { } limit ? (long)limit + 1 : long.MaxValue;
         var byKey = new Dictionary<string, List<CaseAttemptInput>>(StringComparer.Ordinal);

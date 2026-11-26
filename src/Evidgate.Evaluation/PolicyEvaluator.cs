@@ -79,7 +79,9 @@ public sealed class PolicyEvaluator : IPolicyEvaluator
         var (decision, reasons) = ApplyLayers(evidence, policy, exceptions, core, flakyFacts);
 
         // A waiver only annotates a failure that gates; it is applied after the layers, so it can never move the decision.
-        if (decision == EvaluationDecision.Fail && AnyWaived(failedCaseIds, exceptions.WaivedCaseIds))
+        if (decision == EvaluationDecision.Fail
+            && (AnyWaived(failedCaseIds, exceptions.WaivedCaseIds)
+                || AnyWaived(FlakyBudgetPolicy.CriticalCaseIds(flakyFacts, policy), exceptions.WaivedCaseIds)))
         {
             reasons = ReasonSet.Normalize([.. reasons, EvaluationReason.WaiverApproved]);
         }
