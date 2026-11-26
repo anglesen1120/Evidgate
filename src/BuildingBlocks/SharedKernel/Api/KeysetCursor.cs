@@ -9,18 +9,43 @@ namespace Evidgate.BuildingBlocks.SharedKernel.Api;
 /// <c>&lt;utc ticks in hex&gt;-&lt;uuid&gt;</c>. It is opaque to clients — no
 /// meaning is promised beyond "hand it back verbatim" — and it decodes to typed
 /// values so the SQL never compares a client string against a timestamp.
+/// <para>
+/// The <c>d.</c> marker distinguishes issued newest-first cursors from ascending cursors. It is required by
+/// <see cref="TryDecodeDescending"/> and is not a hexadecimal tick value accepted by <see cref="TryDecode"/>.
+/// </para>
 /// </summary>
 public static class KeysetCursor
 {
+    private const string DescendingMarker = "d.";
+
     /// <summary>Encodes one row's keyset position.</summary>
     public static string Encode(DateTimeOffset createdAt, Guid id) =>
         string.Create(
             CultureInfo.InvariantCulture,
             $"{createdAt.UtcTicks:x16}-{id:D}");
 
+    /// <summary>Encodes one row's keyset position for a list read in descending order.</summary>
+    public static string EncodeDescending(DateTimeOffset createdAt, Guid id) =>
+        DescendingMarker + Encode(createdAt, id);
+
     /// <summary>
-    /// Decodes a cursor. False for anything this codec did not produce — the caller
-    /// answers 422 <c>request_invalid</c> rather than guessing a page position.
+    /// Requires the descending marker, then parses the remaining position with <see cref="TryDecode"/>.
+    /// </summary>
+    public static bool TryDecodeDescending(string? cursor, out DateTimeOffset createdAt, out Guid id)
+    {
+        if (cursor is not null && cursor.StartsWith(DescendingMarker, StringComparison.Ordinal))
+        {
+            return TryDecode(cursor[DescendingMarker.Length..], out createdAt, out id);
+        }
+
+        createdAt = default;
+        id = default;
+        return false;
+    }
+
+    /// <summary>
+    /// Parses hexadecimal UTC ticks in the timestamp range and a GUID, separated by the first hyphen.
+    /// The parsed values need not have the exact spelling emitted by <see cref="Encode"/>.
     /// </summary>
     public static bool TryDecode(string? cursor, out DateTimeOffset createdAt, out Guid id)
     {

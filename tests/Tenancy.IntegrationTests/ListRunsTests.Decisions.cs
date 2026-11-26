@@ -62,10 +62,13 @@ public sealed partial class ListRunsTests
 
     /// <summary>
     /// Each verdict filter and <c>pending</c> page the keyset order with a small limit: concatenating the pages
-    /// yields every matching run exactly once, in the database's own <c>(created_at, id)</c> order.
+    /// yields every matching run exactly once, in the database's own order — <c>(created_at, id)</c> ascending, or
+    /// newest first for <c>order=desc</c>.
     /// </summary>
-    [Fact]
-    public async Task ListRuns_DecisionFilter_PagesWithoutSkipOrRepeat()
+    [Theory]
+    [InlineData("asc")]
+    [InlineData("desc")]
+    public async Task ListRuns_DecisionFilter_PagesWithoutSkipOrRepeat(string order)
     {
         await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var policy = await SeedPolicyAsync(world);
@@ -81,13 +84,13 @@ public sealed partial class ListRunsTests
             }
         }
 
-        var ordered = (await OrderedIdsAsync(world)).Select(Guid.Parse).ToArray();
+        var ordered = (await OrderedIdsAsync(world, order == "desc")).Select(Guid.Parse).ToArray();
         ordered.Length.ShouldBe(runs.Count);
 
         foreach (var decision in new[] { "pending", "pass", "fail", "inconclusive" })
         {
             var expected = ordered.Where(run => Matches(verdicts[runs.IndexOf(run)], decision)).ToArray();
-            var paged = await PagedIdsAsync(world, $"decision={decision}&limit=2");
+            var paged = await PagedIdsAsync(world, $"decision={decision}&order={order}&limit=2");
 
             paged.ShouldBe(expected, ignoreOrder: false, $"decision={decision} pages the keyset order");
             paged.Distinct().Count().ShouldBe(paged.Length, $"decision={decision} repeats no run");

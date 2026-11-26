@@ -58,10 +58,13 @@ public sealed partial class ListRunsTests
     }
 
     [Theory]
-    [InlineData(1)]
-    [InlineData(7)]
-    [InlineData(200)]
-    public async Task ListRuns_DecisionFilter_TiedTimestampsRetainEveryMatchingId(int limit)
+    [InlineData(1, "asc")]
+    [InlineData(7, "asc")]
+    [InlineData(200, "asc")]
+    [InlineData(1, "desc")]
+    [InlineData(7, "desc")]
+    [InlineData(200, "desc")]
+    public async Task ListRuns_DecisionFilter_TiedTimestampsRetainEveryMatchingId(int limit, string order)
     {
         await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var runs = await SeedOrderedDecisionRunsAsync(world, limit == 1 ? 51 : 201, tied: true);
@@ -72,32 +75,42 @@ public sealed partial class ListRunsTests
             await InsertEvaluationAsync(world, run, policy, 1, "live", "PASS");
         }
 
-        (await PagedIdsAsync(world, $"decision=pass&limit={limit}"))
+        // Fully tied rows read id ascending in both orders, so one expectation proves both keyset comparisons.
+        (await PagedIdsAsync(world, $"decision=pass&order={order}&limit={limit}"))
             .ShouldBe(matching, ignoreOrder: false);
-        (await PagedIdsAsync(world, $"decision=pending&limit={limit}"))
+        (await PagedIdsAsync(world, $"decision=pending&order={order}&limit={limit}"))
             .ShouldBe(runs.Except(matching).ToArray(), ignoreOrder: false);
     }
 
-    [Fact]
-    public async Task ListRuns_DecisionFilter_NonemptyBudgetPageResumesAfterLastScannedRow()
+    [Theory]
+    [InlineData("asc")]
+    [InlineData("desc")]
+    public async Task ListRuns_DecisionFilter_NonemptyBudgetPageResumesAfterLastScannedRow(string order)
     {
         await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var runs = await SeedOrderedDecisionRunsAsync(world, 1003);
+        if (order == "desc")
+        {
+            Array.Reverse(runs);
+        }
         var policy = await SeedPolicyAsync(world);
-        foreach (var index in new[] { 10, 999, 1001, 1002 })
+        foreach (var index in new[] { 10, 980, 1001, 1002 })
         {
             await InsertEvaluationAsync(world, runs[index], policy, 1, "live", "PASS");
         }
 
         world.Api.Statements.Clear();
-        var first = await ListAsync(world, "decision=pass&limit=3");
+        var query = $"decision=pass&order={order}&limit=3";
+        var first = await ListAsync(world, query);
         first.Status.ShouldBe(HttpStatusCode.OK, first.ErrorMessage);
-        OrderedIds(first).ShouldBe(new[] { runs[10], runs[999] }, ignoreOrder: false);
+        OrderedIds(first).ShouldBe(new[] { runs[10], runs[980] }, ignoreOrder: false);
         EvaluationStatementCount(world).ShouldBe(20, "1000 scanned rows use twenty batches, not one read per row");
         var cursor = DecisionCursor(first);
         cursor.ShouldNotBeNullOrEmpty();
 
-        var second = await ListAsync(world, $"decision=pass&limit=3&cursor={Uri.EscapeDataString(cursor)}");
+        // A previously scanned non-match changes verdict. Resuming at the last match would now repeat this region.
+        await InsertEvaluationAsync(world, runs[990], policy, 1, "live", "PASS");
+        var second = await ListAsync(world, $"{query}&cursor={Uri.EscapeDataString(cursor)}");
         second.Status.ShouldBe(HttpStatusCode.OK, second.ErrorMessage);
         OrderedIds(second).ShouldBe(new[] { runs[1001], runs[1002] }, ignoreOrder: false);
         DecisionCursor(second).ShouldBeNull();

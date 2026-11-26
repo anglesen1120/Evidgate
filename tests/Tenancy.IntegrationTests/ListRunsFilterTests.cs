@@ -18,7 +18,7 @@ namespace Tenancy.IntegrationTests;
 /// <c>completeness</c> is null (never a fabricated <c>incomplete</c>) while a run has no evidence revision.
 /// </summary>
 [Trait("Category", "Docker")]
-public sealed class ListRunsFilterTests : IClassFixture<TenancyHostPool>
+public sealed partial class ListRunsFilterTests : IClassFixture<TenancyHostPool>
 {
     private const string ShaOne = "1111111111111111111111111111111111111111";
 
