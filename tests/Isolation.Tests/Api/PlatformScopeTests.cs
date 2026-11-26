@@ -63,6 +63,8 @@ public sealed class PlatformScopeTests(ApiIsolationFixture fixture)
             "the caller's own profile, resolved from the presented session cookie; no route or body user id can select another account",
         [new ApiRoute("PATCH", "/v1/me")] =
             "updates only the caller's own profile, resolved from the presented session cookie; no route or body user id can select another account",
+        [new ApiRoute("GET", "/v1/me/permissions")] =
+            "me selects only the caller; grants come from the caller's active membership in the resolved org, not a platform account lookup",
     };
 
     /// <summary>

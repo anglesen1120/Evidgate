@@ -57,4 +57,29 @@ internal static class EdgeInputs
         limit = parsed;
         return null;
     }
+
+    /// <summary>
+    /// Parses the optional <c>?project=</c> id: absent means none, anything but exactly one non-empty
+    /// UUID (including an empty or repeated parameter) is the 422 <c>malformed</c>. Null means "valid".
+    /// </summary>
+    internal static Error? ProjectError(HttpContext context, out Guid? project)
+    {
+        project = null;
+        var values = context.Request.Query["project"];
+
+        if (values.Count == 0)
+        {
+            return null;
+        }
+
+        if (values.Count == 1 && Guid.TryParseExact(values[0], "D", out var parsed) && parsed != Guid.Empty)
+        {
+            project = parsed;
+            return null;
+        }
+
+        return Error.Invalid(
+            "project must be a single UUID",
+            [new ErrorDetail("project", "malformed")]);
+    }
 }

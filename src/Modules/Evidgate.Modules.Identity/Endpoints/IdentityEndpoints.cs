@@ -89,6 +89,9 @@ public static class IdentityEndpoints
         // sits on `/v1` beside the tenant routes without ever entering one.
         MyProfileEndpoints.Map(group);
 
+        // The caller's own grants in the org: tenant-bound, so unlike /me it is resolved from X-Evidgate-Org.
+        MyPermissionsEndpoint.Map(group);
+
         return group;
     }
 
