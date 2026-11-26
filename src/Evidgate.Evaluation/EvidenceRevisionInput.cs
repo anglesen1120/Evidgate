@@ -67,8 +67,8 @@ public sealed record EvidenceRevisionInput
     }
 
     /// <summary>
-    /// The suite revision's retry limit: attempts numbered above <c>MaxRetries + 1</c> are not considered for flaky
-    /// detection. Null means unbounded.
+    /// The suite revision's retry limit. It only labels a recovery above <c>MaxRetries + 1</c> as beyond the policy; the
+    /// flaky fact is never dropped for it. Null means unbounded.
     /// </summary>
     public int? MaxRetries { get; init; }
 }

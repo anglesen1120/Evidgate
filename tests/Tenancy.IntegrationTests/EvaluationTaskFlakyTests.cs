@@ -68,11 +68,11 @@ public sealed partial class EvaluationTaskTests
     }
 
     /// <summary>
-    /// A suite that allows no retry never sees a second attempt as a retry: the same history on a critical case stays a
-    /// plain pass with no flaky reason, whatever the policy budget says.
+    /// A suite that allows no retry still never lets a recovered critical case pass: the same history stays a failure with
+    /// the flaky reason, whatever the suite's retry limit says.
     /// </summary>
     [Fact]
-    public async Task Evaluate_SuiteWithoutRetries_IgnoresTheRetriedAttemptAndStoresNoFlakyReason()
+    public async Task Evaluate_SuiteWithoutRetries_CriticalRecoveryStillStoresFailWithTheFlakyReason()
     {
         await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var seed = await SeedRetriedAsync(world, cases => $$"""{"critical_cases":["{{cases.FirstId}}"]}""");
@@ -80,8 +80,8 @@ public sealed partial class EvaluationTaskTests
         await EvaluateAsync(world, seed, EvaluationMode.Live, TestContext.Current.CancellationToken);
         var stored = await ReloadAsync(world, seed, "live");
 
-        stored.Decision.ShouldBe("PASS");
-        stored.Reasons.ShouldBe(["scope_build_policy_pinned"]);
+        stored.Decision.ShouldBe("FAIL");
+        stored.Reasons.ShouldBe(["flaky_critical_retry_pass"]);
     }
 
     /// <summary>

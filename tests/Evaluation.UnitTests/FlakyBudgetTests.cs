@@ -208,7 +208,7 @@ public sealed class FlakyBudgetTests
     }
 
     [Fact]
-    public void Evaluate_RecoveryBeyondTheSuiteRetryLimit_IsNotFlaky()
+    public void Evaluate_CriticalRecoveryBeyondTheSuiteRetryLimit_StillFails()
     {
         var evidence = Scenarios.Evidence() with
         {
@@ -221,8 +221,24 @@ public sealed class FlakyBudgetTests
             Scenarios.Policy(criticalCaseIds: [Scenarios.CheckoutCaseId], flakyBudget: 0),
             Scenarios.NoExceptions);
 
-        result.Decision.ShouldBe(EvaluationDecision.Pass);
-        result.FlakyFacts.ShouldBeEmpty();
+        result.Decision.ShouldBe(EvaluationDecision.Fail);
+        result.Reasons.ShouldBe([EvaluationReason.FlakyCriticalRetryPass]);
+        result.FlakyFacts.Single().BeyondRetryPolicy.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void Evaluate_NonCriticalRecoveryBeyondTheSuiteRetryLimit_NeverPassesOverBudget()
+    {
+        var evidence = Scenarios.Evidence() with
+        {
+            Attempts = Scenarios.Attempts(CaseStatus.Failed, CaseStatus.Passed),
+            MaxRetries = 0,
+        };
+
+        var result = new PolicyEvaluator().Evaluate(evidence, Scenarios.Policy(flakyBudget: 0), Scenarios.NoExceptions);
+
+        result.Decision.ShouldBe(EvaluationDecision.Inconclusive);
+        result.Reasons.ShouldBe([EvaluationReason.FlakyBudgetExceeded]);
     }
 
     [Fact]

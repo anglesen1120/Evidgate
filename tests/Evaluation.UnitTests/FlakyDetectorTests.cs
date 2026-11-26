@@ -81,12 +81,12 @@ public sealed class FlakyDetectorTests
         Detector.Detect(Scenarios.Attempts(CaseStatus.Failed, CaseStatus.Passed, last), null).ShouldBeEmpty();
 
     [Fact]
-    public void Detect_PassAfterRetryLimit_IsNotConsidered()
+    public void Detect_PassAfterRetryLimit_StillYieldsAFlaggedFact()
     {
         var attempts = Scenarios.Attempts(CaseStatus.Failed, CaseStatus.Passed);
 
-        Detector.Detect(attempts, 0).ShouldBeEmpty();
-        Detector.Detect(attempts, 1).Count.ShouldBe(1);
+        Detector.Detect(attempts, 0).ShouldBe([new FlakyFact(Scenarios.CheckoutKey, Scenarios.CheckoutCaseId, 1, true, true)]);
+        Detector.Detect(attempts, 1).ShouldBe([new FlakyFact(Scenarios.CheckoutKey, Scenarios.CheckoutCaseId, 1, true)]);
     }
 
     [Fact]
@@ -95,17 +95,17 @@ public sealed class FlakyDetectorTests
         var attempts = Scenarios.Attempts(CaseStatus.Failed, CaseStatus.Failed, CaseStatus.Failed, CaseStatus.Passed);
 
         Detector.Detect(attempts, null).ShouldBe([new FlakyFact(Scenarios.CheckoutKey, Scenarios.CheckoutCaseId, 3, true)]);
-        Detector.Detect(attempts, 2).ShouldBeEmpty();
-        Detector.Detect(attempts, 3).Count.ShouldBe(1);
-        Detector.Detect(attempts, int.MaxValue).Count.ShouldBe(1);
+        Detector.Detect(attempts, 2).Single().BeyondRetryPolicy.ShouldBeTrue();
+        Detector.Detect(attempts, 3).Single().BeyondRetryPolicy.ShouldBeFalse();
+        Detector.Detect(attempts, int.MaxValue).Single().BeyondRetryPolicy.ShouldBeFalse();
     }
 
     [Fact]
-    public void Detect_RetryLimitDropsLateAttempts_BeforeCountingRetries()
+    public void Detect_LaterFailureAfterThePass_IsNoFactWhateverTheLimit()
     {
         var attempts = Scenarios.Attempts(CaseStatus.Failed, CaseStatus.Passed, CaseStatus.Failed);
 
-        Detector.Detect(attempts, 1).ShouldBe([new FlakyFact(Scenarios.CheckoutKey, Scenarios.CheckoutCaseId, 1, true)]);
+        Detector.Detect(attempts, 1).ShouldBeEmpty();
         Detector.Detect(attempts, null).ShouldBeEmpty();
     }
 
