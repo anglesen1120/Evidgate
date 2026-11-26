@@ -337,8 +337,9 @@ public sealed class RedactionPipelineBoundaryTests
     [Fact]
     public void Redact_InvalidBase64Candidates_DoNotExhaustSuccessfulTokenBudget()
     {
-        var invalid = Convert.ToBase64String(Enumerable.Repeat((byte)0xff, 24).ToArray());
-        var prefix = string.Join(" ", Enumerable.Repeat(invalid, 300)) + " ";
+        var invalid = Convert.ToBase64String(Enumerable.Repeat((byte)0xff, 5).ToArray());
+        var prefix = string.Join(" ", Enumerable.Repeat(invalid, 5000)) + " ";
+        prefix.Length.ShouldBeLessThan(RedactionPipeline.MaxWindowChars - 100);
         var control = Pipeline.Redact(prefix + Convert.ToBase64String(Encoding.UTF8.GetBytes("document=public")));
         control.Blocked.ShouldBeFalse();
         var encoded = Convert.ToBase64String(Encoding.UTF8.GetBytes("password=" + Password));
@@ -353,8 +354,8 @@ public sealed class RedactionPipelineBoundaryTests
     [Fact]
     public void Redact_Base64TokenBudget_IsPerWindowNotPerPayload()
     {
-        var token = Convert.ToBase64String(Encoding.UTF8.GetBytes("document=public"));
-        var part = string.Join(" ", Enumerable.Repeat(token, 256));
+        var token = Convert.ToBase64String("abcdef"u8);
+        var part = string.Join(" ", Enumerable.Repeat(token, 4096));
         var payload = part + "\n" + new string('.', RedactionPipeline.MaxWindowChars - part.Length - 1) + part;
 
         var outcome = Pipeline.Redact(payload);
@@ -362,6 +363,21 @@ public sealed class RedactionPipelineBoundaryTests
         outcome.Blocked.ShouldBeFalse();
         outcome.Text.ShouldBe(payload);
         outcome.Report.Findings.ShouldBeEmpty();
+    }
+
+    [Theory]
+    [InlineData("{\"Authorization\": ***}")]
+    [InlineData("{\"Authorization\": *** \t}")]
+    [InlineData("Authorization: ***")]
+    public void Redact_AlreadyMaskedAuthorization_RemainsIdempotent(string payload)
+    {
+        var first = Pipeline.Redact(payload);
+        var second = Pipeline.Redact(first.Text);
+
+        first.Blocked.ShouldBeFalse();
+        first.Text.ShouldBe(payload);
+        second.Blocked.ShouldBeFalse();
+        second.Text.ShouldBe(first.Text);
     }
 
     [Theory]

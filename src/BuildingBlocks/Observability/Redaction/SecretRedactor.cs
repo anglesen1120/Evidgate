@@ -222,7 +222,7 @@ public sealed class SecretRedactor
     /// JSON and object-literal form) masks the quoted value only, so the rest of a one-line body stays readable.
     /// </summary>
     private readonly Regex _authorizationHeader = new(
-        @"(?<key>[""']authorization[""'])\s*:\s*(?!\s*\*\*\*(?=$|[\s;,\)\]}]))(?<value>""(?:\\.|[^""\\])*""|'(?:\\.|[^'\\])*'|[^\r\n]+)|(?<key>authorization)\s*:\s*(?<value>[^\r\n]+)",
+        @"(?<key>[""']authorization[""'])\s*:\s*(?!(?>[ \t]*)\*\*\*(?=[ \t]*(?:$|[\r\n;,\)\]}])))(?<value>""(?:\\.|[^""\\])*""|'(?:\\.|[^'\\])*'|[^\r\n]+)|(?<key>authorization)\s*:\s*(?<value>[^\r\n]+)",
         RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant,
         MatchTimeout);
 

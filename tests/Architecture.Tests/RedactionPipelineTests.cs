@@ -218,6 +218,57 @@ public sealed class RedactionPipelineTests
         result.ShouldBe(header + ": " + SecretRedactor.Mask + "\nnext line");
     }
 
+    [Theory]
+    [InlineData("{\"Authorization\": ***}")]
+    [InlineData("{\"Authorization\": *** \t}")]
+    [InlineData("Authorization: ***")]
+    public void RedactText_AlreadyMaskedAuthorization_IsIdempotent(string payload)
+    {
+        var redactor = new SecretRedactor();
+
+        var result = redactor.RedactText(payload);
+
+        result.ShouldBe(payload);
+        redactor.RedactText(result).ShouldBe(result);
+    }
+
+    [Theory]
+    [InlineData("\"authorization\"")]
+    [InlineData("'authorization'")]
+    [InlineData("Authorization")]
+    public void RedactText_AuthorizationMaskFollowedByOpaqueTail_MasksTheTail(string header)
+    {
+        var tail = string.Concat("opaque", "tail");
+        var redactor = new SecretRedactor();
+        var control = header + ": ***";
+        redactor.RedactText(control).ShouldBe(control);
+
+        var result = redactor.RedactText(control + " " + tail);
+
+        result.ShouldBe(control);
+        result.ShouldNotContain(tail);
+        redactor.RedactText(result).ShouldBe(result);
+    }
+
+    [Fact]
+    public void RedactTextCounted_AuthorizationMaskTailAfterLongWhitespace_CompletesWithoutTimeout()
+    {
+        var redactor = new SecretRedactor();
+        var counts = new Dictionary<string, int>();
+        _ = redactor.RedactTextCounted("\"authorization\": *** x", counts, 100);
+        counts.Clear();
+        var payload = "\"authorization\":" + new string(' ', 20_000) + "*** x";
+
+        var clock = Stopwatch.StartNew();
+        var result = redactor.RedactTextCounted(payload, counts, payload.Length);
+        clock.Stop();
+
+        result.ShouldBe("\"authorization\": ***");
+        counts.ShouldContainKeyAndValue("authorization_header", 1);
+        counts.ShouldNotContainKey("regex_timeout");
+        clock.Elapsed.ShouldBeLessThan(TimeSpan.FromSeconds(1));
+    }
+
     [Fact]
     public void Redact_EmptyPayload_IsEmptyAndNotBlocked()
     {

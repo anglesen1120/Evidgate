@@ -25,9 +25,12 @@ public sealed class RedactionNormalisationTests
     {
         { "credential, fullwidth keyword and separator", Fullwidth("password=") + Value, Fullwidth("document=") + Value },
         { "credential, fullwidth separator", "password\uFF1D" + Value, "document\uFF1D" + Value },
+        { "credential, zero-width inside keyword", "pass\u200Bword=" + Value, "docu\u200Bment=" + Value },
         { "bearer, fullwidth keyword", Fullwidth("Bearer") + " " + BearerToken, Fullwidth("Beaver") + " " + BearerToken },
         { "bearer, fullwidth keyword and token", Fullwidth("Bearer " + BearerToken), Fullwidth("Beaver " + BearerToken) },
         { "bearer, zero-width inside keyword", "Bea\u200Brer " + BearerToken, "Bea\u200Bver " + BearerToken },
+        { "bearer, invisible-only separator", "Bearer\u3164" + BearerToken, "Beaver\u3164" + BearerToken },
+        { "bearer, invisible separator run", "Bearer\u200B\u3164" + BearerToken, "Beaver\u200B\u3164" + BearerToken },
         { "email, fullwidth at sign", "casey\uFF20example.test", "casey\uFF3Fexample.test" },
         { "email, fullwidth address", Fullwidth("casey@example.test"), Fullwidth("casey_example.test") },
         { "email, zero-width before at sign", "casey\u200B@example.test", "casey\u200B_example.test" },
@@ -42,6 +45,11 @@ public sealed class RedactionNormalisationTests
             Fullwidth("-----BEGIN PRIVATE KEY-----") + "\n" + PemBody,
             Fullwidth("-----BEGIN CERTIFICATE-----") + "\n" + PemBody
         },
+        {
+            "private key, invisible-only separator",
+            "-----BEGIN\u3164PRIVATE KEY-----\n" + PemBody,
+            "-----BEGIN\u3164CERTIFICATE-----\n" + PemBody
+        },
         { "cookie, fullwidth header", Fullwidth("Cookie:") + " " + SessionPair, Fullwidth("Accept:") + " " + SessionPair },
         { "cookie, zero-width inside name", "Coo\u200Bkie: " + SessionPair, "Coo\u200Bkbook: " + SessionPair },
     };
@@ -55,11 +63,11 @@ public sealed class RedactionNormalisationTests
             // block and the variation selectors supplement, which a char-wise scan never sees.
             var codePoints = Enumerable.Range(0x200B, 5)
                 .Concat(Enumerable.Range(0x202A, 5))
-                .Concat(Enumerable.Range(0x2060, 5))
-                .Concat(Enumerable.Range(0x2066, 4))
+                .Concat(Enumerable.Range(0x2060, 10))
                 .Concat([0x00AD, 0x034F, 0x061C, 0x115F, 0x1160, 0x17B4, 0x17B5])
-                .Concat([0x180B, 0x180C, 0x180D, 0x180E, 0x3164, 0xFE00, 0xFE08, 0xFE0F, 0xFEFF, 0xFFA0])
-                .Concat([0xE0001, 0xE0020, 0xE0041, 0xE007F, 0xE0100, 0xE0180, 0xE01EF, 0x1D173]);
+                .Concat([0x180B, 0x180C, 0x180D, 0x180E, 0x180F, 0x3164, 0xFE00, 0xFE08, 0xFE0F, 0xFEFF, 0xFFA0])
+                .Concat(Enumerable.Range(0xFFF0, 9))
+                .Concat([0xE0000, 0xE0001, 0xE0002, 0xE0020, 0xE0041, 0xE007F, 0xE0100, 0xE0180, 0xE01EF, 0xE0FFF, 0x1D173]);
             foreach (var codePoint in codePoints)
             {
                 data.Add(codePoint);
@@ -162,6 +170,20 @@ public sealed class RedactionNormalisationTests
     }
 
     [Theory]
+    [InlineData(1365, false)]
+    [InlineData(1366, true)]
+    public void Redact_NormalisedVariants_ShareTheWindowDecodeBudget(int count, bool blocked)
+    {
+        var payload = "\u3164" + Tokens(Enumerable.Repeat(Convert.ToBase64String("abcdef"u8), count));
+
+        var outcome = UntimedPipeline.Redact(payload);
+
+        outcome.Blocked.ShouldBe(blocked);
+        outcome.Text.ShouldBe(blocked ? string.Empty : payload);
+        outcome.Report.Findings.Any(finding => finding.RuleId == "residual_scan_truncated").ShouldBe(blocked);
+    }
+
+    [Theory]
     [InlineData("\u212Aey=")]
     [InlineData("to\u212Aen=")]
     [InlineData("pa\u017F\u017Fword=")]
@@ -220,6 +242,21 @@ public sealed class RedactionNormalisationTests
         outcome.Blocked.ShouldBeTrue();
         outcome.Text.ShouldBeEmpty();
         outcome.Report.Findings.ShouldContain(finding => finding.RuleId == "residual_urlencoded");
+    }
+
+    [Fact]
+    public void Redact_PercentEncodedFullwidthBearerWithInvisibleSeparator_BlocksEgress()
+    {
+        var benign = Uri.EscapeDataString(Fullwidth("Beaver") + "\u3164" + BearerToken);
+        var control = Pipeline.Redact(benign);
+        control.Blocked.ShouldBeFalse();
+        control.Text.ShouldBe(benign);
+
+        var outcome = Pipeline.Redact(Uri.EscapeDataString(Fullwidth("Bearer") + "\u3164" + BearerToken));
+
+        outcome.Blocked.ShouldBeTrue();
+        outcome.Text.ShouldBeEmpty();
+        outcome.Report.Findings.ShouldContain(finding => finding.RuleId == "residual_normalised");
     }
 
     [Fact]

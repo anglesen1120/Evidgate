@@ -23,7 +23,7 @@ internal interface IRedactionPipeline
 /// Two passes over the payload, window by window. Pass one is <see cref="RedactionRules.Apply"/>. Pass two applies the
 /// same rules to the result and requires that nothing changes (a changed text means a value survived pass one), and
 /// also to the percent-decoded, <c>\uXXXX</c>-decoded, JSON-unescaped and base64-decoded forms of the text, and to its
-/// form without invisible format characters and with fullwidth look-alikes mapped to ASCII, and
+/// forms without invisible format characters (removed, or each run read as a space) and with fullwidth look-alikes mapped to ASCII, and
 /// compares the HTML-entity-decoded form of the window with its masked text, so a secret that was only encoded is
 /// still caught. A payload that cannot be scanned inside its time budget, whose base64 decode budget runs out, or
 /// whose window cannot be cut where no rule spans the seam, is refused, never sent unscanned.
@@ -249,7 +249,7 @@ internal sealed partial class RedactionPipeline(TimeProvider clock) : IRedaction
             }
         }
 
-        if (Normalised(text) is { } normalised)
+        foreach (var normalised in NormalisedVariants(text))
         {
             yield return (normalised, "residual_normalised");
         }
