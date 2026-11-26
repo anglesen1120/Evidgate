@@ -69,6 +69,9 @@ internal static class OrchestratorModule
             .ValidateDataAnnotations()
             .ValidateOnStart();
 
+        // The decision-count scan cap is a plain registered value (not configuration); a test replaces it with a small one.
+        services.TryAddSingleton(new RunDecisionCountsScanCap(RunDecisionCountsScanCap.DefaultRows));
+
         // 05.3.3-T2: the case-attempt writer and the blocked-dependant resolver 04's event-batch commit calls
         // inside its own tenant transaction. Scoped like every other module service; the writer and the resolver
         // take the ambient scope through ITenantDb/ITenantScopeAccessor, never a connection of their own.

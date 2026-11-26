@@ -331,7 +331,7 @@ public sealed partial class ListRunsTests
         string.Equals(stored, StoredDecision(decision), StringComparison.Ordinal);
 
     /// <summary>One revision of the world's project, written by the app role so evaluation rows can point at it.</summary>
-    private async Task<Guid> SeedPolicyAsync(RunCreationTests.World world)
+    internal async Task<Guid> SeedPolicyAsync(RunCreationTests.World world)
     {
         var revision = Guid.CreateVersion7();
 
@@ -353,7 +353,7 @@ public sealed partial class ListRunsTests
     }
 
     /// <summary>One immutable <c>evaluation</c> row of a run's evidence revision, written by the app role.</summary>
-    private async Task<Guid> InsertEvaluationAsync(
+    internal async Task<Guid> InsertEvaluationAsync(
         RunCreationTests.World world,
         Guid runId,
         Guid policyRevisionId,
