@@ -251,6 +251,31 @@ internal sealed partial class TenantRowFactory
             values["reason"] = "generated adjustment";
         }
 
+        // The linkage guard (0122) refuses an incident whose execution key is not its attempt's, and an
+        // incident_attempt whose number or result is not its attempt's. Only a valid row can repeat them: a corrupt
+        // row is refused by its foreign key first and keeps its random key, which keeps it off the valid row's
+        // unique (org_id, run_id, execution_key).
+        if (corruptedForeignKey is null
+            && org == tenantParentOrg
+            && (string.Equals(table, "public.incident", StringComparison.Ordinal)
+                || string.Equals(table, "public.incident_attempt", StringComparison.Ordinal))
+            && values.TryGetValue("attempt_id", out var attemptId))
+        {
+            var attempt = _created
+                .Where(entry => string.Equals(entry.Key.Table, "public.case_attempt", StringComparison.Ordinal))
+                .Select(entry => entry.Value)
+                .FirstOrDefault(row => Equals(row.Values[TenantFkScan.TenantKeyColumn], attemptId));
+            if (attempt is not null && string.Equals(table, "public.incident", StringComparison.Ordinal))
+            {
+                values["execution_key"] = attempt.Values["execution_key"];
+            }
+            else if (attempt is not null)
+            {
+                values["attempt_no"] = attempt.Values["attempt_no"];
+                values["result"] = attempt.Values["normalized_status"];
+            }
+        }
+
         // A corrupt row is the valid row with one parent moved to the other org. When that parent is not
         // part of a unique key of the row's table, the corrupt row duplicates the valid row under that
         // key, and PostgreSQL answers 23505 before the composite foreign key under test: manual_case_link

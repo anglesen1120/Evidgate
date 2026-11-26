@@ -205,6 +205,10 @@ internal static class SchemaConventionScan
             "public.catalog_sync",
             SchemaRule.AuditColumns | SchemaRule.VersionTrigger,
             "A sync is a queue entry (migration 0106): it carries `created_at` only, and its progress is the state pair `started_at`/`finished_at`; `catalog_sync_guard` raises 23514 for a transition the machine does not have and for any write to a done row, so a version trigger would have nothing to protect. Its tenant key, composite FKs (project, binding), commit key and RLS are NOT exempt."),
+        new SchemaExemption(
+            "public.incident_attempt",
+            SchemaRule.AuditColumns | SchemaRule.VersionTrigger,
+            "Append-only retry rows (migration 0122): the app role holds SELECT + INSERT and `incident_attempt_append_only` raises 23514 on every UPDATE and DELETE for every role, so a retry is written once and keeps created_at only — no updated_at/version and no version trigger. Its tenant key, composite FKs (incident, case_attempt), uniqueness and RLS are NOT exempt."),
     ];
 
     /// <summary>
