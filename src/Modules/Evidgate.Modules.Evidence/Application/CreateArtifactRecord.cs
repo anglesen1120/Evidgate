@@ -27,6 +27,7 @@ namespace Evidgate.Modules.Evidence.Application;
 /// <param name="DeclaredBytes">The declared size in bytes, greater than zero.</param>
 /// <param name="Checksum">The declared content address, <c>sha256:&lt;64 lowercase hex&gt;</c>.</param>
 /// <param name="ClientObjectKey">A client-supplied object key, if any; always refused (AC1).</param>
+/// <param name="OwnerCredentialId">The stable ingest-token identity that owns the new upload.</param>
 internal sealed record CreateArtifactRecord(
     Guid RunId,
     string ExecutionKey,
@@ -35,7 +36,8 @@ internal sealed record CreateArtifactRecord(
     string MediaType,
     long DeclaredBytes,
     string Checksum,
-    string? ClientObjectKey)
+    string? ClientObjectKey,
+    string? OwnerCredentialId)
     : ICommand<Result<ArtifactRecord>>;
 
 /// <summary>The mint result (06.1.1 §5): the row's id, its server-chosen key and its state.</summary>
@@ -135,6 +137,7 @@ internal sealed partial class CreateArtifactRecordHandler(
             command.MediaType,
             command.DeclaredBytes,
             command.Checksum,
+            command.OwnerCredentialId,
             cancellationToken).ConfigureAwait(false);
         if (!minted.IsSuccess)
         {
@@ -177,7 +180,7 @@ internal sealed class ArtifactMinter(
     /// read here. <paramref name="knownRun"/> must be the <c>FindAsync</c> answer for this same run id and
     /// execution key; it lets a caller that already read the run skip a second read, and its project is still
     /// compared here. <paramref name="ownerCredentialId"/> is the stable ingest-token id that may later complete
-    /// or reject the upload; null leaves the row ownerless, which only the route without a token identity does.
+    /// or reject the upload; new mints require it, while legacy ownerless rows remain readable.
     /// </summary>
     public async ValueTask<Result<ArtifactRecord>> MintAsync(
         Guid orgId,
@@ -189,11 +192,16 @@ internal sealed class ArtifactMinter(
         string mediaType,
         long declaredBytes,
         string checksum,
+        string? ownerCredentialId,
         CancellationToken cancellationToken,
         string? sensitivity = null,
-        RunPlanLookup? knownRun = null,
-        string? ownerCredentialId = null)
+        RunPlanLookup? knownRun = null)
     {
+        if (string.IsNullOrEmpty(ownerCredentialId))
+        {
+            return Result.Failure<ArtifactRecord>(Error.Invalid("An artifact owner credential is required."));
+        }
+
         var run = knownRun
             ?? await runs.FindAsync(runId, executionKey, cancellationToken).ConfigureAwait(false);
         if (RunRefusal(run, projectId) is { } refusal)

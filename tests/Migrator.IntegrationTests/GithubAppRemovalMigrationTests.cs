@@ -22,11 +22,17 @@ public sealed class GithubAppRemovalMigrationTests(PostgresMigratorFixture fixtu
     private const string Project = "01980000-0000-7000-8000-000000000102";
     private const string User = "01980000-0000-7000-8000-000000000103";
     private const string Suite = "01980000-0000-7000-8000-000000000104";
+    private const string Token = "01980000-0000-7000-8000-000000000106";
     private const string Permissions = """{"contents":"read"}""";
     private const string Binding = "01980000-0000-7000-8000-000000000105";
     private const string SweepHistory = """
         select coalesce(jsonb_agg(to_jsonb(a) order by a.id), '[]'::jsonb)::text from public.platform_sweep_audit a
          where a.action in ('github_installation.resolve', 'github_install_state.purge')
+        """;
+    private const string RetiredDefinerScan = """
+        select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+         where p.prosecdef and n.nspname in ('public', 'evidgate', 'evidgate_resolve')
+           and pg_get_functiondef(p.oid) ~* '\m(github_installation|github_install_state|git_repo_binding|catalog_sync|webhook_delivery)\M'
         """;
 
     private static readonly string[] RetiredTables =
@@ -48,7 +54,7 @@ public sealed class GithubAppRemovalMigrationTests(PostgresMigratorFixture fixtu
 
     private static readonly string[] SurvivingTables =
     [
-        "organization", "project", "user_identity", "suite", "platform_sweep_audit", "webhook_endpoint",
+        "organization", "project", "user_identity", "ingest_token", "suite", "platform_sweep_audit", "webhook_endpoint",
         "webhook_outbound_delivery",
     ];
 
@@ -69,6 +75,7 @@ public sealed class GithubAppRemovalMigrationTests(PostgresMigratorFixture fixtu
         applied.ExitCode.ShouldBe(MigratorExitCodes.Success, applied.Transcript);
         applied.Result.AppliedNow.ShouldBe([FileName]);
         await AssertRetiredAsync(database);
+        await AssertIngestRoleProbesAsync(connection);
         (await ReadSurvivorsAsync(connection)).ShouldBe(survivors);
         (await fixture.ScalarAsync<string>(database, SweepHistory)).ShouldBe(sweepHistory);
 
@@ -87,6 +94,7 @@ public sealed class GithubAppRemovalMigrationTests(PostgresMigratorFixture fixtu
         migrations.CopyReal(FileName);
         var applied = MigratorHarness.Run(migrations.Path, fixture.OwnerConnectionString(database));
         applied.ExitCode.ShouldBe(MigratorExitCodes.Success, applied.Transcript);
+        await AssertIngestRoleProbesAsync(connection);
 
         var cancellation = TestContext.Current.CancellationToken;
         await using var owner = new NpgsqlConnection(fixture.OwnerConnectionString(database));
@@ -100,7 +108,34 @@ public sealed class GithubAppRemovalMigrationTests(PostgresMigratorFixture fixtu
         await transaction.CommitAsync(cancellation);
 
         await AssertRetiredAsync(database);
+        await AssertIngestRoleProbesAsync(connection);
         (await ReadSurvivorsAsync(connection)).ShouldBe(survivors);
+    }
+
+    [Theory]
+    [InlineData("webhook_delivery", 1L)]
+    [InlineData("webhook_outbound_delivery", 0L)]
+    public async Task RetiredDefinerScan_WithWebhookReference_MatchesOnlyTheRetiredRelation(string relation, long expected)
+    {
+        using var migrations = TempMigrations.Create();
+        var database = await SeedPreviousHeadAsync(migrations);
+        migrations.CopyReal(FileName);
+        var applied = MigratorHarness.Run(migrations.Path, fixture.OwnerConnectionString(database));
+        applied.ExitCode.ShouldBe(MigratorExitCodes.Success, applied.Transcript);
+        await using var connection = await fixture.OpenSuperuserAsync(database);
+        (await PostgresMigratorFixture.ScalarAsync<long>(connection, RetiredDefinerScan)).ShouldBe(0);
+
+        await PostgresMigratorFixture.ExecuteAsync(connection, $"""
+            create function public.retired_relation_scan_probe() returns bigint
+            language plpgsql security definer set search_path = ''
+            as $probe$
+            begin
+                return (select count(*) from public.{relation});
+            end
+            $probe$;
+            """);
+
+        (await PostgresMigratorFixture.ScalarAsync<long>(connection, RetiredDefinerScan)).ShouldBe(expected);
     }
 
     private async Task<string> SeedPreviousHeadAsync(TempMigrations migrations)
@@ -123,6 +158,7 @@ public sealed class GithubAppRemovalMigrationTests(PostgresMigratorFixture fixtu
             ("project", $"org_id = '{Org}'"),
             ("\"user\"", $"id = '{User}'"),
             ("user_identity", $"user_id = '{User}'"),
+            ("ingest_token", $"org_id = '{Org}'"),
             ("suite", $"org_id = '{Org}'"),
         })
         {
@@ -143,6 +179,8 @@ public sealed class GithubAppRemovalMigrationTests(PostgresMigratorFixture fixtu
         insert into public."user" (id, email, display_name) values ('{User}', 'survivor@example.com', 'Survivor');
         insert into public.user_identity (id, user_id, provider, subject, email_at_provider)
         values (gen_random_uuid(), '{User}', 'github', '42', 'survivor@example.com');
+        insert into public.ingest_token (id, org_id, project_id, name, prefix, token_hmac, pepper_version, scopes)
+        values ('{Token}', '{Org}', '{Project}', 'survivor', 'AAAAAAAAAAAA', decode(repeat('01', 32), 'hex'), 1, array['run:create']);
         insert into public.suite (id, org_id, project_id, name, slug)
         values ('{Suite}', '{Org}', '{Project}', 'survivor', 'survivor');
         insert into public.github_installation (id, org_id, installation_id, account_login, permissions, installed_by)
@@ -195,10 +233,33 @@ public sealed class GithubAppRemovalMigrationTests(PostgresMigratorFixture fixtu
             (await fixture.ScalarAsync<bool>(database, $"select to_regclass('public.{table}') is not null")).ShouldBeTrue(table);
         }
 
-        (await fixture.ScalarAsync<long>(database, """
-            select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-             where p.prosecdef and n.nspname in ('public', 'evidgate', 'evidgate_resolve')
-               and pg_get_functiondef(p.oid) ~* '\m(github_installation|github_install_state|git_repo_binding|catalog_sync)\M'
-            """)).ShouldBe(0);
+        (await fixture.ScalarAsync<long>(database, RetiredDefinerScan)).ShouldBe(0);
+    }
+
+    private static async Task AssertIngestRoleProbesAsync(NpgsqlConnection connection)
+    {
+        const string ingest = $"""
+            select count(*) from evidgate_resolve.resolve_ingest_token('AAAAAAAAAAAA')
+             where org_id = '{Org}' and project_id = '{Project}' and binding_id = '{Token}' and status = 'active'
+            """;
+        try
+        {
+            await PostgresMigratorFixture.ExecuteAsync(connection, "set role evidgate_app");
+            (await PostgresMigratorFixture.ScalarAsync<long>(connection, ingest)).ShouldBe(1);
+            foreach (var role in new[] { "evidgate_worker", "evidgate_worker_sched" })
+            {
+                await PostgresMigratorFixture.ExecuteAsync(connection, $"reset role; set role {role}");
+                (await PostgresMigratorFixture.ScalarAsync<bool>(connection, $"""
+                    select has_function_privilege('{role}', 'evidgate_resolve.resolve_ingest_token(text)', 'execute')
+                    """)).ShouldBeFalse(role);
+                var denied = await Should.ThrowAsync<PostgresException>(
+                    () => PostgresMigratorFixture.ScalarAsync<long>(connection, ingest));
+                denied.SqlState.ShouldBe(PostgresErrorCodes.InsufficientPrivilege);
+            }
+        }
+        finally
+        {
+            await PostgresMigratorFixture.ExecuteAsync(connection, "reset role");
+        }
     }
 }
