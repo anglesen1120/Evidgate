@@ -953,6 +953,10 @@ public static partial class IsolationRouteCases
         // release_not_found, never a 403 that would name existence.
         ReleaseCreateCase(),
         ReleaseReadCase(),
+        // The release decision is addressed by the release id alone and resolved under RLS: another org's release is
+        // the one 404 not_found, and the own-project control answers 200 with the pending body (nothing is aggregated).
+        ObjectCase("GET", "/v1/releases/{id}/decision", p => [("release", p.ReleaseId)], id =>
+            new(HttpMethod.Get, $"/v1/releases/{id}/decision"), ownControl: true),
         // The bind route names the release in its path and the run in its body, so both sides are resolved under the
         // caller's tenant: another org's release and another org's run are the same 404 not_found, and run:create is
         // outside the service-role ceiling, so a ci_producer is refused before the handler.

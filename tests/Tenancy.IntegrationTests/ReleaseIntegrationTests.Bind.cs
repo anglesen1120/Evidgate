@@ -18,7 +18,7 @@ public sealed partial class ReleaseIntegrationTests
     private static string BindBody(Guid runId) => $$"""{"run_id":"{{runId:D}}"}""";
 
     /// <summary>One <c>POST /v1/releases/{id}/runs</c>, with the caller, key and body the case names.</summary>
-    private static async Task<ApiAnswer> BindAsync(
+    internal static async Task<ApiAnswer> BindAsync(
         RunCreationTests.World world,
         Guid releaseId,
         Guid? runId = null,
@@ -48,7 +48,7 @@ public sealed partial class ReleaseIntegrationTests
     }
 
     /// <summary>One release whose component digests are the requested fill characters, in <c>state</c>.</summary>
-    private static Task<Guid> ReleaseWithAsync(
+    internal static Task<Guid> ReleaseWithAsync(
         RunCreationTests.World world,
         string name,
         string? state,
@@ -59,7 +59,7 @@ public sealed partial class ReleaseIntegrationTests
             world.EnvironmentRevision))]);
 
     /// <summary>The run's <c>components</c> map as the run-create body spells it.</summary>
-    private static string Components(params (string Key, char Fill)[] components) =>
+    internal static string Components(params (string Key, char Fill)[] components) =>
         "{" + string.Join(",", components.Select(component => $"\"{component.Key}\":\"{Digest(component.Fill)}\"")) + "}";
 
     /// <summary>The run-create body, optionally naming the release the run should bind to.</summary>
@@ -71,7 +71,7 @@ public sealed partial class ReleaseIntegrationTests
     }
 
     /// <summary>Creates one run through the served route and returns its id, asserting the 201.</summary>
-    private static async Task<Guid> RunWithAsync(
+    internal static async Task<Guid> RunWithAsync(
         RunCreationTests.World world,
         string componentsJson,
         Guid? releaseId = null)
