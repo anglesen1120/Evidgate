@@ -1763,3 +1763,9 @@ Closed by S684 (#1421, `4e79ed5b`): `GET /v1/me/permissions` (`getMyPermissions`
 | Web swap to GET /v1/me/permissions (S684, #1421) | `EffectivePermissionsSource` still defaults to `CatalogPermissionsSource` (full catalogue); the route now serves the caller's server-provided codes, no role-to-permission map on the client. No web fixture exists for `getMyPermissions` (same as `GET /v1/me`; a corpus file would force the full gate tier); the swap adds a derived fixture row in `fixture-catalog-entries.ts`. | receiver: later UI lane (web swap) |
 
 Closed by S686 (#1428, `a6e30cd4`): `EffectivePermissionsSource` now defaults to `ApiPermissionsSource`, which reads `GET /v1/me/permissions` for the published tenant; the catalogue source is deleted. A failed read leaves the workspace unavailable and grants nothing. Fixtures derive grants from the `listPermissions` toggle and add forbidden/unavailable rows.
+
+## Moved from status-carried.md by S689 (2026-11-26)
+
+| Settings members tab refuses a limited role holding membership:read (S686) | Under the `limited` fixture session (`membership:read` granted) `/en/orgs/<org>/settings/members` renders 'Not authorized' and no tab strip, although the members tab's own permission is held. Cause not investigated (settings shell gate or the members page's own read). A limited role is the first case where this shows, so it is a real defect, not a fixture artefact. | receiver: web follow-up lane |
+
+Closed by S689 (#1431, cbe7554f): the cause was the `settings` navigation entry gate (`organization:read`), not the tab guard; the Settings route now also opens for a caller holding any tab's own read code, and the index lands on the first openable tab.
