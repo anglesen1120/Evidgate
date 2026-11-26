@@ -74,7 +74,9 @@ internal static class AuthoringIntakeSql
 
     /// <summary>
     /// How many unfinished intakes of the tenant were created before one, stopping at <c>@bound</c>: the queue position the
-    /// <c>eta_class</c> is judged from, bounded so a deep queue costs no more than a shallow one.
+    /// <c>eta_class</c> is judged from, bounded so a deep queue costs no more than a shallow one. The state list and the
+    /// order match <c>authoring_intake_pending_created_idx</c>, so the count walks that partial index and never the
+    /// finished rows.
     /// </summary>
     internal const string QueueAhead = """
         select count(*)::int
@@ -83,6 +85,7 @@ internal static class AuthoringIntakeSql
                  where i.org_id = @org_id
                    and i.state in ('received', 'extracting')
                    and (i.created_at, i.id) < (@created_at, @id)
+                 order by i.created_at, i.id
                  limit @bound) ahead
         """;
 }

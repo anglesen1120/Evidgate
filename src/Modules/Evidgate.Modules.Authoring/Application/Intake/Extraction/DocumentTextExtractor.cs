@@ -11,7 +11,8 @@ namespace Evidgate.Modules.Authoring.Application.Intake;
 /// The failure code never carries document content.
 /// </summary>
 /// <param name="parsing">The parser profile; the only zip and XML parser DOCX extraction may use.</param>
-internal sealed class DocumentTextExtractor(IParsing parsing)
+/// <param name="timeProvider">The clock of the extraction budget; the system clock when null.</param>
+internal sealed class DocumentTextExtractor(IParsing parsing, TimeProvider? timeProvider = null)
 {
     /// <summary>The media type a DOCX must be declared as.</summary>
     public const string DocxMediaType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
@@ -43,7 +44,7 @@ internal sealed class DocumentTextExtractor(IParsing parsing)
         ArgumentNullException.ThrowIfNull(content);
         ArgumentNullException.ThrowIfNull(caps);
 
-        var deadline = new ExtractionDeadline(caps.ExtractionTimeout, ct);
+        using var deadline = new ExtractionDeadline(caps.ExtractionTimeout, ct, timeProvider);
 
         try
         {
@@ -52,6 +53,11 @@ internal sealed class DocumentTextExtractor(IParsing parsing)
         catch (ExtractionRefusedException refused)
         {
             return ExtractionOutcome.Refused(refused.FailureCode);
+        }
+        catch (OperationCanceledException) when (deadline.BudgetCancelled)
+        {
+            // A profile call stopped by the linked token: the budget ran out, the caller did not cancel.
+            return ExtractionOutcome.Refused(IntakeFailureCode.ExtractionTimeout);
         }
         catch (Exception ex) when (ex is not (OperationCanceledException or OutOfMemoryException))
         {
@@ -71,7 +77,7 @@ internal sealed class DocumentTextExtractor(IParsing parsing)
             _ => throw new ExtractionRefusedException(IntakeFailureCode.ContainerMismatch),
         };
 
-        if (!string.Equals(BareType(declaredMediaType), expected, StringComparison.OrdinalIgnoreCase))
+        if (!MediaTypes.Equivalent(declaredMediaType, expected))
         {
             throw new ExtractionRefusedException(IntakeFailureCode.ContainerMismatch);
         }
@@ -130,14 +136,6 @@ internal sealed class DocumentTextExtractor(IParsing parsing)
         }
 
         return buffer.ToArray();
-    }
-
-    /// <summary>The media type without parameters, trimmed.</summary>
-    private static string BareType(string declaredMediaType)
-    {
-        var parameters = declaredMediaType.IndexOf(';', StringComparison.Ordinal);
-
-        return (parameters < 0 ? declaredMediaType : declaredMediaType[..parameters]).Trim();
     }
 
     /// <summary>

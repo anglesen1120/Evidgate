@@ -46,6 +46,12 @@ internal sealed class IntakeCapsOptionsValidator : IValidateOptions<IntakeCapsOp
 {
     private const long ByteCeiling = 1024L * 1024 * 1024;
 
+    /// <summary>The largest extraction the row accepts: <c>authoring_intake_extracted_text_check</c> caps the stored text.</summary>
+    internal const int ExtractedCharsCeiling = 2_000_000;
+
+    /// <summary>The largest text intake the row accepts: <c>authoring_intake_input_text_check</c> caps the stored text.</summary>
+    internal const int TextCodePointsCeiling = 1_048_576;
+
     /// <inheritdoc />
     public ValidateOptionsResult Validate(string? name, IntakeCapsOptions options)
     {
@@ -57,8 +63,8 @@ internal sealed class IntakeCapsOptionsValidator : IValidateOptions<IntakeCapsOp
         Check(failures, nameof(options.MaxZipEntries), options.MaxZipEntries, 100_000);
         Check(failures, nameof(options.MaxCompressionRatio), options.MaxCompressionRatio, 10_000);
         Check(failures, nameof(options.MaxPdfPages), options.MaxPdfPages, 100_000);
-        Check(failures, nameof(options.MaxExtractedChars), options.MaxExtractedChars, 100_000_000);
-        Check(failures, nameof(options.MaxTextCodePoints), options.MaxTextCodePoints, options.MaxExtractedChars);
+        Check(failures, nameof(options.MaxExtractedChars), options.MaxExtractedChars, ExtractedCharsCeiling);
+        Check(failures, nameof(options.MaxTextCodePoints), options.MaxTextCodePoints, Math.Min(options.MaxExtractedChars, TextCodePointsCeiling));
         Check(failures, nameof(options.MaxConcurrentExtractionsPerTenant), options.MaxConcurrentExtractionsPerTenant, 64);
         if (options.ExtractionTimeout <= TimeSpan.Zero || options.ExtractionTimeout > TimeSpan.FromMinutes(5))
         {

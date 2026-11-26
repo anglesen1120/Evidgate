@@ -1,7 +1,9 @@
 using System.Collections.Concurrent;
+using Evidgate.BuildingBlocks.Persistence.Tasks;
 using Evidgate.Modules.Authoring.Application.Intake;
 using Evidgate.Modules.Authoring.Application.Intake.Jobs;
 using Evidgate.Modules.Evidence.Contracts;
+using Npgsql;
 
 namespace Evidgate.Modules.Authoring.Infrastructure.Intake.Jobs;
 
@@ -20,8 +22,15 @@ internal sealed class ExtractIntakeJob(
     IntakeExtractionStore store,
     IIntakeArtifactReader artifacts,
     DocumentTextExtractor extractor,
-    TimeProvider time)
+    TimeProvider time,
+    IntakeExecutionPermits permits)
 {
+    /// <summary>The slot step of a renewal, as counted when it fails.</summary>
+    internal const string RenewStep = "renew";
+
+    /// <summary>The slot step of a release, as counted when it fails.</summary>
+    internal const string ReleaseStep = "release";
+
     private static readonly TimeSpan ReleaseBudget = TimeSpan.FromSeconds(10);
 
     // Well inside the lease margin, so one failed renewal does not let the lease lapse under a running parser.
@@ -38,6 +47,29 @@ internal sealed class ExtractIntakeJob(
     /// <param name="cancellationToken">Cancelled on shutdown and on lease loss.</param>
     internal async Task RunAsync(Guid intakeId, Guid orgId, CancellationToken cancellationToken)
     {
+        // Before the claim, so a Worker with every parser permit taken changes nothing: the row stays as it is and the
+        // task is deferred, not retried.
+        if (!permits.TryEnter())
+        {
+            throw new TaskDeferredException(IntakeExtractionStore.SlotWait);
+        }
+
+        var parse = new ParseRun();
+        try
+        {
+            await RunPermittedAsync(intakeId, orgId, parse, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            if (!parse.OwnsPermit)
+            {
+                permits.Exit();
+            }
+        }
+    }
+
+    private async Task RunPermittedAsync(Guid intakeId, Guid orgId, ParseRun parse, CancellationToken cancellationToken)
+    {
         var claim = await store.ClaimAsync(orgId, intakeId, cancellationToken).ConfigureAwait(false);
         if (claim is null)
         {
@@ -45,7 +77,7 @@ internal sealed class ExtractIntakeJob(
         }
 
         IntakeJobMetrics.Record(claim.Kind, "extracting");
-        var parse = new ParseRun();
+
         var finished = false;
         var slotKept = false;
 
@@ -118,11 +150,21 @@ internal sealed class ExtractIntakeJob(
             // Task.Run only honours the token before the work starts, and the parser is synchronous: WaitAsync is what
             // returns at the deadline. A stalled parse is abandoned (its thread is not killed); the extractor refuses any
             // result that arrives after its own deadline, so the abandoned run can never be taken as a success.
+            // The permit goes to the parser: it is given back when the parser exits, which for an abandoned parser is
+            // long after this attempt stopped waiting.
+            parse.OwnsPermit = true;
             var parser = Task.Run(
                 () =>
                 {
-                    using var stream = new MemoryStream(content, writable: false);
-                    return extractor.TryExtract(stream, claim.Kind, claim.MediaType, caps, token);
+                    try
+                    {
+                        using var stream = new MemoryStream(content, writable: false);
+                        return extractor.TryExtract(stream, claim.Kind, claim.MediaType, caps, token);
+                    }
+                    finally
+                    {
+                        permits.Exit();
+                    }
                 },
                 CancellationToken.None);
             parse.Running = parser;
@@ -148,7 +190,7 @@ internal sealed class ExtractIntakeJob(
             return IntakeFailureCode.ExtractionFailed;
         }
 
-        if (!string.Equals(artifact.MediaType, claim.MediaType, StringComparison.Ordinal))
+        if (!MediaTypes.Equivalent(artifact.MediaType, claim.MediaType))
         {
             return IntakeFailureCode.ContainerMismatch;
         }
@@ -180,7 +222,7 @@ internal sealed class ExtractIntakeJob(
 
                 if (first != parser)
                 {
-                    await QuietAsync(token => store.RenewAsync(orgId, claim, token)).ConfigureAwait(false);
+                    await QuietAsync(RenewStep, token => store.RenewAsync(orgId, claim, token)).ConfigureAwait(false);
                 }
             }
         }
@@ -195,14 +237,15 @@ internal sealed class ExtractIntakeJob(
                 // Only the exit matters here: the outcome was written when the attempt gave up on the parser.
             }
 
-            await QuietAsync(token => store.ReleaseAsync(orgId, claim, token)).ConfigureAwait(false);
+            await QuietAsync(ReleaseStep, token => store.ReleaseAsync(orgId, claim, token)).ConfigureAwait(false);
         }
 #pragma warning restore VSTHRD003
     }
 
     // A failed renewal or release is not an error of the intake: the lease margin covers the next tick, and an expired
-    // lease frees the slot at the next claim.
-    private static async Task QuietAsync(Func<CancellationToken, Task> step)
+    // lease frees the slot at the next claim. It is counted, though, so a grant gap or a dead database shows as a
+    // series instead of as slots that silently stay held until their lease lapses.
+    internal static async Task QuietAsync(string operation, Func<CancellationToken, Task> step)
     {
         try
         {
@@ -211,7 +254,9 @@ internal sealed class ExtractIntakeJob(
         }
         catch (Exception exception) when (exception is not OutOfMemoryException)
         {
-            // Left to lease expiry.
+            IntakeJobMetrics.RecordSlotFailure(
+                operation,
+                exception is PostgresException { SqlState: PostgresErrorCodes.InsufficientPrivilege });
         }
     }
 
@@ -219,5 +264,8 @@ internal sealed class ExtractIntakeJob(
     private sealed class ParseRun
     {
         internal Task? Running { get; set; }
+
+        /// <summary>True once the parser exists: it, not the attempt, gives the Worker permit back.</summary>
+        internal bool OwnsPermit { get; set; }
     }
 }

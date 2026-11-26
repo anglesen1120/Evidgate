@@ -1,6 +1,10 @@
 using System.IO.Compression;
 using System.Security;
 using System.Text;
+using Evidgate.BuildingBlocks.SharedKernel.Results;
+using Evidgate.Modules.Evidence.Contracts;
+using Evidgate.Modules.Evidence.Infrastructure.Parsing;
+using Microsoft.Extensions.Time.Testing;
 
 namespace Tenancy.IntegrationTests;
 
@@ -70,15 +74,18 @@ internal static class AuthoringExtractionFixtures
 
     /// <summary>
     /// A one-font PDF with one page per text. Extra markup goes into the catalog, the page dictionaries or the
-    /// trailer; extra objects are numbered from <see cref="FirstExtraObject"/>. Offsets are exact, so the
-    /// parser needs no repair pass.
+    /// trailer; extra objects are numbered from <see cref="FirstExtraObject"/>. <paramref name="pageContents"/>
+    /// replaces the generated content stream of each page; with <paramref name="indirectLengths"/> its /Length is
+    /// a reference to an integer object placed after the extra objects. Offsets are exact, so the parser needs no repair pass.
     /// </summary>
     public static byte[] Pdf(
         string[] pageTexts,
         string catalogExtra = "",
         string pageExtra = "",
         string trailerExtra = "",
-        string[]? extraObjects = null)
+        string[]? extraObjects = null,
+        string[]? pageContents = null,
+        bool indirectLengths = false)
     {
         var objects = new List<string>
         {
@@ -87,15 +94,25 @@ internal static class AuthoringExtractionFixtures
             "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
         };
 
+        var contents = new List<string>();
+        var lengthObject = FirstExtraObject(pageTexts.Length) + (extraObjects?.Length ?? 0);
+
         for (var index = 0; index < pageTexts.Length; index++)
         {
             objects.Add(
                 $"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents {PageObject(index) + 1} 0 R {pageExtra} >>");
-            var content = $"BT /F1 12 Tf 72 700 Td ({Escape(pageTexts[index])}) Tj ET";
-            objects.Add($"<< /Length {content.Length} >>\nstream\n{content}\nendstream");
+            var content = pageContents?[index] ?? $"BT /F1 12 Tf 72 700 Td ({Escape(pageTexts[index])}) Tj ET";
+            contents.Add(content);
+            var length = indirectLengths ? $"{lengthObject + index} 0 R" : content.Length.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            objects.Add($"<< /Length {length} >>\nstream\n{content}\nendstream");
         }
 
         objects.AddRange(extraObjects ?? []);
+
+        if (indirectLengths)
+        {
+            objects.AddRange(contents.Select(content => content.Length.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+        }
 
         return Assemble(objects, trailerExtra);
     }
@@ -148,5 +165,60 @@ internal static class AuthoringExtractionFixtures
                 $"<?xml version=\"1.0\"?><Relationships xmlns=\"{RelationshipsNamespace}\">"
                 + $"<Relationship Id=\"rId1\" Type=\"{OfficeDocumentType}/officeDocument\" Target=\"word/document.xml\"/></Relationships>"));
         yield return ("word/document.xml", Utf8(documentXml));
+    }
+
+    /// <summary>
+    /// The real parser profile, except that the first call that takes a token first moves the fake clock past the
+    /// extraction budget, as a slow parser call would. It records whether the token it was given was cancelled.
+    /// </summary>
+    /// <param name="clock">The clock the extractor's budget runs on.</param>
+    /// <param name="overrunDuringXml">True to overrun in <c>ParseXmlReport</c>, false in <c>ReadArchiveEntries</c>.</param>
+    internal sealed class DeadlineParsing(FakeTimeProvider clock, bool overrunDuringXml) : IParsing
+    {
+        private readonly ParsingService inner = new();
+
+        public bool ObservedCancellation { get; private set; }
+
+        public Result<ParsedXmlReport> ParseXmlReport(Stream content, long maxBytes, CancellationToken cancellationToken)
+        {
+            if (overrunDuringXml)
+            {
+                Overrun(cancellationToken);
+            }
+
+            return inner.ParseXmlReport(content, maxBytes, cancellationToken);
+        }
+
+        public Result<System.Text.Json.JsonDocument> ParseJson(Stream content, long maxBytes, CancellationToken cancellationToken) =>
+            inner.ParseJson(content, maxBytes, cancellationToken);
+
+        public Result<IReadOnlyList<ArchiveEntry>> EnumerateArchive(Stream content, long maxBytes, CancellationToken cancellationToken) =>
+            inner.EnumerateArchive(content, maxBytes, cancellationToken);
+
+        public Result<ArchiveContents> ReadArchiveEntries(
+            Stream content,
+            long maxBytes,
+            ArchiveCaps caps,
+            Func<string, bool> selectEntry,
+            long maxEntryBytes,
+            CancellationToken cancellationToken)
+        {
+            if (!overrunDuringXml)
+            {
+                Overrun(cancellationToken);
+            }
+
+            return inner.ReadArchiveEntries(content, maxBytes, caps, selectEntry, maxEntryBytes, cancellationToken);
+        }
+
+        public MediaSniffVerdict SniffMediaType(string declaredMediaType, ReadOnlySpan<byte> prefix) =>
+            inner.SniffMediaType(declaredMediaType, prefix);
+
+        private void Overrun(CancellationToken cancellationToken)
+        {
+            clock.Advance(TimeSpan.FromSeconds(2));
+            ObservedCancellation = cancellationToken.IsCancellationRequested;
+            cancellationToken.ThrowIfCancellationRequested();
+        }
     }
 }

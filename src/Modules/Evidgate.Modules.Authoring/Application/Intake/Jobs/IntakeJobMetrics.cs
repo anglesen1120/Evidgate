@@ -17,4 +17,10 @@ internal static class IntakeJobMetrics
     /// <param name="elapsed">The measured time.</param>
     internal static void RecordDuration(string kind, TimeSpan elapsed) =>
         EvidgateTelemetry.RecordAuthoringExtraction(kind, elapsed.TotalSeconds);
+
+    /// <summary>Counts a slot renewal or release that failed.</summary>
+    /// <param name="operation">renew or release.</param>
+    /// <param name="privilege">True when the database refused for a missing grant, false for any other cause.</param>
+    internal static void RecordSlotFailure(string operation, bool privilege) =>
+        EvidgateTelemetry.RecordAuthoringIntakeSlotFailure(operation, privilege ? "privilege" : "other");
 }

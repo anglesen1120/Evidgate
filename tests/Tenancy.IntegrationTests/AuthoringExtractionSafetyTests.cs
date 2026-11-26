@@ -1,5 +1,6 @@
 using Evidgate.Modules.Authoring.Application.Intake;
 using Evidgate.Modules.Evidence.Infrastructure.Parsing;
+using Microsoft.Extensions.Time.Testing;
 using Shouldly;
 using Xunit;
 using Fx = Tenancy.IntegrationTests.AuthoringExtractionFixtures;
@@ -7,14 +8,7 @@ using Fx = Tenancy.IntegrationTests.AuthoringExtractionFixtures;
 namespace Tenancy.IntegrationTests;
 
 /// <summary>
-/// The safety contract of <see cref="DocumentTextExtractor"/> (13.3.1 AC2, AC3): every hostile document is refused
-/// with one closed failure code before it is parsed further, and a clean document is read once. No database and no
-/// Docker: the documents are built in memory by <see cref="AuthoringExtractionFixtures"/>, and the parser profile
-/// is the real one. Run: <c>dotnet test tests/Tenancy.IntegrationTests --filter AuthoringExtractionSafetyTests</c>.
-/// <para>
-/// Every deny case has a positive control (the same shape without the hostile part is accepted), so a refusal
-/// can never be an accident of a broken fixture.
-/// </para>
+/// Document refusal and positive controls, using in-memory fixtures and the real parser profile without Docker.
 /// </summary>
 public sealed class AuthoringExtractionSafetyTests
 {
@@ -214,6 +208,26 @@ public sealed class AuthoringExtractionSafetyTests
         ExtractDocx(Fx.Docx("x")).Succeeded.ShouldBeTrue();
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Docx_NonzeroDeadlineInsideParser_ReturnsExtractionTimeout(bool duringXml)
+    {
+        var clock = new FakeTimeProvider();
+        var parsing = new Fx.DeadlineParsing(clock, duringXml);
+        var extractor = new DocumentTextExtractor(parsing, clock);
+        var caps = IntakeCaps.Default with { ExtractionTimeout = TimeSpan.FromSeconds(1) };
+        using var content = new MemoryStream(Fx.Docx("hello"));
+        using var caller = new CancellationTokenSource();
+
+        var outcome = extractor.TryExtract(content, "docx", DocumentTextExtractor.DocxMediaType, caps, caller.Token);
+
+        parsing.ObservedCancellation.ShouldBeTrue();
+        caller.IsCancellationRequested.ShouldBeFalse();
+        ShouldBeRefused(outcome, IntakeFailureCode.ExtractionTimeout);
+        ExtractDocx(Fx.Docx("hello"), caps).Text.ShouldBe("hello");
+    }
+
     [Fact]
     public void CallerCancellation_Propagates_NotAFailureCode()
     {
@@ -273,100 +287,12 @@ public sealed class AuthoringExtractionSafetyTests
         default(ExtractionOutcome).Succeeded.ShouldBeFalse();
     }
 
-    // --- PDF ---
-
-    [Fact]
-    public void Pdf_TwoPages_ReturnedInOrder()
-    {
-        var outcome = ExtractPdf(Fx.Pdf(["Login must lock after five failures", "Second page text"]));
-
-        outcome.Succeeded.ShouldBeTrue();
-        outcome.Text.ShouldBe("Login must lock after five failures\nSecond page text");
-    }
-
-    [Fact]
-    public void Pdf_NoText_IsRefused()
-    {
-        ShouldBeRefused(ExtractPdf(Fx.Pdf([string.Empty])), IntakeFailureCode.NoExtractableText);
-    }
-
-    [Fact]
-    public void Pdf_NotAPdfBody_IsRefusedWithAClosedCode()
-    {
-        var outcome = ExtractPdf(System.Text.Encoding.ASCII.GetBytes("%PDF-1.7\nthis is not a pdf at all"));
-
-        outcome.Succeeded.ShouldBeFalse();
-        outcome.FailureCode.ShouldBeOneOf(IntakeFailureCode.ExtractionFailed, IntakeFailureCode.NoExtractableText);
-    }
-
-    [Fact]
-    public void Pdf_PageCap_AtCapAccepted_OneOverRefused()
-    {
-        var caps = IntakeCaps.Default with { MaxPdfPages = 2 };
-
-        ExtractPdf(Fx.Pdf(["one", "two"]), caps).Text.ShouldBe("one\ntwo");
-        ShouldBeRefused(ExtractPdf(Fx.Pdf(["one", "two", "three"]), caps), IntakeFailureCode.PageLimitExceeded);
-    }
-
-    [Fact]
-    public void Pdf_CharCap_AtCapAccepted_OneOverRefused()
-    {
-        var caps = IntakeCaps.Default with { MaxExtractedChars = 10 };
-
-        ExtractPdf(Fx.Pdf(["ABCDEFGHIJ"]), caps).Text.ShouldBe("ABCDEFGHIJ");
-        ShouldBeRefused(ExtractPdf(Fx.Pdf(["ABCDEFGHIJK"]), caps), IntakeFailureCode.CharLimitExceeded);
-    }
-
-    [Fact]
-    public void EncryptedPdf_Rejected()
-    {
-        var encryption = $"<< /Filter /Standard /V 1 /R 2 /O ({new string('a', 32)}) /U ({new string('b', 32)}) /P -4 >>";
-        var encrypted = Fx.Pdf(["secret"], trailerExtra: $"/Encrypt {Fx.FirstExtraObject(1)} 0 R", extraObjects: [encryption]);
-
-        ShouldBeRefused(ExtractPdf(encrypted), IntakeFailureCode.EncryptionUnsupported);
-        ExtractPdf(Fx.Pdf(["secret"])).Text.ShouldBe("secret");
-    }
-
-    [Theory]
-    [InlineData("/OpenAction << /S /JavaScript /JS (x) >>", "", IntakeFailureCode.MacroPresent)]
-    [InlineData("", "/AA << /O << /S /GoTo >> >>", IntakeFailureCode.MacroPresent)]
-    [InlineData("/Names << /JavaScript << /Names [(a) << /S /JavaScript /JS (x) >>] >> >>", "", IntakeFailureCode.MacroPresent)]
-    [InlineData("/Other << /S /Launch /F (calc.exe) >>", "", IntakeFailureCode.MacroPresent)]
-    [InlineData("/Names << /EmbeddedFiles << /Names [(a.txt) << /Type /Filespec /F (a.txt) >>] >> >>", "", IntakeFailureCode.ExternalReferencePresent)]
-    public void Pdf_ActiveOrCarriedContent_Rejected(string catalogExtra, string pageExtra, string expectedCode)
-    {
-        var hostile = Fx.Pdf(["hello"], catalogExtra, pageExtra);
-
-        ShouldBeRefused(ExtractPdf(hostile), expectedCode);
-        ExtractPdf(Fx.Pdf(["hello"])).Text.ShouldBe("hello");
-    }
-
-    [Fact]
-    public void Pdf_EscapedNames_AreCaughtByTheStructureWalk_Direct_And_Indirect()
-    {
-        // "#6E" and "#68" spell n and h: the raw bytes contain no forbidden name, the parsed names do.
-        var direct = Fx.Pdf(["hello"], catalogExtra: "/OpenActio#6E << /S /GoTo >>");
-        var indirect = Fx.Pdf(
-            ["hello"],
-            catalogExtra: $"/Other {Fx.FirstExtraObject(1)} 0 R",
-            extraObjects: ["<< /S /Launc#68 /F (calc.exe) >>"]);
-
-        ShouldBeRefused(ExtractPdf(direct), IntakeFailureCode.MacroPresent);
-        ShouldBeRefused(ExtractPdf(indirect), IntakeFailureCode.MacroPresent);
-    }
-
-    [Fact]
-    public void Pdf_TextThatMerelyStartsWithAForbiddenName_IsNotAnAction()
-    {
-        ExtractPdf(Fx.Pdf(["/AAPL stock"])).Text.ShouldBe("/AAPL stock");
-    }
-
     private static string Paragraph(string text) => $"<w:p><w:r><w:t>{System.Security.SecurityElement.Escape(text)}</w:t></w:r></w:p>";
 
     private static ExtractionOutcome ExtractDocx(byte[] document, IntakeCaps? caps = null) =>
         Extract(document, "docx", DocumentTextExtractor.DocxMediaType, caps);
 
-    private static ExtractionOutcome ExtractPdf(byte[] document, IntakeCaps? caps = null) =>
+    internal static ExtractionOutcome ExtractPdf(byte[] document, IntakeCaps? caps = null) =>
         Extract(document, "pdf", DocumentTextExtractor.PdfMediaType, caps);
 
     private static ExtractionOutcome Extract(byte[] document, string kind, string declaredMediaType, IntakeCaps? caps = null)
@@ -376,7 +302,7 @@ public sealed class AuthoringExtractionSafetyTests
         return Extractor.TryExtract(content, kind, declaredMediaType, caps ?? IntakeCaps.Default, CancellationToken.None);
     }
 
-    private static void ShouldBeRefused(ExtractionOutcome outcome, string failureCode)
+    internal static void ShouldBeRefused(ExtractionOutcome outcome, string failureCode)
     {
         outcome.Succeeded.ShouldBeFalse();
         outcome.Text.ShouldBeNull();

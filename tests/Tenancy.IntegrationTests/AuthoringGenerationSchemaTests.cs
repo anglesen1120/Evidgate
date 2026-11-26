@@ -71,6 +71,17 @@ public sealed class AuthoringGenerationSchemaTests(PostgresTenancyFixture fixtur
         (await fixture.HasTablePrivilegeAsync(database, "evidgate_app", Slot, "DELETE")).ShouldBeTrue();
         (await fixture.IndexesAsync(database, Intake)).ShouldContain(
             index => index.Contains("(org_id, project_id, created_at DESC, id DESC)", StringComparison.Ordinal));
+        (await fixture.IndexesAsync(database, Intake)).ShouldContain(
+            index => index.Contains("authoring_intake_pending_created_idx", StringComparison.Ordinal)
+                && index.Contains("(org_id, created_at, id)", StringComparison.Ordinal)
+                && index.Contains("received", StringComparison.Ordinal)
+                && index.Contains("extracting", StringComparison.Ordinal)
+                && index.Contains("WHERE", StringComparison.Ordinal));
+        foreach (var column in new[] { "id", "org_id", "slot", "intake_id", "lease_id", "expires_at" })
+        {
+            (await fixture.ScalarAsync<bool>(database, $"select has_column_privilege('evidgate_app', 'public.{Slot}', '{column}', 'UPDATE')"))
+                .ShouldBe(column == "expires_at", $"slot update {column}");
+        }
 
         foreach (var (column, update, insert) in new[]
         {
@@ -317,7 +328,7 @@ public sealed class AuthoringGenerationSchemaTests(PostgresTenancyFixture fixtur
 
     // ------------------------------------------------------------------ the extraction slot table
 
-    /// <summary>A slot is one of 0..63, held by one intake, owned by one org, and taken or released but never edited.</summary>
+    /// <summary>A slot is tenant-scoped and bounded; only its expiry may be renewed.</summary>
     [Fact]
     public async Task Slots_AreUniqueBoundedAndTenantScoped()
     {
@@ -332,6 +343,9 @@ public sealed class AuthoringGenerationSchemaTests(PostgresTenancyFixture fixtur
         await RefusesAsync(scope, InsertSlot, "23514", ("org", w.Org), ("slot", 64), ("intake", two));
         await RefusesAsync(scope, InsertSlot, "23514", ("org", w.Org), ("slot", -1), ("intake", two));
         await RefusesAsync(scope, InsertSlot, "23503", ("org", w.Org), ("slot", 2), ("intake", Guid.CreateVersion7()));
+        (await scope.ExecuteAsync(
+            "update public.authoring_intake_slot set expires_at = now() + interval '2 minutes' where intake_id = @id",
+            ("id", one))).ShouldBe(1);
         await RefusesAsync(scope, "update public.authoring_intake_slot set slot = 5 where intake_id = @id", "42501", ("id", one));
         await RefusesAsync(scope, "update public.authoring_intake_slot set lease_id = gen_random_uuid() where intake_id = @id", "42501", ("id", one));
         (await scope.ExecuteAsync(InsertSlot, ("org", w.Org), ("slot", 63), ("intake", two))).ShouldBe(1);

@@ -65,8 +65,7 @@ internal sealed class IntakeArtifactReader(ITenantDb db, IObjectStorage storage)
                     row.PolicySensitivity ?? ArtifactSensitivity.ForKind(row.Kind))
                 : null);
 
-        var allowed = policy is { CaptureEnabled: true }
-            && policy.MediaTypes.Contains(row.MediaType, StringComparer.OrdinalIgnoreCase);
+        var allowed = policy is { CaptureEnabled: true } && MediaTypes.IsAllowed(policy.MediaTypes, row.MediaType);
 
         return new IntakeArtifact(row.Kind, row.MediaType, row.Bytes, row.ObjectKey, allowed, policy?.MaxBytes ?? 0);
     }

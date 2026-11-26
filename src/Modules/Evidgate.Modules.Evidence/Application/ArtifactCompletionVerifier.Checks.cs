@@ -1,5 +1,6 @@
 using System.Net;
 using Evidgate.BuildingBlocks.ObjectStorage;
+using Evidgate.Modules.Evidence.Contracts;
 using Evidgate.Modules.Evidence.Domain;
 using Evidgate.Modules.Evidence.Infrastructure.Parsing;
 
@@ -214,15 +215,5 @@ internal sealed partial class ArtifactCompletionVerifier
     /// </summary>
     /// <param name="allowed">The effective policy's accepted types (never null: a null resolution is refused before this call).</param>
     /// <param name="mediaType">The declared media type of the artifact.</param>
-    private static bool MediaTypeAllowed(string[] allowed, string? mediaType)
-    {
-        if (mediaType is null || !ArtifactShape.HasNoControlCharacter(mediaType))
-        {
-            return false;
-        }
-
-        var bare = mediaType.Split(';', 2)[0];
-
-        return allowed.Any(candidate => string.Equals(candidate, bare, StringComparison.OrdinalIgnoreCase));
-    }
+    private static bool MediaTypeAllowed(string[] allowed, string? mediaType) => MediaTypes.IsAllowed(allowed, mediaType);
 }

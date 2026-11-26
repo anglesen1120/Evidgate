@@ -123,6 +123,12 @@ create index if not exists authoring_intake_feature_node_idx
   on public.authoring_intake (org_id, project_id, feature_node_id)
   where feature_node_id is not null;
 
+-- The queue position of a received or extracting intake: the unfinished rows of one tenant in creation order, read
+-- as a bounded index range, so the cost follows the unfinished backlog and never the history of finished rows.
+create index if not exists authoring_intake_pending_created_idx
+  on public.authoring_intake (org_id, created_at, id)
+  where state in ('received', 'extracting');
+
 -- Extraction slots: at most one row per (org, slot number), so the number of live rows is the tenant's
 -- concurrency. A crashed worker's slot is reclaimed once its lease has expired.
 create table if not exists public.authoring_intake_slot (
@@ -270,4 +276,6 @@ grant update (state, extracted_text, extracted_text_hash, caps, failure_code)
 revoke all on public.authoring_intake_slot from evidgate_app, evidgate_operator, evidgate_worker_sched;
 grant select, delete on public.authoring_intake_slot to evidgate_app;
 grant insert (id, org_id, slot, intake_id, lease_id, expires_at) on public.authoring_intake_slot to evidgate_app;
--- A slot is taken and released, never edited: no update grant.
+-- A slot is taken, renewed and released, never moved: only the lease expiry is updatable, so a holder cannot
+-- change the slot number or the lease id it was given.
+grant update (expires_at) on public.authoring_intake_slot to evidgate_app;

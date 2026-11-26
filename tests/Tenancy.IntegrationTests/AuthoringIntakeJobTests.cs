@@ -4,6 +4,7 @@ using Evidgate.Modules.Authoring.Application.Intake;
 using Evidgate.Modules.Authoring.Infrastructure.Intake.Jobs;
 using Evidgate.Modules.Evidence.Contracts;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 using Shouldly;
 using Xunit;
@@ -270,7 +271,8 @@ public sealed partial class AuthoringIntakeJobTests(PostgresTenancyFixture fixtu
         IServiceProvider services,
         Func<IntakeArtifact, long, CancellationToken, Task<byte[]?>> fetch,
         TimeProvider? time = null,
-        IParsing? parsing = null)
+        IParsing? parsing = null,
+        IntakeExecutionPermits? permits = null)
     {
         var real = services.GetRequiredService<IIntakeArtifactReader>();
         var scopes = services.GetRequiredService<ITenantScopeAccessor>();
@@ -281,7 +283,8 @@ public sealed partial class AuthoringIntakeJobTests(PostgresTenancyFixture fixtu
             store,
             observed,
             new DocumentTextExtractor(parsing ?? services.GetRequiredService<IParsing>()),
-            time ?? TimeProvider.System);
+            time ?? TimeProvider.System,
+            permits ?? new IntakeExecutionPermits(Options.Create(new IntakeExecutionOptions { MaxConcurrentParsers = 8 })));
     }
 
     /// <summary>The real metadata read, with a fetch that also asserts no transaction is open around it.</summary>

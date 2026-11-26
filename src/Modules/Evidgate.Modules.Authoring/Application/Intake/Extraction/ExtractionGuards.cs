@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Text;
 
 namespace Evidgate.Modules.Authoring.Application.Intake;
@@ -14,36 +13,55 @@ internal sealed class ExtractionRefusedException(string failureCode) : Exception
 }
 
 /// <summary>
-/// The wall-clock budget of one extraction plus the caller's token. The parser profile and PdfPig both ignore
-/// the budget, so the readers call <see cref="ThrowIfExpired"/> between pages, parts and XML nodes.
+/// The wall-clock budget of one extraction plus the caller's token. The parser profile and PdfPig do not know the
+/// budget, so the readers call <see cref="ThrowIfExpired"/> between pages, parts and XML nodes, and
+/// <see cref="Token"/> (caller cancellation linked with the budget) goes to every profile call so a long call stops at the deadline.
 /// </summary>
-internal sealed class ExtractionDeadline
+internal sealed class ExtractionDeadline : IDisposable
 {
-    private readonly Stopwatch clock = Stopwatch.StartNew();
+    private readonly TimeProvider time;
+    private readonly long started;
     private readonly TimeSpan limit;
-    private readonly CancellationToken cancellationToken;
+    private readonly CancellationToken callerToken;
+    private readonly CancellationTokenSource budget;
+    private readonly CancellationTokenSource linked;
 
     /// <summary>Starts the clock.</summary>
     /// <param name="limit">The budget; a budget of zero is expired at the first check.</param>
     /// <param name="cancellationToken">The caller's token; cancellation is never turned into a refusal.</param>
-    public ExtractionDeadline(TimeSpan limit, CancellationToken cancellationToken)
+    /// <param name="timeProvider">The clock; the system clock when null.</param>
+    public ExtractionDeadline(TimeSpan limit, CancellationToken cancellationToken, TimeProvider? timeProvider = null)
     {
+        time = timeProvider ?? TimeProvider.System;
+        started = time.GetTimestamp();
         this.limit = limit;
-        this.cancellationToken = cancellationToken;
+        callerToken = cancellationToken;
+        budget = new CancellationTokenSource(limit, time);
+        linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, budget.Token);
     }
 
-    /// <summary>The caller's token, for the parser profile calls that take one.</summary>
-    public CancellationToken Token => cancellationToken;
+    /// <summary>The caller's cancellation linked with the budget, for the parser profile calls that take a token.</summary>
+    public CancellationToken Token => linked.Token;
+
+    /// <summary>True when the budget, not the caller, cancelled <see cref="Token"/>.</summary>
+    public bool BudgetCancelled => linked.IsCancellationRequested && !callerToken.IsCancellationRequested;
 
     /// <summary>Stops with the caller's cancellation, or with <c>extraction_timeout</c> once the budget is spent.</summary>
     public void ThrowIfExpired()
     {
-        cancellationToken.ThrowIfCancellationRequested();
+        callerToken.ThrowIfCancellationRequested();
 
-        if (clock.Elapsed >= limit)
+        if (time.GetElapsedTime(started) >= limit)
         {
             throw new ExtractionRefusedException(IntakeFailureCode.ExtractionTimeout);
         }
+    }
+
+    /// <inheritdoc/>
+    public void Dispose()
+    {
+        linked.Dispose();
+        budget.Dispose();
     }
 }
 

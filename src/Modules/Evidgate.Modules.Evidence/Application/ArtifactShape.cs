@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using Evidgate.Modules.Evidence.Contracts;
 
 namespace Evidgate.Modules.Evidence.Application;
 
@@ -34,12 +35,8 @@ internal static partial class ArtifactShape
 
     /// <summary>
     /// True when <paramref name="value"/> carries no control or format character. A media type is compared to the
-    /// kind policy verbatim, so a trailing newline or a NUL must never be trimmed into a match (06.1.2 §5).
+    /// kind policy verbatim, so a trailing newline or a NUL must never be trimmed into a match (06.1.2 §5). The rule
+    /// is <see cref="MediaTypes.HasNoControlCharacter"/>, the one every media-type comparison shares.
     /// </summary>
-    public static bool HasNoControlCharacter(string? value) =>
-        value is not null && NoControlCharacterShape().IsMatch(value);
-
-    /// <summary>The 00 §7 media-type shape: no control or format character, anchored with <c>\z</c>.</summary>
-    [GeneratedRegex("\\A[^\\p{Cc}\\p{Cf}]+\\z", RegexOptions.CultureInvariant)]
-    private static partial Regex NoControlCharacterShape();
+    public static bool HasNoControlCharacter(string? value) => MediaTypes.HasNoControlCharacter(value);
 }

@@ -88,7 +88,7 @@ internal sealed class IntakePlanner(ITenantDb db, IIntakeArtifactReader artifact
         string[] allowed = kind switch { "docx" => [Docx], "pdf" => [Pdf], _ => Images };
         var expectedKind = kind == "image" ? ArtifactKinds.RequirementImage : ArtifactKinds.RequirementDocument;
 
-        if (Member(body, "media_type") is { } declared && !allowed.Contains(Bare(declared)))
+        if (Member(body, "media_type") is { } declared && !MediaTypes.IsAllowed(allowed, declared))
         {
             return (null, Refuse("/media_type", "media_type_not_allowed", "the media type is not allowed for this kind"));
         }
@@ -99,8 +99,9 @@ internal sealed class IntakePlanner(ITenantDb db, IIntakeArtifactReader artifact
             return (null, Error.NotFound("no ready artifact with that id is visible in this project"));
         }
 
-        var mediaType = Bare(artifact.MediaType);
-        if (artifact.Kind != expectedKind || !artifact.MediaAllowed || !allowed.Contains(mediaType))
+        // The row stores the accepted type in its own spelling, never the artifact's declared one.
+        var mediaType = MediaTypes.Match(allowed, artifact.MediaType);
+        if (artifact.Kind != expectedKind || !artifact.MediaAllowed || mediaType is null)
         {
             return (null, Refuse("/artifact_id", "media_type_not_allowed", "the artifact is not an allowed input for this kind"));
         }
@@ -126,12 +127,6 @@ internal sealed class IntakePlanner(ITenantDb db, IIntakeArtifactReader artifact
 
     private static string? Member(JsonElement body, string name) =>
         body.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
-
-    private static string Bare(string mediaType)
-    {
-        var end = mediaType.IndexOf(';', StringComparison.Ordinal);
-        return (end < 0 ? mediaType : mediaType[..end]).Trim().ToLowerInvariant();
-    }
 
     private static Error Refuse(string path, string reason, string message) => Error.Invalid(message, [new ErrorDetail(path, reason)]);
 }

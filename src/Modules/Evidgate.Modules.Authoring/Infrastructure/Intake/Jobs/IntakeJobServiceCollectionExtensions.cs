@@ -11,9 +11,10 @@ namespace Evidgate.Modules.Authoring.Infrastructure.Intake.Jobs;
 internal static class IntakeJobServiceCollectionExtensions
 {
     /// <summary>
-    /// Registers the extraction handler, the job and its store. All are singletons: the handler opens its own tenant
-    /// scopes per attempt, and the reader it uses (registered by the Evidence module) keeps no state. The extractor
-    /// stores and hashes NFC text, so a host that cannot compose refuses here instead of storing decomposed text.
+    /// Registers the extraction handler, the job, its store and the Worker-wide parser permits. All are singletons:
+    /// the handler opens its own tenant scopes per attempt, and the reader it uses (registered by the Evidence module)
+    /// keeps no state. The extractor stores and hashes NFC text, so a host that cannot compose refuses here instead
+    /// of storing decomposed text.
     /// </summary>
     /// <param name="services">The host's service collection.</param>
     internal static IServiceCollection AddAuthoringIntakeJobs(this IServiceCollection services)
@@ -22,6 +23,13 @@ internal static class IntakeJobServiceCollectionExtensions
         AuthoringText.EnsureNfcSupported();
 
         services.TryAddSingleton(TimeProvider.System);
+        services.AddOptions<IntakeExecutionOptions>()
+            .BindConfiguration(IntakeExecutionOptions.SectionName)
+            .Validate(
+                IntakeExecutionOptions.IsValid,
+                $"{IntakeExecutionOptions.SectionName}:MaxConcurrentParsers must be between 1 and {IntakeExecutionOptions.Ceiling}.")
+            .ValidateOnStart();
+        services.TryAddSingleton<IntakeExecutionPermits>();
         services.TryAddSingleton<DocumentTextExtractor>();
         services.TryAddSingleton<IntakeExtractionStore>();
         services.TryAddSingleton<ExtractIntakeJob>();

@@ -5,6 +5,7 @@ using Evidgate.Modules.Authoring.Application.Intake;
 using Evidgate.Modules.Authoring.Infrastructure.Intake.Jobs;
 using Evidgate.Modules.Evidence.Contracts;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 using Shouldly;
 using Xunit;
@@ -53,6 +54,43 @@ public sealed partial class AuthoringIntakeJobTests
         await job.WhenSlotsReleasedAsync();
         (await SlotCountAsync(world)).ShouldBe(0);
         (await store.ClaimAsync(world.Org, third, Token)).ShouldNotBeNull();
+    }
+
+    [Fact]
+    public async Task AbandonedParser_KeepsWorkerPermitAcrossTenantsAndJobInstances()
+    {
+        var world = await SeedWorldAsync();
+        var other = await SeedWorldAsync();
+        var bytes = AuthoringExtractionFixtures.Docx("Stuck");
+        var first = await SeedDocumentAsync(world, bytes);
+        var waiting = await SeedDocumentAsync(other, bytes);
+        await using var api = TenancyApiFactory.GrantAll(fixture.AppConnectionString(world.Database));
+        var clock = new FakeTimeProvider();
+        var permits = new IntakeExecutionPermits(Options.Create(new IntakeExecutionOptions { MaxConcurrentParsers = 1 }));
+        using var parsing = new BlockedParsing(1);
+        var stalled = CreateJob(api.Services, (_, _, _) => Task.FromResult<byte[]?>(bytes), clock, parsing, permits);
+        var next = CreateJob(api.Services, (_, _, _) => Task.FromResult<byte[]?>(bytes), permits: permits);
+        try
+        {
+            var run = stalled.RunAsync(first, world.Org, Token);
+            (await Task.Run(() => parsing.Entered.Wait(TimeSpan.FromSeconds(30), Token), Token)).ShouldBeTrue();
+            clock.Advance(IntakeCaps.Default.ExtractionTimeout + TimeSpan.FromSeconds(1));
+            await run;
+
+            (await StateAsync(world, first)).ShouldBe("rejected");
+            var deferred = await Should.ThrowAsync<TaskDeferredException>(() => next.RunAsync(waiting, other.Org, Token));
+            deferred.Delay.ShouldBe(IntakeExtractionStore.SlotWait);
+            (await StateAsync(other, waiting)).ShouldBe("received");
+            (await SlotCountAsync(other, waiting)).ShouldBe(0);
+        }
+        finally
+        {
+            parsing.Open();
+            await stalled.WhenSlotsReleasedAsync();
+        }
+
+        await next.RunAsync(waiting, other.Org, Token);
+        (await StateAsync(other, waiting)).ShouldBe("ready");
     }
 
     /// <summary>A parser whose first call blocks until <see cref="Open"/>, standing in for a stalled PDF/OOXML read.</summary>
