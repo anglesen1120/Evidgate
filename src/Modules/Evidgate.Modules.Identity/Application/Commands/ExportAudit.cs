@@ -78,6 +78,7 @@ internal sealed class ExportAuditCommandHandler(ITenantDb db, ITenantScopeAccess
                     actor_type = command.Filter.ActorType,
                     action = command.Filter.Action,
                     object_type = command.Filter.ObjectType,
+                    project_id = command.Filter.ProjectId,
                     from,
                     to,
                     cursor_created_at = cursorCreatedAt,

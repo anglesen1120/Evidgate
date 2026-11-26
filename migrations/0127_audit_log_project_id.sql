@@ -1,0 +1,28 @@
+-- 0127_audit_log_project_id.sql
+--
+-- WHY: the audit list has no way to answer "what happened in this project". audit_log gets a nullable project tag
+-- the project dashboards filter on. It is a tag on the row, not part of the evidence: it is NOT in entry_hash
+-- (AuditHashing's canonical fields are unchanged, so every existing chain still verifies), and the chain therefore
+-- proves the action happened, not which project it carried. Rows written before this migration, and actions that
+-- belong to no project, keep NULL and are never matched by a project filter.
+--
+-- No foreign key on purpose: audit rows must outlive the project they describe (like object_id, which is text and
+-- unreferenced), and a reference from an append-only table would block or cascade a project deletion.
+--
+-- Append-only is unchanged: evidgate_app holds only INSERT and SELECT on audit_log (0015 revoked UPDATE, DELETE and
+-- TRUNCATE), so the tag cannot be rewritten after the insert; a column added to the table is covered by that
+-- table-level privilege.
+--
+-- The partial index serves the filtered keyset page (org_id, project_id, created_at desc, id desc) without a sort;
+-- the unfiltered page keeps audit_log_org_created_id_idx.
+--
+-- LOCKS: ADD COLUMN of a nullable column without a default is a catalogue change under a brief ACCESS EXCLUSIVE lock;
+-- CREATE INDEX (not CONCURRENTLY, the migrator runs in one transaction) blocks inserts for the scan of the table.
+-- 5 s lock_timeout; the table is insert-only.
+set local lock_timeout = '5s';
+
+alter table public.audit_log add column if not exists project_id uuid;
+
+create index if not exists audit_log_org_project_created_id_idx
+  on public.audit_log (org_id, project_id, created_at desc, id desc)
+  where project_id is not null;

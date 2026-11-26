@@ -212,6 +212,7 @@ public sealed class AuditTrail : IAuditTrail
                     prev_hash = prev,
                     entry_hash = entryHash,
                     created_at = row.CreatedAt,
+                    project_id = entry.Subject?.ProjectId,
                 },
                 cancellationToken).ConfigureAwait(false);
 
@@ -269,9 +270,11 @@ internal static class AuditSql
     internal const string Insert =
         """
         insert into public.audit_log (id, org_id, seq, actor_type, actor_id, action, object_type, object_id,
-                                      before_hash, after_hash, request_id, trace_id, metadata, prev_hash, entry_hash, created_at)
+                                      before_hash, after_hash, request_id, trace_id, metadata, prev_hash, entry_hash, created_at,
+                                      project_id)
         values (@id, @org_id, @seq, @actor_type, @actor_id, @action, @object_type, @object_id,
-                @before_hash, @after_hash, @request_id, @trace_id, @metadata::jsonb, @prev_hash, @entry_hash, @created_at)
+                @before_hash, @after_hash, @request_id, @trace_id, @metadata::jsonb, @prev_hash, @entry_hash, @created_at,
+                @project_id)
         """;
 
     internal const string ChainPage =

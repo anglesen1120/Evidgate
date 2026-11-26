@@ -164,11 +164,24 @@ public static class AuditEndpoints
     private static Error? FilterError(HttpContext context, out AuditFilter filter)
     {
         var query = context.Request.Query;
-        filter = new AuditFilter(null, null, null, null, null);
+        filter = new AuditFilter(null, null, null, null, null, null);
 
         if (!TryDate(query["from"].ToString(), out var from) || !TryDate(query["to"].ToString(), out var to))
         {
             return Error.Invalid("from and to must be ISO 8601 timestamps", [new ErrorDetail("from", "invalid")]);
+        }
+
+        Guid? projectId = null;
+        var rawProjectId = query["project_id"].ToString();
+
+        if (!string.IsNullOrEmpty(rawProjectId))
+        {
+            if (!Guid.TryParse(rawProjectId, out var parsedProjectId))
+            {
+                return Error.Invalid("project_id must be a uuid", [new ErrorDetail("project_id", "invalid")]);
+            }
+
+            projectId = parsedProjectId;
         }
 
         filter = new AuditFilter(
@@ -176,7 +189,8 @@ public static class AuditEndpoints
             NullIfEmpty(query["action"].ToString()),
             NullIfEmpty(query["object_type"].ToString()),
             from,
-            to);
+            to,
+            projectId);
 
         return null;
     }

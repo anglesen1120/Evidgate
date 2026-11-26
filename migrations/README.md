@@ -1287,3 +1287,11 @@ target)` and `session_revoke_audit_append(org, actor, object_type, object_id, me
 
 - `0125` drops `public.incident_list` (created by `0123`; the `0123` file is unchanged and its `incident_project_state_list` index stays). The role-and-privilege scan admits an `evidgate_app`-readable view only with `security_barrier = true`, and a barrier view stays a subquery scan, so the state-filtered keyset page sorted instead of streaming from `incident_project_state_list`.
 - `evidgate_app` already holds `SELECT` on `incident` and `incident_attempt` (`0122`), so the list statements read `incident` directly under FORCE RLS with an explicit `org_id` predicate and compute `attempt_count` inline. No grant, index, policy or trigger changes. Locks: `ACCESS EXCLUSIVE` on the view for one `drop view`, under a 5 s `lock_timeout`.
+
+## Notes on the audit project tag (`0127`)
+
+- `0127` adds the nullable `audit_log.project_id uuid` and the partial index `audit_log_org_project_created_id_idx (org_id, project_id, created_at desc, id desc) where project_id is not null`, so the project-filtered audit page streams from the index without a sort. No backfill: rows written before this migration, and actions that belong to no project, keep NULL and are never matched by a project filter.
+- Threat model: `project_id` is a non-evidentiary tag. It is NOT part of `entry_hash` (the 14 canonical fields of `AuditHashing` are unchanged, so every existing chain verifies): the chain proves the action happened, not which project it was tagged with. A reader must not treat the tag as tamper-evident.
+- No foreign key: audit rows outlive the project they describe, like the text `object_id`. Append-only is unchanged: `evidgate_app` holds only `SELECT` + `INSERT` on `audit_log` (`0015` revoked `UPDATE`, `DELETE`, `TRUNCATE`), so the tag cannot be rewritten after the insert; no grant, policy or trigger changes.
+- Locks: brief `ACCESS EXCLUSIVE` for the catalogue-only `add column`, then inserts into `audit_log` wait for the one index build, under a 5 s `lock_timeout`. Deploy: the migrator before the API that writes the tag (a writer that omits it still inserts). Rollback: drop the index and the column; no other table changes.
+- Numbering: `0127` follows `0126` from a sibling lane; the migrator refuses a gap, so run this migration only on a tree that holds `0126`.

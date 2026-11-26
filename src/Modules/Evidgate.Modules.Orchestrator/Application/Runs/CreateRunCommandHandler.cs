@@ -412,6 +412,7 @@ internal sealed partial class CreateRunCommandHandler(
             await RunReleaseBinding
                 .BindAsync(
                     boundReleaseId,
+                    command.ProjectId,
                     runId,
                     orgId,
                     components,
@@ -450,7 +451,7 @@ internal sealed partial class CreateRunCommandHandler(
             $"orchestrator:run:{runId}:created",
             cancellationToken).ConfigureAwait(false);
 
-        audit.Describe(new AuditObject("run", runId.ToString("D")));
+        audit.Describe(new AuditObject("run", runId.ToString("D"), ProjectId: command.ProjectId));
         activity?.SetTag("evidgate.run_id", runId.ToString("D"));
         if (identity.RefKind is { } refKind)
         {
