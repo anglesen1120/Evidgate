@@ -91,10 +91,12 @@ public sealed class AuthoringIntakeTests(PostgresTenancyFixture fixture)
         (await world.Client.SendAsync(HttpMethod.Get, detail, caller)).Status.ShouldBe(HttpStatusCode.OK);
         (await world.Client.SendAsync(HttpMethod.Post, world.Path, caller, body, NewKey())).Status.ShouldBe(HttpStatusCode.Forbidden);
         var sibling = await CreateProjectAsync(world.Client, world.User, world.Org, Unique.Slug("sibling"));
-        var scoped = TenancyApiFactory.Resolved(serviceOrg: world.Org, serviceProject: sibling, servicePermissions: ["authoring:read"]);
+        var scoped = TenancyApiFactory.Caller(org: world.Org, user: world.User, project: sibling);
         var mismatch = await world.Client.SendAsync(HttpMethod.Get, detail, scoped);
         mismatch.Status.ShouldBe(HttpStatusCode.Forbidden);
         mismatch.ErrorCode.ShouldBe("project_scope_mismatch");
+        var inScope = TenancyApiFactory.Caller(org: world.Org, user: world.User, project: world.Project);
+        (await world.Client.SendAsync(HttpMethod.Get, detail, inScope)).Status.ShouldBe(HttpStatusCode.OK);
     }
 
     private static async Task RefusedTextAsync(IntakeApiWorld world, string text, string reason) =>

@@ -16,15 +16,53 @@
   "allOf": [
     {
       "if": { "properties": { "kind": { "const": "text" } }, "required": ["kind"] },
-      "then": { "$ref": "#/$defs/text_intake" }
+      "then": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "feature_node_id", "text"],
+        "properties": {
+          "kind": { "$ref": "#/$defs/kind" },
+          "feature_node_id": { "$ref": "#/$defs/feature_node_id" },
+          "text": {
+            "type": "string",
+            "description": "The inline requirement. Not bounded here: the command normalises to NFC and refuses empty or oversized text with a reason."
+          },
+          "media_type": { "$ref": "#/$defs/media_type" },
+          "bytes": { "$ref": "#/$defs/bytes" },
+          "target_language": { "$ref": "#/$defs/target_language" }
+        }
+      }
     },
     {
       "if": { "properties": { "kind": { "enum": ["docx", "pdf"] } }, "required": ["kind"] },
-      "then": { "$ref": "#/$defs/document_intake" }
+      "then": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "feature_node_id", "artifact_id"],
+        "properties": {
+          "kind": { "$ref": "#/$defs/kind" },
+          "feature_node_id": { "$ref": "#/$defs/feature_node_id" },
+          "artifact_id": { "$ref": "#/$defs/artifact_id" },
+          "media_type": { "$ref": "#/$defs/media_type" },
+          "bytes": { "$ref": "#/$defs/bytes" },
+          "target_language": { "$ref": "#/$defs/target_language" }
+        }
+      }
     },
     {
       "if": { "properties": { "kind": { "const": "image" } }, "required": ["kind"] },
-      "then": { "$ref": "#/$defs/image_intake" }
+      "then": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "artifact_id"],
+        "properties": {
+          "kind": { "$ref": "#/$defs/kind" },
+          "artifact_id": { "$ref": "#/$defs/artifact_id" },
+          "media_type": { "$ref": "#/$defs/media_type" },
+          "bytes": { "$ref": "#/$defs/bytes" },
+          "target_language": { "$ref": "#/$defs/target_language" }
+        }
+      }
     }
   ],
   "$defs": {
@@ -57,47 +95,6 @@
       "type": "string",
       "enum": ["en", "vi"],
       "description": "The language the requirement is written in, one of the two G1 locales."
-    },
-    "text_intake": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["kind", "feature_node_id", "text"],
-      "properties": {
-        "kind": { "$ref": "#/$defs/kind" },
-        "feature_node_id": { "$ref": "#/$defs/feature_node_id" },
-        "text": {
-          "type": "string",
-          "description": "The inline requirement. Not bounded here: the command normalises to NFC and refuses empty or oversized text with a reason."
-        },
-        "media_type": { "$ref": "#/$defs/media_type" },
-        "bytes": { "$ref": "#/$defs/bytes" },
-        "target_language": { "$ref": "#/$defs/target_language" }
-      }
-    },
-    "document_intake": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["kind", "feature_node_id", "artifact_id"],
-      "properties": {
-        "kind": { "$ref": "#/$defs/kind" },
-        "feature_node_id": { "$ref": "#/$defs/feature_node_id" },
-        "artifact_id": { "$ref": "#/$defs/artifact_id" },
-        "media_type": { "$ref": "#/$defs/media_type" },
-        "bytes": { "$ref": "#/$defs/bytes" },
-        "target_language": { "$ref": "#/$defs/target_language" }
-      }
-    },
-    "image_intake": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["kind", "artifact_id"],
-      "properties": {
-        "kind": { "$ref": "#/$defs/kind" },
-        "artifact_id": { "$ref": "#/$defs/artifact_id" },
-        "media_type": { "$ref": "#/$defs/media_type" },
-        "bytes": { "$ref": "#/$defs/bytes" },
-        "target_language": { "$ref": "#/$defs/target_language" }
-      }
     }
   }
 }

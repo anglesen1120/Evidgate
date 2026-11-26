@@ -1,6 +1,8 @@
 using System.Net;
 using System.Text.Json;
 using Evidgate.BuildingBlocks.Persistence.Tasks;
+using Evidgate.Modules.Authoring.Infrastructure.Intake.Jobs;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
 using Xunit;
@@ -164,7 +166,12 @@ public sealed class AuthoringIntakeChainTests(PostgresTenancyFixture fixture, Se
     private async Task<IntakeApiWorld> StartAsync()
     {
         var database = await fixture.SharedDatabaseAsync();
-        var api = TenancyApiFactory.RealResolver(fixture.AppConnectionString(database), store.Configuration());
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(store.Configuration()).Build();
+        var api = TenancyApiFactory.RealResolver(fixture.AppConnectionString(database), store.Configuration(), services =>
+        {
+            services.AddAuthoringIntakeJobs();
+            services.AddEvidgateTasks(configuration);
+        });
         var client = api.CreateClient();
         var user = Guid.CreateVersion7();
         var org = await CreateOrgAsync(client, user, Unique.Slug("chain"));

@@ -33,27 +33,37 @@ public sealed partial class AuthoringIntakeJobTests
         using var parsing = new BlockedParsing(2);
         var job = CreateJob(api.Services, (_, _, _) => Task.FromResult<byte[]?>(bytes), clock, parsing);
 
-        var attempts = Task.WhenAll(job.RunAsync(first, world.Org, Token), job.RunAsync(second, world.Org, Token));
-        (await Task.Run(() => parsing.Entered.Wait(TimeSpan.FromSeconds(30), Token), Token)).ShouldBeTrue();
-        clock.Advance(IntakeCaps.Default.ExtractionTimeout + TimeSpan.FromSeconds(1));
-        await attempts;
-
-        foreach (var intake in new[] { first, second })
+        var firstAttempt = job.RunAsync(first, world.Org, Token);
+        var secondAttempt = Task.CompletedTask;
+        try
         {
-            (await StateAsync(world, intake)).ShouldBe("rejected");
-            (await ColumnAsync<string>(world, intake, "failure_code")).ShouldBe(IntakeFailureCode.ExtractionTimeout);
+            await parsing.FirstEntered.Task.WaitAsync(TimeSpan.FromSeconds(30), Token);
+            secondAttempt = job.RunAsync(second, world.Org, Token);
+            (await Task.Run(() => parsing.Entered.Wait(TimeSpan.FromSeconds(30), Token), Token)).ShouldBeTrue();
+            clock.Advance(IntakeCaps.Default.ExtractionTimeout + TimeSpan.FromSeconds(1));
+            await Task.WhenAll(firstAttempt, secondAttempt);
+
+            foreach (var intake in new[] { first, second })
+            {
+                (await StateAsync(world, intake)).ShouldBe("rejected");
+                (await ColumnAsync<string>(world, intake, "failure_code")).ShouldBe(IntakeFailureCode.ExtractionTimeout);
+            }
+
+            (await SlotCountAsync(world)).ShouldBe(2);
+            await Should.ThrowAsync<TaskDeferredException>(() => store.ClaimAsync(world.Org, third, Token));
+            (await StateAsync(world, third)).ShouldBe("received");
+
+            parsing.Open();
+            await job.WhenSlotsReleasedAsync();
+            (await SlotCountAsync(world)).ShouldBe(0);
+            (await store.ClaimAsync(world.Org, third, Token)).ShouldNotBeNull();
         }
-
-        // Both parsers are still running: both slots stay charged, so the third waits and stays received.
-        (await SlotCountAsync(world)).ShouldBe(2);
-        await Should.ThrowAsync<TaskDeferredException>(() => store.ClaimAsync(world.Org, third, Token));
-        (await StateAsync(world, third)).ShouldBe("received");
-
-        // Positive control: once the parsers exit, the slots come back and the same claim goes through.
-        parsing.Open();
-        await job.WhenSlotsReleasedAsync();
-        (await SlotCountAsync(world)).ShouldBe(0);
-        (await store.ClaimAsync(world.Org, third, Token)).ShouldNotBeNull();
+        finally
+        {
+            parsing.Open();
+            await Task.WhenAll(firstAttempt, secondAttempt);
+            await job.WhenSlotsReleasedAsync();
+        }
     }
 
     [Fact]
@@ -100,11 +110,14 @@ public sealed partial class AuthoringIntakeJobTests
 
         public CountdownEvent Entered { get; } = new(parsers);
 
+        public TaskCompletionSource FirstEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
         public void Open() => _gate.Set();
 
         public MediaSniffVerdict SniffMediaType(string declaredMediaType, ReadOnlySpan<byte> prefix)
         {
             Entered.Signal();
+            FirstEntered.TrySetResult();
             _gate.Wait(TimeSpan.FromSeconds(60));
 
             return MediaSniffVerdict.Match;

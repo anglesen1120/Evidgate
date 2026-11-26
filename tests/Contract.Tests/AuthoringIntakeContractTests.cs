@@ -34,13 +34,13 @@ public sealed class AuthoringIntakeContractTests
     }
 
     [Theory]
-    [InlineData("CreateIntakeTextRequest", "text_intake")]
-    [InlineData("CreateIntakeDocumentRequest", "document_intake")]
-    [InlineData("CreateIntakeImageRequest", "image_intake")]
-    public void RequestComponent_RepeatsTheValidatedSchemasKindVariant(string component, string definition)
+    [InlineData("CreateIntakeTextRequest", 0)]
+    [InlineData("CreateIntakeDocumentRequest", 1)]
+    [InlineData("CreateIntakeImageRequest", 2)]
+    public void RequestComponent_RepeatsTheValidatedSchemasKindVariant(string component, int variant)
     {
         var served = OpenApiSpec.Load().Schema(component);
-        var file = JsonNode.Parse(File.ReadAllText(Path.Combine(ContractPaths.ContractsDirectory, "schemas", Key + ".json")))!["$defs"]![definition]!;
+        var file = JsonNode.Parse(File.ReadAllText(Path.Combine(ContractPaths.ContractsDirectory, "schemas", Key + ".json")))!["allOf"]![variant]!["then"]!;
 
         served["additionalProperties"]?.GetValue<bool>().ShouldBe(false);
         Names(served["required"]).ShouldBe(Names(file["required"]));

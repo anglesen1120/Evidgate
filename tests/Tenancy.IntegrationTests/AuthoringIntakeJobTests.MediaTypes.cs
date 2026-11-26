@@ -24,8 +24,7 @@ public sealed partial class AuthoringIntakeJobTests
     {
         var world = await SeedWorldAsync();
         var pdf = AuthoringExtractionFixtures.Pdf(["Spelled differently"]);
-        var intake = await SeedIntakeAsync(world, pdf.LongLength, IntakeCapsJson.Serialize(IntakeCaps.Default), "pdf", PdfType, artifactMedia);
-        var artifact = await ColumnAsync<Guid>(world, intake, "artifact_id");
+        var artifact = await SeedArtifactAsync(world, pdf.LongLength, artifactMedia);
         await using var api = TenancyApiFactory.GrantAll(fixture.AppConnectionString(world.Database));
         var scopes = api.Services.GetRequiredService<ITenantScopeFactory>();
         var reader = api.Services.GetRequiredService<IIntakeArtifactReader>();
@@ -35,8 +34,6 @@ public sealed partial class AuthoringIntakeJobTests
             (await reader.ReadEligibleAsync(world.Org, world.Project, artifact, Token)).ShouldNotBeNull().MediaAllowed.ShouldBeTrue();
         }
 
-        // The planner stores the accepted type in its own spelling: the intake row's own check needs it lowercase.
-        await fixture.ExecuteAsync(world.Database, $"delete from public.authoring_intake where id = '{intake:D}'");
         var body = JsonSerializer.SerializeToElement(new { kind = "pdf", feature_node_id = world.Node, artifact_id = artifact });
         await using (await scopes.BeginAsync(world.Org, readOnlyTransaction: true, cancellationToken: Token))
         {
@@ -47,7 +44,7 @@ public sealed partial class AuthoringIntakeJobTests
             plan.ShouldNotBeNull().MediaType.ShouldBe(PdfType);
         }
 
-        var second = await SeedIntakeAsync(world, pdf.LongLength, IntakeCapsJson.Serialize(IntakeCaps.Default), "pdf", PdfType, artifactMedia);
+        var second = await SeedIntakeRowAsync(world, artifact, pdf.LongLength, IntakeCapsJson.Serialize(IntakeCaps.Default), "pdf", PdfType);
         var job = CreateJob(api.Services, (_, _, _) => Task.FromResult<byte[]?>(pdf));
 
         await job.RunAsync(second, world.Org, Token);

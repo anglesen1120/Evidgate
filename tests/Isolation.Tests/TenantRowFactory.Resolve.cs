@@ -87,7 +87,12 @@ internal sealed partial class TenantRowFactory
             var ownColumns = foreignKey.Columns
                 .Where(column => !string.Equals(column, TenantFkScan.TenantColumn, StringComparison.Ordinal))
                 .ToArray();
+            // Text intakes require a feature node despite its nullable FK; only images leave it absent.
+            var requiredIntakeNode = string.Equals(table, "public.authoring_intake", StringComparison.Ordinal)
+                && string.Equals(foreignKey.Name, "authoring_intake_feature_node_fk", StringComparison.Ordinal)
+                && !string.Equals(corruptedForeignKey, "authoring_intake_artifact_fk", StringComparison.Ordinal);
             if (!(corruptedForeignKey is not null && corrupted)
+                && !requiredIntakeNode
                 && ownColumns.Length > 0
                 && ownColumns.Any(column => !_schema.ColumnsOf(table).Single(c => string.Equals(c.Name, column, StringComparison.Ordinal)).NotNull))
             {

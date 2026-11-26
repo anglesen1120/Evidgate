@@ -80,8 +80,36 @@ public sealed partial class AuthoringIntakeJobTests
         string intakeMedia,
         string artifactMedia)
     {
-        var artifact = Guid.CreateVersion7();
+        var artifact = await SeedArtifactAsync(world, declared, artifactMedia);
+
+        return await SeedIntakeRowAsync(world, artifact, declared, capsJson, kind, intakeMedia);
+    }
+
+    private async Task<Guid> SeedIntakeRowAsync(
+        World world,
+        Guid artifact,
+        long declared,
+        string capsJson,
+        string kind,
+        string intakeMedia)
+    {
         var intake = Guid.CreateVersion7();
+
+        await fixture.ExecuteAsync(
+            world.Database,
+            string.Create(
+                CultureInfo.InvariantCulture,
+                $"""
+                insert into public.authoring_intake (id, org_id, project_id, feature_node_id, kind, artifact_id, media_type, declared_bytes, caps)
+                values ('{intake:D}', '{world.Org:D}', '{world.Project:D}', '{world.Node:D}', '{kind}', '{artifact:D}', '{intakeMedia}', {declared}, '{capsJson}'::jsonb);
+                """));
+
+        return intake;
+    }
+
+    private async Task<Guid> SeedArtifactAsync(World world, long declared, string mediaType, string state = "ready")
+    {
+        var artifact = Guid.CreateVersion7();
         var key = $"org/{world.Org:D}/project/{world.Project:D}/run/{world.Run:D}/attempt/{ExecutionKey}/1/{artifact:D}";
         var checksum = "sha256:" + new string('a', 64);
 
@@ -92,12 +120,10 @@ public sealed partial class AuthoringIntakeJobTests
                 $"""
                 insert into public.artifact (id, org_id, project_id, run_id, execution_key, attempt_no, kind, object_key, media_type, checksum, sensitivity, scan_state, state, bytes, failure_code)
                 values ('{artifact:D}', '{world.Org:D}', '{world.Project:D}', '{world.Run:D}', '{ExecutionKey}', 1,
-                        '{ArtifactKinds.RequirementDocument}', '{key}', '{artifactMedia}', '{checksum}', 'normal', 'pending', 'ready', {declared}, null);
-                insert into public.authoring_intake (id, org_id, project_id, feature_node_id, kind, artifact_id, media_type, declared_bytes, caps)
-                values ('{intake:D}', '{world.Org:D}', '{world.Project:D}', '{world.Node:D}', '{kind}', '{artifact:D}', '{intakeMedia}', {declared}, '{capsJson}'::jsonb);
+                        '{ArtifactKinds.RequirementDocument}', '{key}', '{mediaType}', '{checksum}', 'normal', 'pending', '{state}', {declared}, null);
                 """));
 
-        return intake;
+        return artifact;
     }
 
     private Task<string> StateAsync(World world, Guid intake) => ColumnAsync<string>(world, intake, "state");

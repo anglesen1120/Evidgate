@@ -34,6 +34,21 @@ public sealed class AuthoringIntakeCapsValidatorTests
         Validator.Validate(null, new IntakeCapsOptions { MaxExtractedChars = 2_000_000, MaxTextCodePoints = value }).Succeeded.ShouldBe(valid);
 }
 
+/// <summary>A stored caps document is either complete or unreadable: a partial one never becomes zero limits.</summary>
+public sealed class AuthoringIntakeCapsJsonTests
+{
+    [Fact]
+    public void Deserialize_SerializedDefaults_ReadsTheSameCaps() =>
+        IntakeCapsJson.Deserialize(IntakeCapsJson.Serialize(IntakeCaps.Default)).ShouldBe(IntakeCaps.Default);
+
+    [Theory]
+    [InlineData("{}")]
+    [InlineData("""{"max_document_bytes": 10}""")]
+    [InlineData("not json")]
+    public void Deserialize_IncompleteOrMalformedDocument_ReturnsNull(string json) =>
+        IntakeCapsJson.Deserialize(json).ShouldBeNull();
+}
+
 /// <summary>The Worker-wide parser permits: a taken permit stays taken until it is given back.</summary>
 public sealed class IntakeExecutionPermitsTests
 {

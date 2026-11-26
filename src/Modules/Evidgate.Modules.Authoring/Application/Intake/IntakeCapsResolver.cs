@@ -109,7 +109,11 @@ internal sealed class IntakeCapsResolver(IOptions<IntakeCapsOptions> options)
 /// <summary>The one JSON form of <see cref="IntakeCaps"/>: the <c>caps</c> column and the <c>caps</c> member of the responses.</summary>
 internal static class IntakeCapsJson
 {
-    private static readonly JsonSerializerOptions Options = new() { PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower };
+    private static readonly JsonSerializerOptions Options = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+        RespectRequiredConstructorParameters = true,
+    };
 
     /// <summary>The snake_case document of <paramref name="caps"/> (the timeout as <c>hh:mm:ss</c>).</summary>
     /// <param name="caps">The caps.</param>

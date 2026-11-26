@@ -56,13 +56,11 @@ public sealed partial class AuthoringIntakeJobTests
             found.MediaAllowed.ShouldBeFalse();
         }
 
-        await fixture.ExecuteAsync(
-            world.Database,
-            $"update public.artifact set state = 'pending_upload' where id = '{artifact:D}'");
+        var unready = await SeedArtifactAsync(world, 10, DocxType, "pending_upload");
 
         await using (await scopes.BeginAsync(world.Org, readOnlyTransaction: true, cancellationToken: Token))
         {
-            (await reader.ReadEligibleAsync(world.Org, world.Project, artifact, Token)).ShouldBeNull();
+            (await reader.ReadEligibleAsync(world.Org, world.Project, unready, Token)).ShouldBeNull();
         }
     }
 }
