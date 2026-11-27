@@ -19,6 +19,12 @@ namespace Evidgate.Modules.Authoring.Endpoints;
 /// </summary>
 internal static partial class AuthoringRequirementEndpoints
 {
+    /// <summary>
+    /// The body cap of the create, edit and restore routes: 20 000 code points can be 80 000 UTF-8 bytes (non-BMP),
+    /// which with the other members and the JSON framing does not fit the 64 KiB cap the other authoring routes keep.
+    /// </summary>
+    internal const int WriteBodyCap = 96 * 1024;
+
     /// <summary>Maps the requirement routes onto the authoring group.</summary>
     /// <param name="authoring">The <c>/v1/projects/{p}/authoring</c> group the host already created.</param>
     internal static void MapAuthoringRequirementEndpoints(RouteGroupBuilder authoring)
@@ -150,7 +156,7 @@ internal static partial class AuthoringRequirementEndpoints
         // Refuse an unresolved caller before anything else reads the request.
         RawBodyGuard.RequireAuthenticatedTenant(context.RequestServices);
 
-        var (body, bodyError) = await AuthoringEndpointSupport.ReadBodyAsync(context, cancellationToken).ConfigureAwait(false);
+        var (body, bodyError) = await AuthoringEndpointSupport.ReadBodyAsync(context, WriteBodyCap, cancellationToken).ConfigureAwait(false);
         if (bodyError is not null)
         {
             return Result.Failure<RequirementWriteResponse>(bodyError);
@@ -190,7 +196,7 @@ internal static partial class AuthoringRequirementEndpoints
             return Result.Failure<RequirementWriteResponse>(ifMatchError);
         }
 
-        var (body, bodyError) = await AuthoringEndpointSupport.ReadBodyAsync(context, cancellationToken).ConfigureAwait(false);
+        var (body, bodyError) = await AuthoringEndpointSupport.ReadBodyAsync(context, WriteBodyCap, cancellationToken).ConfigureAwait(false);
         if (bodyError is not null)
         {
             return Result.Failure<RequirementWriteResponse>(bodyError);
@@ -252,7 +258,7 @@ internal static partial class AuthoringRequirementEndpoints
             return Result.Failure<RequirementWriteResponse>(ifMatchError);
         }
 
-        var (body, bodyError) = await AuthoringEndpointSupport.ReadBodyAsync(context, cancellationToken).ConfigureAwait(false);
+        var (body, bodyError) = await AuthoringEndpointSupport.ReadBodyAsync(context, WriteBodyCap, cancellationToken).ConfigureAwait(false);
         if (bodyError is not null)
         {
             return Result.Failure<RequirementWriteResponse>(bodyError);

@@ -2802,12 +2802,12 @@ export type RequirementVersionListResponse = {
 };
 
 /**
- * Names exactly one target to pin to the requirement's head. Both or neither is 422.
+ * Names exactly one target to pin to the requirement's head, and the head version the caller read. Both targets or neither is 422; an absent `expected_version_id` is 422.
  */
 export type CreateRequirementLinkRequest = {
     checklist_item_id?: string | null;
     manual_test_case_id?: string | null;
-    expected_version_id?: string | null;
+    expected_version_id: string;
 };
 
 /**

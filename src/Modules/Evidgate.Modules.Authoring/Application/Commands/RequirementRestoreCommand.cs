@@ -104,7 +104,7 @@ internal sealed class RestoreRequirementCommandHandler(
             return Result.Failure<RequirementWriteResponse>(written.Error!);
         }
 
-        audit.Describe(new AuditObject("requirement", command.RequirementId.ToString("D")));
+        audit.Describe(RequirementAudit.Appended(command.ProjectId, command.RequirementId, current.Value, written.Value));
 
         return Result.Success(RequirementResponses.Write(written.Value));
     }

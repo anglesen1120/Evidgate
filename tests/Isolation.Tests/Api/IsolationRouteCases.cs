@@ -467,9 +467,15 @@ public static partial class IsolationRouteCases
             own: p => new(HttpMethod.Get, $"/v1/projects/{p.Id}/authoring/requirements/{p.AuthoringRequirementId}/coverage")),
         ObjectCaseWith("POST", "/v1/projects/{p}/authoring/requirements/{r}/links", p => [("requirement", p.AuthoringRequirementId)],
             (id, p) => new(HttpMethod.Post, $"/v1/projects/{p.Id}/authoring/requirements/{id}/links",
-                new JsonObject { ["checklist_item_id"] = p.AuthoringItemId }), (_, _) => []),
-        ObjectCaseWith("DELETE", "/v1/projects/{p}/authoring/requirements/{r}/links/{l}", p => [("requirement", p.AuthoringRequirementId)],
-            (id, p) => new(HttpMethod.Delete, $"/v1/projects/{p.Id}/authoring/requirements/{id}/links/{Guid.NewGuid()}"), (_, _) => []),
+                new JsonObject { ["checklist_item_id"] = p.AuthoringItemId, ["expected_version_id"] = p.AuthoringRequirementVersionId }), (_, _) => []),
+        // The unlink names a persisted link of the victim project: a random link id answers 404 whatever the
+        // lookup does, so only a real one proves the project and org predicates. Org B's own control removes its
+        // own second link and answers 204, which proves the URL shape matches a real route.
+        ObjectCaseWith("DELETE", "/v1/projects/{p}/authoring/requirements/{r}/links/{l}", p => [("requirement link", p.AuthoringRequirementLinkId)],
+            (id, p) => new(HttpMethod.Delete, $"/v1/projects/{p.Id}/authoring/requirements/{p.AuthoringRequirementId}/links/{id}"),
+            ForeignLinkUnderOwnRequirement,
+            own: p => new(HttpMethod.Delete, $"/v1/projects/{p.Id}/authoring/requirements/{p.AuthoringRequirementId}/links/{p.AuthoringRequirementDisposableLinkId}"),
+            ownStatus: 204),
 
         // 13.1.1-T3: the version timeline (routes 22 and 23) and the four restore routes (6, 11, 18, 24). A tombstone's
         // `If-Match` is the version the delete left and the seed reads back through route 22 (IsolationWorld), so a
@@ -2338,7 +2344,8 @@ public static partial class IsolationRouteCases
         Func<IsolationProject, IEnumerable<(string Label, Guid Id)>> ids,
         Func<Guid, IsolationProject, ProbeRequest> request,
         Func<ApiRoute, IsolationWorld, IEnumerable<RouteProbe>> extraMember,
-        Func<IsolationProject, ProbeRequest>? own = null) =>
+        Func<IsolationProject, ProbeRequest>? own = null,
+        int ownStatus = 200) =>
         Case(
             method,
             template,
@@ -2352,7 +2359,7 @@ public static partial class IsolationRouteCases
                 probes.AddRange(extraMember(route, w));
                 if (own is not null)
                 {
-                    probes.Add(OwnObject(route, "own object answers 200", OrgBAdmin(w), own(w.Acme2.Projects[0])));
+                    probes.Add(OwnObject(route, string.Create(CultureInfo.InvariantCulture, $"own object answers {ownStatus}"), OrgBAdmin(w), own(w.Acme2.Projects[0]), ownStatus));
                 }
 
                 return probes;
@@ -2377,14 +2384,33 @@ public static partial class IsolationRouteCases
                 request(w.Acme2.Projects[0].Id, Guid.CreateVersion7())),
         ];
 
+    /// <summary>
+    /// A link id of another tenant, and of org B's sibling project, in the path of org B's own project and requirement:
+    /// refused exactly like a random link id, so an unlink that looks the link up by its id alone deletes a row it
+    /// does not own and answers 204 here instead of 404.
+    /// </summary>
+    private static IEnumerable<RouteProbe> ForeignLinkUnderOwnRequirement(ApiRoute route, IsolationWorld w)
+    {
+        var own = w.Acme2.Projects[0];
+        ProbeRequest Unlink(Guid link) => new(HttpMethod.Delete, $"/v1/projects/{own.Id}/authoring/requirements/{own.AuthoringRequirementId}/links/{link}");
+
+        return
+        [
+            Pair(route, "org A link under org B's own requirement", ProbeExpect.NotFound, OrgBAdmin(w),
+                Unlink(w.Acme.Projects[0].AuthoringRequirementLinkId), Unlink(Guid.CreateVersion7())),
+            Pair(route, "org B sibling project's link under this requirement", ProbeExpect.NotFound, OrgBAdmin(w),
+                Unlink(w.Acme2.Projects[1].AuthoringRequirementLinkId), Unlink(Guid.CreateVersion7())),
+        ];
+    }
+
     // ---------------------------------------------------------------------------------------------------- helpers
 
     private static RouteProbe Pair(ApiRoute route, string name, ProbeExpect expect, ProbeCaller caller, ProbeRequest foreign, ProbeRequest random) =>
         new(route, name, runner => runner.PairAsync(route, name, expect, caller, foreign, random));
 
     /// <summary>Org B's own object with the same URL shape: the positive control (200) for a GET object case.</summary>
-    private static RouteProbe OwnObject(ApiRoute route, string name, ProbeCaller caller, ProbeRequest request) =>
-        new(route, name, runner => runner.OwnObjectAsync(route, name, caller, request));
+    private static RouteProbe OwnObject(ApiRoute route, string name, ProbeCaller caller, ProbeRequest request, int expectedStatus = 200) =>
+        new(route, name, runner => runner.OwnObjectAsync(route, name, caller, request, expectedStatus));
 
     /// <summary>
     /// An <c>If-Match</c> value for a row's <c>version</c>: the number in quotes (<c>"2"</c>), the tag shape the

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.Modules.Authoring.Domain;
 using Evidgate.Modules.Authoring.Infrastructure.Persistence;
@@ -67,15 +68,18 @@ internal sealed record RequirementCoverage(
 
 internal sealed partial class RequirementWriter
 {
+    private static readonly JsonSerializerOptions CoverageJson = new() { PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower };
+
     /// <summary>
     /// The coverage of a requirement: counts over every link, the pinned targets, and one keyset page of the distinct
-    /// cases it reaches. Three statements run whatever the page holds, so the cost does not grow per case.
+    /// cases it reaches. One statement answers it, so the head, the counts and the lists are the same snapshot, and the
+    /// cost does not grow per case.
     /// </summary>
     /// <param name="orgId">The tenant; must equal the open scope's organization.</param>
     /// <param name="projectId">The project the requirement must belong to.</param>
     /// <param name="requirementId">The requirement; a soft-deleted one is still readable.</param>
     /// <param name="limit">The page size, 1 to <see cref="MaximumPageSize"/>.</param>
-    /// <param name="afterCode">The last code of the previous page, or null for the first.</param>
+    /// <param name="afterCode">The last code of the previous page, or null for the first; it must be a well-formed case code.</param>
     /// <param name="cancellationToken">Cancellation.</param>
     internal async ValueTask<Result<RequirementCoverage>> GetCoverageAsync(
         Guid orgId,
@@ -92,55 +96,71 @@ internal sealed partial class RequirementWriter
             return Failure<RequirementCoverage>(AuthoringErrors.Invalid("/limit", "range", "the page size must be 1 to 200"));
         }
 
-        var requirement = await GetAsync(orgId, projectId, requirementId, cancellationToken).ConfigureAwait(false);
-        if (!requirement.IsSuccess)
+        // A cursor outside the code grammar can match no case; refusing it here also keeps a NUL away from the database.
+        if (afterCode is not null && !AuthoringCode.IsWellFormed(afterCode))
         {
-            return Failure<RequirementCoverage>(requirement.Error!);
+            return Failure<RequirementCoverage>(AuthoringErrors.Invalid("/after_code", "invalid", "after_code is not a case code this list issued"));
         }
 
-        var scope = new { org_id = orgId, project_id = projectId, requirement_id = requirementId };
-        var summary = await db.QuerySingleOrDefaultAsync<SummaryRow>(RequirementCoverageSql.Summary, scope, cancellationToken).ConfigureAwait(false) ?? new SummaryRow();
-        var targets = await db.QueryAsync<TargetRow>(
-            RequirementCoverageSql.Targets,
-            new { scope.org_id, scope.project_id, scope.requirement_id, take = RequirementLinkRules.MaximumListedTargets + 1 },
-            cancellationToken).ConfigureAwait(false);
-        var cases = await db.QueryAsync<CaseRow>(
-            RequirementCoverageSql.Cases,
-            new { scope.org_id, scope.project_id, scope.requirement_id, after_code = afterCode, take = limit + 1 },
+        var row = await db.QuerySingleOrDefaultAsync<CoverageRow>(
+            RequirementCoverageSql.Coverage,
+            new
+            {
+                org_id = orgId,
+                project_id = projectId,
+                requirement_id = requirementId,
+                after_code = afterCode,
+                take_targets = RequirementLinkRules.MaximumListedTargets + 1,
+                take_cases = limit + 1,
+            },
             cancellationToken).ConfigureAwait(false);
 
+        return row is null
+            ? Failure<RequirementCoverage>(AuthoringErrors.NotFound("no requirement with that id is visible in this project"))
+            : Result.Success(Cover(requirementId, row, limit));
+    }
+
+    private static RequirementCoverage Cover(Guid requirementId, CoverageRow row, int limit)
+    {
+        var targets = JsonSerializer.Deserialize<List<TargetRow>>(row.Targets, CoverageJson) ?? [];
+        var cases = JsonSerializer.Deserialize<List<CaseRow>>(row.Cases, CoverageJson) ?? [];
+
         var listed = targets.Take(RequirementLinkRules.MaximumListedTargets)
-            .Select(row => new CoverageTarget(row.LinkId, row.VersionId, row.VersionNo, row.ChecklistItemId, row.ManualTestCaseId, row.Stale))
+            .Select(target => new CoverageTarget(target.LinkId, target.VersionId, target.VersionNo, target.ChecklistItemId, target.ManualTestCaseId, target.Stale))
             .ToList();
         var page = cases.Take(limit)
-            .Select(row => new CoverageCase(
-                row.CaseId,
-                row.Code,
-                row.Title,
-                row.State,
-                row.ChecklistItemId,
-                RequirementLinkRules.PathOf(row.Direct, row.ViaItem),
-                row.AutomatedCaseIds,
+            .Select(found => new CoverageCase(
+                found.CaseId,
+                found.Code,
+                found.Title,
+                found.State,
+                found.ChecklistItemId,
+                RequirementLinkRules.PathOf(found.Direct, found.ViaItem),
+                found.AutomatedCaseIds,
                 RequirementLinkRules.ResultUnavailable))
             .ToList();
 
-        return Result.Success(new RequirementCoverage(
+        return new RequirementCoverage(
             requirementId,
-            requirement.Value.HeadVersionId,
-            requirement.Value.HeadVersionNo,
-            summary.LinkedCaseCount,
-            summary.ApprovedCaseCount,
-            summary.LinkCount,
-            summary.StaleLinkCount,
+            row.HeadVersionId,
+            row.HeadVersionNo,
+            row.LinkedCaseCount,
+            row.ApprovedCaseCount,
+            row.LinkCount,
+            row.StaleLinkCount,
             ResultSourceAvailable: false,
             listed,
             targets.Count > RequirementLinkRules.MaximumListedTargets,
             page,
-            cases.Count > limit ? page[^1].Code : null));
+            cases.Count > limit ? page[^1].Code : null);
     }
 
-    private sealed class SummaryRow
+    private sealed class CoverageRow
     {
+        public Guid HeadVersionId { get; set; }
+
+        public int HeadVersionNo { get; set; }
+
         public int LinkedCaseCount { get; set; }
 
         public int ApprovedCaseCount { get; set; }
@@ -148,6 +168,10 @@ internal sealed partial class RequirementWriter
         public int LinkCount { get; set; }
 
         public int StaleLinkCount { get; set; }
+
+        public string Targets { get; set; } = "[]";
+
+        public string Cases { get; set; } = "[]";
     }
 
     private sealed class TargetRow

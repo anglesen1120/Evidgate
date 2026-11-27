@@ -22,7 +22,7 @@ public sealed class RequirementLinkApiTests(PostgresTenancyFixture fixture)
         var (world, caller) = (scene.World, scene.Caller);
         var before = await Audits(world);
 
-        var created = await world.Client.SendAsync(HttpMethod.Post, LinksPath(scene), caller, new { checklist_item_id = scene.Targets.Item }, NewKey());
+        var created = await world.Client.SendAsync(HttpMethod.Post, LinksPath(scene), caller, ItemBody(scene), NewKey());
         created.Status.ShouldBe(HttpStatusCode.Created, created.ErrorMessage);
         created.Body.GetProperty("changed").GetBoolean().ShouldBeTrue();
         created.Body.GetProperty("version_id").GetGuid().ShouldBe(scene.Version);
@@ -30,7 +30,7 @@ public sealed class RequirementLinkApiTests(PostgresTenancyFixture fixture)
         created.Body.GetProperty("manual_test_case_id").ValueKind.ShouldBe(JsonValueKind.Null);
         (await Audits(world)).ShouldBe(before + 1);
 
-        var repeat = await world.Client.SendAsync(HttpMethod.Post, LinksPath(scene), caller, new { checklist_item_id = scene.Targets.Item }, NewKey());
+        var repeat = await world.Client.SendAsync(HttpMethod.Post, LinksPath(scene), caller, ItemBody(scene), NewKey());
         repeat.Status.ShouldBe(HttpStatusCode.OK, repeat.ErrorMessage);
         repeat.Body.GetProperty("changed").GetBoolean().ShouldBeFalse();
         repeat.Id("link_id").ShouldBe(created.Id("link_id"));
@@ -48,7 +48,7 @@ public sealed class RequirementLinkApiTests(PostgresTenancyFixture fixture)
     public async Task Coverage_NoResultSource_SaysUnavailableNeverZero()
     {
         await using var scene = await SceneAsync();
-        (await scene.World.Client.SendAsync(HttpMethod.Post, LinksPath(scene), scene.Caller, new { checklist_item_id = scene.Targets.Item }, NewKey()))
+        (await scene.World.Client.SendAsync(HttpMethod.Post, LinksPath(scene), scene.Caller, ItemBody(scene), NewKey()))
             .Status.ShouldBe(HttpStatusCode.Created);
 
         var coverage = await CoverageAsync(scene);
@@ -64,9 +64,9 @@ public sealed class RequirementLinkApiTests(PostgresTenancyFixture fixture)
     {
         await using var scene = await SceneAsync();
         var client = scene.World.Client;
-        (await client.SendAsync(HttpMethod.Post, LinksPath(scene), scene.Caller, new { checklist_item_id = scene.Targets.Item }, NewKey()))
+        (await client.SendAsync(HttpMethod.Post, LinksPath(scene), scene.Caller, ItemBody(scene), NewKey()))
             .Status.ShouldBe(HttpStatusCode.Created);
-        var direct = await client.SendAsync(HttpMethod.Post, LinksPath(scene), scene.Caller, new { manual_test_case_id = scene.Targets.ApprovedCase }, NewKey());
+        var direct = await client.SendAsync(HttpMethod.Post, LinksPath(scene), scene.Caller, CaseBody(scene, scene.Targets.ApprovedCase), NewKey());
         direct.Status.ShouldBe(HttpStatusCode.Created, direct.ErrorMessage);
 
         var coverage = await CoverageAsync(scene);
@@ -105,7 +105,7 @@ public sealed class RequirementLinkApiTests(PostgresTenancyFixture fixture)
 
         (await LinkCount(scene)).ShouldBe(0);
         (await Audits(scene.World)).ShouldBe(before);
-        (await client.SendAsync(HttpMethod.Post, LinksPath(scene), scene.Caller, new { checklist_item_id = scene.Targets.Item }, NewKey()))
+        (await client.SendAsync(HttpMethod.Post, LinksPath(scene), scene.Caller, ItemBody(scene), NewKey()))
             .Status.ShouldBe(HttpStatusCode.Created);
     }
 
@@ -115,13 +115,14 @@ public sealed class RequirementLinkApiTests(PostgresTenancyFixture fixture)
         await using var scene = await SceneAsync();
         var foreign = await RequirementLinkTestData.SeedAsync(scene.World, scene.World.OtherProject, 5);
 
-        var item = await scene.World.Client.SendAsync(HttpMethod.Post, LinksPath(scene), scene.Caller, new { checklist_item_id = foreign.Item }, NewKey());
+        var item = await scene.World.Client.SendAsync(
+            HttpMethod.Post, LinksPath(scene), scene.Caller, new { checklist_item_id = foreign.Item, expected_version_id = scene.Version }, NewKey());
         item.Status.ShouldBe(HttpStatusCode.UnprocessableEntity, item.ErrorMessage);
-        var manual = await scene.World.Client.SendAsync(HttpMethod.Post, LinksPath(scene), scene.Caller, new { manual_test_case_id = foreign.ApprovedCase }, NewKey());
+        var manual = await scene.World.Client.SendAsync(HttpMethod.Post, LinksPath(scene), scene.Caller, CaseBody(scene, foreign.ApprovedCase), NewKey());
         manual.Status.ShouldBe(HttpStatusCode.UnprocessableEntity, manual.ErrorMessage);
 
         (await LinkCount(scene)).ShouldBe(0);
-        (await scene.World.Client.SendAsync(HttpMethod.Post, LinksPath(scene), scene.Caller, new { checklist_item_id = scene.Targets.Item }, NewKey()))
+        (await scene.World.Client.SendAsync(HttpMethod.Post, LinksPath(scene), scene.Caller, ItemBody(scene), NewKey()))
             .Status.ShouldBe(HttpStatusCode.Created);
     }
 
@@ -132,7 +133,7 @@ public sealed class RequirementLinkApiTests(PostgresTenancyFixture fixture)
         await using var stranger = await SceneAsync();
         var world = scene.World;
         var elsewhere = await CreateRequirementAsync(world, scene.Caller, world.OtherProject);
-        var body = new { checklist_item_id = scene.Targets.Item };
+        var body = ItemBody(scene);
 
         foreach (var requirement in new[] { Guid.CreateVersion7(), elsewhere.Id("requirement_id"), stranger.Requirement })
         {
@@ -157,10 +158,13 @@ public sealed class RequirementLinkApiTests(PostgresTenancyFixture fixture)
             HttpMethod.Patch, RequirementPath(scene.World.Project, scene.Requirement), scene.Caller, new { body = "second" }, NewKey(), scene.ETag);
         edited.Status.ShouldBe(HttpStatusCode.OK, edited.ErrorMessage);
 
-        var stale = await client.SendAsync(
-            HttpMethod.Post, LinksPath(scene), scene.Caller, new { checklist_item_id = scene.Targets.Item, expected_version_id = scene.Version }, NewKey());
+        var stale = await client.SendAsync(HttpMethod.Post, LinksPath(scene), scene.Caller, ItemBody(scene), NewKey());
         stale.Status.ShouldBe(HttpStatusCode.PreconditionFailed);
         stale.ErrorCode.ShouldBe(ApiErrorCode.PreconditionFailed);
+        var details = stale.Body.GetProperty("error").GetProperty("details").EnumerateArray().ToList();
+        details.ShouldContain(detail => detail.GetProperty("path").GetString() == "/expected_version_id");
+        details.Single(detail => detail.GetProperty("path").GetString() == "/head_version_id").GetProperty("reason").GetString()
+            .ShouldBe(edited.Id("version_id").ToString("D"));
         (await LinkCount(scene)).ShouldBe(0);
 
         var current = await client.SendAsync(
@@ -175,13 +179,15 @@ public sealed class RequirementLinkApiTests(PostgresTenancyFixture fixture)
     {
         await using var scene = await SceneAsync();
         var client = scene.World.Client;
-        (await client.SendAsync(HttpMethod.Post, LinksPath(scene), scene.Caller, new { checklist_item_id = scene.Targets.Item }, NewKey()))
+        (await client.SendAsync(HttpMethod.Post, LinksPath(scene), scene.Caller, ItemBody(scene), NewKey()))
             .Status.ShouldBe(HttpStatusCode.Created);
-        (await client.SendAsync(
-            HttpMethod.Patch, RequirementPath(scene.World.Project, scene.Requirement), scene.Caller, new { body = "second" }, NewKey(), scene.ETag))
-            .Status.ShouldBe(HttpStatusCode.OK);
+        var edited = await client.SendAsync(
+            HttpMethod.Patch, RequirementPath(scene.World.Project, scene.Requirement), scene.Caller, new { body = "second" }, NewKey(), scene.ETag);
+        edited.Status.ShouldBe(HttpStatusCode.OK, edited.ErrorMessage);
 
-        var older = await client.SendAsync(HttpMethod.Post, LinksPath(scene), scene.Caller, new { checklist_item_id = scene.Targets.Item }, NewKey());
+        var older = await client.SendAsync(
+            HttpMethod.Post, LinksPath(scene), scene.Caller,
+            new { checklist_item_id = scene.Targets.Item, expected_version_id = edited.Id("version_id") }, NewKey());
 
         older.Status.ShouldBe(HttpStatusCode.Conflict);
         older.ErrorCode.ShouldBe(ApiErrorCode.InvalidTransition);
@@ -198,8 +204,10 @@ public sealed class RequirementLinkApiTests(PostgresTenancyFixture fixture)
         var world = scene.World;
         var other = await CreateRequirementAsync(world, scene.Caller, world.Project);
         var otherPath = RequirementPath(world.Project, other.Id("requirement_id"));
-        var mine = await world.Client.SendAsync(HttpMethod.Post, LinksPath(scene), scene.Caller, new { checklist_item_id = scene.Targets.Item }, NewKey());
-        var theirs = await world.Client.SendAsync(HttpMethod.Post, otherPath + "/links", scene.Caller, new { manual_test_case_id = scene.Targets.DraftCase }, NewKey());
+        var mine = await world.Client.SendAsync(HttpMethod.Post, LinksPath(scene), scene.Caller, ItemBody(scene), NewKey());
+        var theirs = await world.Client.SendAsync(
+            HttpMethod.Post, otherPath + "/links", scene.Caller,
+            new { manual_test_case_id = scene.Targets.DraftCase, expected_version_id = other.Id("version_id") }, NewKey());
         theirs.Status.ShouldBe(HttpStatusCode.Created, theirs.ErrorMessage);
         var before = await Audits(world);
 
@@ -224,13 +232,13 @@ public sealed class RequirementLinkApiTests(PostgresTenancyFixture fixture)
     {
         await using var scene = await SceneAsync();
         var world = scene.World;
-        var link = await world.Client.SendAsync(HttpMethod.Post, LinksPath(scene), scene.Caller, new { checklist_item_id = scene.Targets.Item }, NewKey());
+        var link = await world.Client.SendAsync(HttpMethod.Post, LinksPath(scene), scene.Caller, ItemBody(scene), NewKey());
         (await world.Client.SendAsync(HttpMethod.Delete, RequirementPath(world.Project, scene.Requirement), scene.Caller, null, NewKey(), scene.ETag))
             .Status.ShouldBe(HttpStatusCode.NoContent);
 
         (await world.Client.SendAsync(HttpMethod.Get, RequirementPath(world.Project, scene.Requirement) + "/coverage", scene.Caller))
             .Status.ShouldBe(HttpStatusCode.OK);
-        (await world.Client.SendAsync(HttpMethod.Post, LinksPath(scene), scene.Caller, new { manual_test_case_id = scene.Targets.DraftCase }, NewKey()))
+        (await world.Client.SendAsync(HttpMethod.Post, LinksPath(scene), scene.Caller, CaseBody(scene, scene.Targets.DraftCase), NewKey()))
             .Status.ShouldBe(HttpStatusCode.NotFound);
         (await world.Client.SendAsync(HttpMethod.Delete, LinksPath(scene) + $"/{link.Id("link_id"):D}", scene.Caller, null, NewKey()))
             .Status.ShouldBe(HttpStatusCode.NoContent);
@@ -242,10 +250,10 @@ public sealed class RequirementLinkApiTests(PostgresTenancyFixture fixture)
         await using var scene = await SceneAsync();
         var world = scene.World;
         var viewer = await ViewerAsync(world);
-        var link = await world.Client.SendAsync(HttpMethod.Post, LinksPath(scene), scene.Caller, new { checklist_item_id = scene.Targets.Item }, NewKey());
+        var link = await world.Client.SendAsync(HttpMethod.Post, LinksPath(scene), scene.Caller, ItemBody(scene), NewKey());
         link.Status.ShouldBe(HttpStatusCode.Created);
 
-        var create = await world.Client.SendAsync(HttpMethod.Post, LinksPath(scene), viewer, new { manual_test_case_id = scene.Targets.DraftCase }, NewKey());
+        var create = await world.Client.SendAsync(HttpMethod.Post, LinksPath(scene), viewer, CaseBody(scene, scene.Targets.DraftCase), NewKey());
         create.Status.ShouldBe(HttpStatusCode.Forbidden);
         create.ErrorCode.ShouldBe(ApiErrorCode.Forbidden);
         var remove = await world.Client.SendAsync(HttpMethod.Delete, LinksPath(scene) + $"/{link.Id("link_id"):D}", viewer, null, NewKey());
@@ -262,10 +270,10 @@ public sealed class RequirementLinkApiTests(PostgresTenancyFixture fixture)
         var world = scene.World;
         var narrowed = TenancyApiFactory.Caller(org: world.Org, user: world.User, project: world.OtherProject);
         var inScope = TenancyApiFactory.Caller(org: world.Org, user: world.User, project: world.Project);
-        var link = await world.Client.SendAsync(HttpMethod.Post, LinksPath(scene), inScope, new { checklist_item_id = scene.Targets.Item }, NewKey());
+        var link = await world.Client.SendAsync(HttpMethod.Post, LinksPath(scene), inScope, ItemBody(scene), NewKey());
         link.Status.ShouldBe(HttpStatusCode.Created, link.ErrorMessage);
 
-        var create = await world.Client.SendAsync(HttpMethod.Post, LinksPath(scene), narrowed, new { manual_test_case_id = scene.Targets.DraftCase }, NewKey());
+        var create = await world.Client.SendAsync(HttpMethod.Post, LinksPath(scene), narrowed, CaseBody(scene, scene.Targets.DraftCase), NewKey());
         var remove = await world.Client.SendAsync(HttpMethod.Delete, LinksPath(scene) + $"/{link.Id("link_id"):D}", narrowed, null, NewKey());
         var read = await world.Client.SendAsync(HttpMethod.Get, CoveragePath(scene), narrowed);
 
@@ -284,7 +292,7 @@ public sealed class RequirementLinkApiTests(PostgresTenancyFixture fixture)
     {
         await using var scene = await SceneAsync();
         var client = scene.World.Client;
-        (await client.SendAsync(HttpMethod.Post, LinksPath(scene), scene.Caller, new { checklist_item_id = scene.Targets.Item }, NewKey()))
+        (await client.SendAsync(HttpMethod.Post, LinksPath(scene), scene.Caller, ItemBody(scene), NewKey()))
             .Status.ShouldBe(HttpStatusCode.Created);
 
         foreach (var query in new[] { "?limit=0", "?limit=201", "?limit=abc", "?after_code=" + new string('x', 65) })
@@ -320,14 +328,14 @@ public sealed class RequirementLinkApiTests(PostgresTenancyFixture fixture)
         await using var holder = await TenantScope.BeginAsync(fixture.OwnerConnectionString(world.Database), world.Org, world.Project);
         await holder.ExecuteAsync($"select 1 from public.requirement where id = '{scene.Requirement:D}' for update");
 
-        var blocked = await world.Client.SendAsync(HttpMethod.Post, LinksPath(scene), scene.Caller, new { checklist_item_id = scene.Targets.Item }, NewKey());
+        var blocked = await world.Client.SendAsync(HttpMethod.Post, LinksPath(scene), scene.Caller, ItemBody(scene), NewKey());
 
         blocked.Status.ShouldBe(HttpStatusCode.ServiceUnavailable);
         blocked.ErrorCode.ShouldBe(ApiErrorCode.Unavailable);
         (await LinkCount(scene)).ShouldBe(0);
 
         await holder.CommitAsync();
-        (await world.Client.SendAsync(HttpMethod.Post, LinksPath(scene), scene.Caller, new { checklist_item_id = scene.Targets.Item }, NewKey()))
+        (await world.Client.SendAsync(HttpMethod.Post, LinksPath(scene), scene.Caller, ItemBody(scene), NewKey()))
             .Status.ShouldBe(HttpStatusCode.Created);
     }
 
@@ -336,7 +344,7 @@ public sealed class RequirementLinkApiTests(PostgresTenancyFixture fixture)
     {
         await using var scene = await SceneAsync();
         var world = scene.World;
-        var link = await world.Client.SendAsync(HttpMethod.Post, LinksPath(scene), scene.Caller, new { checklist_item_id = scene.Targets.Item }, NewKey());
+        var link = await world.Client.SendAsync(HttpMethod.Post, LinksPath(scene), scene.Caller, ItemBody(scene), NewKey());
         link.Status.ShouldBe(HttpStatusCode.Created);
 
         await using var holder = await TenantScope.BeginAsync(fixture.OwnerConnectionString(world.Database), world.Org, world.Project);
@@ -361,6 +369,11 @@ public sealed class RequirementLinkApiTests(PostgresTenancyFixture fixture)
     private static string CoveragePath(Scene scene) => RequirementPath(scene.World.Project, scene.Requirement) + "/coverage";
 
     private static List<JsonElement> Cases(JsonElement coverage) => [.. coverage.GetProperty("cases").EnumerateArray()];
+
+    // Every link create names the head version it read; the scene's requirement is still at its first version.
+    private static object ItemBody(Scene scene) => new { checklist_item_id = scene.Targets.Item, expected_version_id = scene.Version };
+
+    private static object CaseBody(Scene scene, Guid manualCase) => new { manual_test_case_id = manualCase, expected_version_id = scene.Version };
 
     private static async Task<ApiAnswer> CreateRequirementAsync(
         RequirementTestWorld world, Action<HttpRequestHeaders> caller, Guid project)

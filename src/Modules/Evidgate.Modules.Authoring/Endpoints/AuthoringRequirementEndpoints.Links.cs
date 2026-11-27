@@ -6,6 +6,7 @@ using Evidgate.Modules.Authoring.Application;
 using Evidgate.Modules.Authoring.Application.Commands;
 using Evidgate.Modules.Authoring.Application.Queries;
 using Evidgate.Modules.Authoring.Contracts;
+using Evidgate.Modules.Authoring.Domain;
 using Mediator;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -17,9 +18,6 @@ namespace Evidgate.Modules.Authoring.Endpoints;
 internal static partial class AuthoringRequirementEndpoints
 {
     private static readonly string[] LinkMembers = ["checklist_item_id", "manual_test_case_id", "expected_version_id"];
-
-    /// <summary>The longest case code a coverage cursor may carry; a code is 10 characters, so more is never one we issued.</summary>
-    private const int MaximumAfterCodeLength = 64;
 
     private static void MapLinkRoutes(RouteGroupBuilder authoring)
     {
@@ -61,7 +59,7 @@ internal static partial class AuthoringRequirementEndpoints
 
         var requestError = AuthoringEndpointSupport.LimitError(context.Request.Query["limit"], out var limit);
         var afterCode = AuthoringEndpointText.Blank(context.Request.Query["after_code"]);
-        if (requestError is null && afterCode is { Length: > MaximumAfterCodeLength })
+        if (requestError is null && afterCode is not null && !AuthoringCode.IsWellFormed(afterCode))
         {
             requestError = AuthoringErrors.Invalid("/after_code", "invalid", "after_code is not a case code this list issued");
         }

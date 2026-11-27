@@ -23,7 +23,7 @@ namespace Evidgate.Modules.Authoring.Application.Commands;
 /// <param name="RequirementId">The requirement from the route.</param>
 /// <param name="ChecklistItemId">The item to link; exactly one of the two targets is set.</param>
 /// <param name="ManualTestCaseId">The manual case to link.</param>
-/// <param name="ExpectedVersionId">Optional head version the caller read; a moved head is a 412.</param>
+/// <param name="ExpectedVersionId">The head version the caller read; absent is a 422 and a moved head is a 412.</param>
 /// <param name="IdempotencyKey">The client's <c>Idempotency-Key</c>.</param>
 internal sealed record LinkRequirementCommand(
     Guid ProjectId,
@@ -106,7 +106,7 @@ internal sealed class LinkRequirementCommandHandler(
             return Result.Success(response);
         }
 
-        audit.Describe(new AuditObject("requirement_link", link.LinkId.ToString("D")));
+        audit.Describe(RequirementAudit.Linked(command.ProjectId, link));
 
         return Result.Success(response, StatusCodes.Status201Created);
     }
@@ -162,7 +162,7 @@ internal sealed class UnlinkRequirementCommandHandler(
             return Result.Failure(removed.Error!);
         }
 
-        audit.Describe(new AuditObject("requirement_link", removed.Value.ToString("D")));
+        audit.Describe(RequirementAudit.Unlinked(command.ProjectId, command.RequirementId, removed.Value));
 
         return Result.Success(StatusCodes.Status204NoContent);
     }

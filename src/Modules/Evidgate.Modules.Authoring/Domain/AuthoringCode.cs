@@ -49,6 +49,15 @@ internal sealed partial record AuthoringCode
         !string.IsNullOrEmpty(prefix) && PrefixRegex().IsMatch(prefix);
 
     /// <summary>
+    /// True when <paramref name="text"/> matches <see cref="FormatPattern"/>, the grammar the database check on
+    /// <c>manual_test_case.code</c> enforces. Unlike <see cref="TryParse"/> it does not look at the number's range, so a
+    /// cursor is judged by the same rule as a stored code.
+    /// </summary>
+    /// <param name="text">The candidate.</param>
+    public static bool IsWellFormed(string? text) =>
+        !string.IsNullOrEmpty(text) && CodeRegex().IsMatch(text);
+
+    /// <summary>
     /// Builds the code of an allocated number. Returns false for a number outside 1..<see cref="MaximumNumber"/> or an
     /// illegal prefix, so the allocator can answer <c>quota_exceeded</c> instead of writing a code the format check refuses.
     /// </summary>

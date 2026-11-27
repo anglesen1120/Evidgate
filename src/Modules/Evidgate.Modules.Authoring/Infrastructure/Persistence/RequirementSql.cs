@@ -49,15 +49,22 @@ internal static class RequirementSql
         """;
 
     /// <summary>
-    /// Hides the requirement from the live list when the caller read the current row version. Versions, the head
-    /// pointer and every row that names the requirement stay; only <c>deleted_at</c> moves.
+    /// Hides the requirement from the live list when the caller read the current row version, and answers the head it
+    /// hid (for the audit row). Versions, the head pointer and every row that names the requirement stay; only
+    /// <c>deleted_at</c> moves.
     /// </summary>
     internal const string SoftDelete = """
-        update public.requirement
-           set deleted_at = now()
-         where org_id = @org_id and project_id = @project_id and id = @id
-           and version = @expected_version and deleted_at is null
-        returning version
+        with hidden as (
+          update public.requirement
+             set deleted_at = now()
+           where org_id = @org_id and project_id = @project_id and id = @id
+             and version = @expected_version and deleted_at is null
+          returning id, head_version_no, version
+        )
+        select hidden.version, hidden.head_version_no, h.id as head_version_id, h.content_hash
+          from hidden
+          join public.requirement_version h
+            on h.org_id = @org_id and h.requirement_id = hidden.id and h.version_no = hidden.head_version_no
         """;
 
     /// <summary>Why <see cref="AdvanceHead"/> matched nothing: the row is missing or deleted, or its version moved.</summary>
@@ -109,26 +116,36 @@ internal static class RequirementSql
 
     /// <summary>
     /// A page of history, newest first, keyed by version number. The unique key
-    /// <c>(org_id, requirement_id, version_no)</c> is scanned backwards, so there is no sort. The inner page is cut by
-    /// row count first, then by the running size of the bodies: a row is kept while the bytes before it are under
-    /// <c>@max_bytes</c>, so the first row always comes back and a page never holds much more than the cap.
+    /// <c>(org_id, requirement_id, version_no)</c> is scanned backwards, so there is no sort. The page is cut by row
+    /// count first, then by the running size of the bodies (<c>octet_length</c> reads the size from the TOAST pointer,
+    /// so no body is fetched to be counted): a row is kept while the bytes before it are under <c>@max_bytes</c>, so
+    /// the first row always comes back. The bodies are read only for the rows that survive the cut.
     /// </summary>
     internal const string SelectVersions = """
-        select p.id, p.version_no, p.body, p.content_hash, p.source, p.author_membership_id, p.reason, p.created_at
+        select b.id, b.version_no, b.body, b.content_hash, b.source, b.author_membership_id, b.reason, b.created_at
           from (
-            select page.*, sum(octet_length(page.body)) over (order by page.version_no desc) as running_bytes
+            select s.version_no
               from (
-                select v.id, v.version_no, v.body, v.content_hash, v.source, v.author_membership_id, v.reason, v.created_at
-                  from public.requirement r
-                  join public.requirement_version v
-                    on v.org_id = r.org_id and v.requirement_id = r.id
-                 where r.org_id = @org_id and r.project_id = @project_id and r.id = @requirement_id
-                   and (@before_version_no::integer is null or v.version_no < @before_version_no)
-                 order by v.version_no desc
-                 limit @limit
-              ) page
-          ) p
-         where p.running_bytes - octet_length(p.body) < @max_bytes
-         order by p.version_no desc
+                select page.version_no, page.body_bytes,
+                       sum(page.body_bytes) over (order by page.version_no desc) as running_bytes
+                  from (
+                    select v.version_no, octet_length(v.body) as body_bytes
+                      from public.requirement r
+                      join public.requirement_version v
+                        on v.org_id = r.org_id and v.requirement_id = r.id
+                     where r.org_id = @org_id and r.project_id = @project_id and r.id = @requirement_id
+                       and (@before_version_no::integer is null or v.version_no < @before_version_no)
+                     order by v.version_no desc
+                     limit @limit
+                  ) page
+              ) s
+             where s.running_bytes - s.body_bytes < @max_bytes
+          ) kept
+          cross join lateral (
+            select v.id, v.version_no, v.body, v.content_hash, v.source, v.author_membership_id, v.reason, v.created_at
+              from public.requirement_version v
+             where v.org_id = @org_id and v.requirement_id = @requirement_id and v.version_no = kept.version_no
+          ) b
+         order by kept.version_no desc
         """;
 }

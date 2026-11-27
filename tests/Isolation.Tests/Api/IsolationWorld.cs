@@ -148,6 +148,21 @@ public sealed class IsolationProject
     public required Guid AuthoringSecondRequirementId { get; init; }
 
     /// <summary>
+    /// A persisted link of <see cref="AuthoringRequirementId"/> to <see cref="AuthoringItemId"/>
+    /// (<c>{l}</c> of <c>…/authoring/requirements/{r}/links/{l}</c>); the unlink probes never delete it.
+    /// </summary>
+    public required Guid AuthoringRequirementLinkId { get; init; }
+
+    /// <summary>
+    /// A second persisted link of <see cref="AuthoringRequirementId"/>, to <see cref="AuthoringSecondItemId"/>: the one
+    /// the unlink route's authorized control removes.
+    /// </summary>
+    public required Guid AuthoringRequirementDisposableLinkId { get; init; }
+
+    /// <summary>The head version of <see cref="AuthoringRequirementId"/> as the create answered it: the pin a link names.</summary>
+    public required Guid AuthoringRequirementVersionId { get; init; }
+
+    /// <summary>
     /// The project's newest <c>authoring_version</c> id (13.1.1-T3): <c>{v}</c> of
     /// <c>…/authoring/versions/{v}</c> (route 23) and of <c>…/authoring/versions/{v}/restore</c> (route 24).
     /// </summary>
@@ -869,13 +884,15 @@ public sealed class IsolationWorld
 
             // Two requirements per project, so the requirement list pages at limit 1 and its object routes name a real row
             // of the victim tenant rather than a random id alone.
-            var authoringRequirement = (await SendAsync(
+            var authoringRequirementCreated = await SendAsync(
                 HttpMethod.Post,
                 $"/v1/projects/{project}/authoring/requirements",
                 admin,
                 org,
                 new { kind = "user_story", title = "isolation requirement", body = "the first body" },
-                HttpStatusCode.Created).ConfigureAwait(false)).GetProperty("requirement_id").GetGuid();
+                HttpStatusCode.Created).ConfigureAwait(false);
+            var authoringRequirement = authoringRequirementCreated.GetProperty("requirement_id").GetGuid();
+            var authoringRequirementVersion = authoringRequirementCreated.GetProperty("version_id").GetGuid();
             var authoringSecondRequirement = (await SendAsync(
                 HttpMethod.Post,
                 $"/v1/projects/{project}/authoring/requirements",
@@ -883,6 +900,14 @@ public sealed class IsolationWorld
                 org,
                 new { kind = "epic", title = "isolation requirement 2" },
                 HttpStatusCode.Created).ConfigureAwait(false)).GetProperty("requirement_id").GetGuid();
+
+            // Two persisted links on the requirement, so the unlink route's probes name a real link of the victim
+            // tenant instead of a random id that 404s whatever the lookup does. The second link is the one org B's
+            // own control deletes, which keeps the first one intact for every foreign probe that follows.
+            var authoringRequirementLink = await LinkRequirementAsync(admin, org, project, authoringRequirement, authoringRequirementVersion, authoringItem)
+                .ConfigureAwait(false);
+            var authoringRequirementDisposableLink = await LinkRequirementAsync(admin, org, project, authoringRequirement, authoringRequirementVersion, authoringSecondItem)
+                .ConfigureAwait(false);
 
             // 13.1.1-T3: the version timeline (routes 22/23) and one tombstone per entity restore route (6, 11, 18).
             // Every row is produced through a route, and each tombstone's version is read back through route 22 instead
@@ -1044,7 +1069,10 @@ public sealed class IsolationWorld
                 AuthoringSecondItemId = authoringSecondItem,
                 AuthoringSecondManualCaseId = authoringSecondCase,
                 AuthoringRequirementId = authoringRequirement,
+                AuthoringRequirementVersionId = authoringRequirementVersion,
                 AuthoringSecondRequirementId = authoringSecondRequirement,
+                AuthoringRequirementLinkId = authoringRequirementLink,
+                AuthoringRequirementDisposableLinkId = authoringRequirementDisposableLink,
                 AuthoringVersionId = authoringVersion,
                 AuthoringChangeId = authoringChange,
                 AuthoringIntakeId = authoringIntake,
@@ -1294,6 +1322,19 @@ public sealed class IsolationWorld
         /// </summary>
         private Task<JsonElement> SendIfMatchAsync(HttpMethod method, string url, IsolationUser caller, Guid org, string ifMatch, params HttpStatusCode[] expected) =>
             SendCoreAsync(method, url, caller.UserId, caller.Email, org, body: null, ifMatch, expected);
+
+        /// <summary>
+        /// Links <paramref name="requirement"/> to a checklist item through the route and returns the link id, pinning the
+        /// requirement's head version the way a caller that read it would.
+        /// </summary>
+        private async Task<Guid> LinkRequirementAsync(IsolationUser admin, Guid org, Guid project, Guid requirement, Guid headVersion, Guid item) =>
+            (await SendAsync(
+                HttpMethod.Post,
+                $"/v1/projects/{project}/authoring/requirements/{requirement}/links",
+                admin,
+                org,
+                new { checklist_item_id = item, expected_version_id = headVersion },
+                HttpStatusCode.Created).ConfigureAwait(false)).GetProperty("link_id").GetGuid();
 
         /// <summary>
         /// The <c>version_no</c> a soft-deleted row keeps — the <c>If-Match</c> its restore route needs (13.1.1-T3,

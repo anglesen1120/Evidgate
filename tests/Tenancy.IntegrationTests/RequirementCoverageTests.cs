@@ -166,7 +166,7 @@ public sealed class RequirementCoverageTests
     }
 
     [Fact]
-    public async Task CoverageStatements_UseIndexes_WithoutASeqScan()
+    public async Task CoverageStatement_UsesIndexes_WithoutASeqScan()
     {
         await using var world = await RequirementTestWorld.StartAsync(_fixture);
         var head = await world.CreatedAsync(world.Create());
@@ -174,20 +174,39 @@ public sealed class RequirementCoverageTests
         await RequirementLinkTestData.LinkAsync(world, head, targets.Item);
         await RequirementLinkTestData.LinkAsync(world, head, manualCase: targets.ApprovedCase);
 
-        foreach (var sql in new[] { RequirementCoverageSql.Cases, RequirementCoverageSql.Targets, RequirementCoverageSql.Summary })
-        {
-            await using var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org);
-            await scope.ExecuteAsync("set local enable_seqscan = off");
-            var plan = await scope.ScalarAsync<string>(
-                "explain (format json) " + sql,
-                ("org_id", world.Org),
-                ("project_id", world.Project),
-                ("requirement_id", head.RequirementId),
-                ("after_code", "LINK-000"),
-                ("take", 51));
+        await using var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org);
+        await scope.ExecuteAsync("set local enable_seqscan = off");
+        var plan = await scope.ScalarAsync<string>(
+            "explain (format json) " + RequirementCoverageSql.Coverage,
+            ("org_id", world.Org),
+            ("project_id", world.Project),
+            ("requirement_id", head.RequirementId),
+            ("after_code", "LINK-000"),
+            ("take_targets", 51),
+            ("take_cases", 51));
 
-            plan.ShouldContain("requirement_link_", Case.Sensitive);
-            plan.ShouldNotContain("\"Node Type\": \"Seq Scan\"", Case.Sensitive);
-        }
+        plan.ShouldContain("requirement_link_", Case.Sensitive);
+        plan.ShouldNotContain("\"Node Type\": \"Seq Scan\"", Case.Sensitive);
+    }
+
+    [Fact]
+    public async Task SoftDeletedChecklistItem_ReachesNoCase_WhileItsLinkStillCountsAndIsListed()
+    {
+        await using var world = await RequirementTestWorld.StartAsync(_fixture);
+        var head = await world.CreatedAsync(world.Create());
+        var targets = await RequirementLinkTestData.SeedAsync(world);
+        await RequirementLinkTestData.LinkAsync(world, head, targets.Item);
+        var live = await RequirementLinkTestData.CoverageAsync(world, head.RequirementId);
+        await _fixture.ExecuteAsync(world.Database, $"update public.checklist_item set deleted_at = now() where id = '{targets.Item:D}'");
+
+        var deleted = await RequirementLinkTestData.CoverageAsync(world, head.RequirementId);
+
+        live.LinkedCaseCount.ShouldBe(2);
+        live.Cases.Count.ShouldBe(2);
+        deleted.LinkedCaseCount.ShouldBe(0);
+        deleted.ApprovedCaseCount.ShouldBe(0);
+        deleted.Cases.ShouldBeEmpty();
+        deleted.LinkCount.ShouldBe(1);
+        deleted.Targets.Select(t => t.ChecklistItemId).ShouldBe([targets.Item]);
     }
 }

@@ -1,5 +1,7 @@
+using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.Modules.Authoring.Application;
+using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
 using Xunit;
 
@@ -41,9 +43,8 @@ public sealed class RequirementLinkWriterTests
         var first = await RequirementLinkTestData.LinkAsync(world, head, targets.Item);
 
         var repeat = await RequirementLinkTestData.LinkAsync(world, head, targets.Item);
-        await AppendAsync(world, head);
-        var older = await world.InScopeAsync((writer, token) => writer.CreateLinkAsync(
-            world.Org, new RequirementLinkCreate(world.Project, head.RequirementId, targets.Item, null, null, null), token));
+        var next = await AppendAsync(world, head);
+        var older = await TryAsync(world, head.RequirementId, targets.Item, null, next.VersionId);
 
         repeat.Changed.ShouldBeFalse();
         repeat.LinkId.ShouldBe(first.LinkId);
@@ -64,16 +65,16 @@ public sealed class RequirementLinkWriterTests
         var deleted = await world.CreatedAsync(world.Create());
         await _fixture.ExecuteAsync(world.Database, $"update public.requirement set deleted_at = now() where id = '{deleted.RequirementId:D}'");
 
-        var none = await TryAsync(world, head.RequirementId, null, null);
-        var both = await TryAsync(world, head.RequirementId, own.Item, own.ApprovedCase);
-        var foreignItem = await TryAsync(world, head.RequirementId, other.Item, null);
-        var foreignCase = await TryAsync(world, head.RequirementId, null, other.ApprovedCase);
-        var deletedCase = await TryAsync(world, head.RequirementId, null, own.DraftCase);
-        var missing = await TryAsync(world, Guid.CreateVersion7(), own.Item, null);
-        var foreignRequirement = await TryAsync(world, foreign.RequirementId, own.Item, null);
-        var deletedRequirement = await TryAsync(world, deleted.RequirementId, own.Item, null);
-        var moved = await world.InScopeAsync((writer, token) => writer.CreateLinkAsync(
-            world.Org, new RequirementLinkCreate(world.Project, head.RequirementId, own.Item, null, Guid.CreateVersion7(), null), token));
+        var none = await TryAsync(world, head.RequirementId, null, null, head.VersionId);
+        var both = await TryAsync(world, head.RequirementId, own.Item, own.ApprovedCase, head.VersionId);
+        var foreignItem = await TryAsync(world, head.RequirementId, other.Item, null, head.VersionId);
+        var foreignCase = await TryAsync(world, head.RequirementId, null, other.ApprovedCase, head.VersionId);
+        var deletedCase = await TryAsync(world, head.RequirementId, null, own.DraftCase, head.VersionId);
+        var missing = await TryAsync(world, Guid.CreateVersion7(), own.Item, null, head.VersionId);
+        var foreignRequirement = await TryAsync(world, foreign.RequirementId, own.Item, null, foreign.VersionId);
+        var deletedRequirement = await TryAsync(world, deleted.RequirementId, own.Item, null, deleted.VersionId);
+        var moved = await TryAsync(world, head.RequirementId, own.Item, null, Guid.CreateVersion7());
+        var unpinned = await TryAsync(world, head.RequirementId, own.Item, null, null);
 
         none.Error!.Details!.ShouldContain(detail => detail.Path == "/target");
         both.Error!.Details!.ShouldContain(detail => detail.Path == "/target");
@@ -84,10 +85,13 @@ public sealed class RequirementLinkWriterTests
         foreignRequirement.Error!.Status.ShouldBe(404);
         deletedRequirement.Error!.Status.ShouldBe(404);
         moved.Error!.Status.ShouldBe(412);
+        moved.Error.Details!.ShouldContain(detail => detail.Path == "/expected_version_id");
+        moved.Error.Details!.ShouldContain(detail => detail.Path == "/head_version_id" && detail.Reason == head.VersionId.ToString("D"));
+        unpinned.Error!.Status.ShouldBe(422);
+        unpinned.Error.Details!.ShouldContain(detail => detail.Path == "/expected_version_id");
         (await LinkCountAsync(world)).ShouldBe(0);
 
-        var accepted = await world.InScopeAsync((writer, token) => writer.CreateLinkAsync(
-            world.Org, new RequirementLinkCreate(world.Project, head.RequirementId, own.Item, null, head.VersionId, null), token));
+        var accepted = await TryAsync(world, head.RequirementId, own.Item, null, head.VersionId);
         accepted.IsSuccess.ShouldBeTrue(accepted.Error?.Message);
         (await LinkCountAsync(world)).ShouldBe(1);
     }
@@ -102,7 +106,7 @@ public sealed class RequirementLinkWriterTests
         var theirs = await RequirementLinkTestData.SeedAsync(other);
 
         var crossTenant = await other.InScopeAsync((writer, token) => writer.CreateLinkAsync(
-            other.Org, new RequirementLinkCreate(other.Project, head.RequirementId, theirs.Item, null, null, null), token));
+            other.Org, new RequirementLinkCreate(other.Project, head.RequirementId, theirs.Item, null, head.VersionId, null), token));
         var own = await RequirementLinkTestData.LinkAsync(world, head, targets.Item);
 
         crossTenant.Error!.Status.ShouldBe(404);
@@ -130,7 +134,12 @@ public sealed class RequirementLinkWriterTests
         wrongRequirement.Error!.Status.ShouldBe(404);
         foreignProject.Error!.Status.ShouldBe(404);
         unknown.Error!.Status.ShouldBe(404);
-        removed.Value.ShouldBe(link.LinkId);
+        removed.IsSuccess.ShouldBeTrue(removed.Error?.Message);
+        removed.Value.LinkId.ShouldBe(link.LinkId);
+        removed.Value.VersionId.ShouldBe(head.VersionId);
+        removed.Value.VersionNo.ShouldBe(1);
+        removed.Value.ChecklistItemId.ShouldBe(targets.Item);
+        removed.Value.ManualTestCaseId.ShouldBeNull();
         again.Error!.Status.ShouldBe(404);
         (await LinkCountAsync(world)).ShouldBe(0);
     }
@@ -146,8 +155,7 @@ public sealed class RequirementLinkWriterTests
         {
             await holder.ScalarAsync<Guid>("select id from public.requirement where id = @id for update", ("id", head.RequirementId));
 
-            var blocked = await world.InScopeAsync((writer, token) => writer.CreateLinkAsync(
-                world.Org, new RequirementLinkCreate(world.Project, head.RequirementId, targets.Item, null, null, null), token));
+            var blocked = await TryAsync(world, head.RequirementId, targets.Item, null, head.VersionId);
 
             blocked.Error!.Status.ShouldBe(503);
         }
@@ -156,10 +164,48 @@ public sealed class RequirementLinkWriterTests
         (await RequirementLinkTestData.LinkAsync(world, head, targets.Item)).Changed.ShouldBeTrue();
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Create_RacingAnEditInFlight_WaitsForIt_AndAnswersFromTheNewHead_NeverNotFound(bool pinTheNewHead)
+    {
+        await using var world = await RequirementTestWorld.StartAsync(_fixture);
+        var head = await world.CreatedAsync(world.Create());
+        var targets = await RequirementLinkTestData.SeedAsync(world);
+        var cancellationToken = TestContext.Current.CancellationToken;
+
+        await using var services = world.Api.Services.CreateAsyncScope();
+        await using var edit = await services.ServiceProvider.GetRequiredService<ITenantScopeFactory>()
+            .BeginAsync(world.Org, world.Project, false, cancellationToken);
+        var appended = await services.ServiceProvider.GetRequiredService<RequirementWriter>().AppendVersionAsync(
+            world.Org, world.Project, head.RequirementId, head.RowVersion, "second wording", "manual", null, null, cancellationToken);
+        appended.IsSuccess.ShouldBeTrue(appended.Error?.Message);
+        var editorPid = await services.ServiceProvider.GetRequiredService<ITenantDb>()
+            .ScalarAsync<int>("select pg_backend_pid()", null, cancellationToken);
+
+        var pin = pinTheNewHead ? appended.Value.VersionId : head.VersionId;
+        var racing = TryAsync(world, head.RequirementId, targets.Item, null, pin);
+        await RequirementLinkTestData.WaitUntilBlockedAsync(world, racing, editorPid);
+        await edit.CommitAsync(cancellationToken);
+        var linked = await racing;
+
+        if (pinTheNewHead)
+        {
+            linked.IsSuccess.ShouldBeTrue(linked.Error?.Message);
+            linked.Value.VersionId.ShouldBe(appended.Value.VersionId);
+            linked.Value.VersionNo.ShouldBe(2);
+        }
+        else
+        {
+            linked.Error!.Status.ShouldBe(412);
+            linked.Error.Details!.ShouldContain(detail => detail.Path == "/head_version_id" && detail.Reason == appended.Value.VersionId.ToString("D"));
+        }
+    }
+
     private static Task<Result<RequirementLinkRow>> TryAsync(
-        RequirementTestWorld world, Guid requirement, Guid? item, Guid? manualCase) =>
+        RequirementTestWorld world, Guid requirement, Guid? item, Guid? manualCase, Guid? pin) =>
         world.InScopeAsync((writer, token) => writer.CreateLinkAsync(
-            world.Org, new RequirementLinkCreate(world.Project, requirement, item, manualCase, null, null), token));
+            world.Org, new RequirementLinkCreate(world.Project, requirement, item, manualCase, pin, null), token));
 
     private static async Task<RequirementHead> AppendAsync(RequirementTestWorld world, RequirementHead head)
     {

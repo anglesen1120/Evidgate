@@ -10,7 +10,7 @@ namespace Evidgate.Modules.Authoring.Application;
 /// <param name="RequirementId">The requirement.</param>
 /// <param name="ChecklistItemId">The checklist item to link; exactly one of the two targets is set.</param>
 /// <param name="ManualTestCaseId">The manual test case to link.</param>
-/// <param name="ExpectedVersionId">Optional: the head version the caller read; a moved head is refused as stale.</param>
+/// <param name="ExpectedVersionId">Required: the head version the caller read; absent is a 422 and a moved head is refused as stale.</param>
 /// <param name="LinkedByMembershipId">The author, or null for a service principal.</param>
 internal sealed record RequirementLinkCreate(
     Guid ProjectId,
@@ -37,6 +37,19 @@ internal sealed record RequirementLinkRow(
     Guid? ManualTestCaseId,
     bool Changed);
 
+/// <summary>The link an unlink removed, as the row looked when it was deleted.</summary>
+/// <param name="LinkId">The removed link.</param>
+/// <param name="VersionId">The version it pinned.</param>
+/// <param name="VersionNo">That version's number.</param>
+/// <param name="ChecklistItemId">The item it linked, when the target was an item.</param>
+/// <param name="ManualTestCaseId">The case it linked, when the target was a case.</param>
+internal sealed record RequirementLinkRemoved(
+    Guid LinkId,
+    Guid VersionId,
+    int VersionNo,
+    Guid? ChecklistItemId,
+    Guid? ManualTestCaseId);
+
 internal sealed partial class RequirementWriter
 {
     /// <summary>
@@ -61,22 +74,24 @@ internal sealed partial class RequirementWriter
             return Failure<RequirementLinkRow>(AuthoringErrors.Invalid("/target", "one_target", "name exactly one checklist item or one manual test case"));
         }
 
+        if (create.ExpectedVersionId is not { } expected)
+        {
+            return Failure<RequirementLinkRow>(AuthoringErrors.Invalid("/expected_version_id", "required", "name the head version id the link is based on"));
+        }
+
         try
         {
             await AuthoringLockGuard.SetLockTimeoutAsync(db, cancellationToken).ConfigureAwait(false);
 
-            var head = await db.QuerySingleOrDefaultAsync<LinkHead>(
-                RequirementLinkSql.LockHead,
-                new { org_id = orgId, project_id = create.ProjectId, requirement_id = create.RequirementId },
-                cancellationToken).ConfigureAwait(false);
+            var head = await LockHeadAsync(orgId, create, cancellationToken).ConfigureAwait(false);
             if (head is null)
             {
                 return Failure<RequirementLinkRow>(AuthoringErrors.NotFound("no live requirement with that id is visible in this project"));
             }
 
-            if (create.ExpectedVersionId is { } expected && expected != head.HeadVersionId)
+            if (expected != head.HeadVersionId)
             {
-                return Failure<RequirementLinkRow>(AuthoringRequestScope.Stale("requirement", head.Version));
+                return Failure<RequirementLinkRow>(AuthoringRequestScope.StalePin(head.HeadVersionId));
             }
 
             if (await TargetRefusalAsync(orgId, create, cancellationToken).ConfigureAwait(false) is { } refusal)
@@ -106,7 +121,7 @@ internal sealed partial class RequirementWriter
     /// <param name="requirementId">The requirement from the route.</param>
     /// <param name="linkId">The link to remove.</param>
     /// <param name="cancellationToken">Cancellation.</param>
-    internal async ValueTask<Result<Guid>> RemoveLinkAsync(
+    internal async ValueTask<Result<RequirementLinkRemoved>> RemoveLinkAsync(
         Guid orgId,
         Guid projectId,
         Guid requirementId,
@@ -119,19 +134,42 @@ internal sealed partial class RequirementWriter
         {
             await AuthoringLockGuard.SetLockTimeoutAsync(db, cancellationToken).ConfigureAwait(false);
 
-            var removed = await db.ScalarAsync<Guid?>(
+            var removed = await db.QuerySingleOrDefaultAsync<RequirementLinkRemoved>(
                 RequirementLinkSql.DeleteLink,
                 new { org_id = orgId, project_id = projectId, requirement_id = requirementId, id = linkId },
                 cancellationToken).ConfigureAwait(false);
 
-            return removed is { } id
-                ? Result.Success(id)
-                : Failure<Guid>(AuthoringErrors.NotFound("no such link on this requirement in this project"));
+            return removed is not null
+                ? Result.Success(removed)
+                : Failure<RequirementLinkRemoved>(AuthoringErrors.NotFound("no such link on this requirement in this project"));
         }
         catch (PostgresException exception) when (AuthoringLockGuard.IsContention(exception))
         {
-            return Failure<Guid>(AuthoringErrors.Unavailable());
+            return Failure<RequirementLinkRemoved>(AuthoringErrors.Unavailable());
         }
+    }
+
+    /// <summary>
+    /// Share-locks the requirement row, then reads its head version in a second statement: the lock statement keeps
+    /// the snapshot it started with, so a head version inserted by the writer it waited for is only visible to the next one.
+    /// </summary>
+    private async Task<LinkHead?> LockHeadAsync(Guid orgId, RequirementLinkCreate create, CancellationToken cancellationToken)
+    {
+        var head = await db.QuerySingleOrDefaultAsync<LinkHead>(
+            RequirementLinkSql.LockRequirement,
+            new { org_id = orgId, project_id = create.ProjectId, requirement_id = create.RequirementId },
+            cancellationToken).ConfigureAwait(false);
+        if (head is null)
+        {
+            return null;
+        }
+
+        head.HeadVersionId = await db.ScalarAsync<Guid>(
+            RequirementLinkSql.HeadVersionId,
+            new { org_id = orgId, requirement_id = create.RequirementId, head_version_no = head.HeadVersionNo },
+            cancellationToken).ConfigureAwait(false);
+
+        return head;
     }
 
     private async Task<Error?> TargetRefusalAsync(Guid orgId, RequirementLinkCreate create, CancellationToken cancellationToken)
@@ -201,8 +239,6 @@ internal sealed partial class RequirementWriter
 
     private sealed class LinkHead
     {
-        public int Version { get; set; }
-
         public int HeadVersionNo { get; set; }
 
         public Guid HeadVersionId { get; set; }

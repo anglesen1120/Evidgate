@@ -67,8 +67,7 @@ internal sealed class UpdateRequirementCommandHandler(
             return Result.Failure<RequirementWriteResponse>(read.Error!);
         }
 
-        var fields = read.Value;
-        if (!fields.ChangesAnything)
+        if (!read.Value.ChangesAnything)
         {
             return Result.Failure<RequirementWriteResponse>(AuthoringErrors.Invalid(
                 "/",
@@ -83,12 +82,21 @@ internal sealed class UpdateRequirementCommandHandler(
             return Result.Failure<RequirementWriteResponse>(current.Error ?? AuthoringErrors.NotFound("no requirement with that id is visible in this project"));
         }
 
-        var row = current.Value;
-        if (row.Version != command.ExpectedVersion)
+        if (current.Value.Version != command.ExpectedVersion)
         {
-            return Result.Failure<RequirementWriteResponse>(AuthoringRequestScope.Stale("requirement", row.Version));
+            return Result.Failure<RequirementWriteResponse>(AuthoringRequestScope.Stale("requirement", current.Value.Version));
         }
 
+        return await AppendAsync(command, orgId, read.Value, current.Value, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async ValueTask<Result<RequirementWriteResponse>> AppendAsync(
+        UpdateRequirementCommand command,
+        Guid orgId,
+        RequirementFields fields,
+        RequirementRow row,
+        CancellationToken cancellationToken)
+    {
         var before = new RequirementIdentity(row.Kind, row.Title, row.ExternalRef, row.FeatureNodeId, row.ParentRequirementId);
         var after = new RequirementIdentity(
             fields.Kind ?? row.Kind,
@@ -115,7 +123,7 @@ internal sealed class UpdateRequirementCommandHandler(
             return Result.Failure<RequirementWriteResponse>(written.Error!);
         }
 
-        audit.Describe(new AuditObject("requirement", command.RequirementId.ToString("D")));
+        audit.Describe(RequirementAudit.Appended(command.ProjectId, command.RequirementId, row, written.Value));
 
         return Result.Success(RequirementResponses.Write(written.Value));
     }

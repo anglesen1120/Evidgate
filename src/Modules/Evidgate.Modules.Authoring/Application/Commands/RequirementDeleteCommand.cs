@@ -62,10 +62,10 @@ internal sealed class DeleteRequirementCommandHandler(
 
         if (!deleted.IsSuccess)
         {
-            return deleted;
+            return Result.Failure(deleted.Error!);
         }
 
-        audit.Describe(new AuditObject("requirement", command.RequirementId.ToString("D")));
+        audit.Describe(RequirementAudit.Hidden(command.ProjectId, command.RequirementId, deleted.Value));
 
         return Result.Success(StatusCodes.Status204NoContent);
     }

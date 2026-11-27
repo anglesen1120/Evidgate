@@ -69,4 +69,22 @@ internal static class AuthoringRequestScope
             new ErrorDetail("/If-Match", "stale"),
             new ErrorDetail("/version", currentVersion.ToString(System.Globalization.CultureInfo.InvariantCulture)),
         ]);
+
+    /// <summary>
+    /// 412 <c>precondition_failed</c> for a link whose <c>expected_version_id</c> is no longer the head. The pin is a body
+    /// member, not a header, so the detail points at <c>/expected_version_id</c> and carries the head the caller must
+    /// re-read at <c>/head_version_id</c>.
+    /// </summary>
+    /// <param name="headVersionId">The requirement's head version now.</param>
+    /// <returns>The refusal the handler returns unchanged.</returns>
+    internal static Error StalePin(Guid headVersionId) => new(
+        ApiErrorCode.PreconditionFailed,
+        "the requirement's head moved since it was read",
+        412,
+        Retryable: false,
+        Details:
+        [
+            new ErrorDetail("/expected_version_id", "stale"),
+            new ErrorDetail("/head_version_id", headVersionId.ToString("D")),
+        ]);
 }

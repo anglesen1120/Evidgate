@@ -73,15 +73,16 @@ internal sealed partial class RequirementWriter
     }
 
     /// <summary>
-    /// Hides the requirement from the live list. Its versions and head pointer stay, and so does every row that names
-    /// it. A missing or already hidden requirement is a 404, a moved row version a 412, and nothing is written then.
+    /// Hides the requirement from the live list and answers the head it hid. Its versions and head pointer stay, and so
+    /// does every row that names it. A missing or already hidden requirement is a 404, a moved row version a 412, and
+    /// nothing is written then.
     /// </summary>
     /// <param name="orgId">The tenant; must equal the open scope's organization.</param>
     /// <param name="projectId">The project the requirement must belong to.</param>
     /// <param name="requirementId">The requirement.</param>
     /// <param name="expectedRowVersion">The row version the caller read.</param>
     /// <param name="cancellationToken">Cancellation.</param>
-    internal async ValueTask<Result> DeleteAsync(
+    internal async ValueTask<Result<RequirementHead>> DeleteAsync(
         Guid orgId,
         Guid projectId,
         Guid requirementId,
@@ -95,15 +96,15 @@ internal sealed partial class RequirementWriter
             await AuthoringLockGuard.SetLockTimeoutAsync(db, cancellationToken).ConfigureAwait(false);
 
             var parameters = new { org_id = orgId, project_id = projectId, id = requirementId, expected_version = expectedRowVersion };
-            var deleted = await db.QuerySingleOrDefaultAsync<HeadAdvance>(RequirementSql.SoftDelete, parameters, cancellationToken).ConfigureAwait(false);
+            var hidden = await db.QuerySingleOrDefaultAsync<HiddenHead>(RequirementSql.SoftDelete, parameters, cancellationToken).ConfigureAwait(false);
 
-            return deleted is not null
-                ? Result.Success()
-                : Result.Failure(await WhyNothingMatchedAsync(parameters, cancellationToken).ConfigureAwait(false));
+            return hidden is not null
+                ? Result.Success(new RequirementHead(requirementId, hidden.HeadVersionId, hidden.HeadVersionNo, hidden.Version, hidden.ContentHash))
+                : Result.Failure<RequirementHead>(await WhyNothingMatchedAsync(parameters, cancellationToken).ConfigureAwait(false));
         }
         catch (PostgresException exception) when (ToError(exception) is { } error)
         {
-            return Result.Failure(error);
+            return Result.Failure<RequirementHead>(error);
         }
     }
 
@@ -251,5 +252,16 @@ internal sealed partial class RequirementWriter
             && exception.MessageText.StartsWith("requirement_parent_cycle", StringComparison.Ordinal)
                 ? AuthoringErrors.Invalid("/parent_requirement_id", "cycle", "the new parent is a descendant of the requirement")
                 : null;
+    }
+
+    private sealed class HiddenHead
+    {
+        public int Version { get; set; }
+
+        public int HeadVersionNo { get; set; }
+
+        public Guid HeadVersionId { get; set; }
+
+        public string ContentHash { get; set; } = string.Empty;
     }
 }

@@ -7,16 +7,23 @@ namespace Evidgate.Modules.Authoring.Infrastructure.Persistence;
 internal static class RequirementLinkSql
 {
     /// <summary>
-    /// The live requirement and its head version, share-locked: an append moves the head with an UPDATE that conflicts
-    /// with this lock, so the head read here is still the head when the link commits.
+    /// Share-locks the live requirement row alone. An append moves the head with an UPDATE that conflicts with this
+    /// lock, so the head read by <see cref="HeadVersionId"/> afterwards is still the head when the link commits. The
+    /// head version is deliberately not joined here: a statement that waited on the lock keeps its old snapshot, so
+    /// a join to a version the waited-for writer just inserted would drop the row and answer a spurious 404.
     /// </summary>
-    internal const string LockHead = """
-        select r.id as requirement_id, r.version, r.head_version_no, h.id as head_version_id
+    internal const string LockRequirement = """
+        select r.head_version_no
           from public.requirement r
-          join public.requirement_version h
-            on h.org_id = r.org_id and h.requirement_id = r.id and h.version_no = r.head_version_no
          where r.org_id = @org_id and r.project_id = @project_id and r.id = @requirement_id and r.deleted_at is null
            for share of r
+        """;
+
+    /// <summary>The head version row of a requirement whose row <see cref="LockRequirement"/> holds, in a fresh statement snapshot.</summary>
+    internal const string HeadVersionId = """
+        select h.id
+          from public.requirement_version h
+         where h.org_id = @org_id and h.requirement_id = @requirement_id and h.version_no = @head_version_no
         """;
 
     /// <summary>A live checklist item of the project, a valid link target.</summary>
@@ -34,8 +41,9 @@ internal static class RequirementLinkSql
         """;
 
     /// <summary>
-    /// Inserts the pinned link. The two partial unique indexes are the arbiter of "one link per requirement and
-    /// target", so a repeat or a concurrent twin writes nothing and returns no id.
+    /// Inserts the pinned link. The single <c>unique nulls not distinct</c> constraint
+    /// <c>requirement_link_target_key</c> is the arbiter of "one link per requirement and target", so a repeat or a
+    /// concurrent twin writes nothing and returns no id.
     /// </summary>
     internal const string InsertLink = """
         insert into public.requirement_link
@@ -59,10 +67,20 @@ internal static class RequirementLinkSql
            and l.manual_test_case_id is not distinct from @manual_test_case_id::uuid
         """;
 
-    /// <summary>Removes one link of the requirement; a soft-deleted requirement keeps its links removable.</summary>
+    /// <summary>
+    /// Removes one link of the requirement and answers what it was (its pinned version and target), so the audit row
+    /// can record the removed association. A soft-deleted requirement keeps its links removable.
+    /// </summary>
     internal const string DeleteLink = """
-        delete from public.requirement_link
-         where org_id = @org_id and project_id = @project_id and requirement_id = @requirement_id and id = @id
-        returning id
+        with removed as (
+          delete from public.requirement_link
+           where org_id = @org_id and project_id = @project_id and requirement_id = @requirement_id and id = @id
+          returning id, requirement_version_id, checklist_item_id, manual_test_case_id
+        )
+        select d.id as link_id, d.requirement_version_id as version_id, v.version_no,
+               d.checklist_item_id, d.manual_test_case_id
+          from removed d
+          join public.requirement_version v
+            on v.org_id = @org_id and v.requirement_id = @requirement_id and v.id = d.requirement_version_id
         """;
 }

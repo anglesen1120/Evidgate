@@ -1,5 +1,6 @@
 using Evidgate.Modules.Authoring.Application;
 using Shouldly;
+using Xunit;
 
 namespace Tenancy.IntegrationTests;
 
@@ -30,12 +31,23 @@ internal static class RequirementLinkTestData
         return new RequirementLinkTargets(item, approved, draft, automated);
     }
 
+    /// <summary>The id of the requirement's current head version, the pin every link create must name.</summary>
+    internal static Task<Guid> HeadVersionIdAsync(RequirementTestWorld world, Guid requirement) => world.Fixture.ScalarAsync<Guid>(
+        world.Database,
+        $"""
+        select v.id from public.requirement r
+        join public.requirement_version v
+          on v.org_id = r.org_id and v.requirement_id = r.id and v.version_no = r.head_version_no
+        where r.id = '{requirement:D}'
+        """);
+
     internal static async Task<RequirementLinkRow> LinkAsync(
         RequirementTestWorld world, RequirementHead head, Guid? item = null, Guid? manualCase = null)
     {
+        var pin = await HeadVersionIdAsync(world, head.RequirementId);
         var result = await world.InScopeAsync((writer, token) => writer.CreateLinkAsync(
             world.Org,
-            new RequirementLinkCreate(world.Project, head.RequirementId, item, manualCase, null, null),
+            new RequirementLinkCreate(world.Project, head.RequirementId, item, manualCase, pin, null),
             token));
         result.IsSuccess.ShouldBeTrue(result.Error?.Message);
         return result.Value;
@@ -48,6 +60,31 @@ internal static class RequirementLinkTestData
             world.Org, world.Project, requirement, limit, afterCode, token), commit: false);
         result.IsSuccess.ShouldBeTrue(result.Error?.Message);
         return result.Value;
+    }
+
+    /// <summary>
+    /// Waits until a backend is observed blocked behind <paramref name="blockerPid"/>, the open transaction of the
+    /// test: the proof that <paramref name="pending"/> overlapped it, and not some other test's wait in the shared
+    /// database. Bounded by attempts; a completed task never blocked, so that is reported at once.
+    /// </summary>
+    internal static async Task WaitUntilBlockedAsync(RequirementTestWorld world, Task pending, int blockerPid)
+    {
+        for (var attempt = 0; attempt < 400; attempt++)
+        {
+            pending.IsCompleted.ShouldBeFalse("the call must wait for the transaction that holds what it needs");
+
+            var waiting = await world.Fixture.ScalarAsync<int>(
+                world.Database,
+                $"select count(*)::int from pg_stat_activity where {blockerPid} = any(pg_blocking_pids(pid))");
+            if (waiting > 0)
+            {
+                return;
+            }
+
+            await Task.Delay(25, TestContext.Current.CancellationToken);
+        }
+
+        throw new InvalidOperationException("the call never blocked behind the open transaction");
     }
 
     internal static string InsertSql(

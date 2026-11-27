@@ -98,7 +98,7 @@ public sealed class RequirementApiTests(PostgresTenancyFixture fixture)
 
         var foreign = await world.Client.SendAsync(
             HttpMethod.Post, Path(world.Project, mineId) + "/restore", caller,
-            new { version_id = other.Body.GetProperty("version_id").GetGuid() }, NewKey(), mine.ETag);
+            new { version_id = other.Body.GetProperty("version_id").GetGuid(), reason = "restore prior wording" }, NewKey(), mine.ETag);
         foreign.Status.ShouldBe(HttpStatusCode.NotFound);
         (await Scalar<long>(world, $"select count(*) from public.requirement_version where requirement_id = '{mineId}'")).ShouldBe(1);
 
@@ -106,8 +106,51 @@ public sealed class RequirementApiTests(PostgresTenancyFixture fixture)
         deleted.Status.ShouldBe(HttpStatusCode.NoContent);
         (await world.Client.SendAsync(
             HttpMethod.Post, Path(world.Project, mineId) + "/restore", caller,
-            new { version_id = mine.Body.GetProperty("version_id").GetGuid() }, NewKey(), mine.ETag))
+            new { version_id = mine.Body.GetProperty("version_id").GetGuid(), reason = "restore prior wording" }, NewKey(), mine.ETag))
             .Status.ShouldBe(HttpStatusCode.NotFound);
+    }
+
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(0)]
+    [InlineData(501)]
+    public async Task Restore_InvalidReason_Is422AndLeavesHeadHistoryAndAuditUnchanged(int reasonLength)
+    {
+        await using var world = await RequirementTestWorld.StartAsync(fixture);
+        var caller = As(world);
+        var created = await CreateAsync(world, caller, "first");
+        var id = created.Body.GetProperty("requirement_id").GetGuid();
+        var version = created.Body.GetProperty("version_id").GetGuid();
+        var path = Path(world.Project, id);
+        var edited = await world.Client.SendAsync(
+            HttpMethod.Patch, path, caller, new { body = "second" }, NewKey(), created.ETag);
+        edited.Status.ShouldBe(HttpStatusCode.OK, edited.ErrorMessage);
+        var head = await Scalar<string>(world, $"select to_jsonb(r)::text from public.requirement r where id = '{id}'");
+        var history = await Rows(world, id, "true");
+        var audits = await Audits(world);
+        var body = new Dictionary<string, object> { ["version_id"] = version };
+        if (reasonLength >= 0)
+        {
+            body["reason"] = new string('r', reasonLength);
+        }
+
+        var refused = await world.Client.SendAsync(
+            HttpMethod.Post, path + "/restore", caller, body, NewKey(), edited.ETag);
+
+        refused.Status.ShouldBe(HttpStatusCode.UnprocessableEntity, refused.ErrorMessage);
+        (await Scalar<string>(world, $"select to_jsonb(r)::text from public.requirement r where id = '{id}'")).ShouldBe(head);
+        (await Rows(world, id, "true")).ShouldBe(history);
+        (await Audits(world)).ShouldBe(audits);
+
+        var restored = await world.Client.SendAsync(
+            HttpMethod.Post, path + "/restore", caller,
+            new { version_id = version, reason = new string('r', 500) }, NewKey(), edited.ETag);
+        restored.Status.ShouldBe(HttpStatusCode.OK, restored.ErrorMessage);
+        restored.Body.GetProperty("version_no").GetInt32().ShouldBe(3);
+        (await Rows(world, id, "version_no < 3")).ShouldBe(history);
+        (await Scalar<string>(world, $"select body from public.requirement_version where requirement_id = '{id}' and version_no = 3"))
+            .ShouldBe("first");
+        await Audits(world, "authoring.requirement.restore", audits + 1);
     }
 
     [Fact]
@@ -322,7 +365,7 @@ public sealed class RequirementApiTests(PostgresTenancyFixture fixture)
 
         var restored = await world.Client.SendAsync(
             HttpMethod.Post, Path(world.Project, id) + "/restore", caller,
-            new { version_id = created.Body.GetProperty("version_id").GetGuid() }, NewKey(), edited.ETag);
+            new { version_id = created.Body.GetProperty("version_id").GetGuid(), reason = "restore prior wording" }, NewKey(), edited.ETag);
         restored.Status.ShouldBe(HttpStatusCode.OK, restored.ErrorMessage);
         await Audits(world, "authoring.requirement.restore", start + 3);
 
