@@ -32,14 +32,32 @@ internal static class RequirementSql
     /// <summary>
     /// Moves the head one number forward if, and only if, the caller read the current row version. The row lock taken
     /// by this UPDATE is what serializes two writers: the loser re-evaluates the WHERE clause after the winner commits,
-    /// matches nothing and is answered as stale instead of allocating the same number.
+    /// matches nothing and is answered as stale instead of allocating the same number. With <c>@set_identity</c> the
+    /// same statement also replaces the identity fields, so one edit moves the row version once, not twice.
     /// </summary>
     internal const string AdvanceHead = """
         update public.requirement
-           set head_version_no = head_version_no + 1
+           set head_version_no = head_version_no + 1,
+               kind = case when @set_identity then @kind::text else kind end,
+               title = case when @set_identity then @title::text else title end,
+               external_ref = case when @set_identity then @external_ref::text else external_ref end,
+               feature_node_id = case when @set_identity then @feature_node_id::uuid else feature_node_id end,
+               parent_requirement_id = case when @set_identity then @parent_requirement_id::uuid else parent_requirement_id end
          where org_id = @org_id and project_id = @project_id and id = @id
            and version = @expected_version and deleted_at is null
         returning head_version_no, version
+        """;
+
+    /// <summary>
+    /// Hides the requirement from the live list when the caller read the current row version. Versions, the head
+    /// pointer and every row that names the requirement stay; only <c>deleted_at</c> moves.
+    /// </summary>
+    internal const string SoftDelete = """
+        update public.requirement
+           set deleted_at = now()
+         where org_id = @org_id and project_id = @project_id and id = @id
+           and version = @expected_version and deleted_at is null
+        returning version
         """;
 
     /// <summary>Why <see cref="AdvanceHead"/> matched nothing: the row is missing or deleted, or its version moved.</summary>
@@ -60,7 +78,8 @@ internal static class RequirementSql
     /// <summary>One requirement with its head and the id of the head version.</summary>
     internal const string SelectRequirement = """
         select r.id, r.kind, r.title, r.external_ref, r.feature_node_id, r.parent_requirement_id,
-               r.head_version_no, r.version, r.deleted_at, h.id as head_version_id
+               r.head_version_no, r.version, r.deleted_at, r.created_at, r.updated_at,
+               h.id as head_version_id, h.body, h.content_hash
           from public.requirement r
           join public.requirement_version h
             on h.org_id = r.org_id and h.requirement_id = r.id and h.version_no = r.head_version_no
@@ -68,17 +87,48 @@ internal static class RequirementSql
         """;
 
     /// <summary>
+    /// One keyset page of the live requirements in <c>(created_at, id)</c> order, served by
+    /// <c>requirement_project_list_idx</c>. The list carries no body: a page of 200 stays one small statement.
+    /// </summary>
+    internal const string SelectLive = """
+        select r.id, r.kind, r.title, r.external_ref, r.feature_node_id, r.parent_requirement_id,
+               r.head_version_no, r.version, r.created_at, r.updated_at
+          from public.requirement r
+         where r.org_id = @org_id and r.project_id = @project_id and r.deleted_at is null
+           and (@after_created_at::timestamptz is null or (r.created_at, r.id) > (@after_created_at::timestamptz, @after_id::uuid))
+         order by r.created_at, r.id
+         limit @limit
+        """;
+
+    /// <summary>One version of one requirement of the project, by its id.</summary>
+    internal const string SelectVersion = """
+        select v.id, v.version_no, v.body, v.content_hash, v.source, v.author_membership_id, v.reason, v.created_at
+          from public.requirement_version v
+         where v.org_id = @org_id and v.project_id = @project_id and v.requirement_id = @requirement_id and v.id = @id
+        """;
+
+    /// <summary>
     /// A page of history, newest first, keyed by version number. The unique key
-    /// <c>(org_id, requirement_id, version_no)</c> is scanned backwards, so there is no sort.
+    /// <c>(org_id, requirement_id, version_no)</c> is scanned backwards, so there is no sort. The inner page is cut by
+    /// row count first, then by the running size of the bodies: a row is kept while the bytes before it are under
+    /// <c>@max_bytes</c>, so the first row always comes back and a page never holds much more than the cap.
     /// </summary>
     internal const string SelectVersions = """
-        select v.id, v.version_no, v.body, v.content_hash, v.source, v.author_membership_id, v.reason, v.created_at
-          from public.requirement r
-          join public.requirement_version v
-            on v.org_id = r.org_id and v.requirement_id = r.id
-         where r.org_id = @org_id and r.project_id = @project_id and r.id = @requirement_id
-           and (@before_version_no::integer is null or v.version_no < @before_version_no)
-         order by v.version_no desc
-         limit @limit
+        select p.id, p.version_no, p.body, p.content_hash, p.source, p.author_membership_id, p.reason, p.created_at
+          from (
+            select page.*, sum(octet_length(page.body)) over (order by page.version_no desc) as running_bytes
+              from (
+                select v.id, v.version_no, v.body, v.content_hash, v.source, v.author_membership_id, v.reason, v.created_at
+                  from public.requirement r
+                  join public.requirement_version v
+                    on v.org_id = r.org_id and v.requirement_id = r.id
+                 where r.org_id = @org_id and r.project_id = @project_id and r.id = @requirement_id
+                   and (@before_version_no::integer is null or v.version_no < @before_version_no)
+                 order by v.version_no desc
+                 limit @limit
+              ) page
+          ) p
+         where p.running_bytes - octet_length(p.body) < @max_bytes
+         order by p.version_no desc
         """;
 }

@@ -2714,6 +2714,189 @@ export type ManualCaseStepDto = {
 };
 
 /**
+ * Body of `createRequirement`. `body` is at most 20 000 code points; `external_ref` is a label of the catalog reference alphabet, never a tracker key.
+ */
+export type CreateRequirementRequest = {
+    kind: 'user_story' | 'acceptance_criterion' | 'epic' | 'spec_section' | 'other';
+    title: string;
+    body?: string;
+    reason?: string | null;
+    external_ref?: string | null;
+    feature_node_id?: string | null;
+    parent_requirement_id?: string | null;
+};
+
+/**
+ * Body of `updateRequirement`. An absent member is unchanged; an explicit `null` clears `external_ref`, `feature_node_id` or `parent_requirement_id`. At least one editable member is required.
+ */
+export type UpdateRequirementRequest = {
+    kind?: 'user_story' | 'acceptance_criterion' | 'epic' | 'spec_section' | 'other';
+    title?: string;
+    body?: string;
+    reason?: string | null;
+    external_ref?: string | null;
+    feature_node_id?: string | null;
+    parent_requirement_id?: string | null;
+};
+
+/**
+ * Body of `restoreRequirement`.
+ */
+export type RestoreRequirementRequest = {
+    version_id: string;
+    reason: string;
+};
+
+/**
+ * The answer of create, edit and restore: the appended version. `version` is the identity row's version (the `ETag` and the next `If-Match`), not the history number `version_no`.
+ */
+export type RequirementWriteResponse = {
+    requirement_id: string;
+    version_id: string;
+    version_no: number;
+    version: number;
+    content_hash: string;
+};
+
+/**
+ * One row of the requirement list, with identity and head numbers but never a body.
+ */
+export type RequirementListItemDto = {
+    requirement_id: string;
+    kind: 'user_story' | 'acceptance_criterion' | 'epic' | 'spec_section' | 'other';
+    title: string;
+    external_ref: string | null;
+    feature_node_id: string | null;
+    parent_requirement_id: string | null;
+    head_version_no: number;
+    version: number;
+    created_at: string;
+    updated_at: string;
+};
+
+/**
+ * 00 §9.1 keyset page of `RequirementListItemDto`, ordered `(created_at, id)`.
+ */
+export type RequirementListResponse = {
+    items: Array<RequirementListItemDto>;
+    next_cursor: string | null;
+};
+
+/**
+ * The 200 body of `getRequirement`: one requirement with its head body. `deleted_at` is set for a requirement hidden from the live list.
+ */
+export type RequirementDetailDto = {
+    requirement_id: string;
+    kind: 'user_story' | 'acceptance_criterion' | 'epic' | 'spec_section' | 'other';
+    title: string;
+    external_ref: string | null;
+    feature_node_id: string | null;
+    parent_requirement_id: string | null;
+    body: string;
+    content_hash: string;
+    head_version_id: string;
+    head_version_no: number;
+    version: number;
+    deleted_at: string | null;
+    created_at: string;
+    updated_at: string;
+};
+
+/**
+ * One immutable version of a requirement.
+ */
+export type RequirementVersionDto = {
+    version_id: string;
+    version_no: number;
+    body: string;
+    content_hash: string;
+    source: 'manual' | 'import' | 'tracker' | 'ai';
+    author_membership_id: string | null;
+    reason: string | null;
+    created_at: string;
+};
+
+/**
+ * One page of history, newest first, cut by row count and by body bytes; `next_cursor` is null once version 1 was returned.
+ */
+export type RequirementVersionListResponse = {
+    items: Array<RequirementVersionDto>;
+    next_cursor: string | null;
+};
+
+/**
+ * Names exactly one target to pin to the requirement's head. Both or neither is 422.
+ */
+export type CreateRequirementLinkRequest = {
+    checklist_item_id?: string | null;
+    manual_test_case_id?: string | null;
+    expected_version_id?: string | null;
+};
+
+/**
+ * The link a create produced (201) or found (200 with `changed` false).
+ */
+export type RequirementLinkResponse = {
+    link_id: string;
+    requirement_id: string;
+    version_id: string;
+    version_no: number;
+    checklist_item_id: string | null;
+    manual_test_case_id: string | null;
+    changed: boolean;
+};
+
+/**
+ * One pinned target of a requirement.
+ */
+export type RequirementCoverageTargetDto = {
+    link_id: string;
+    version_id: string;
+    version_no: number;
+    checklist_item_id: string | null;
+    manual_test_case_id: string | null;
+    /**
+     * The pin is older than the requirement's head.
+     */
+    stale: boolean;
+};
+
+/**
+ * One live manual case a requirement reaches, listed once however many ways reach it.
+ */
+export type RequirementCoverageCaseDto = {
+    case_id: string;
+    code: string;
+    title: string;
+    state: 'draft' | 'approved' | 'retired';
+    checklist_item_id: string;
+    link_path: 'direct' | 'via_item' | 'both';
+    automated_case_ids: Array<string>;
+    /**
+     * The latest manual result of the case. Only `unavailable` exists until a result source does.
+     */
+    result_availability: 'unavailable';
+};
+
+/**
+ * The coverage view of one requirement. `result_source_available` false means no result figure exists at all; it is never a zero.
+ */
+export type RequirementCoverageResponse = {
+    requirement_id: string;
+    head_version_id: string;
+    head_version_no: number;
+    linked_case_count: number;
+    approved_case_count: number;
+    link_count: number;
+    stale_link_count: number;
+    result_source_available: boolean;
+    targets: Array<RequirementCoverageTargetDto>;
+    targets_truncated: boolean;
+    cases: Array<RequirementCoverageCaseDto>;
+    next_code: string | null;
+};
+
+/**
  * One row of the manual-case list (13.1.1-T2 + 13.1.1-T4). The list projection carries no `description`, `precondition` or `steps`; the two coverage members are authoring coverage — the live catalog cases this manual case is linked to — and are not 03.1.4's execution coverage.
  */
 export type ManualCaseListItemDto = {
@@ -4394,6 +4577,21 @@ export type AuthoringNodeId = string;
  * Checklist item id (13.1.1).
  */
 export type AuthoringChecklistItemId = string;
+
+/**
+ * Requirement id.
+ */
+export type AuthoringRequirementId = string;
+
+/**
+ * Requirement link id.
+ */
+export type AuthoringRequirementLinkId = string;
+
+/**
+ * The `next_code` of the previous coverage page; absent for the first page.
+ */
+export type AuthoringAfterCode = string;
 
 /**
  * Manual test case id (13.1.1).
@@ -14016,6 +14214,658 @@ export type ApplyAuthoringChangesResponses = {
 };
 
 export type ApplyAuthoringChangesResponse2 = ApplyAuthoringChangesResponses[keyof ApplyAuthoringChangesResponses];
+
+export type ListRequirementsData = {
+    body?: never;
+    path: {
+        p: string;
+    };
+    query?: {
+        /**
+         * Opaque cursor from `next_cursor`; the order is the one the route declares (`(position, id)` for tree and checklist pages, `(code, id)` for manual cases, 00 §9.1).
+         */
+        cursor?: string;
+        limit?: number;
+    };
+    url: '/projects/{p}/authoring/requirements';
+};
+
+export type ListRequirementsErrors = {
+    /**
+     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type ListRequirementsError = ListRequirementsErrors[keyof ListRequirementsErrors];
+
+export type ListRequirementsResponses = {
+    /**
+     * Page of requirements
+     */
+    200: RequirementListResponse;
+};
+
+export type ListRequirementsResponse = ListRequirementsResponses[keyof ListRequirementsResponses];
+
+export type CreateRequirementData = {
+    body: CreateRequirementRequest;
+    headers: {
+        /**
+         * Client-supplied, ≤ 128 chars, unique per `(org_id, project_id, operation)` ≥ 24 h (00 §7/§9.1).
+         */
+        'Idempotency-Key': string;
+        /**
+         * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
+         */
+        'X-XSRF-TOKEN'?: string;
+    };
+    path: {
+        p: string;
+    };
+    query?: never;
+    url: '/projects/{p}/authoring/requirements';
+};
+
+export type CreateRequirementErrors = {
+    /**
+     * 400 request_invalid — a malformed or missing request header, e.g. the `Idempotency-Key` every mutating authoring route requires (00 §9.1)
+     */
+    400: ErrorEnvelope;
+    /**
+     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 413 too large (00 §9.2): a request body over its published cap. For the caps that carry numbers (`manifest_bytes`, `run_body_bytes`, and the raw-report byte cap behind `report_bytes`) the one detail names the cap in `path` and carries `limit` and `actual`; `actual` is the declared length when the declaration alone was over, otherwise the bytes counted when the overrun was seen, so a missing or short `Content-Length` never hides it.
+     */
+    413: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type CreateRequirementError = CreateRequirementErrors[keyof CreateRequirementErrors];
+
+export type CreateRequirementResponses = {
+    /**
+     * The requirement id, its first version and `ETag: "<version>"`
+     */
+    201: RequirementWriteResponse;
+};
+
+export type CreateRequirementResponse = CreateRequirementResponses[keyof CreateRequirementResponses];
+
+export type DeleteRequirementData = {
+    body?: never;
+    headers: {
+        /**
+         * ETag for optimistic concurrency; stale → 412 (00 §9.1).
+         */
+        'If-Match': string;
+        /**
+         * Client-supplied, ≤ 128 chars, unique per `(org_id, project_id, operation)` ≥ 24 h (00 §7/§9.1).
+         */
+        'Idempotency-Key': string;
+        /**
+         * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
+         */
+        'X-XSRF-TOKEN'?: string;
+    };
+    path: {
+        p: string;
+        /**
+         * Requirement id.
+         */
+        r: string;
+    };
+    query?: never;
+    url: '/projects/{p}/authoring/requirements/{r}';
+};
+
+export type DeleteRequirementErrors = {
+    /**
+     * 400 request_invalid — a malformed or missing request header, e.g. the `Idempotency-Key` every mutating authoring route requires (00 §9.1)
+     */
+    400: ErrorEnvelope;
+    /**
+     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 412 precondition failed — stale ETag; current revision id in `error.details` (00 §9.1/§9.2)
+     */
+    412: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type DeleteRequirementError = DeleteRequirementErrors[keyof DeleteRequirementErrors];
+
+export type DeleteRequirementResponses = {
+    /**
+     * Requirement hidden; no body
+     */
+    204: void;
+};
+
+export type DeleteRequirementResponse = DeleteRequirementResponses[keyof DeleteRequirementResponses];
+
+export type GetRequirementData = {
+    body?: never;
+    path: {
+        p: string;
+        /**
+         * Requirement id.
+         */
+        r: string;
+    };
+    query?: never;
+    url: '/projects/{p}/authoring/requirements/{r}';
+};
+
+export type GetRequirementErrors = {
+    /**
+     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type GetRequirementError = GetRequirementErrors[keyof GetRequirementErrors];
+
+export type GetRequirementResponses = {
+    /**
+     * The requirement and `ETag: "<version>"`
+     */
+    200: RequirementDetailDto;
+};
+
+export type GetRequirementResponse = GetRequirementResponses[keyof GetRequirementResponses];
+
+export type UpdateRequirementData = {
+    body: UpdateRequirementRequest;
+    headers: {
+        /**
+         * ETag for optimistic concurrency; stale → 412 (00 §9.1).
+         */
+        'If-Match': string;
+        /**
+         * Client-supplied, ≤ 128 chars, unique per `(org_id, project_id, operation)` ≥ 24 h (00 §7/§9.1).
+         */
+        'Idempotency-Key': string;
+        /**
+         * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
+         */
+        'X-XSRF-TOKEN'?: string;
+    };
+    path: {
+        p: string;
+        /**
+         * Requirement id.
+         */
+        r: string;
+    };
+    query?: never;
+    url: '/projects/{p}/authoring/requirements/{r}';
+};
+
+export type UpdateRequirementErrors = {
+    /**
+     * 400 request_invalid — a malformed or missing request header, e.g. the `Idempotency-Key` every mutating authoring route requires (00 §9.1)
+     */
+    400: ErrorEnvelope;
+    /**
+     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 412 precondition failed — stale ETag; current revision id in `error.details` (00 §9.1/§9.2)
+     */
+    412: ErrorEnvelope;
+    /**
+     * 413 too large (00 §9.2): a request body over its published cap. For the caps that carry numbers (`manifest_bytes`, `run_body_bytes`, and the raw-report byte cap behind `report_bytes`) the one detail names the cap in `path` and carries `limit` and `actual`; `actual` is the declared length when the declaration alone was over, otherwise the bytes counted when the overrun was seen, so a missing or short `Content-Length` never hides it.
+     */
+    413: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type UpdateRequirementError = UpdateRequirementErrors[keyof UpdateRequirementErrors];
+
+export type UpdateRequirementResponses = {
+    /**
+     * The appended version and `ETag: "<version>"`
+     */
+    200: RequirementWriteResponse;
+};
+
+export type UpdateRequirementResponse = UpdateRequirementResponses[keyof UpdateRequirementResponses];
+
+export type ListRequirementVersionsData = {
+    body?: never;
+    path: {
+        p: string;
+        /**
+         * Requirement id.
+         */
+        r: string;
+    };
+    query?: {
+        /**
+         * Opaque cursor from `next_cursor`; the order is the one the route declares (`(position, id)` for tree and checklist pages, `(code, id)` for manual cases, 00 §9.1).
+         */
+        cursor?: string;
+        limit?: number;
+    };
+    url: '/projects/{p}/authoring/requirements/{r}/versions';
+};
+
+export type ListRequirementVersionsErrors = {
+    /**
+     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type ListRequirementVersionsError = ListRequirementVersionsErrors[keyof ListRequirementVersionsErrors];
+
+export type ListRequirementVersionsResponses = {
+    /**
+     * Page of versions
+     */
+    200: RequirementVersionListResponse;
+};
+
+export type ListRequirementVersionsResponse = ListRequirementVersionsResponses[keyof ListRequirementVersionsResponses];
+
+export type RestoreRequirementData = {
+    body: RestoreRequirementRequest;
+    headers: {
+        /**
+         * ETag for optimistic concurrency; stale → 412 (00 §9.1).
+         */
+        'If-Match': string;
+        /**
+         * Client-supplied, ≤ 128 chars, unique per `(org_id, project_id, operation)` ≥ 24 h (00 §7/§9.1).
+         */
+        'Idempotency-Key': string;
+        /**
+         * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
+         */
+        'X-XSRF-TOKEN'?: string;
+    };
+    path: {
+        p: string;
+        /**
+         * Requirement id.
+         */
+        r: string;
+    };
+    query?: never;
+    url: '/projects/{p}/authoring/requirements/{r}/restore';
+};
+
+export type RestoreRequirementErrors = {
+    /**
+     * 400 request_invalid — a malformed or missing request header, e.g. the `Idempotency-Key` every mutating authoring route requires (00 §9.1)
+     */
+    400: ErrorEnvelope;
+    /**
+     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 412 precondition failed — stale ETag; current revision id in `error.details` (00 §9.1/§9.2)
+     */
+    412: ErrorEnvelope;
+    /**
+     * 413 too large (00 §9.2): a request body over its published cap. For the caps that carry numbers (`manifest_bytes`, `run_body_bytes`, and the raw-report byte cap behind `report_bytes`) the one detail names the cap in `path` and carries `limit` and `actual`; `actual` is the declared length when the declaration alone was over, otherwise the bytes counted when the overrun was seen, so a missing or short `Content-Length` never hides it.
+     */
+    413: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type RestoreRequirementError = RestoreRequirementErrors[keyof RestoreRequirementErrors];
+
+export type RestoreRequirementResponses = {
+    /**
+     * The appended version and `ETag: "<version>"`
+     */
+    200: RequirementWriteResponse;
+};
+
+export type RestoreRequirementResponse = RestoreRequirementResponses[keyof RestoreRequirementResponses];
+
+export type GetRequirementCoverageData = {
+    body?: never;
+    path: {
+        p: string;
+        /**
+         * Requirement id.
+         */
+        r: string;
+    };
+    query?: {
+        /**
+         * The `next_code` of the previous coverage page; absent for the first page.
+         */
+        after_code?: string;
+        limit?: number;
+    };
+    url: '/projects/{p}/authoring/requirements/{r}/coverage';
+};
+
+export type GetRequirementCoverageErrors = {
+    /**
+     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type GetRequirementCoverageError = GetRequirementCoverageErrors[keyof GetRequirementCoverageErrors];
+
+export type GetRequirementCoverageResponses = {
+    /**
+     * Coverage of the requirement
+     */
+    200: RequirementCoverageResponse;
+};
+
+export type GetRequirementCoverageResponse = GetRequirementCoverageResponses[keyof GetRequirementCoverageResponses];
+
+export type CreateRequirementLinkData = {
+    body: CreateRequirementLinkRequest;
+    headers: {
+        /**
+         * Client-supplied, ≤ 128 chars, unique per `(org_id, project_id, operation)` ≥ 24 h (00 §7/§9.1).
+         */
+        'Idempotency-Key': string;
+        /**
+         * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
+         */
+        'X-XSRF-TOKEN'?: string;
+    };
+    path: {
+        p: string;
+        /**
+         * Requirement id.
+         */
+        r: string;
+    };
+    query?: never;
+    url: '/projects/{p}/authoring/requirements/{r}/links';
+};
+
+export type CreateRequirementLinkErrors = {
+    /**
+     * 400 request_invalid — a malformed or missing request header, e.g. the `Idempotency-Key` every mutating authoring route requires (00 §9.1)
+     */
+    400: ErrorEnvelope;
+    /**
+     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 409 conflict — e.g. `idempotency_conflict`, `run_closed` (00 §9.1/§9.2)
+     */
+    409: ErrorEnvelope;
+    /**
+     * 412 precondition failed — stale ETag; current revision id in `error.details` (00 §9.1/§9.2)
+     */
+    412: ErrorEnvelope;
+    /**
+     * 413 too large (00 §9.2): a request body over its published cap. For the caps that carry numbers (`manifest_bytes`, `run_body_bytes`, and the raw-report byte cap behind `report_bytes`) the one detail names the cap in `path` and carries `limit` and `actual`; `actual` is the declared length when the declaration alone was over, otherwise the bytes counted when the overrun was seen, so a missing or short `Content-Length` never hides it.
+     */
+    413: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type CreateRequirementLinkError = CreateRequirementLinkErrors[keyof CreateRequirementLinkErrors];
+
+export type CreateRequirementLinkResponses = {
+    /**
+     * The target was already linked at the head; nothing was written
+     */
+    200: RequirementLinkResponse;
+    /**
+     * The link that was created
+     */
+    201: RequirementLinkResponse;
+};
+
+export type CreateRequirementLinkResponse = CreateRequirementLinkResponses[keyof CreateRequirementLinkResponses];
+
+export type DeleteRequirementLinkData = {
+    body?: never;
+    headers: {
+        /**
+         * Client-supplied, ≤ 128 chars, unique per `(org_id, project_id, operation)` ≥ 24 h (00 §7/§9.1).
+         */
+        'Idempotency-Key': string;
+        /**
+         * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
+         */
+        'X-XSRF-TOKEN'?: string;
+    };
+    path: {
+        p: string;
+        /**
+         * Requirement id.
+         */
+        r: string;
+        /**
+         * Requirement link id.
+         */
+        l: string;
+    };
+    query?: never;
+    url: '/projects/{p}/authoring/requirements/{r}/links/{l}';
+};
+
+export type DeleteRequirementLinkErrors = {
+    /**
+     * 400 request_invalid — a malformed or missing request header, e.g. the `Idempotency-Key` every mutating authoring route requires (00 §9.1)
+     */
+    400: ErrorEnvelope;
+    /**
+     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type DeleteRequirementLinkError = DeleteRequirementLinkErrors[keyof DeleteRequirementLinkErrors];
+
+export type DeleteRequirementLinkResponses = {
+    /**
+     * Link removed; no body
+     */
+    204: void;
+};
+
+export type DeleteRequirementLinkResponse = DeleteRequirementLinkResponses[keyof DeleteRequirementLinkResponses];
 
 export type ListManualCasesData = {
     body?: never;

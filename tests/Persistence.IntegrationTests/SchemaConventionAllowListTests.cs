@@ -64,6 +64,7 @@ public sealed class SchemaConventionAllowListTests
         ("public.catalog_sync", SchemaRule.AuditColumns | SchemaRule.VersionTrigger),
         ("public.incident_attempt", SchemaRule.AuditColumns | SchemaRule.VersionTrigger),
         ("public.release_decision", SchemaRule.AuditColumns | SchemaRule.VersionTrigger),
+        ("public.requirement_link", SchemaRule.AuditColumns | SchemaRule.VersionTrigger),
     ];
 
     [Fact]

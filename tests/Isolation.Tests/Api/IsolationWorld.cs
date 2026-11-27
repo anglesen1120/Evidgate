@@ -141,6 +141,12 @@ public sealed class IsolationProject
     /// <summary>The project's second manual test case, listed after <see cref="AuthoringManualCaseId"/>.</summary>
     public required Guid AuthoringSecondManualCaseId { get; init; }
 
+    /// <summary>The project's requirement (<c>{r}</c> of <c>…/authoring/requirements/{r}</c>), created through the route.</summary>
+    public required Guid AuthoringRequirementId { get; init; }
+
+    /// <summary>The project's second requirement: the requirement list pages at limit 1.</summary>
+    public required Guid AuthoringSecondRequirementId { get; init; }
+
     /// <summary>
     /// The project's newest <c>authoring_version</c> id (13.1.1-T3): <c>{v}</c> of
     /// <c>…/authoring/versions/{v}</c> (route 23) and of <c>…/authoring/versions/{v}/restore</c> (route 24).
@@ -902,6 +908,23 @@ public sealed class IsolationWorld
                 },
                 HttpStatusCode.Created).ConfigureAwait(false)).GetProperty("case_id").GetGuid();
 
+            // Two requirements per project, so the requirement list pages at limit 1 and its object routes name a real row
+            // of the victim tenant rather than a random id alone.
+            var authoringRequirement = (await SendAsync(
+                HttpMethod.Post,
+                $"/v1/projects/{project}/authoring/requirements",
+                admin,
+                org,
+                new { kind = "user_story", title = "isolation requirement", body = "the first body" },
+                HttpStatusCode.Created).ConfigureAwait(false)).GetProperty("requirement_id").GetGuid();
+            var authoringSecondRequirement = (await SendAsync(
+                HttpMethod.Post,
+                $"/v1/projects/{project}/authoring/requirements",
+                admin,
+                org,
+                new { kind = "epic", title = "isolation requirement 2" },
+                HttpStatusCode.Created).ConfigureAwait(false)).GetProperty("requirement_id").GetGuid();
+
             // 13.1.1-T3: the version timeline (routes 22/23) and one tombstone per entity restore route (6, 11, 18).
             // Every row is produced through a route, and each tombstone's version is read back through route 22 instead
             // of being assumed: the delete routes answer 204 without a body, and the timeline is where a caller learns
@@ -1061,6 +1084,8 @@ public sealed class IsolationWorld
                 AuthoringSecondRootNodeId = authoringSecondRoot,
                 AuthoringSecondItemId = authoringSecondItem,
                 AuthoringSecondManualCaseId = authoringSecondCase,
+                AuthoringRequirementId = authoringRequirement,
+                AuthoringSecondRequirementId = authoringSecondRequirement,
                 AuthoringVersionId = authoringVersion,
                 AuthoringChangeId = authoringChange,
                 AuthoringIntakeId = authoringIntake,

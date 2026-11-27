@@ -8480,6 +8480,470 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '503':
           $ref: '#/components/responses/Unavailable'
+  /projects/{p}/authoring/requirements:
+    get:
+      operationId: listRequirements
+      tags: [authoring]
+      summary: Cursor page of the project's live requirements, oldest first
+      description: >-
+        `authoring:read`. Live (not deleted) requirements in `(created_at, id)` order, each with its
+        identity, `parent_requirement_id` and head numbers but no body. A `limit` outside 1..200 or a
+        garbled `cursor` is 422 `request_invalid` with `details[].path` naming the parameter. Another
+        tenant's project is 404 `not_found`; a credential scoped to a sibling project of the same org
+        is 403 `project_scope_mismatch`.
+      x-permission: authoring:read
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/AuthoringCursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Page of requirements
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequirementListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    post:
+      operationId: createRequirement
+      tags: [authoring]
+      summary: Create a requirement and its first version
+      description: >-
+        `authoring:write`. `kind` and `title` are required; `body` defaults to an empty body. The
+        optional `parent_requirement_id` and `feature_node_id` must name live rows of the same
+        project, else 422 `request_invalid` (`details[].reason` `reference`). The version is recorded
+        with `source = manual` and the caller's membership as author. An unknown member is 422, a body
+        over 64 KiB 413 `payload_too_large`, a missing `Idempotency-Key` 400 `request_invalid`, and a
+        replay answers the stored 201 with no second version or audit row. A lock timeout is 503
+        `unavailable` with `Retry-After`.
+      x-permission: authoring:write
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateRequirementRequest'
+      responses:
+        '201':
+          description: 'The requirement id, its first version and `ETag: "<version>"`'
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequirementWriteResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '413':
+          $ref: '#/components/responses/TooLarge'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /projects/{p}/authoring/requirements/{r}:
+    get:
+      operationId: getRequirement
+      tags: [authoring]
+      summary: One requirement with its head body; ETag is its version
+      description: >-
+        `authoring:read`. Returns the requirement with its head body and `ETag: "<version>"`. A
+        deleted requirement is still answered, with `deleted_at` set, so a pin that names it can
+        resolve it. Unknown, another tenant's or another project's requirement is 404 `not_found`; a
+        credential scoped to a sibling project is 403 `project_scope_mismatch`.
+      x-permission: authoring:read
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/AuthoringRequirementId'
+      responses:
+        '200':
+          description: 'The requirement and `ETag: "<version>"`'
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequirementDetailDto'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    patch:
+      operationId: updateRequirement
+      tags: [authoring]
+      summary: Edit a requirement under If-Match; every edit appends one version
+      description: >-
+        `authoring:write`. Omitted members are unchanged; an explicit `null` clears `external_ref`,
+        `feature_node_id` or `parent_requirement_id`. A body that sends no editable member is 422
+        (`details[].reason` `empty`). When `body` is absent the head body is carried into the new
+        version. A parent that would close a cycle is 422 (`details[].reason` `cycle`). `If-Match` is
+        the requirement's `version` (absent/malformed 422 with `details[].path = /If-Match`, stale 412
+        `precondition_failed` with the current `version` in `error.details` and nothing written).
+        Unknown member 422, body over 64 KiB 413, unknown or deleted requirement 404, lock timeout 503
+        `unavailable` with `Retry-After`.
+      x-permission: authoring:write
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/AuthoringRequirementId'
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateRequirementRequest'
+      responses:
+        '200':
+          description: 'The appended version and `ETag: "<version>"`'
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequirementWriteResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
+        '413':
+          $ref: '#/components/responses/TooLarge'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    delete:
+      operationId: deleteRequirement
+      tags: [authoring]
+      summary: Hide a requirement from the live list; its versions are kept
+      description: >-
+        `authoring:write`. Soft-deletes the requirement: it leaves the live list, while its versions,
+        its head and every pin that names it stay readable. `If-Match` is the requirement's `version`
+        (absent/malformed 422 with `details[].path = /If-Match`, stale 412 `precondition_failed`, no
+        write). Unknown or already deleted 404 `not_found`, missing `Idempotency-Key` 400
+        `request_invalid`. The answer is a bodiless 204.
+      x-permission: authoring:write
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/AuthoringRequirementId'
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XsrfToken'
+      responses:
+        '204':
+          description: Requirement hidden; no body
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /projects/{p}/authoring/requirements/{r}/versions:
+    get:
+      operationId: listRequirementVersions
+      tags: [authoring]
+      summary: A page of a requirement's history, newest first
+      description: >-
+        `authoring:read`. Versions in descending `version_no`, cut by `limit` (1..200) and by body
+        bytes (256 KiB), so a page may hold fewer rows than asked; follow `next_cursor` until it is
+        null. The history of a deleted requirement stays readable. Unknown requirement 404, garbled
+        `cursor` or `limit` 422, sibling-project credential 403 `project_scope_mismatch`.
+      x-permission: authoring:read
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/AuthoringRequirementId'
+        - $ref: '#/components/parameters/AuthoringCursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Page of versions
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequirementVersionListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /projects/{p}/authoring/requirements/{r}/restore:
+    post:
+      operationId: restoreRequirement
+      tags: [authoring]
+      summary: Append an earlier version's body as the newest version
+      description: >-
+        `authoring:write`. `version_id` must be a version of this requirement (another requirement's
+        version is 404) and `reason` is required. The restore appends a new version and moves the head
+        forward only; no earlier version is changed. `If-Match` is the requirement's `version` (stale
+        412 `precondition_failed`, nothing written). A deleted requirement is 404. Unknown member 422,
+        missing `Idempotency-Key` 400, lock timeout 503 `unavailable` with `Retry-After`.
+      x-permission: authoring:write
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/AuthoringRequirementId'
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RestoreRequirementRequest'
+      responses:
+        '200':
+          description: 'The appended version and `ETag: "<version>"`'
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequirementWriteResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
+        '413':
+          $ref: '#/components/responses/TooLarge'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /projects/{p}/authoring/requirements/{r}/coverage:
+    get:
+      operationId: getRequirementCoverage
+      tags: [authoring]
+      summary: The cases a requirement reaches, its pinned targets and stale counts
+      description: >-
+        `authoring:read`. Counts cover every link; `cases` is one keyset page of the distinct live
+        manual cases reached directly or through a linked checklist item, in code order, each listed
+        once with its `link_path`. `limit` is 1..200 and `after_code` is the previous page's
+        `next_code`. No latest-result source exists yet, so `result_source_available` is false and
+        every case says `result_availability` `unavailable`; no result figure is ever given, and a
+        missing figure must not be read as zero failures. A deleted requirement stays readable.
+        Unknown requirement 404, bad `limit` or `after_code` 422, sibling-project credential 403
+        `project_scope_mismatch`.
+      x-permission: authoring:read
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/AuthoringRequirementId'
+        - $ref: '#/components/parameters/AuthoringAfterCode'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Coverage of the requirement
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequirementCoverageResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /projects/{p}/authoring/requirements/{r}/links:
+    post:
+      operationId: createRequirementLink
+      tags: [authoring]
+      summary: Pin one checklist item or manual case to the head version of a requirement
+      description: >-
+        `authoring:write`. Name exactly one of `checklist_item_id` and `manual_test_case_id` (both or
+        neither 422 `request_invalid`, `details[].path` `/target`); the target must be a live row of
+        the same project, else 422 `reference` and a foreign requirement 404. The pin is the head
+        version at commit; `expected_version_id` names the head the caller read and a moved head is
+        412. Linking a target already linked at the head answers 200 with `changed` false and writes
+        nothing, so a repeat never doubles coverage; a target linked at an older version is 409.
+        A new link answers 201 with one audit row. Unknown member 422, missing `Idempotency-Key` 400,
+        lock timeout 503 `unavailable` with `Retry-After`.
+      x-permission: authoring:write
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/AuthoringRequirementId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateRequirementLinkRequest'
+      responses:
+        '200':
+          description: The target was already linked at the head; nothing was written
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequirementLinkResponse'
+        '201':
+          description: The link that was created
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequirementLinkResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
+        '413':
+          $ref: '#/components/responses/TooLarge'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /projects/{p}/authoring/requirements/{r}/links/{l}:
+    delete:
+      operationId: deleteRequirementLink
+      tags: [authoring]
+      summary: Remove one link of a requirement
+      description: >-
+        `authoring:write`. Removes the link and answers a bodiless 204. A link of another
+        requirement, another project or another tenant, or one already removed, is 404 `not_found`
+        and nothing changes. The links of a deleted requirement stay removable. Missing
+        `Idempotency-Key` 400, lock timeout 503 `unavailable` with `Retry-After`.
+      x-permission: authoring:write
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/AuthoringRequirementId'
+        - $ref: '#/components/parameters/AuthoringRequirementLinkId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XsrfToken'
+      responses:
+        '204':
+          description: Link removed; no body
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
   /projects/{p}/authoring/manual-cases:
     get:
       operationId: listManualCases
@@ -10511,6 +10975,30 @@ components:
       schema:
         type: string
         format: uuid
+    AuthoringRequirementId:
+      name: r
+      in: path
+      required: true
+      description: Requirement id.
+      schema:
+        type: string
+        format: uuid
+    AuthoringRequirementLinkId:
+      name: l
+      in: path
+      required: true
+      description: Requirement link id.
+      schema:
+        type: string
+        format: uuid
+    AuthoringAfterCode:
+      name: after_code
+      in: query
+      required: false
+      description: The `next_code` of the previous coverage page; absent for the first page.
+      schema:
+        type: string
+        maxLength: 64
     AuthoringManualCaseId:
       name: m
       in: path
@@ -15297,6 +15785,273 @@ components:
         action: { type: string, maxLength: 2000 }
         expected: { type: string, maxLength: 2000 }
         data: { type: [string, 'null'], maxLength: 2000 }
+    CreateRequirementRequest:
+      type: object
+      description: >-
+        Body of `createRequirement`. `body` is at most 20 000 code points; `external_ref` is a label of
+        the catalog reference alphabet, never a tracker key.
+      additionalProperties: false
+      required: [kind, title]
+      properties:
+        kind: { type: string, enum: [user_story, acceptance_criterion, epic, spec_section, other] }
+        title: { type: string, minLength: 1, maxLength: 200 }
+        body: { type: string, maxLength: 20000 }
+        reason: { type: [string, 'null'], minLength: 1, maxLength: 500 }
+        external_ref: { type: [string, 'null'], maxLength: 128 }
+        feature_node_id: { type: [string, 'null'], format: uuid }
+        parent_requirement_id: { type: [string, 'null'], format: uuid }
+    UpdateRequirementRequest:
+      type: object
+      description: >-
+        Body of `updateRequirement`. An absent member is unchanged; an explicit `null` clears
+        `external_ref`, `feature_node_id` or `parent_requirement_id`. At least one editable member is
+        required.
+      additionalProperties: false
+      properties:
+        kind: { type: string, enum: [user_story, acceptance_criterion, epic, spec_section, other] }
+        title: { type: string, minLength: 1, maxLength: 200 }
+        body: { type: string, maxLength: 20000 }
+        reason: { type: [string, 'null'], minLength: 1, maxLength: 500 }
+        external_ref: { type: [string, 'null'], maxLength: 128 }
+        feature_node_id: { type: [string, 'null'], format: uuid }
+        parent_requirement_id: { type: [string, 'null'], format: uuid }
+    RestoreRequirementRequest:
+      type: object
+      description: Body of `restoreRequirement`.
+      additionalProperties: false
+      required: [version_id, reason]
+      properties:
+        version_id: { type: string, format: uuid }
+        reason: { type: string, minLength: 1, maxLength: 500 }
+    RequirementWriteResponse:
+      type: object
+      description: >-
+        The answer of create, edit and restore: the appended version. `version` is the identity row's
+        version (the `ETag` and the next `If-Match`), not the history number `version_no`.
+      required: [requirement_id, version_id, version_no, version, content_hash]
+      properties:
+        requirement_id: { type: string, format: uuid }
+        version_id: { type: string, format: uuid }
+        version_no: { type: integer, minimum: 1 }
+        version: { type: integer, minimum: 1 }
+        content_hash: { type: string, pattern: '^sha256:[0-9a-f]{64}$' }
+    RequirementListItemDto:
+      type: object
+      description: One row of the requirement list, with identity and head numbers but never a body.
+      required:
+        [
+          requirement_id,
+          kind,
+          title,
+          external_ref,
+          feature_node_id,
+          parent_requirement_id,
+          head_version_no,
+          version,
+          created_at,
+          updated_at,
+        ]
+      properties:
+        requirement_id: { type: string, format: uuid }
+        kind: { type: string, enum: [user_story, acceptance_criterion, epic, spec_section, other] }
+        title: { type: string, minLength: 1, maxLength: 200 }
+        external_ref: { type: [string, 'null'], maxLength: 128 }
+        feature_node_id: { type: [string, 'null'], format: uuid }
+        parent_requirement_id: { type: [string, 'null'], format: uuid }
+        head_version_no: { type: integer, minimum: 1 }
+        version: { type: integer, minimum: 1 }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    RequirementListResponse:
+      type: object
+      description: 00 §9.1 keyset page of `RequirementListItemDto`, ordered `(created_at, id)`.
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/RequirementListItemDto'
+        next_cursor: { type: [string, 'null'] }
+    RequirementDetailDto:
+      type: object
+      description: >-
+        The 200 body of `getRequirement`: one requirement with its head body. `deleted_at` is set for
+        a requirement hidden from the live list.
+      required:
+        [
+          requirement_id,
+          kind,
+          title,
+          external_ref,
+          feature_node_id,
+          parent_requirement_id,
+          body,
+          content_hash,
+          head_version_id,
+          head_version_no,
+          version,
+          deleted_at,
+          created_at,
+          updated_at,
+        ]
+      properties:
+        requirement_id: { type: string, format: uuid }
+        kind: { type: string, enum: [user_story, acceptance_criterion, epic, spec_section, other] }
+        title: { type: string, minLength: 1, maxLength: 200 }
+        external_ref: { type: [string, 'null'], maxLength: 128 }
+        feature_node_id: { type: [string, 'null'], format: uuid }
+        parent_requirement_id: { type: [string, 'null'], format: uuid }
+        body: { type: string, maxLength: 20000 }
+        content_hash: { type: string, pattern: '^sha256:[0-9a-f]{64}$' }
+        head_version_id: { type: string, format: uuid }
+        head_version_no: { type: integer, minimum: 1 }
+        version: { type: integer, minimum: 1 }
+        deleted_at: { type: [string, 'null'], format: date-time }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    RequirementVersionDto:
+      type: object
+      description: One immutable version of a requirement.
+      required:
+        [
+          version_id,
+          version_no,
+          body,
+          content_hash,
+          source,
+          author_membership_id,
+          reason,
+          created_at,
+        ]
+      properties:
+        version_id: { type: string, format: uuid }
+        version_no: { type: integer, minimum: 1 }
+        body: { type: string, maxLength: 20000 }
+        content_hash: { type: string, pattern: '^sha256:[0-9a-f]{64}$' }
+        source: { type: string, enum: [manual, import, tracker, ai] }
+        author_membership_id: { type: [string, 'null'], format: uuid }
+        reason: { type: [string, 'null'], maxLength: 500 }
+        created_at: { type: string, format: date-time }
+    RequirementVersionListResponse:
+      type: object
+      description: >-
+        One page of history, newest first, cut by row count and by body bytes; `next_cursor` is null
+        once version 1 was returned.
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/RequirementVersionDto'
+        next_cursor: { type: [string, 'null'] }
+    CreateRequirementLinkRequest:
+      type: object
+      description: >-
+        Names exactly one target to pin to the requirement's head. Both or neither is 422.
+      additionalProperties: false
+      properties:
+        checklist_item_id: { type: [string, 'null'], format: uuid }
+        manual_test_case_id: { type: [string, 'null'], format: uuid }
+        expected_version_id: { type: [string, 'null'], format: uuid }
+    RequirementLinkResponse:
+      type: object
+      description: The link a create produced (201) or found (200 with `changed` false).
+      required:
+        [
+          link_id,
+          requirement_id,
+          version_id,
+          version_no,
+          checklist_item_id,
+          manual_test_case_id,
+          changed,
+        ]
+      properties:
+        link_id: { type: string, format: uuid }
+        requirement_id: { type: string, format: uuid }
+        version_id: { type: string, format: uuid }
+        version_no: { type: integer, minimum: 1 }
+        checklist_item_id: { type: [string, 'null'], format: uuid }
+        manual_test_case_id: { type: [string, 'null'], format: uuid }
+        changed: { type: boolean }
+    RequirementCoverageTargetDto:
+      type: object
+      description: One pinned target of a requirement.
+      required: [link_id, version_id, version_no, checklist_item_id, manual_test_case_id, stale]
+      properties:
+        link_id: { type: string, format: uuid }
+        version_id: { type: string, format: uuid }
+        version_no: { type: integer, minimum: 1 }
+        checklist_item_id: { type: [string, 'null'], format: uuid }
+        manual_test_case_id: { type: [string, 'null'], format: uuid }
+        stale: { type: boolean, description: The pin is older than the requirement's head. }
+    RequirementCoverageCaseDto:
+      type: object
+      description: One live manual case a requirement reaches, listed once however many ways reach it.
+      required:
+        [
+          case_id,
+          code,
+          title,
+          state,
+          checklist_item_id,
+          link_path,
+          automated_case_ids,
+          result_availability,
+        ]
+      properties:
+        case_id: { type: string, format: uuid }
+        code: { type: string }
+        title: { type: string }
+        state: { type: string, enum: [draft, approved, retired] }
+        checklist_item_id: { type: string, format: uuid }
+        link_path: { type: string, enum: [direct, via_item, both] }
+        automated_case_ids:
+          type: array
+          items: { type: string, format: uuid }
+        result_availability:
+          type: string
+          enum: [unavailable]
+          description: >-
+            The latest manual result of the case. Only `unavailable` exists until a result source does.
+    RequirementCoverageResponse:
+      type: object
+      description: >-
+        The coverage view of one requirement. `result_source_available` false means no result figure
+        exists at all; it is never a zero.
+      required:
+        - requirement_id
+        - head_version_id
+        - head_version_no
+        - linked_case_count
+        - approved_case_count
+        - link_count
+        - stale_link_count
+        - result_source_available
+        - targets
+        - targets_truncated
+        - cases
+        - next_code
+      properties:
+        requirement_id: { type: string, format: uuid }
+        head_version_id: { type: string, format: uuid }
+        head_version_no: { type: integer, minimum: 1 }
+        linked_case_count: { type: integer, minimum: 0 }
+        approved_case_count: { type: integer, minimum: 0 }
+        link_count: { type: integer, minimum: 0 }
+        stale_link_count: { type: integer, minimum: 0 }
+        result_source_available: { type: boolean }
+        targets:
+          type: array
+          maxItems: 500
+          items:
+            $ref: '#/components/schemas/RequirementCoverageTargetDto'
+        targets_truncated: { type: boolean }
+        cases:
+          type: array
+          items:
+            $ref: '#/components/schemas/RequirementCoverageCaseDto'
+        next_code: { type: [string, 'null'] }
     ManualCaseListItemDto:
       type: object
       description: >-

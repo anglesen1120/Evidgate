@@ -91,8 +91,14 @@ internal sealed partial class TenantRowFactory
             var requiredIntakeNode = string.Equals(table, "public.authoring_intake", StringComparison.Ordinal)
                 && string.Equals(foreignKey.Name, "authoring_intake_feature_node_fk", StringComparison.Ordinal)
                 && !string.Equals(corruptedForeignKey, "authoring_intake_artifact_fk", StringComparison.Ordinal);
+            // A requirement link names exactly one target (0138 CHECK) although both target keys are nullable: the
+            // item is the generated one unless the case key is the one under test.
+            var requiredLinkItem = string.Equals(table, "public.requirement_link", StringComparison.Ordinal)
+                && string.Equals(foreignKey.Name, "requirement_link_item_fk", StringComparison.Ordinal)
+                && !string.Equals(corruptedForeignKey, "requirement_link_case_fk", StringComparison.Ordinal);
             if (!(corruptedForeignKey is not null && corrupted)
                 && !requiredIntakeNode
+                && !requiredLinkItem
                 && ownColumns.Length > 0
                 && ownColumns.Any(column => !_schema.ColumnsOf(table).Single(c => string.Equals(c.Name, column, StringComparison.Ordinal)).NotNull))
             {

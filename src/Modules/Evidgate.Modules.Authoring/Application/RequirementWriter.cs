@@ -57,25 +57,10 @@ internal sealed partial class RequirementWriter(ITenantDb db, ITenantScopeAccess
         ArgumentNullException.ThrowIfNull(create);
         EnsureScope(orgId);
 
-        if (!RequirementRules.IsStorable(create.Title))
+        var shape = CheckIdentityShape(new RequirementIdentity(create.Kind, create.Title, create.ExternalRef, create.FeatureNodeId, create.ParentRequirementId));
+        if (!shape.IsSuccess)
         {
-            return Refuse("/title", "invalid_text", "the title holds a NUL or an unpaired surrogate");
-        }
-
-        var title = AuthoringText.Normalize(create.Title)?.Trim() ?? string.Empty;
-        if (title.Length == 0 || !AuthoringText.Fits(title, RequirementRules.MaximumTitleCodePoints))
-        {
-            return Refuse("/title", "length", "the title must be 1 to 200 characters");
-        }
-
-        if (!RequirementRules.IsKind(create.Kind))
-        {
-            return Refuse("/kind", "unknown", "the kind is not one of the requirement kinds");
-        }
-
-        if (create.ExternalRef is not null && !RequirementRules.IsExternalRef(create.ExternalRef))
-        {
-            return Refuse("/external_ref", "format", "the reference may only use letters, digits and . _ : / # -");
+            return Result.Failure<RequirementHead>(shape.Error!);
         }
 
         if (CheckVersionFields(create.Body, create.Source, create.Reason) is { } refusal)
@@ -83,14 +68,10 @@ internal sealed partial class RequirementWriter(ITenantDb db, ITenantScopeAccess
             return refusal;
         }
 
-        if (create.FeatureNodeId is { } node && !await ExistsAsync(RequirementSql.FeatureNodeExists, orgId, create.ProjectId, node, cancellationToken).ConfigureAwait(false))
+        var identity = shape.Value;
+        if (await CheckReferencesAsync(orgId, create.ProjectId, null, identity, null, cancellationToken).ConfigureAwait(false) is { } missing)
         {
-            return Refuse("/feature_node_id", "not_found", "no live feature node with that id in this project");
-        }
-
-        if (create.ParentRequirementId is { } parent && !await ExistsAsync(RequirementSql.RequirementExists, orgId, create.ProjectId, parent, cancellationToken).ConfigureAwait(false))
-        {
-            return Refuse("/parent_requirement_id", "not_found", "no live requirement with that id in this project");
+            return Result.Failure<RequirementHead>(missing);
         }
 
         try
@@ -105,11 +86,11 @@ internal sealed partial class RequirementWriter(ITenantDb db, ITenantScopeAccess
                     id = requirementId,
                     org_id = orgId,
                     project_id = create.ProjectId,
-                    kind = create.Kind,
-                    title,
-                    external_ref = create.ExternalRef,
-                    feature_node_id = create.FeatureNodeId,
-                    parent_requirement_id = create.ParentRequirementId,
+                    kind = identity.Kind,
+                    title = identity.Title,
+                    external_ref = identity.ExternalRef,
+                    feature_node_id = identity.FeatureNodeId,
+                    parent_requirement_id = identity.ParentRequirementId,
                 },
                 cancellationToken).ConfigureAwait(false);
 
@@ -117,9 +98,9 @@ internal sealed partial class RequirementWriter(ITenantDb db, ITenantScopeAccess
 
             return Result.Success(new RequirementHead(requirementId, versionId, 1, rowVersion, hash));
         }
-        catch (PostgresException exception) when (AuthoringLockGuard.IsContention(exception))
+        catch (PostgresException exception) when (ToError(exception) is { } error)
         {
-            return Result.Failure<RequirementHead>(AuthoringErrors.Unavailable());
+            return Result.Failure<RequirementHead>(error);
         }
     }
 
@@ -147,36 +128,7 @@ internal sealed partial class RequirementWriter(ITenantDb db, ITenantScopeAccess
         string? reason,
         CancellationToken cancellationToken = default)
     {
-        EnsureScope(orgId);
-
-        if (CheckVersionFields(body, source, reason) is { } refusal)
-        {
-            return refusal;
-        }
-
-        try
-        {
-            await AuthoringLockGuard.SetLockTimeoutAsync(db, cancellationToken).ConfigureAwait(false);
-
-            var parameters = new { org_id = orgId, project_id = projectId, id = requirementId, expected_version = expectedRowVersion };
-            var advanced = await db.QuerySingleOrDefaultAsync<HeadAdvance>(RequirementSql.AdvanceHead, parameters, cancellationToken).ConfigureAwait(false);
-            if (advanced is null)
-            {
-                var state = await db.QuerySingleOrDefaultAsync<HeadState>(RequirementSql.HeadState, parameters, cancellationToken).ConfigureAwait(false);
-
-                return state is null or { Deleted: true }
-                    ? Result.Failure<RequirementHead>(AuthoringErrors.NotFound("no requirement with that id is visible in this project"))
-                    : Result.Failure<RequirementHead>(AuthoringRequestScope.Stale("requirement", state.Version));
-            }
-
-            var (versionId, hash) = await InsertVersionAsync(orgId, projectId, requirementId, advanced.HeadVersionNo, body, source, authorMembershipId, reason, cancellationToken).ConfigureAwait(false);
-
-            return Result.Success(new RequirementHead(requirementId, versionId, advanced.HeadVersionNo, advanced.Version, hash));
-        }
-        catch (PostgresException exception) when (AuthoringLockGuard.IsContention(exception))
-        {
-            return Result.Failure<RequirementHead>(AuthoringErrors.Unavailable());
-        }
+        return await AppendCoreAsync(orgId, projectId, requirementId, expectedRowVersion, body, source, authorMembershipId, reason, null, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task<(Guid VersionId, string Hash)> InsertVersionAsync(
