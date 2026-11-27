@@ -264,8 +264,13 @@ internal sealed partial class TenantRowFactory
             // the generic "probe" and the 400-day timestamp are both refused.
             ("public.support_grant", "scopes") => new[] { "case:read" },
             ("public.support_grant", "expires_at") => DateTimeOffset.UtcNow.AddHours(1),
-            ("public.github_install_state", "state_hash") =>
+            ("public.github_install_state" or "public.tracker_oauth_state", "state_hash") =>
                 (byte[])[.. Guid.NewGuid().ToByteArray(), .. Guid.NewGuid().ToByteArray()],
+            // The tracker tables (0139) close provider, kind and the item digest in CHECKs the generic text candidate
+            // cannot satisfy; every other constrained member is generic (13 characters sit inside its length bounds).
+            ("public.tracker_connection" or "public.tracker_oauth_state", "provider") => "jira_cloud",
+            ("public.tracker_item", "kind") => "story",
+            ("public.tracker_item", "content_hash") => "sha256:" + new string('a', 64),
             _ => (object?)null,
         };
 

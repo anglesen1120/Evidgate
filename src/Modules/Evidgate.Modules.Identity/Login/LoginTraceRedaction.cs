@@ -27,6 +27,12 @@ internal static class LoginTraceRedaction
     /// <summary>The span tag that carries the query string on its own.</summary>
     internal const string QueryTag = "url.query";
 
+    /// <summary>The literal start of the tracker callback route (<c>/v1/tracker-connections/{provider}/callback</c>).</summary>
+    internal const string TrackerCallbackPrefix = "/v1/tracker-connections/";
+
+    /// <summary>The literal end of the tracker callback route.</summary>
+    internal const string TrackerCallbackSuffix = "/callback";
+
     /// <summary>
     /// The span tags that carry the whole URL, query included: <c>url.full</c> of the current HTTP semantic
     /// conventions and the legacy <c>http.url</c> the instrumentation still sets by default.
@@ -38,7 +44,29 @@ internal static class LoginTraceRedaction
     internal static bool IsLoginRoute(string? path) =>
         !string.IsNullOrEmpty(path)
         && (path.StartsWith(LoginPathPrefix, StringComparison.OrdinalIgnoreCase)
-            || WithoutTrailingSlash(path).Equals(GitHubCallbackPath, StringComparison.OrdinalIgnoreCase));
+            || WithoutTrailingSlash(path).Equals(GitHubCallbackPath, StringComparison.OrdinalIgnoreCase)
+            || IsTrackerCallbackRoute(path));
+
+    /// <summary>
+    /// Whether <paramref name="path"/> is <c>/v1/tracker-connections/{provider}/callback</c>, whose query carries the
+    /// tracker's authorization <c>code</c> and the consent <c>state</c>. One non-empty segment sits between the two
+    /// literals; the trailing-slash form routes to the same endpoint.
+    /// </summary>
+    /// <param name="path">The request path (never the query string).</param>
+    internal static bool IsTrackerCallbackRoute(string? path)
+    {
+        if (string.IsNullOrEmpty(path))
+        {
+            return false;
+        }
+
+        var trimmed = WithoutTrailingSlash(path);
+
+        return trimmed.Length > TrackerCallbackPrefix.Length + TrackerCallbackSuffix.Length
+            && trimmed.StartsWith(TrackerCallbackPrefix, StringComparison.OrdinalIgnoreCase)
+            && trimmed.EndsWith(TrackerCallbackSuffix, StringComparison.OrdinalIgnoreCase)
+            && trimmed.IndexOf('/', TrackerCallbackPrefix.Length) == trimmed.Length - TrackerCallbackSuffix.Length;
+    }
 
     /// <summary>
     /// <paramref name="path"/> without a trailing slash, so <c>/v1/github/installations/callback/</c> is the same

@@ -15,6 +15,8 @@ var IDEMPOTENCY_EXEMPT = {
   'post /webhooks/github': 'replay-safe by provider delivery_id dedupe (00 §9.3)',
   'post /github/installations/start':
     'no resource is created: the route draws a one-time state nonce and binds nothing, so a retry mints a fresh state and only the callback that consumes one can bind (02.4.3 AC1)',
+  'post /projects/{p}/tracker-connections/{provider}/authorize':
+    'no connection is created: the route draws a one-time consent state and answers the tracker URL, so a retry mints a fresh state and only the callback that consumes one can bind (13.10.4)',
   'post /runs/{r}/events':
     'per-event event_id dedupe is the arbiter; a batch-level key cannot cover per-event acks (00 §9.4)',
   'post /drafts/{d}/pull-request': 'idempotent by (branch, commit) per 00 §9.3',

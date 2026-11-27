@@ -278,6 +278,13 @@ internal sealed partial class TenantRowFactory
             values["kind"] = "reserve";
         }
 
+        // A live connection holds an access token (0139 CHECK) and the column is nullable, so the generator, which fills
+        // only NOT NULL members, leaves it for this rule.
+        if (string.Equals(table, "public.tracker_connection", StringComparison.Ordinal))
+        {
+            values.TryAdd("access_token_cipher", "probe-cipher");
+        }
+
         // The linkage guard (0122) refuses an incident whose execution key is not its attempt's, and an
         // incident_attempt whose number or result is not its attempt's. Only a valid row can repeat them: a corrupt
         // row is refused by its foreign key first and keeps its random key, which keeps it off the valid row's

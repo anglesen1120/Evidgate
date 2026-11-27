@@ -1122,6 +1122,18 @@ internal static class RouteRequests
         Add("GET", "/v1/projects/{p}/authoring/intakes/{i}", ctx =>
             new(HttpMethod.Get, $"/v1/projects/{ctx.ProjectId}/authoring/intakes/{Guid.NewGuid():D}"));
 
+        // 13.10.4: the tracker connection routes. The callback probe carries a state that names no consent, so a granted
+        // caller is refused by the consent check and a denied one by the permission stage that runs first.
+        Add("POST", "/v1/projects/{p}/tracker-connections/{provider}/authorize", ctx =>
+            new(HttpMethod.Post, $"/v1/projects/{ctx.ProjectId}/tracker-connections/linear/authorize"));
+        Add("GET", "/v1/tracker-connections/{provider}/callback", _ =>
+            new(HttpMethod.Get, "/v1/tracker-connections/linear/callback?code=probe&state=probe"));
+        Add("GET", "/v1/projects/{p}/tracker-connections", ctx =>
+            new(HttpMethod.Get, $"/v1/projects/{ctx.ProjectId}/tracker-connections"));
+        Add("DELETE", "/v1/projects/{p}/tracker-connections/{c}", ctx =>
+            new(HttpMethod.Delete, $"/v1/projects/{ctx.ProjectId}/tracker-connections/{Guid.NewGuid():D}",
+                IdempotencyKey: Key()));
+
         // 13.1.1-T5: route 25, the import/export pair. The import probe is a dry run of a valid one-row JSON document —
         // a body the readers refuse would answer 422 before the permission stage, so a denied probe could not observe
         // the 403 it asserts — and a dry run writes nothing even for a granted caller.

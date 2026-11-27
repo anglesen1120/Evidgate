@@ -3,6 +3,7 @@ using Evidgate.BuildingBlocks.Pipeline.Authorization;
 using Evidgate.BuildingBlocks.Pipeline.Tenancy;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
+using Evidgate.Modules.Authoring.Endpoints;
 using Evidgate.Modules.Identity.Endpoints;
 using Evidgate.Modules.Identity.Login;
 
@@ -132,6 +133,14 @@ public sealed class TenantResolutionFilter(
         {
             return GitHubInstallationEndpoints.CallbackOrg(http.Request.Query["state"]) is { } callbackOrg
                 ? (callbackOrg, true)
+                : null;
+        }
+
+        // The tracker callback is the same shape: a session, no org header, and the org inside the state it carries.
+        if (http.Request.Path.Value is { } trackerPath && LoginTraceRedaction.IsTrackerCallbackRoute(trackerPath))
+        {
+            return AuthoringTrackerEndpoints.CallbackOrg(http.Request.Query["state"]) is { } trackerOrg
+                ? (trackerOrg, true)
                 : null;
         }
 

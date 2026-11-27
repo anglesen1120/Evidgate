@@ -144,6 +144,10 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
         // GitHubInstallationTests covers permission/refusal in Callback_MalformedState_IsRefusedByThePermissionStage and
         // redaction in Start_Callback_HappyPath and FullFlow_WritesNoSecretToAnyTable; the shared DTO is scanned below.
         "/v1/github/installations/callback",
+
+        // The tracker callback consumes a one-time state and exchanges a provider code, not a repeatable resource read; its
+        // permission stage, refusals and token redaction are asserted in Tenancy.IntegrationTests' tracker suites.
+        "/v1/tracker-connections/{provider}/callback",
     ];
 
     /// <summary>The wire shape of the create bodies (snake_case, like the API).</summary>

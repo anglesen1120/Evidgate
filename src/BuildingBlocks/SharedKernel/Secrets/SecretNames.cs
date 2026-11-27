@@ -49,6 +49,12 @@ public static class SecretNames
     /// <summary>Client secret of the GitHub OAuth login client (02.3.1-T1.3); the client id is plain configuration.</summary>
     public const string OauthGithubClientSecret = "EVIDGATE__OAUTH__GITHUB__CLIENTSECRET";
 
+    /// <summary>Client secret of the Jira Cloud (Atlassian 3LO) tracker connection; the client id is plain configuration.</summary>
+    public const string TrackersJiraCloudClientSecret = "EVIDGATE__TRACKERS__JIRACLOUD__CLIENTSECRET";
+
+    /// <summary>Client secret of the Linear tracker connection; the client id is plain configuration.</summary>
+    public const string TrackersLinearClientSecret = "EVIDGATE__TRACKERS__LINEAR__CLIENTSECRET";
+
     /// <summary>
     /// PEM private key of the platform's GitHub App. Resolved per mint by the catalog
     /// client through <see cref="ISecretProvider"/>; the value is never bound, logged or stored, and a
@@ -108,6 +114,8 @@ public static class SecretNames
         ObjectSecretKey,
         OidcGoogleClientSecret,
         OauthGithubClientSecret,
+        TrackersJiraCloudClientSecret,
+        TrackersLinearClientSecret,
         GitHubAppPrivateKey,
         GitHubAppClientSecret,
         HealingLlmApiKey,

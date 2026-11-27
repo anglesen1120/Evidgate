@@ -172,6 +172,7 @@ internal sealed partial class TenantRowFactory
     /// (02.9.1 §8 T1), so the generated row needs a platform identity parent only the owner can write.
     /// <c>support_grant</c> (0115) is the third: its <c>operator_user_id</c> is NOT NULL and references the same
     /// platform identity table, for the same reason.
+    /// <c>tracker_oauth_state</c> (0139) is the fourth, for the same reason: its <c>user_id</c> references the same table.
     /// </remarks>
     internal static readonly IReadOnlySet<string> OwnerProvisionedTables =
         new HashSet<string>(StringComparer.Ordinal)
@@ -179,6 +180,7 @@ internal sealed partial class TenantRowFactory
             "public.healing_llm_budget",
             "public.github_install_state",
             "public.support_grant",
+            "public.tracker_oauth_state",
         };
 
     /// <summary>

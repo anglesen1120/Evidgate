@@ -61,6 +61,26 @@ public sealed class LoginTraceRedactionTests(DatabaseFixture fixture)
         activity.GetTagItem(LoginTraceRedaction.QueryTag).ShouldBeNull();
     }
 
+    [Theory]
+    [InlineData("/v1/tracker-connections/linear/callback")]
+    [InlineData("/v1/tracker-connections/jira_cloud/callback/")]
+    [InlineData("/V1/Tracker-Connections/linear/CALLBACK")]
+    public void The_Tracker_Callback_Is_Redacted(string path)
+    {
+        using var activity = CallbackActivity();
+
+        LoginTraceRedaction.Redact(activity, path).ShouldBeTrue();
+
+        activity.GetTagItem(LoginTraceRedaction.QueryTag).ShouldBeNull();
+    }
+
+    [Theory]
+    [InlineData("/v1/tracker-connections/callback")]
+    [InlineData("/v1/tracker-connections/linear/authorize")]
+    [InlineData("/v1/projects/p/tracker-connections/linear/callback")]
+    public void Other_Tracker_Paths_Are_Not_Callback_Routes(string path) =>
+        LoginTraceRedaction.IsTrackerCallbackRoute(path).ShouldBeFalse();
+
     [Fact]
     public void Another_Route_Is_Left_Untouched()
     {

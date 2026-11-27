@@ -77,6 +77,21 @@ public static class ApiErrorCode
     /// <summary>409: the project already binds this repository.</summary>
     public const string BindingExists = "binding_exists";
 
+    /// <summary>409: this deployment has no OAuth client for the tracker, so it cannot be connected here.</summary>
+    public const string TrackerProviderUnavailable = "tracker_provider_unavailable";
+
+    /// <summary>409: the project already holds a live connection to this tracker.</summary>
+    public const string TrackerConnectionExists = "tracker_connection_exists";
+
+    /// <summary>400: the consent <c>state</c> is malformed, unknown, expired, already used or belongs to another provider.</summary>
+    public const string TrackerConsentInvalid = "tracker_consent_invalid";
+
+    /// <summary>400: the user declined the consent at the tracker; nothing was stored.</summary>
+    public const string TrackerConsentDenied = "tracker_consent_denied";
+
+    /// <summary>400: the tracker refused the authorization code, or answered something unusable; nothing was stored.</summary>
+    public const string TrackerExchangeFailed = "tracker_exchange_failed";
+
     /// <summary>429: a burst limit was hit; always with <c>Retry-After</c> (00 §9.2).</summary>
     public const string RateLimited = "rate_limited";
 

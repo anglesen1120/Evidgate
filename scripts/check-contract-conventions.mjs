@@ -265,6 +265,12 @@ const EXPECTED = [
   // The requirement intake pair: recording one is gated by `authoring:generate`, reading it by `authoring:read`.
   ['/projects/{p}/authoring/intakes', 'post', 'authoring:generate', 'v1'],
   ['/projects/{p}/authoring/intakes/{i}', 'get', 'authoring:read', 'v1'],
+  // 13.10.4: the read-only tracker connections. The callback sits outside /projects/{p}: the browser returns with a
+  // session and no project, and the consent it consumes names the project.
+  ['/projects/{p}/tracker-connections/{provider}/authorize', 'post', 'project:write', 'v1'],
+  ['/tracker-connections/{provider}/callback', 'get', 'project:write', 'v1'],
+  ['/projects/{p}/tracker-connections', 'get', 'project:read', 'v1'],
+  ['/projects/{p}/tracker-connections/{c}', 'delete', 'project:write', 'v1'],
 ];
 
 const byKey = new Map(ops.map((o) => [`${o.method} ${o.path}`, o]));
@@ -342,7 +348,8 @@ const INLINE_PARAM_ALLOWED = new Set(['X-Hub-Signature-256', 'traceparent']);
 // same state, and the `If-Match` version makes the retry that re-sends the already-applied version answer 412
 // instead of applying twice; the retention upsert = a PUT that writes the same two windows for the same body,
 // so a replay cannot create a second row or a different answer; the GitHub install start of 02.4.3 = no
-// resource is created (a one-time state nonce the callback consumes), so a retry mints a fresh state.
+// resource is created (a one-time state nonce the callback consumes), so a retry mints a fresh state; the tracker
+// consent start of 13.10.4 is the same (a pending consent, nothing connected).
 const IDEM_EXEMPT = new Set([
   'post /ci/token',
   'post /projects/{p}/ingest-tokens',
@@ -350,6 +357,7 @@ const IDEM_EXEMPT = new Set([
   'post /ingest-tokens/{t}/rotate',
   'post /webhooks/github',
   'post /github/installations/start',
+  'post /projects/{p}/tracker-connections/{provider}/authorize',
   'post /runs/{r}/events',
   'post /drafts/{d}/pull-request',
   'post /jobs/{j}/heartbeat',
