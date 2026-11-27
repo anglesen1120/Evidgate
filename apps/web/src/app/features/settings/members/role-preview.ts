@@ -182,7 +182,6 @@ export const BUILTIN_ROLE_GRANTS: ReadonlyMap<string, readonly string[]> = new M
       'authoring:write',
       'case:read',
       'case:write',
-      'ci_binding:write',
       'decision:read',
       'draft:dry_run',
       'draft:merge_request',

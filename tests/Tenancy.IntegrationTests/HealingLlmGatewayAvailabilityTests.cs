@@ -88,6 +88,7 @@ public sealed class HealingLlmGatewayAvailabilityTests
             new HealingLlmTransactions((ITenantScopeFactory)scopes),
             Options.Create(new HealingProviderOptions { Kind = HealingProviderKind.Mock, Provider = "mock" }),
             Options.Create(new HealingLlmOptions()),
+            new RedactionPipeline(),
             NullLogger<HealingLlmGateway>.Instance);
 
     private static (ITenantDb Db, ITenantScopeAccessor Scopes) Database()

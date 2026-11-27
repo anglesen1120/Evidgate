@@ -8,7 +8,6 @@ export const TOKEN_DENIED_PATTERNS: readonly string[] = [
   'organization:write',
   'project:create',
   'project:write',
-  'ci_binding:write',
   'api_token:*',
   'ingest_token:write',
   'service_identity:*',

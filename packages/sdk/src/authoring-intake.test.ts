@@ -26,11 +26,11 @@ describe('authoring intake request type', () => {
       { kind: 'pdf', feature_node_id: id } satisfies CreateIntakeRequest,
       // @ts-expect-error an image attaches to no feature node
       { kind: 'image', artifact_id: id, feature_node_id: id } satisfies CreateIntakeRequest,
-      // @ts-expect-error a text intake carries no artifact
       {
         kind: 'text',
         feature_node_id: id,
         text: 'x',
+        // @ts-expect-error a text intake carries no artifact
         artifact_id: id,
       } satisfies CreateIntakeRequest,
       // @ts-expect-error the kind is a closed set of four

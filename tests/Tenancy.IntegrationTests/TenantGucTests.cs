@@ -1,4 +1,3 @@
-using System.Globalization;
 using Evidgate.BuildingBlocks.Persistence.Isolation;
 using Npgsql;
 using Shouldly;
@@ -230,62 +229,6 @@ public sealed partial class TenantGucTests
             ("org_id", orgId),
             ("account_id", creditAccountId),
             ("payload_hash", "sha256:" + new string('b', 64)));
-        // The commit-registration tables (migration 0106): one binding, one received delivery and one queued
-        // sync, all owner-written so the fail-closed-zero assertions below have a row of each to hide.
-        var gitBindingId = Guid.CreateVersion7();
-        await scope.ExecuteAsync(
-            """
-            insert into public.git_repo_binding
-                (id, org_id, project_id, installation_id, repository_id, webhook_secret_ref)
-            values (@id, @org_id, @project_id, '1', '2', 'secret:probe')
-            """,
-            ("id", gitBindingId),
-            ("org_id", orgId),
-            ("project_id", projectId));
-        await scope.ExecuteAsync(
-            """
-            insert into public.webhook_delivery (id, org_id, provider, delivery_id, event, payload_hash)
-            values (@id, @org_id, 'github', @delivery_id, 'push', @payload_hash)
-            """,
-            ("id", Guid.CreateVersion7()),
-            ("org_id", orgId),
-            ("delivery_id", "probe-" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture)),
-            ("payload_hash", "sha256:" + new string('a', 64)));
-        await scope.ExecuteAsync(
-            """
-            insert into public.catalog_sync (id, org_id, project_id, binding_id, commit_sha)
-            values (@id, @org_id, @project_id, @binding_id, @commit_sha)
-            """,
-            ("id", Guid.CreateVersion7()),
-            ("org_id", orgId),
-            ("project_id", projectId),
-            ("binding_id", gitBindingId),
-            ("commit_sha", "0123456789abcdef0123456789abcdef01234567"));
-        // The installation tables (migration 0108): the org's one installation and one pending OAuth state, both
-        // owner-written so the fail-closed-zero assertions below have a row of each to hide. The state names a real
-        // account because its FK requires one, the same owner seam the founder membership above uses.
-        var installer = Guid.CreateVersion7();
-        await scope.ExecuteAsync(
-            "insert into public.\"user\" (id, email) values (@id, 'installer@example.test')",
-            ("id", installer));
-        await scope.ExecuteAsync(
-            """
-            insert into public.github_installation
-                (id, org_id, installation_id, account_login, account_id, permissions, installed_by)
-            values (@id, @org_id, @installation_id, 'acme', 1, '{"metadata":"read"}'::jsonb, @installed_by)
-            """,
-            ("id", Guid.CreateVersion7()),
-            ("org_id", orgId),
-            ("installation_id", 7000000001L),
-            ("installed_by", installer));
-        await scope.ExecuteAsync(
-            """
-            insert into public.github_install_state (state_hash, org_id, user_id, expires_at)
-            values (@state_hash, @org_id, @user_id, now() + interval '10 minutes')
-            """,
-            ("state_hash", new byte[32]),
-            ("org_id", orgId),
-            ("user_id", installer));
         await scope.ExecuteAsync(
             """
             insert into public.retention_policy (id, org_id, project_id, artifact_days, metadata_days)
@@ -974,6 +917,18 @@ public sealed partial class TenantGucTests
             ("id", Guid.CreateVersion7()),
             ("org_id", orgId),
             ("project_id", projectId));
+
+        // The provider-call redaction report (migration 0136): one row, so the zero-rows check has data to hide.
+        await scope.ExecuteAsync(
+            """
+            insert into public.healing_redaction_report
+                (id, org_id, project_id, purpose, rule_version, report, report_hash)
+            values (@id, @org_id, @project_id, 'authoring_generation', 'probe-v1', '{}'::jsonb, @hash)
+            """,
+            ("id", Guid.CreateVersion7()),
+            ("org_id", orgId),
+            ("project_id", projectId),
+            ("hash", "sha256:" + new string('a', 64)));
 
         // The release tables (migration 0072): one draft release with one component bound to the
         // environment revision seeded above, and one release_run bound to the run seeded above. The draft

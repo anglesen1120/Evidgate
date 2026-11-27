@@ -952,14 +952,6 @@
           "Evidgate.BuildingBlocks.SharedKernel": "[1.0.0, )"
         }
       },
-      "evidgate.buildingblocks.github": {
-        "type": "Project",
-        "dependencies": {
-          "Evidgate.BuildingBlocks.SharedKernel": "[1.0.0, )",
-          "Microsoft.Extensions.Http.Resilience": "[10.10.0, )",
-          "Microsoft.IdentityModel.JsonWebTokens": "[8.23.0, )"
-        }
-      },
       "evidgate.buildingblocks.observability": {
         "type": "Project",
         "dependencies": {
@@ -1021,7 +1013,6 @@
         "dependencies": {
           "Evidgate.BuildingBlocks.Canonicalization": "[1.0.0, )",
           "Evidgate.BuildingBlocks.Contracts.Validation": "[1.0.0, )",
-          "Evidgate.BuildingBlocks.GitHub": "[1.0.0, )",
           "Evidgate.BuildingBlocks.Observability": "[1.0.0, )",
           "Evidgate.BuildingBlocks.Persistence": "[1.0.0, )",
           "Evidgate.BuildingBlocks.Pipeline": "[1.0.0, )",
@@ -1031,8 +1022,6 @@
           "Mediator.Abstractions": "[3.0.2, )",
           "Microsoft.EntityFrameworkCore": "[10.0.14, )",
           "Microsoft.EntityFrameworkCore.Relational": "[10.0.14, )",
-          "Microsoft.Extensions.Http.Resilience": "[10.10.0, )",
-          "Microsoft.IdentityModel.JsonWebTokens": "[8.23.0, )",
           "YamlDotNet": "[18.1.0, )"
         }
       },
@@ -1048,7 +1037,6 @@
       "evidgate.modules.identity": {
         "type": "Project",
         "dependencies": {
-          "Evidgate.BuildingBlocks.GitHub": "[1.0.0, )",
           "Evidgate.BuildingBlocks.Observability": "[1.0.0, )",
           "Evidgate.BuildingBlocks.Persistence": "[1.0.0, )",
           "Evidgate.BuildingBlocks.Pipeline": "[1.0.0, )",

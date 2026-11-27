@@ -35,6 +35,7 @@ namespace Evidgate.Modules.Evidence.Application;
 /// types and the capture switch; the row is passed to the shared resolution whole, so the mint's and the
 /// completion's resolution of one artifact cannot differ.
 /// </param>
+/// <param name="OwnerCredentialId">The ingest-token id that minted the row, or null for a row minted before ownership was recorded.</param>
 internal sealed record ArtifactFacts(
     string? State,
     long? Bytes,
@@ -48,7 +49,8 @@ internal sealed record ArtifactFacts(
     long? MaxBytes,
     string[]? MediaTypes,
     bool? CaptureEnabled,
-    string? DefaultSensitivity);
+    string? DefaultSensitivity,
+    string? OwnerCredentialId = null);
 
 /// <summary>
 /// The endpoint-side verification of one completion (06.1.2 §5, T86 steps 1-4), run BEFORE the writer command
@@ -109,7 +111,8 @@ internal sealed partial class ArtifactCompletionVerifier(
                kp.max_bytes,
                kp.media_types,
                kp.capture_enabled,
-               kp.default_sensitivity
+               kp.default_sensitivity,
+               a.owner_credential_id
           from public.artifact a
           join public.project p on p.id = a.project_id
           left join public.artifact_kind_policy kp
@@ -179,6 +182,13 @@ internal sealed partial class ArtifactCompletionVerifier(
         // RLS already hides another tenant's row; the project comparison hides another project's row of the same
         // org, so an unknown, a foreign and a foreign-project id are one answer and never an oracle.
         if (facts is null || facts.ProjectId != projectId)
+        {
+            return Result.Failure<ArtifactCompletionVerdict>(EvidenceErrors.ArtifactNotFound);
+        }
+
+        // Another token of the same project gets the same 404 as an unknown id, before the stored outcome is
+        // replayed and before any storage call, so it can neither probe nor complete or reject the upload.
+        if (!ArtifactOwnership.Permits(facts.OwnerCredentialId, principal.CredentialId))
         {
             return Result.Failure<ArtifactCompletionVerdict>(EvidenceErrors.ArtifactNotFound);
         }

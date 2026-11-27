@@ -10,7 +10,7 @@ public interface ICaseIdentityService
     /// Registers what a sync found at <paramref name="commitSha"/>. <paramref name="files"/> is the
     /// <em>complete</em> set of test files and <c>evidgate.cases.yaml</c> sidecars of the project's tree at that
     /// commit: a case whose id is absent from it becomes <c>missing</c>. Must run inside the caller's tenant
-    /// transaction (the 03.4.1 <c>catalog_sync</c> task). Per-file problems are reported, never thrown:
+    /// transaction of whatever drives the sync. Per-file problems are reported, never thrown:
     /// a conflicting file writes nothing and the other files are still processed (AC2, AC4, AC5). Syncs of one
     /// project are serialised by a transaction-scoped advisory lock, and the caller must feed commits in order:
     /// nothing here stops an older commit from being applied after a newer one (03.4.1 owns that cursor).
@@ -84,7 +84,7 @@ public static class CaseSyncCodes
 /// <param name="Message">A human-readable reason for conflicts and warnings.</param>
 public sealed record CaseSyncEntry(string Path, string Result, Guid? CaseId = null, string? Code = null, string? Message = null);
 
-/// <summary>The sync report returned to 03.4.1 and stored on <c>catalog_sync.counts</c> (03.1.1-T2.2).</summary>
+/// <summary>The sync report <c>RegisterDiscoveredAsync</c> returns to its caller.</summary>
 /// <param name="Entries">One row per file with something to say, in path order.</param>
 /// <param name="Registered">New cases.</param>
 /// <param name="Renamed">Moved cases.</param>

@@ -54,6 +54,7 @@ internal sealed class ArtifactConfiguration : IEntityTypeConfiguration<Artifact>
         builder.Property(row => row.State).HasColumnName("state").HasDefaultValue(ArtifactState.PendingUpload);
         builder.Property(row => row.ExpiresAt).HasColumnName("expires_at");
         builder.Property(row => row.FailureCode).HasColumnName("failure_code");
+        builder.Property(row => row.OwnerCredentialId).HasColumnName("owner_credential_id");
         builder.Property(row => row.Version).HasColumnName("version").HasDefaultValue(1).IsConcurrencyToken();
         builder.Property(row => row.CreatedAt).HasColumnName("created_at").HasDefaultValueSql("now()");
         builder.Property(row => row.UpdatedAt).HasColumnName("updated_at").HasDefaultValueSql("now()");

@@ -30,7 +30,6 @@ using Evidgate.Modules.Ingestion.Endpoints;
 using Evidgate.Modules.Orchestrator;
 using Evidgate.Modules.Policy;
 using Evidgate.Modules.Catalog.Endpoints;
-using Evidgate.Modules.Catalog.Infrastructure.GitHub;
 using Evidgate.Modules.Evidence.Endpoints;
 using Evidgate.Modules.Healing;
 using Evidgate.Modules.Healing.Endpoints;
@@ -142,9 +141,6 @@ public static partial class ApiHost
         // Mediator's source generator registered the handlers themselves.
         builder.Services.AddIngestionModule();
         builder.Services.AddCatalogModule();
-        // The catalog's typed GitHub App client: the repository verification of a binding runs in this host, between
-        // the binding command's two units. The same extension is composed by the Worker; it sends nothing at start-up.
-        builder.Services.AddCatalogGitHub(builder.Configuration);
         // Both hosts compose the Authoring services because Mediator registers their handlers in each host.
         builder.Services.AddAuthoringModule();
         builder.Services.AddOrchestratorModule();
@@ -260,7 +256,6 @@ public static partial class ApiHost
         // 02.2.1-T1.2 (00 §5.5 C8): the module maps its /v1 read routes and the host
         // applies the envelope filter, so a Result becomes the 00 §9.2 body once.
         app.MapIdentityEndpoints().AddEndpointFilter<TenantResolutionFilter>().AddEndpointFilter<ResultEndpointFilter>();
-        app.MapGitHubInstallationEndpoints().AddEndpointFilter<TenantResolutionFilter>().AddEndpointFilter<ResultEndpointFilter>();
         // 02.1.2-T1.2 (00 §5.5 C8): the membership routes of 02.1.2 and the same
         // single Result → 00 §9.2 envelope filter.
         app.MapMembershipEndpoints().AddEndpointFilter<TenantResolutionFilter>().AddEndpointFilter<ResultEndpointFilter>();

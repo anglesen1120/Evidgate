@@ -25,13 +25,19 @@ public static class HealingLlmStatuses
     public const string Error = "error";
 
     /// <summary>
+    /// The redaction pipeline's second pass still found a secret-shaped value, so nothing was sent. Written by the
+    /// gateway only: a provider that reports it is recorded as <see cref="Error"/>.
+    /// </summary>
+    public const string BlockedLeak = "blocked_leak";
+
+    /// <summary>
     /// Whether <paramref name="status"/> is one of this closed vocabulary — the only values the DDL accepts. The verdict
     /// lives next to the constants so a new status cannot be storable in SQL and rejected here, or the reverse.
     /// </summary>
     /// <param name="status">A status, as a provider or the gateway reported it.</param>
     /// <returns><see langword="true"/> when the value may be written to <c>healing_llm_call.status</c>.</returns>
     public static bool IsKnown(string? status) =>
-        status is Ok or Timeout or SchemaViolation or BudgetExceeded or Error;
+        status is Ok or Timeout or SchemaViolation or BudgetExceeded or Error or BlockedLeak;
 }
 
 /// <summary>
@@ -68,9 +74,9 @@ public static class HealingLlmPurposes
 /// <param name="Model">The model the adapter is asked for; it is recorded on the row, never derived after the fact.</param>
 /// <param name="PromptVersion">The prompt template version, so output lineage survives a prompt edit (08.7.2).</param>
 /// <param name="Payload">
-/// The prompt body, <em>already redacted and opt-in approved</em> by the caller. 08.5.1 assumes this and never runs the
-/// redaction pipeline itself (08.5.3 owns it); the gateway, the recorder and the adapters must never log it, and no
-/// column of <c>healing_llm_call</c> can hold it (AC6).
+/// The prompt body as the caller built it, <em>not yet redacted</em>: the gateway masks it before any send and the
+/// adapter receives the masked text. The gateway, the recorder and the adapters must never log it, and no column of
+/// <c>healing_llm_call</c> can hold it (only the redaction report, which carries counts and hashes).
 /// </param>
 /// <param name="ResponseSchema">
 /// The JSON Schema the answer must satisfy, or null when the caller accepts any JSON answer. It is validated by the
@@ -127,15 +133,15 @@ public sealed record HealingLlmResult(string Status, string? Content, int Tokens
 /// behaviour; an adapter owns transport and provider-specific mapping only, and must never log or persist the payload.
 /// </summary>
 /// <remarks>
-/// Redaction seam: <see cref="HealingLlmRequest.Payload"/> is accepted already redacted and opt-in approved. The gateway
-/// does not redact, and the redaction pipeline is the caller's step before it builds the request. A later redaction
-/// stage hooks in at that call site (before <see cref="HealingLlmRequest"/> is constructed), so no adapter ever sees an
-/// unredacted prompt and no adapter changes when it lands.
+/// Redaction seam: the gateway masks <see cref="HealingLlmRequest.Payload"/> (raw prompt text from the caller) once per
+/// call, after the budget hold and before the send, and hands the adapter a request carrying the masked text; a payload
+/// that still holds a secret-shaped value is not sent at all. No adapter ever sees the raw prompt, so none needs to
+/// redact. Opt-in approval is not decided here.
 /// </remarks>
 public interface IHealingLlmProvider
 {
     /// <summary>Invokes the provider once for <paramref name="request"/>.</summary>
-    /// <param name="request">The call, with a payload the caller has already redacted.</param>
+    /// <param name="request">The call, with a payload the gateway has already masked.</param>
     /// <param name="cancellationToken">Cancellation of the call.</param>
     /// <returns>
     /// The answer, or one of the failure statuses — an adapter maps its own transport failure, time budget and non-success

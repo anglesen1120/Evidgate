@@ -73,9 +73,8 @@ Every operation declares:
 
 - `x-permission` — its 00 §9.3 permission (T51). The literal `none` is
   reserved for the routes that reach no tenant permission at all:
-  `POST /v1/ci/token` and `POST /v1/webhooks/github`, which must set `x-auth`
-  naming the credential (`ingest_token`,
-  `github_webhook_signature`), and the pre-tenant browser routes
+  `POST /v1/ci/token`, which must set `x-auth`
+  naming the credential (`ingest_token`), and the pre-tenant browser routes
   `GET /v1/auth/oidc/{provider}/start` and `/callback` (00 §5.4.8, 02 §4.2),
   which take no credential at all and set `x-auth: anonymous` with
   `security: []`. 02.3.1-T2 extends the same pre-tenant browser surface with
@@ -198,8 +197,6 @@ artifact kinds also extend the artifact-kind enum (`CaptureOptionsView.kinds` no
   a second secret the admin can revoke (02.4.2, 02.4.4).
 - `POST /v1/dev/session` — Development-only route: it only sets the
   session cookies of one fixed development user, so a repeat replaces the caller's own session.
-- `POST /v1/webhooks/github` — replay-safe by provider `delivery_id` dedupe
-  (00 §9.3).
 - `POST /v1/runs/{r}/events` — per-event `event_id` dedupe is the arbiter; a
   batch-level key cannot cover per-event acks (00 §9.4).
 - `POST /v1/drafts/{d}/pull-request` — idempotent by `(branch, commit)`
@@ -221,11 +218,6 @@ artifact kinds also extend the artifact-kind enum (`CaptureOptionsView.kinds` no
   (06.2.2): a list replaces the kind's declared set, `[]` clears it and an
   omitted member leaves it untouched, so a replay stores the same set and the
   rules never accumulate.
-- `POST /v1/github/installations/start` — no resource is created: the route
-  draws a one-time `state` nonce (only its SHA-256 is stored, bound to the
-  caller's org and user for ten minutes) and answers the install URL; nothing
-  is bound until the callback consumes the state, so a retry mints a fresh
-  state instead of replaying a response (02.4.3 AC1).
 - `POST /v1/auth/invite-token`, `POST /v1/auth/link/{provider}` — no resource
   is created: the first validates the presented token and stages it in the
   short-lived `__Host-evidgate_invite` cookie, the second answers a state cookie
