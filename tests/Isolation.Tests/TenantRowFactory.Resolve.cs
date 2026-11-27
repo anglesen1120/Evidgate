@@ -296,6 +296,14 @@ internal sealed partial class TenantRowFactory
         if (string.Equals(table, "public.tracker_connection", StringComparison.Ordinal))
         {
             values.TryAdd("access_token_cipher", "probe-cipher");
+
+            // The one-live-connection key is a partial unique index the constraint scan below does not see, so a
+            // corrupt row would duplicate the valid row's (org, project, provider) and answer 23505 before the
+            // foreign key under test; the other provider keeps the row valid and moves that key.
+            if (corruptedForeignKey is not null)
+            {
+                values["provider"] = "linear";
+            }
         }
 
         // The linkage guard (0122) refuses an incident whose execution key is not its attempt's, and an
