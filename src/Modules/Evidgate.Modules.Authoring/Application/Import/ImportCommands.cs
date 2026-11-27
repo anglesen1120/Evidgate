@@ -39,7 +39,7 @@ namespace Evidgate.Modules.Authoring.Application.Import;
 /// </para>
 /// </remarks>
 /// <param name="ProjectId">The project from the route.</param>
-/// <param name="Format">The normalized format token: <c>csv</c>, <c>json</c> or <c>xlsx</c>.</param>
+/// <param name="Format">The normalized format token: <c>csv</c>, <c>json</c>, <c>xlsx</c> or <c>markdown</c>.</param>
 /// <param name="DryRun">True to report what the file would do without writing anything (AC13).</param>
 /// <param name="Body">The uploaded file, byte for byte (at most <c>ImportLimits.MaxBodyBytes</c>).</param>
 /// <param name="IdempotencyKey">The client's <c>Idempotency-Key</c> (00 §9.1, AC18).</param>
@@ -110,7 +110,7 @@ internal sealed class ImportAuthoringCommandHandler(
         {
             // Unreachable from the route (the delegate refuses an unknown format before the pipeline) and reachable from
             // a direct caller: an unsupported format is the same 422, never an exception.
-            return Result.Failure<ImportResponse>(ImportFormats.Unsupported());
+            return Result.Failure<ImportResponse>(ImportFormats.UnsupportedImport());
         }
 
         if (parsed.TooLarge)
@@ -193,6 +193,9 @@ internal static class ImportFormats
     /// <summary>The XLSX format token.</summary>
     internal const string Xlsx = "xlsx";
 
+    /// <summary>The Markdown format token (import only).</summary>
+    internal const string Markdown = "markdown";
+
     /// <summary>
     /// The CSV media type the <em>import</em> accepts, exactly as route 25's <c>requestBody</c> declares it in
     /// <c>contracts/openapi.yaml</c>: <c>text/csv</c> with no parameter, because a media type plus a charset is a
@@ -209,6 +212,12 @@ internal static class ImportFormats
 
     /// <summary>The XLSX media type (the only one <c>Results.Stream</c> may declare without a charset).</summary>
     internal const string XlsxContentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
+    /// <summary>The Markdown media type the import accepts (bare, like <see cref="CsvMediaType"/>).</summary>
+    internal const string MarkdownMediaType = "text/markdown";
+
+    /// <summary>The Markdown media type with the charset an editor or browser upload sends.</summary>
+    internal const string MarkdownContentType = "text/markdown; charset=utf-8";
 
     /// <summary>The 413 of a file over <see cref="ImportLimits.MaxDataRows"/> data rows.</summary>
     private static readonly Error TooLarge = new(
@@ -227,9 +236,23 @@ internal static class ImportFormats
         _ => null,
     };
 
+    /// <summary>
+    /// Reads the import route's <c>?format=</c> token: the export formats plus <c>markdown</c>, which only reads
+    /// (an export of requirements does not exist, so <see cref="ReadFormat"/> refuses it).
+    /// </summary>
+    /// <param name="raw">The raw query value.</param>
+    /// <returns>The token, or null.</returns>
+    internal static string? ReadImportFormat(string? raw) =>
+        string.Equals(raw?.Trim(), Markdown, StringComparison.Ordinal) ? Markdown : ReadFormat(raw);
+
     /// <summary>The 422 of a missing or unknown <c>format</c> (and of an XLSX upload no composed host can read).</summary>
     internal static Error Unsupported() => Error.Invalid(
         "the format must be csv, json or xlsx",
+        [new ErrorDetail("/format", "unsupported_format")]);
+
+    /// <summary>The import route's 422 of a missing or unknown <c>format</c>: the export formats plus Markdown.</summary>
+    internal static Error UnsupportedImport() => Error.Invalid(
+        "the format must be csv, json, xlsx or markdown",
         [new ErrorDetail("/format", "unsupported_format")]);
 
     /// <summary>The 413 of a file over the row cap.</summary>
@@ -315,14 +338,9 @@ internal static class ImportFormats
         return null;
     }
 
-    /// <summary>The wire name of a row kind (<c>node</c>, <c>item</c>, <c>case</c>).</summary>
+    /// <summary>The wire name of a row kind (<c>node</c>, <c>item</c>, <c>case</c>, <c>requirement</c>).</summary>
     /// <param name="kind">The kind.</param>
-    internal static string KindName(ImportRowKind kind) => kind switch
-    {
-        ImportRowKind.Node => "node",
-        ImportRowKind.Item => "item",
-        _ => "case",
-    };
+    internal static string KindName(ImportRowKind kind) => ImportRows.KindName(kind);
 
     /// <summary>Parses one file with the reader of <paramref name="format"/>.</summary>
     /// <param name="format">A normalized format token (<see cref="ReadFormat"/>).</param>
@@ -340,6 +358,7 @@ internal static class ImportFormats
             Csv => CsvFormat.Read(body),
             Json => JsonFormat.Read(body),
             Xlsx => parsing is null ? null : XlsxFormat.Read(body, parsing, cancellationToken),
+            Markdown => MarkdownFormat.Read(body),
             _ => null,
         };
     }

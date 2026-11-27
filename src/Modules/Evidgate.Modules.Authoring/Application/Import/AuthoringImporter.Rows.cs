@@ -202,7 +202,7 @@ internal sealed partial class AuthoringImporter
 
     /// <summary>The wire name of an outcome (13.1.1 §5 route 25 <c>rows[].outcome</c>).</summary>
     /// <param name="outcome">The outcome.</param>
-    private static string OutcomeName(ImportOutcome outcome) => outcome switch
+    internal static string OutcomeName(ImportOutcome outcome) => outcome switch
     {
         ImportOutcome.Create => "create",
         ImportOutcome.Update => "update",

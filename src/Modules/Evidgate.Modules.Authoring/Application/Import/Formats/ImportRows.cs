@@ -74,6 +74,7 @@ internal static class ImportRows
         ImportRowKind.Node => "node",
         ImportRowKind.Item => "item",
         ImportRowKind.Case => "case",
+        ImportRowKind.Requirement => "requirement",
         _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "unknown import row kind"),
     };
 
@@ -85,6 +86,7 @@ internal static class ImportRows
         "node" => ImportRowKind.Node,
         "item" => ImportRowKind.Item,
         "case" => ImportRowKind.Case,
+        "requirement" => ImportRowKind.Requirement,
         _ => throw new InvalidOperationException("the import document carries a row kind the schema does not allow"),
     };
 

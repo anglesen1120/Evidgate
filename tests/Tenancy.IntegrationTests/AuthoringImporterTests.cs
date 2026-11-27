@@ -88,7 +88,8 @@ public sealed partial class AuthoringImporterTests
         var importer = new AuthoringImporter(
             services.ServiceProvider.GetRequiredService<ITenantDb>(),
             services.ServiceProvider.GetRequiredService<AuthoringCodeAllocator>(),
-            services.ServiceProvider.GetRequiredService<ManualCaseStepsValidator>());
+            services.ServiceProvider.GetRequiredService<ManualCaseStepsValidator>(),
+            services.ServiceProvider.GetRequiredService<RequirementWriter>());
 
         var result = await importer.ImportAsync(world.Org, projectId, null, rows, dryRun, cancellationToken);
 

@@ -58,6 +58,8 @@ internal static class AuthoringImportEndpoints
                     ImportFormats.CsvContentType,
                     ImportFormats.JsonContentType,
                     ImportFormats.XlsxContentType,
+                    ImportFormats.MarkdownMediaType,
+                    ImportFormats.MarkdownContentType,
                 ],
                 typeof(byte[]),
                 isOptional: false))
@@ -96,9 +98,9 @@ internal static class AuthoringImportEndpoints
         // Refuse an unresolved caller before the query is validated.
         RawBodyGuard.RequireAuthenticatedTenant(context.RequestServices);
 
-        if (ImportFormats.ReadFormat(context.Request.Query["format"].ToString()) is not { } format)
+        if (ImportFormats.ReadImportFormat(context.Request.Query["format"].ToString()) is not { } format)
         {
-            return Result.Failure<ImportResponse>(ImportFormats.Unsupported());
+            return Result.Failure<ImportResponse>(ImportFormats.UnsupportedImport());
         }
 
         if (ImportFormats.DryRun(context.Request.Query["dry_run"].ToString(), out var dryRun) is { } dryRunError)

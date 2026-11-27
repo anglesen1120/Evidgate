@@ -546,6 +546,7 @@ internal static class AuthoringImportCalls
     {
         "csv" => CsvMediaType,
         "xlsx" => XlsxMediaType,
+        "markdown" => "text/markdown",
         _ => JsonMediaType,
     };
 
