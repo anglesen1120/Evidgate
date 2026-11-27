@@ -20,36 +20,44 @@ internal static class RedactionRules
 
     private static readonly SecretRedactor Secrets = new();
 
-    // Quoted spans are single-line and atomic, so a quote that never closes costs one line and cannot send the scan on
-    // to the end of the window from every candidate start. A call argument may hold brackets nested up to three deep
-    // and may wrap over lines; deeper nesting is not matched (known limit).
+    // Quoted spans are single-line and atomic. A backslash before a quote outside a span is consumed as one unit
+    // (Escaped), so a run of \' pairs can never open a span: a span that fails to close can then fail only once per
+    // quote kind and line, not again from every later candidate start. A call argument may hold brackets nested up to
+    // three deep and may wrap over lines; deeper nesting is not matched (known limit).
+    private const string Escaped = @"\\['""`\\]";
     private const string Quoted = @"'(?>(?:\\.|[^'\\\r\n]|\\)*)'|""(?>(?:\\.|[^""\\\r\n]|\\)*)""|`(?>(?:\\.|[^`\\\r\n]|\\)*)`";
-    private const string Group1 = @"[(\[](?>(?:" + Quoted + @"|[^()\[\]'""`])*)[)\]]";
-    private const string Group2 = @"[(\[](?>(?:" + Quoted + "|" + Group1 + @"|[^()\[\]'""`])*)[)\]]";
-    private const string Group3 = @"[(\[](?>(?:" + Quoted + "|" + Group2 + @"|[^()\[\]'""`])*)[)\]]";
+    private const string Group1 = @"[(\[](?>(?:" + Escaped + "|" + Quoted + @"|[^()\[\]'""`])*)[)\]]";
+    private const string Group2 = @"[(\[](?>(?:" + Escaped + "|" + Quoted + "|" + Group1 + @"|[^()\[\]'""`])*)[)\]]";
+    private const string Group3 = @"[(\[](?>(?:" + Escaped + "|" + Quoted + "|" + Group2 + @"|[^()\[\]'""`])*)[)\]]";
 
     // The selector argument of a fill-style call: a literal or an expression such as SEL.a or sel('a,b').
-    private const string Selector = @"(?>(?:" + Quoted + "|" + Group3 + @"|[^,()\[\]'""`])+)";
+    private const string Selector = @"(?>(?:" + Escaped + "|" + Quoted + "|" + Group3 + @"|[^,()\[\]'""`])+)";
 
     // What follows a literal value up to the end of its argument ('a' + 'b', 'a' + x). A stray quote is consumed as text.
-    private const string ArgumentTail = @"(?>(?:" + Quoted + "|" + Group3 + @"|[^,()\[\]'""`]|['""`])*)";
+    private const string ArgumentTail = @"(?>(?:" + Escaped + "|" + Quoted + "|" + Group3 + @"|[^,()\[\]'""`]|['""`])*)";
+
+    // The same for an object member, which also ends at the closing brace.
+    private const string MemberTail = @"(?>(?:" + Escaped + "|" + Quoted + "|" + Group3 + @"|[^,()\[\]{}'""`]|['""`])*)";
 
     // A value literal that is not exactly the generated marker followed by the end of its argument. An unclosed quote
-    // ends at the line end (a template literal at the end of the window) and is masked.
+    // ends at the line end (a template literal at the end of the window) and is masked. A Python string prefix
+    // (f, r, b, u and the two-letter pairs) belongs to the literal.
     private const string ArgumentEnd = @"(?=\s*(?:[,)]|\z))";
+    private const string MemberEnd = @"(?=\s*(?:[,)}\]]|\z))";
     private const string Marker = @"\[redacted:input_value\]";
+    private const string StringPrefix = @"(?:fr|rf|br|rb|ur|ru|[fbru])?";
     private const string ValueLiteral =
-        @"'(?!" + Marker + "'" + ArgumentEnd + @")(?>(?:\\.|[^'\\\r\n]|\\)*)(?:'|(?=[\r\n]|\z))"
-        + @"|[@$]{0,2}""(?!" + Marker + @"""" + ArgumentEnd + @")(?>(?:\\.|[^""\\\r\n]|\\)*)(?:""|(?=[\r\n]|\z))"
+        StringPrefix + @"'(?!" + Marker + "'" + ArgumentEnd + @")(?>(?:\\.|[^'\\\r\n]|\\)*)(?:'|(?=[\r\n]|\z))"
+        + "|" + StringPrefix + @"[@$]{0,2}""(?!" + Marker + @"""" + ArgumentEnd + @")(?>(?:\\.|[^""\\\r\n]|\\)*)(?:""|(?=[\r\n]|\z))"
         + @"|`(?!" + Marker + "`" + ArgumentEnd + @")(?>(?:\\.|[^`\\]|\\)*)(?:`|\z)";
 
-    // The value of an object-literal or JSON member, in either quote kind.
-    private const string MemberValue =
-        @"'(?!" + Marker + @"')(?>(?:\\.|[^'\\\r\n]|\\)*)(?:'|(?=[\r\n]|\z))"
-        + @"|""(?!" + Marker + @"""" + @")(?>(?:\\.|[^""\\\r\n]|\\)*)(?:""|(?=[\r\n]|\z))";
+    // The value of an object-literal or JSON member, in either quote kind. A quote that never closes runs to the end
+    // of the window: a string may wrap over lines, and masking too much is safer than leaving a line of the value.
+    private const string MemberSingle = @"'(?!" + Marker + "'" + MemberEnd + @")(?>(?:\\.|[^'\\]|\\)*)(?:'|\z)";
+    private const string MemberDouble = @"""(?!" + Marker + @"""" + MemberEnd + @")(?>(?:\\.|[^""\\]|\\)*)(?:""|\z)";
 
     // Calls whose first literal argument may be the typed text (the selector, when there is one, comes first).
-    private const string TypeCall = @"\.(?:fill|type|pressSequentially)(?:Async)?\(";
+    private const string TypeCall = @"\.(?:fill|type|pressSequentially|press_sequentially)(?:Async)?\(";
 
     // Calls whose first argument is always the typed text.
     private const string KeysCall = @"\.(?:sendKeys|send_keys|setValue)\(";
@@ -73,10 +81,10 @@ internal static class RedactionRules
         new("input_value", @"(\bvalue\s*=\s*)""(?!\[redacted:input_value\]"")[^""]*""", Replacement: "$1\"[redacted:input_value]\"", Prefilter: "value"),
         new("input_value", @"(\bvalue\s*=\s*)'(?!\[redacted:input_value\]')[^']*'", Replacement: "$1'[redacted:input_value]'", Prefilter: "value"),
         new("input_value", @"(\bvalue\s*=\s*)(?![""'\s]|\[redacted:input_value\](?:\s|/?>|\z))[^\s""'<>`=]+", Replacement: "$1\"[redacted:input_value]\"", Prefilter: "value"),
-        new("input_value", @"(""value""\s*:\s*)""(?!\[redacted:input_value\]"")(?>(?:\\.|[^""\\\r\n]|\\)*)(?:""|(?=[\r\n]|\z))", Replacement: "$1\"[redacted:input_value]\"", Prefilter: "\"value\""),
-        new("input_value", @"([{,]\s*(?:value|'value'|""value"")\s*:\s*)(?:" + MemberValue + ")", Replacement: "$1\"[redacted:input_value]\"", Prefilter: "value"),
+        new("input_value", @"(""value""\s*:\s*)(?:" + MemberDouble + ")" + MemberTail, Replacement: "$1\"[redacted:input_value]\"", Prefilter: "\"value\""),
+        new("input_value", @"([{,]\s*(?:value|'value'|""value"")\s*:\s*)(?:" + MemberSingle + "|" + MemberDouble + ")" + MemberTail, Replacement: "$1\"[redacted:input_value]\"", Prefilter: "value"),
         new("input_value", "(" + TypeCall + @"(?>\s*)" + Selector + @"\s*,\s*)(?:" + ValueLiteral + ")" + ArgumentTail, Replacement: "$1\"[redacted:input_value]\"", Prefilter: "("),
-        new("input_value", "(" + TypeCall + @"(?>\s*))(?:" + ValueLiteral + ")" + ArgumentTail + @"(?=\s*(?:\)|,\s*(?:\)|\{|new\b)))", Replacement: "$1\"[redacted:input_value]\"", Prefilter: "("),
+        new("input_value", "(" + TypeCall + @"(?>\s*))(?:" + ValueLiteral + ")" + ArgumentTail + @"(?=\s*(?:\)|,(?>\s*)(?!['""`])))", Replacement: "$1\"[redacted:input_value]\"", Prefilter: "("),
         new("input_value", "(" + KeysCall + @"(?>\s*))(?:" + ValueLiteral + ")" + ArgumentTail, Replacement: "$1\"[redacted:input_value]\"", Prefilter: "("),
     ];
 

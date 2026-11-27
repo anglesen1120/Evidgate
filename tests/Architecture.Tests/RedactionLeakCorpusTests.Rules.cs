@@ -16,6 +16,15 @@ public sealed partial class RedactionLeakCorpusTests
         { "fill concatenated value", "page.fill('#pw','hun'+'ter2')", "ter2", "input_value" },
         { "fill marker concatenated tail", "page.fill(sel,'[redacted:input_value]'+'" + Secret + "')", Secret, "input_value" },
         { "fill wrapped selector", "page.fill(\n SELECTORS\n .password,\n '" + Secret + "',\n)", Secret, "input_value" },
+        { "fill identifier options", "locator.fill('" + Secret + "', opts)", Secret, "input_value" },
+        { "python press_sequentially", "locator.press_sequentially('" + Secret + "')", Secret, "input_value" },
+        { "JSON multiline LF value", "{\"value\":\"first\n" + Secret + "\"}", Secret, "input_value" },
+        { "JSON multiline CRLF value", "{\"value\":\"first\r\n" + Secret + "\"}", Secret, "input_value" },
+        { "JSON multiline truncated value", "{\"value\":\"first\n" + Secret, Secret, "input_value" },
+        { "JSON multiline escaped quote", "{\"value\":\"first\\\"\n" + Secret + "\"}", Secret, "input_value" },
+        { "object concatenated value", "{value:'hun'+'" + Secret + "'}", Secret, "input_value" },
+        { "JSON concatenated value", "{\"value\":\"hun\"+\"" + Secret + "\"}", Secret, "input_value" },
+        { "object marker concatenated value", "{value:'[redacted:input_value]'+'" + Secret + "'}", Secret, "input_value" },
         { "C# FillAsync", "locator.FillAsync(\"" + Secret + "\")", Secret, "input_value" },
         { "C# TypeAsync", "page.TypeAsync(SEL.a, \"" + Secret + "\")", Secret, "input_value" },
         { "C# PressSequentiallyAsync", "locator.PressSequentiallyAsync(\"" + Secret + "\")", Secret, "input_value" },
@@ -34,8 +43,29 @@ public sealed partial class RedactionLeakCorpusTests
         { "orphan PGP private key end", Token + string.Concat("\n-----END PGP PRIVATE", " KEY BLOCK-----"), Token, "residual_private_key" },
     };
 
+    public static TheoryData<string, string, string, string> PrefixedRuleLeaks
+    {
+        get
+        {
+            var rows = new TheoryData<string, string, string, string>();
+            foreach (var prefix in new[] { "f", "r", "b", "u", "fr", "rf", "br", "rb", "ur", "ru" })
+            {
+                foreach (var quote in new[] { "'", "\"" })
+                {
+                    rows.Add("python prefixed fill " + prefix + quote,
+                        "locator.fill(" + prefix + quote + Secret + quote + ")", Secret, "input_value");
+                    rows.Add("python prefixed press_sequentially " + prefix + quote,
+                        "locator.press_sequentially(" + prefix + quote + Secret + quote + ")", Secret, "input_value");
+                }
+            }
+
+            return rows;
+        }
+    }
+
     [Theory]
     [MemberData(nameof(RuleLeaks))]
+    [MemberData(nameof(PrefixedRuleLeaks))]
     public void Redact_ExtendedRuleCorpus_RemovesSecretBytesOrBlocks(string name, string payload, string secretBytes, string rule) =>
         Redact_GoldenLeakCorpus_RemovesTheSecretBytesOrBlocks(name, payload, secretBytes, rule);
 
@@ -107,10 +137,13 @@ public sealed partial class RedactionLeakCorpusTests
         new SecretRedactor().RedactText(outcome.Text).ShouldBe(outcome.Text);
     }
 
-    [Fact]
-    public void Apply_UnterminatedQuotedSelectors_ScalesFrom16To64KiBWithoutTimeout()
+    [Theory]
+    [InlineData(".fill(a\\'\n")]
+    [InlineData(".fill(a\\'")]
+    [InlineData("\\'", ".fill('x' + ")]
+    public void Apply_UnterminatedQuotedSelectors_ScalesFrom16To64KiBWithoutTimeout(string repeat, string prefix = "")
     {
-        var large = string.Concat(Enumerable.Repeat(".fill(a\\'\n", 6554))[..65536];
+        var large = (prefix + string.Concat(Enumerable.Repeat(repeat, 65536 / repeat.Length + 1)))[..65536];
         var small = large[..16384];
         _ = MeasureSelectors(small);
         _ = MeasureSelectors(large);
