@@ -58,6 +58,8 @@ public sealed partial class AuthoringGuardFirstBoundaryTests
         "AuthoringImportEndpoints.ImportAsync",
         "AuthoringIntakeEndpoints.CreateAsync",
         "AuthoringTestReportEndpoints.CreateAsync",
+        "AuthoringTrackerEndpoints.AuthorizeAsync",
+        "AuthoringTrackerEndpoints.DisconnectAsync",
     ];
 
     [Fact]

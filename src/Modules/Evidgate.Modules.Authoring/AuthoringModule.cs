@@ -9,6 +9,7 @@ using Evidgate.Modules.Authoring.Application.Reports.Sections;
 using Evidgate.Modules.Authoring.Contracts;
 using Evidgate.Modules.Authoring.Domain;
 using Evidgate.Modules.Authoring.Infrastructure.Persistence;
+using Evidgate.Modules.Authoring.Trackers.Infrastructure;
 using Evidgate.Modules.Evidence.Contracts;
 using FluentValidation;
 using Microsoft.Extensions.DependencyInjection;
@@ -90,6 +91,10 @@ internal static class AuthoringModule
         services.AddReportSectionBuilders();
         services.TryAddScoped<TestReportSourceReader>();
         services.TryAddScoped<TestReportStore>();
+
+        // The read-only tracker connections (Jira Cloud, Linear): OAuth clients, the allowlisted provider HTTP client,
+        // the callback and the store. An absent client leaves its provider unavailable rather than failing the host.
+        services.AddTrackerConnections();
 
         return services;
     }

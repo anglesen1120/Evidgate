@@ -4330,6 +4330,157 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '503':
           $ref: '#/components/responses/Unavailable'
+  /projects/{p}/tracker-connections/{provider}/authorize:
+    post:
+      operationId: authorizeTrackerConnection
+      tags: [authoring]
+      summary: Start connecting Jira Cloud or Linear read-only; answers the consent URL (13.10.4)
+      description: >-
+        `project:write`. Stores a pending consent bound to the caller, the project and the tracker for ten minutes
+        (only the SHA-256 of its `state` is stored) and answers the provider's consent URL, which asks for read scopes
+        only. Nothing is connected by this call. Answers 409 `tracker_provider_unavailable` when this deployment has
+        no OAuth client for the tracker and 409 `tracker_connection_exists` when the project already has a live
+        connection to it. Idempotency-Key exempt: a retry mints a fresh consent and creates no resource.
+      x-permission: project:write
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/TrackerProvider'
+        - $ref: '#/components/parameters/XsrfToken'
+      responses:
+        '200':
+          description: The consent URL; the state it carries is never logged
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: Always `no-store`.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TrackerAuthorizeResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /tracker-connections/{provider}/callback:
+    get:
+      operationId: completeTrackerConnection
+      tags: [authoring]
+      summary: Complete a tracker connection — take the consent, exchange the code, store the connection (13.10.4)
+      description: >-
+        `project:write`. The browser lands here after the tracker's consent page, with a session and no org header;
+        the org comes from the `state`, and the caller must be a member of it. The consent is taken first and
+        committed, the code is then exchanged once with the provider outside any transaction, and the connection is
+        stored with its tokens encrypted. The tokens granted must be exactly the read scopes requested, else nothing
+        is stored. A declined consent (`error`) spends the state and stores nothing. A state used by the wrong user is
+        403 and stays unused; a state for another tracker, project or credential scope is refused without being
+        spent. Neither the code, the state nor a token is echoed or logged.
+      x-permission: project:write
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/TrackerProvider'
+        - $ref: '#/components/parameters/TrackerCallbackCode'
+        - $ref: '#/components/parameters/TrackerCallbackState'
+        - $ref: '#/components/parameters/TrackerCallbackError'
+      responses:
+        '200':
+          description: The new connection, without any token
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: Always `no-store`.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TrackerConnectionDto'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /projects/{p}/tracker-connections:
+    get:
+      operationId: listTrackerConnections
+      tags: [authoring]
+      summary: The project's tracker connections (13.10.4)
+      description: >-
+        `project:read`. Every connection of the project, whatever its state, without any token. Another tenant's
+        project is 404 `not_found`; a credential scoped to a sibling project is 403 `project_scope_mismatch`.
+      x-permission: project:read
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '200':
+          description: The connections
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TrackerConnectionListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /projects/{p}/tracker-connections/{c}:
+    delete:
+      operationId: disconnectTrackerConnection
+      tags: [authoring]
+      summary: Disconnect a tracker connection and clear its stored tokens (13.10.4)
+      description: >-
+        `project:write`. Marks the connection `disconnected` and clears both token ciphers in the same transaction. The
+        tracker is not called: revoking the grant there is the customer's action. An unknown id, another project's
+        or another tenant's is 404 `not_found`. A missing `Idempotency-Key` is 400 `request_invalid`.
+      x-permission: project:write
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/TrackerConnectionId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XsrfToken'
+      responses:
+        '204':
+          description: Connection disconnected
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
   /projects/{p}/ingest-tokens:
     post:
       operationId: createIngestToken
@@ -11248,6 +11399,55 @@ components:
         current tag in `error.details`, and nothing is written.
       schema:
         type: string
+    TrackerProvider:
+      name: provider
+      in: path
+      required: true
+      description: The tracker. Any other value answers 404 `not_found`.
+      schema:
+        type: string
+        enum: [jira_cloud, linear]
+    TrackerConnectionId:
+      name: c
+      in: path
+      required: true
+      description: >-
+        The connection id the list route returns as `id`. An unknown id, another project's or another tenant's
+        answers the same 404 `not_found`.
+      schema:
+        type: string
+        format: uuid
+    TrackerCallbackCode:
+      name: code
+      in: query
+      required: false
+      description: >-
+        The one-time authorization code the tracker appends to the redirect; required unless `error` is present. It is
+        exchanged once and neither stored nor echoed. A value over 512 characters answers 400 `tracker_consent_invalid`.
+      schema:
+        type: string
+        maxLength: 512
+    TrackerCallbackState:
+      name: state
+      in: query
+      required: true
+      description: >-
+        The `<org>.<nonce>` state the authorize route issued; only its SHA-256 exists in the database. A value that is
+        malformed, over 256 characters, unknown, expired, already used or issued for another tracker answers 400
+        `tracker_consent_invalid`; one issued to another user answers 403.
+      schema:
+        type: string
+        maxLength: 256
+    TrackerCallbackError:
+      name: error
+      in: query
+      required: false
+      description: >-
+        The tracker's `error` (for example `access_denied`) when the user declined. The state is consumed, nothing is
+        stored and the call answers 400 `tracker_consent_denied`.
+      schema:
+        type: string
+        maxLength: 128
   headers:
     XRequestId:
       description: Server request id; echoed in `error.request_id` (00 §9.1/§9.2).
@@ -17144,6 +17344,70 @@ components:
           format: int64
           minimum: 0
           description: Projects whose counter for this metric warned without blocking, that is `warned_at` is set and `blocked_at` is null.
+    TrackerAuthorizeResponse:
+      type: object
+      description: >-
+        Where to send the browser to consent at the tracker (13.10.4). The URL carries the single-use `state`, which is
+        stored only as its SHA-256 and never logged.
+      additionalProperties: false
+      required: [authorization_url, expires_at]
+      properties:
+        authorization_url:
+          type: string
+          format: uri
+          description: The consent page on the provider's fixed host, asking for read scopes only.
+        expires_at:
+          type: string
+          format: date-time
+          description: When the consent expires unused (ten minutes after it was started).
+    TrackerCapabilitiesDto:
+      type: object
+      description: What a tracker connection can do. Every connection is read-only until a later consent adds write access.
+      additionalProperties: false
+      required: [create_issue]
+      properties:
+        create_issue:
+          type: boolean
+          description: Always `false` today; no connection holds write consent.
+    TrackerConnectionDto:
+      type: object
+      description: >-
+        One tracker connection (13.10.4). The access and refresh tokens are encrypted at rest and never returned; neither
+        is any cipher, provider account id or site id.
+      additionalProperties: false
+      required: [id, provider, state, capabilities, granted_scopes, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: The connection id to disconnect with.
+        provider:
+          type: string
+          enum: [jira_cloud, linear]
+        state:
+          type: string
+          enum: [active, needs_reauth, disconnected]
+          description: '`needs_reauth` marks a connection whose stored grant can no longer be used; the customer reconnects. This feature only ever creates `active` connections.'
+        capabilities:
+          $ref: '#/components/schemas/TrackerCapabilitiesDto'
+        granted_scopes:
+          type: array
+          items:
+            type: string
+          description: The scopes the provider granted, exactly the read scopes that were requested.
+        created_at:
+          type: string
+          format: date-time
+    TrackerConnectionListResponse:
+      type: object
+      description: Every tracker connection of the project, whatever its state.
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/TrackerConnectionDto'
 
 security:
   - sessionCookie: []

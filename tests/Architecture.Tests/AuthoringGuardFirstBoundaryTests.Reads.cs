@@ -40,8 +40,15 @@ public sealed partial class AuthoringGuardFirstBoundaryTests
         "AuthoringTestReportEndpoints.JobAsync",
         "AuthoringTestReportEndpoints.ListAsync",
         "AuthoringVersionEndpoints.GetAsync",
+        "AuthoringTrackerEndpoints.CallbackAsync",
+        "AuthoringTrackerEndpoints.ListAsync",
         "AuthoringVersionEndpoints.ListAsync",
     ];
+
+    // The OAuth callback derives its tenant from the signed state and runs its consent steps outside one mediator
+    // transaction, so it takes its service from the request scope and cannot send one message. It still must open
+    // with the tenant guard; every other rule here is waived for these names only.
+    private static readonly string[] StateTenantCallbacks = ["AuthoringTrackerEndpoints.CallbackAsync"];
 
     [Fact]
     public void AuthoringReadDelegates_AllRegisteredReads_GuardFirstAndSendFirst()
@@ -76,8 +83,18 @@ public sealed partial class AuthoringGuardFirstBoundaryTests
         var (method, name) = resolved;
         found.Add(name);
         var route = (call.ArgumentList.Arguments.ElementAtOrDefault(0)?.Expression as LiteralExpressionSyntax)?.Token.ValueText;
-        errors.AddRange(ParameterErrors(method, path, name, route));
         var guarded = GuardFirst(method);
+        if (StateTenantCallbacks.Contains(name, StringComparer.Ordinal))
+        {
+            if (!guarded)
+            {
+                errors.Add($"{path}:{Line(method)}: {name} must have RawBodyGuard.RequireAuthenticatedTenant(context.RequestServices) first");
+            }
+
+            return;
+        }
+
+        errors.AddRange(ParameterErrors(method, path, name, route));
         var hasContext = method.ParameterList.Parameters.Any(parameter =>
             parameter.Type?.ToString().EndsWith("HttpContext", StringComparison.Ordinal) == true);
         var exemption = exemptions.Where(candidate => candidate.TypeMethod == name).ToArray();

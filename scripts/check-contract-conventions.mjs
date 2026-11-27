@@ -270,6 +270,12 @@ const EXPECTED = [
   // The requirement intake pair: recording one is gated by `authoring:generate`, reading it by `authoring:read`.
   ['/projects/{p}/authoring/intakes', 'post', 'authoring:generate', 'v1'],
   ['/projects/{p}/authoring/intakes/{i}', 'get', 'authoring:read', 'v1'],
+  // 13.10.4: the read-only tracker connections. The callback sits outside /projects/{p}: the browser returns with a
+  // session and no project, and the consent it consumes names the project.
+  ['/projects/{p}/tracker-connections/{provider}/authorize', 'post', 'project:write', 'v1'],
+  ['/tracker-connections/{provider}/callback', 'get', 'project:write', 'v1'],
+  ['/projects/{p}/tracker-connections', 'get', 'project:read', 'v1'],
+  ['/projects/{p}/tracker-connections/{c}', 'delete', 'project:write', 'v1'],
 ];
 
 const byKey = new Map(ops.map((o) => [`${o.method} ${o.path}`, o]));
@@ -344,12 +350,14 @@ const INLINE_PARAM_ALLOWED = new Set(['traceparent']);
 // own-profile write of 02.3.1-T3 = the body sets one column to one of two values, so a replay would write the
 // same state, and the `If-Match` version makes the retry that re-sends the already-applied version answer 412
 // instead of applying twice; the retention upsert = a PUT that writes the same two windows for the same body,
-// so a replay cannot create a second row or a different answer.
+// so a replay cannot create a second row or a different answer; tracker consent start creates only a
+// pending consent, nothing connected, so a retry mints a fresh state.
 const IDEM_EXEMPT = new Set([
   'post /ci/token',
   'post /projects/{p}/ingest-tokens',
   'post /projects/{p}/api-tokens',
   'post /ingest-tokens/{t}/rotate',
+  'post /projects/{p}/tracker-connections/{provider}/authorize',
   'post /runs/{r}/events',
   'post /drafts/{d}/pull-request',
   'post /jobs/{j}/heartbeat',

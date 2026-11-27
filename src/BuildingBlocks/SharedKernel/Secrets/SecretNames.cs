@@ -49,6 +49,12 @@ public static class SecretNames
     /// <summary>Client secret of the GitHub OAuth login client (02.3.1-T1.3); the client id is plain configuration.</summary>
     public const string OauthGithubClientSecret = "EVIDGATE__OAUTH__GITHUB__CLIENTSECRET";
 
+    /// <summary>Client secret of the Jira Cloud (Atlassian 3LO) tracker connection; the client id is plain configuration.</summary>
+    public const string TrackersJiraCloudClientSecret = "EVIDGATE__TRACKERS__JIRACLOUD__CLIENTSECRET";
+
+    /// <summary>Client secret of the Linear tracker connection; the client id is plain configuration.</summary>
+    public const string TrackersLinearClientSecret = "EVIDGATE__TRACKERS__LINEAR__CLIENTSECRET";
+
     /// <summary>
     /// API key the healing adapter presents to its provider. Deployments name it in
     /// <c>EVIDGATE__HEALING__LLM__APIKEYSECRET</c>; the value is resolved per request and never stored.
@@ -95,6 +101,8 @@ public static class SecretNames
         ObjectSecretKey,
         OidcGoogleClientSecret,
         OauthGithubClientSecret,
+        TrackersJiraCloudClientSecret,
+        TrackersLinearClientSecret,
         HealingLlmApiKey,
         SessionPepper,
         SessionPreviousPepper,

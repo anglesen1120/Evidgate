@@ -541,6 +541,21 @@ public static partial class IsolationRouteCases
         ObjectCaseWith("GET", "/v1/projects/{p}/authoring/intakes/{i}", p => [("recorded intake", p.AuthoringIntakeId)],
             (id, p) => new(HttpMethod.Get, $"/v1/projects/{p.Id}/authoring/intakes/{id}"), (_, _) => [],
             own: p => new(HttpMethod.Get, $"/v1/projects/{p.Id}/authoring/intakes/{p.AuthoringIntakeId}")),
+        // 13.10.4: the tracker connection routes. The authorize and disconnect probes name a project and a random
+        // connection; a project of another org answers the same 404 as a random one. The callback names no project: a
+        // forged state is refused identically whatever org the caller names.
+        ProjectCase("POST", "/v1/projects/{p}/tracker-connections/{provider}/authorize", p => new(HttpMethod.Post,
+            $"/v1/projects/{p}/tracker-connections/linear/authorize")),
+        ProjectCase("GET", "/v1/projects/{p}/tracker-connections", p => new(HttpMethod.Get,
+            $"/v1/projects/{p}/tracker-connections"), ownControl: true),
+        ProjectCase("DELETE", "/v1/projects/{p}/tracker-connections/{c}", p => new(HttpMethod.Delete,
+            $"/v1/projects/{p}/tracker-connections/{Guid.CreateVersion7()}")),
+        Case("GET", "/v1/tracker-connections/{provider}/callback", (route, w) =>
+        [
+            Pair(route, "forged state", ProbeExpect.NotSuccess, OrgBAdmin(w),
+                new(HttpMethod.Get, "/v1/tracker-connections/linear/callback?code=probe&state=forged-a"),
+                new(HttpMethod.Get, "/v1/tracker-connections/linear/callback?code=probe&state=forged-b")),
+        ]),
         ObjectCaseWith("GET", "/v1/projects/{p}/authoring/changes/{c}", p => [("queued change", p.AuthoringChangeId)],
             (id, p) => new(HttpMethod.Get, $"/v1/projects/{p.Id}/authoring/changes/{id}"), (_, _) => [],
             own: p => new(HttpMethod.Get, $"/v1/projects/{p.Id}/authoring/changes/{p.AuthoringChangeId}")),

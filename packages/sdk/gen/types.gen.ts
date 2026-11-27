@@ -3677,6 +3677,58 @@ export type UsageSummaryProjectsStatusDto = {
 };
 
 /**
+ * Where to send the browser to consent at the tracker (13.10.4). The URL carries the single-use `state`, which is stored only as its SHA-256 and never logged.
+ */
+export type TrackerAuthorizeResponse = {
+    /**
+     * The consent page on the provider's fixed host, asking for read scopes only.
+     */
+    authorization_url: string;
+    /**
+     * When the consent expires unused (ten minutes after it was started).
+     */
+    expires_at: string;
+};
+
+/**
+ * What a tracker connection can do. Every connection is read-only until a later consent adds write access.
+ */
+export type TrackerCapabilitiesDto = {
+    /**
+     * Always `false` today; no connection holds write consent.
+     */
+    create_issue: boolean;
+};
+
+/**
+ * One tracker connection (13.10.4). The access and refresh tokens are encrypted at rest and never returned; neither is any cipher, provider account id or site id.
+ */
+export type TrackerConnectionDto = {
+    /**
+     * The connection id to disconnect with.
+     */
+    id: string;
+    provider: 'jira_cloud' | 'linear';
+    /**
+     * `needs_reauth` marks a connection whose stored grant can no longer be used; the customer reconnects. This feature only ever creates `active` connections.
+     */
+    state: 'active' | 'needs_reauth' | 'disconnected';
+    capabilities: TrackerCapabilitiesDto;
+    /**
+     * The scopes the provider granted, exactly the read scopes that were requested.
+     */
+    granted_scopes: Array<string>;
+    created_at: string;
+};
+
+/**
+ * Every tracker connection of the project, whatever its state.
+ */
+export type TrackerConnectionListResponse = {
+    items: Array<TrackerConnectionDto>;
+};
+
+/**
  * Adapter capability document v1
  *
  * 00 §10 adapter protocol capability document (04.7.1-T1.1). The server rejects an incompatible protocol.major; supports is extensible — flags the server does not know are recorded verbatim in adapter_capability.supports and never evaluated (04.7.1 AC3). capture_control: false declares that the adapter cannot honour the run-create configuration document (contracts/adapter/config.v1.json), so its runs carry the capture_uncontrolled label (T97, AC7); an absent capture_control means the configuration document must be honoured. The document is untrusted input capped at 16 KiB. See contracts/README.md for the *.vN.json versioning rule.
@@ -4758,6 +4810,31 @@ export type AiSettingsVersionNo = number;
  * Order tag of the sibling set, `"order:sha256:<hex>"` — `AuthoringHashes.OrderHash` over the sorted `(id, version)` pairs of the parent's live siblings (13.1.1-T2) — never a row `version`. Absent or malformed is 422 `request_invalid` with `details[].path = /If-Match` (`required` / `invalid`); a stale tag is 412 `precondition_failed` with the current tag in `error.details`, and nothing is written.
  */
 export type IfMatchOrder = string;
+
+/**
+ * The tracker. Any other value answers 404 `not_found`.
+ */
+export type TrackerProvider = 'jira_cloud' | 'linear';
+
+/**
+ * The connection id the list route returns as `id`. An unknown id, another project's or another tenant's answers the same 404 `not_found`.
+ */
+export type TrackerConnectionId = string;
+
+/**
+ * The one-time authorization code the tracker appends to the redirect; required unless `error` is present. It is exchanged once and neither stored nor echoed. A value over 512 characters answers 400 `tracker_consent_invalid`.
+ */
+export type TrackerCallbackCode = string;
+
+/**
+ * The `<org>.<nonce>` state the authorize route issued; only its SHA-256 exists in the database. A value that is malformed, over 256 characters, unknown, expired, already used or issued for another tracker answers 400 `tracker_consent_invalid`; one issued to another user answers 403.
+ */
+export type TrackerCallbackState = string;
+
+/**
+ * The tracker's `error` (for example `access_denied`) when the user declined. The state is consumed, nothing is stored and the call answers 400 `tracker_consent_denied`.
+ */
+export type TrackerCallbackError = string;
 
 export type ExchangeCiTokenData = {
     body: CiTokenRequest;
@@ -8663,6 +8740,222 @@ export type UpdateRoleResponses = {
 };
 
 export type UpdateRoleResponse = UpdateRoleResponses[keyof UpdateRoleResponses];
+
+export type AuthorizeTrackerConnectionData = {
+    body?: never;
+    headers?: {
+        /**
+         * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
+         */
+        'X-XSRF-TOKEN'?: string;
+    };
+    path: {
+        p: string;
+        /**
+         * The tracker. Any other value answers 404 `not_found`.
+         */
+        provider: 'jira_cloud' | 'linear';
+    };
+    query?: never;
+    url: '/projects/{p}/tracker-connections/{provider}/authorize';
+};
+
+export type AuthorizeTrackerConnectionErrors = {
+    /**
+     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 409 conflict — e.g. `idempotency_conflict`, `run_closed` (00 §9.1/§9.2)
+     */
+    409: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+};
+
+export type AuthorizeTrackerConnectionError = AuthorizeTrackerConnectionErrors[keyof AuthorizeTrackerConnectionErrors];
+
+export type AuthorizeTrackerConnectionResponses = {
+    /**
+     * The consent URL; the state it carries is never logged
+     */
+    200: TrackerAuthorizeResponse;
+};
+
+export type AuthorizeTrackerConnectionResponse = AuthorizeTrackerConnectionResponses[keyof AuthorizeTrackerConnectionResponses];
+
+export type CompleteTrackerConnectionData = {
+    body?: never;
+    path: {
+        /**
+         * The tracker. Any other value answers 404 `not_found`.
+         */
+        provider: 'jira_cloud' | 'linear';
+    };
+    query: {
+        /**
+         * The one-time authorization code the tracker appends to the redirect; required unless `error` is present. It is exchanged once and neither stored nor echoed. A value over 512 characters answers 400 `tracker_consent_invalid`.
+         */
+        code?: string;
+        /**
+         * The `<org>.<nonce>` state the authorize route issued; only its SHA-256 exists in the database. A value that is malformed, over 256 characters, unknown, expired, already used or issued for another tracker answers 400 `tracker_consent_invalid`; one issued to another user answers 403.
+         */
+        state: string;
+        /**
+         * The tracker's `error` (for example `access_denied`) when the user declined. The state is consumed, nothing is stored and the call answers 400 `tracker_consent_denied`.
+         */
+        error?: string;
+    };
+    url: '/tracker-connections/{provider}/callback';
+};
+
+export type CompleteTrackerConnectionErrors = {
+    /**
+     * 400 request_invalid — a malformed or missing request header, e.g. the `Idempotency-Key` every mutating authoring route requires (00 §9.1)
+     */
+    400: ErrorEnvelope;
+    /**
+     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 409 conflict — e.g. `idempotency_conflict`, `run_closed` (00 §9.1/§9.2)
+     */
+    409: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+};
+
+export type CompleteTrackerConnectionError = CompleteTrackerConnectionErrors[keyof CompleteTrackerConnectionErrors];
+
+export type CompleteTrackerConnectionResponses = {
+    /**
+     * The new connection, without any token
+     */
+    200: TrackerConnectionDto;
+};
+
+export type CompleteTrackerConnectionResponse = CompleteTrackerConnectionResponses[keyof CompleteTrackerConnectionResponses];
+
+export type ListTrackerConnectionsData = {
+    body?: never;
+    path: {
+        p: string;
+    };
+    query?: never;
+    url: '/projects/{p}/tracker-connections';
+};
+
+export type ListTrackerConnectionsErrors = {
+    /**
+     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+};
+
+export type ListTrackerConnectionsError = ListTrackerConnectionsErrors[keyof ListTrackerConnectionsErrors];
+
+export type ListTrackerConnectionsResponses = {
+    /**
+     * The connections
+     */
+    200: TrackerConnectionListResponse;
+};
+
+export type ListTrackerConnectionsResponse = ListTrackerConnectionsResponses[keyof ListTrackerConnectionsResponses];
+
+export type DisconnectTrackerConnectionData = {
+    body?: never;
+    headers: {
+        /**
+         * Client-supplied, ≤ 128 chars, unique per `(org_id, project_id, operation)` ≥ 24 h (00 §7/§9.1).
+         */
+        'Idempotency-Key': string;
+        /**
+         * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
+         */
+        'X-XSRF-TOKEN'?: string;
+    };
+    path: {
+        p: string;
+        /**
+         * The connection id the list route returns as `id`. An unknown id, another project's or another tenant's answers the same 404 `not_found`.
+         */
+        c: string;
+    };
+    query?: never;
+    url: '/projects/{p}/tracker-connections/{c}';
+};
+
+export type DisconnectTrackerConnectionErrors = {
+    /**
+     * 400 request_invalid — a malformed or missing request header, e.g. the `Idempotency-Key` every mutating authoring route requires (00 §9.1)
+     */
+    400: ErrorEnvelope;
+    /**
+     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 409 conflict — e.g. `idempotency_conflict`, `run_closed` (00 §9.1/§9.2)
+     */
+    409: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+};
+
+export type DisconnectTrackerConnectionError = DisconnectTrackerConnectionErrors[keyof DisconnectTrackerConnectionErrors];
+
+export type DisconnectTrackerConnectionResponses = {
+    /**
+     * Connection disconnected
+     */
+    204: void;
+};
+
+export type DisconnectTrackerConnectionResponse = DisconnectTrackerConnectionResponses[keyof DisconnectTrackerConnectionResponses];
 
 export type ListIngestTokensData = {
     body?: never;
