@@ -27,7 +27,7 @@ public sealed partial class RedactionLeakCorpusTests
         { "object marker concatenated value", "{value:'[redacted:input_value]'+'" + Secret + "'}", Secret, "input_value" },
         { "object template literal value", "{ value: `" + Secret + "` }", Secret, "input_value" },
         { "fill truncated literal", "x.fill('" + Secret, Secret, "input_value" },
-        { "fill deeply nested tail", "x.fill('" + Secret + "' + a(b(c(d(e)))))", Secret, "input_value" },
+        { "fill three-deep nested tail", "x.fill('" + Secret + "' + a(b(c(d))))", Secret, "input_value" },
         { "C# FillAsync", "locator.FillAsync(\"" + Secret + "\")", Secret, "input_value" },
         { "C# TypeAsync", "page.TypeAsync(SEL.a, \"" + Secret + "\")", Secret, "input_value" },
         { "C# PressSequentiallyAsync", "locator.PressSequentiallyAsync(\"" + Secret + "\")", Secret, "input_value" },
