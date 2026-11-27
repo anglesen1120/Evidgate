@@ -522,6 +522,7 @@ internal sealed record RouteRequestContext(
     Guid NodeId,
     Guid ItemId,
     Guid ManualCaseId,
+    Guid RequirementId,
     Guid AuthoringVersionId,
     Guid FixtureId)
 {
@@ -529,6 +530,7 @@ internal sealed record RouteRequestContext(
     internal static RouteRequestContext Fresh(Guid orgId, Guid projectId) => new(
         orgId,
         projectId,
+        Guid.CreateVersion7(),
         Guid.CreateVersion7(),
         Guid.CreateVersion7(),
         Guid.CreateVersion7(),
@@ -1009,6 +1011,22 @@ internal static class RouteRequests
             new JsonObject { ["state"] = "approved" }, IfMatch: "\"1\"", IdempotencyKey: Key()));
         Add("POST", "/v1/projects/{p}/authoring/manual-cases/{m}/item", ctx => new(HttpMethod.Post, $"/v1/projects/{ctx.ProjectId}/authoring/manual-cases/{ctx.ManualCaseId}/item",
             new JsonObject { ["checklist_item_id"] = ctx.ItemId.ToString() }, IfMatch: "\"1\"", IdempotencyKey: Key()));
+        Add("GET", "/v1/projects/{p}/authoring/requirements", ctx => new(HttpMethod.Get, $"/v1/projects/{ctx.ProjectId}/authoring/requirements"));
+        Add("POST", "/v1/projects/{p}/authoring/requirements", ctx => new(HttpMethod.Post, $"/v1/projects/{ctx.ProjectId}/authoring/requirements",
+            new JsonObject { ["kind"] = "user_story", ["title"] = "probe requirement" }, IdempotencyKey: Key()));
+        Add("GET", "/v1/projects/{p}/authoring/requirements/{r}", ctx => new(HttpMethod.Get, $"/v1/projects/{ctx.ProjectId}/authoring/requirements/{ctx.RequirementId}"));
+        Add("PATCH", "/v1/projects/{p}/authoring/requirements/{r}", ctx => new(HttpMethod.Patch, $"/v1/projects/{ctx.ProjectId}/authoring/requirements/{ctx.RequirementId}",
+            new JsonObject { ["title"] = "probe requirement" }, IfMatch: "\"1\"", IdempotencyKey: Key()));
+        Add("DELETE", "/v1/projects/{p}/authoring/requirements/{r}", ctx => new(HttpMethod.Delete, $"/v1/projects/{ctx.ProjectId}/authoring/requirements/{ctx.RequirementId}",
+            IfMatch: "\"1\"", IdempotencyKey: Key()));
+        Add("GET", "/v1/projects/{p}/authoring/requirements/{r}/versions", ctx => new(HttpMethod.Get, $"/v1/projects/{ctx.ProjectId}/authoring/requirements/{ctx.RequirementId}/versions"));
+        Add("POST", "/v1/projects/{p}/authoring/requirements/{r}/restore", ctx => new(HttpMethod.Post, $"/v1/projects/{ctx.ProjectId}/authoring/requirements/{ctx.RequirementId}/restore",
+            new JsonObject { ["version_id"] = ctx.AuthoringVersionId.ToString(), ["reason"] = "probe restore" }, IfMatch: "\"1\"", IdempotencyKey: Key()));
+        Add("GET", "/v1/projects/{p}/authoring/requirements/{r}/coverage", ctx => new(HttpMethod.Get, $"/v1/projects/{ctx.ProjectId}/authoring/requirements/{ctx.RequirementId}/coverage"));
+        Add("POST", "/v1/projects/{p}/authoring/requirements/{r}/links", ctx => new(HttpMethod.Post, $"/v1/projects/{ctx.ProjectId}/authoring/requirements/{ctx.RequirementId}/links",
+            new JsonObject { ["checklist_item_id"] = ctx.ItemId.ToString() }, IdempotencyKey: Key()));
+        Add("DELETE", "/v1/projects/{p}/authoring/requirements/{r}/links/{l}", ctx => new(HttpMethod.Delete, $"/v1/projects/{ctx.ProjectId}/authoring/requirements/{ctx.RequirementId}/links/{ctx.AuthoringVersionId}",
+            IdempotencyKey: Key()));
         // 13.1.1-T3: the version timeline (routes 22, 23) and the four restore routes (6, 11, 18, 24). The version id is
         // fresh, so a granted call answers 404 like the entity ids above; the restore routes carry If-Match exactly as
         // the spec declares them — routes 6/11/18 a row tag, route 24 none.
@@ -1106,6 +1124,20 @@ internal static class RouteRequests
                 IdempotencyKey: Key()));
         Add("GET", "/v1/projects/{p}/authoring/intakes/{i}", ctx =>
             new(HttpMethod.Get, $"/v1/projects/{ctx.ProjectId}/authoring/intakes/{Guid.NewGuid():D}"));
+
+        // The tracker connection routes.
+        Add("POST", "/v1/projects/{p}/tracker-connections/{provider}/authorize", ctx =>
+            new(HttpMethod.Post, $"/v1/projects/{ctx.ProjectId}/tracker-connections/linear/authorize"));
+        // The probe's state names no consent and no org. This harness publishes the tenant itself, so a denied caller
+        // reaches authorization and answers 403. In production a state naming no org leaves no tenant, and the tenant
+        // requirement answers 401 before authorization (TrackerCallbackEndpointTests).
+        Add("GET", "/v1/tracker-connections/{provider}/callback", _ =>
+            new(HttpMethod.Get, "/v1/tracker-connections/linear/callback?code=probe&state=probe"));
+        Add("GET", "/v1/projects/{p}/tracker-connections", ctx =>
+            new(HttpMethod.Get, $"/v1/projects/{ctx.ProjectId}/tracker-connections"));
+        Add("DELETE", "/v1/projects/{p}/tracker-connections/{c}", ctx =>
+            new(HttpMethod.Delete, $"/v1/projects/{ctx.ProjectId}/tracker-connections/{Guid.NewGuid():D}",
+                IdempotencyKey: Key()));
 
         // 13.1.1-T5: route 25, the import/export pair. The import probe is a dry run of a valid one-row JSON document —
         // a body the readers refuse would answer 422 before the permission stage, so a denied probe could not observe

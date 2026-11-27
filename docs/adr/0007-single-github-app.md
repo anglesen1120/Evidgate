@@ -2,6 +2,8 @@
 
 ## Status
 
+deprecated
+
 Superseded by D-NO-GITHUB (owner 2026-11-27): Evidgate has no GitHub App and no repository integration. The decision is recorded in [DECISIONS.md](../../DECISIONS.md) under D-NO-GITHUB. The text below is kept as dated history only.
 
 ## Date

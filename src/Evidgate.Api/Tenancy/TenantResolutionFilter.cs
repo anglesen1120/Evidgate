@@ -3,6 +3,8 @@ using Evidgate.BuildingBlocks.Pipeline.Authorization;
 using Evidgate.BuildingBlocks.Pipeline.Tenancy;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
+using Evidgate.Modules.Authoring.Endpoints;
+using Evidgate.Modules.Identity.Login;
 
 namespace Evidgate.Api.Tenancy;
 
@@ -122,6 +124,14 @@ public sealed class TenantResolutionFilter(
     /// </summary>
     private static (Guid? Org, bool Named)? RequestedOrg(HttpContext http, bool allowHeader)
     {
+        // The tracker callback uses a session with no org header; its state carries the org.
+        if (http.Request.Path.Value is { } trackerPath && LoginTraceRedaction.IsTrackerCallbackRoute(trackerPath))
+        {
+            return AuthoringTrackerEndpoints.CallbackOrg(http.Request.Query["state"]) is { } trackerOrg
+                ? (trackerOrg, true)
+                : null;
+        }
+
         if (http.Request.RouteValues.TryGetValue("o", out var route))
         {
             return Guid.TryParse(route?.ToString(), out var routeOrg) ? (routeOrg, true) : null;

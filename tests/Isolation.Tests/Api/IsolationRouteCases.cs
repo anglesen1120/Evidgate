@@ -314,6 +314,19 @@ public static partial class IsolationRouteCases
                     return expected;
                 },
                 aAdmin, $"/v1/projects/{ap.Id}/authoring/manual-cases?limit=1"));
+            walks.Add(new(Get("/v1/projects/{p}/authoring/requirements"), $"org B project {bp.Slug} requirements", bAdmin,
+                $"/v1/projects/{bp.Id}/authoring/requirements?limit=1", "requirement_id",
+                async runner =>
+                {
+                    var expected = new HashSet<string>(
+                        await runner.OwnerIdsAsync(
+                            "select id::text from public.requirement where project_id = @org and deleted_at is null",
+                            bp.Id),
+                        StringComparer.OrdinalIgnoreCase);
+                    expected.UnionWith([bp.AuthoringRequirementId.ToString("D"), bp.AuthoringSecondRequirementId.ToString("D")]);
+                    return expected;
+                },
+                aAdmin, $"/v1/projects/{ap.Id}/authoring/requirements?limit=1"));
             // 13.1.1-T3: the version timeline is append-only and the seed cannot name its ids, so the expectation is the
             // database's own row set for the project (owner connection), exactly as the audit and run walks derive theirs.
             // Tombsones are rows too: a version is written for a delete, so the set covers every seeded entity change.
@@ -430,6 +443,39 @@ public static partial class IsolationRouteCases
         ObjectCaseWith("POST", "/v1/projects/{p}/authoring/manual-cases/{m}/item", p => [("case", p.AuthoringManualCaseId)],
             (id, p) => new(HttpMethod.Post, $"/v1/projects/{p.Id}/authoring/manual-cases/{id}/item",
                 new JsonObject { ["checklist_item_id"] = p.AuthoringItemId }, "\"1\""), (_, _) => []),
+        ProjectCase("GET", "/v1/projects/{p}/authoring/requirements", p => new(HttpMethod.Get,
+            $"/v1/projects/{p}/authoring/requirements?limit=1"), list: true, ownControl: true),
+        ProjectCase("POST", "/v1/projects/{p}/authoring/requirements", p => new(HttpMethod.Post,
+            $"/v1/projects/{p}/authoring/requirements",
+            new JsonObject { ["kind"] = "user_story", ["title"] = "intruder requirement" })),
+        ObjectCaseWith("GET", "/v1/projects/{p}/authoring/requirements/{r}", p => [("requirement", p.AuthoringRequirementId)],
+            (id, p) => new(HttpMethod.Get, $"/v1/projects/{p.Id}/authoring/requirements/{id}"), (_, _) => [],
+            own: p => new(HttpMethod.Get, $"/v1/projects/{p.Id}/authoring/requirements/{p.AuthoringRequirementId}")),
+        ObjectCaseWith("PATCH", "/v1/projects/{p}/authoring/requirements/{r}", p => [("requirement", p.AuthoringRequirementId)],
+            (id, p) => new(HttpMethod.Patch, $"/v1/projects/{p.Id}/authoring/requirements/{id}",
+                new JsonObject { ["title"] = "intruder" }, "\"1\""), (_, _) => []),
+        ObjectCaseWith("DELETE", "/v1/projects/{p}/authoring/requirements/{r}", p => [("requirement", p.AuthoringRequirementId)],
+            (id, p) => new(HttpMethod.Delete, $"/v1/projects/{p.Id}/authoring/requirements/{id}", null, "\"1\""), (_, _) => []),
+        ObjectCaseWith("GET", "/v1/projects/{p}/authoring/requirements/{r}/versions", p => [("requirement", p.AuthoringRequirementId)],
+            (id, p) => new(HttpMethod.Get, $"/v1/projects/{p.Id}/authoring/requirements/{id}/versions"), (_, _) => [],
+            own: p => new(HttpMethod.Get, $"/v1/projects/{p.Id}/authoring/requirements/{p.AuthoringRequirementId}/versions")),
+        ObjectCaseWith("POST", "/v1/projects/{p}/authoring/requirements/{r}/restore", p => [("requirement", p.AuthoringRequirementId)],
+            (id, p) => new(HttpMethod.Post, $"/v1/projects/{p.Id}/authoring/requirements/{id}/restore",
+                new JsonObject { ["version_id"] = p.AuthoringVersionId, ["reason"] = "intruder" }, "\"1\""), (_, _) => []),
+        ObjectCaseWith("GET", "/v1/projects/{p}/authoring/requirements/{r}/coverage", p => [("requirement", p.AuthoringRequirementId)],
+            (id, p) => new(HttpMethod.Get, $"/v1/projects/{p.Id}/authoring/requirements/{id}/coverage"), (_, _) => [],
+            own: p => new(HttpMethod.Get, $"/v1/projects/{p.Id}/authoring/requirements/{p.AuthoringRequirementId}/coverage")),
+        ObjectCaseWith("POST", "/v1/projects/{p}/authoring/requirements/{r}/links", p => [("requirement", p.AuthoringRequirementId)],
+            (id, p) => new(HttpMethod.Post, $"/v1/projects/{p.Id}/authoring/requirements/{id}/links",
+                new JsonObject { ["checklist_item_id"] = p.AuthoringItemId, ["expected_version_id"] = p.AuthoringRequirementVersionId }), (_, _) => []),
+        // The unlink names a persisted link of the victim project: a random link id answers 404 whatever the
+        // lookup does, so only a real one proves the project and org predicates. Org B's own control removes its
+        // own second link and answers 204, which proves the URL shape matches a real route.
+        ObjectCaseWith("DELETE", "/v1/projects/{p}/authoring/requirements/{r}/links/{l}", p => [("requirement link", p.AuthoringRequirementLinkId)],
+            (id, p) => new(HttpMethod.Delete, $"/v1/projects/{p.Id}/authoring/requirements/{p.AuthoringRequirementId}/links/{id}"),
+            ForeignLinkUnderOwnRequirement,
+            own: p => new(HttpMethod.Delete, $"/v1/projects/{p.Id}/authoring/requirements/{p.AuthoringRequirementId}/links/{p.AuthoringRequirementDisposableLinkId}"),
+            ownStatus: 204),
 
         // 13.1.1-T3: the version timeline (routes 22 and 23) and the four restore routes (6, 11, 18, 24). A tombstone's
         // `If-Match` is the version the delete left and the seed reads back through route 22 (IsolationWorld), so a
@@ -495,6 +541,21 @@ public static partial class IsolationRouteCases
         ObjectCaseWith("GET", "/v1/projects/{p}/authoring/intakes/{i}", p => [("recorded intake", p.AuthoringIntakeId)],
             (id, p) => new(HttpMethod.Get, $"/v1/projects/{p.Id}/authoring/intakes/{id}"), (_, _) => [],
             own: p => new(HttpMethod.Get, $"/v1/projects/{p.Id}/authoring/intakes/{p.AuthoringIntakeId}")),
+        // 13.10.4: the tracker connection routes. The authorize and disconnect probes name a project and a random
+        // connection; a project of another org answers the same 404 as a random one. The callback names no project: a
+        // forged state is refused identically whatever org the caller names.
+        ProjectCase("POST", "/v1/projects/{p}/tracker-connections/{provider}/authorize", p => new(HttpMethod.Post,
+            $"/v1/projects/{p}/tracker-connections/linear/authorize")),
+        ProjectCase("GET", "/v1/projects/{p}/tracker-connections", p => new(HttpMethod.Get,
+            $"/v1/projects/{p}/tracker-connections"), ownControl: true),
+        ProjectCase("DELETE", "/v1/projects/{p}/tracker-connections/{c}", p => new(HttpMethod.Delete,
+            $"/v1/projects/{p}/tracker-connections/{Guid.CreateVersion7()}")),
+        Case("GET", "/v1/tracker-connections/{provider}/callback", (route, w) =>
+        [
+            Pair(route, "forged state", ProbeExpect.NotSuccess, OrgBAdmin(w),
+                new(HttpMethod.Get, "/v1/tracker-connections/linear/callback?code=probe&state=forged-a"),
+                new(HttpMethod.Get, "/v1/tracker-connections/linear/callback?code=probe&state=forged-b")),
+        ]),
         ObjectCaseWith("GET", "/v1/projects/{p}/authoring/changes/{c}", p => [("queued change", p.AuthoringChangeId)],
             (id, p) => new(HttpMethod.Get, $"/v1/projects/{p.Id}/authoring/changes/{id}"), (_, _) => [],
             own: p => new(HttpMethod.Get, $"/v1/projects/{p.Id}/authoring/changes/{p.AuthoringChangeId}")),
@@ -2298,7 +2359,8 @@ public static partial class IsolationRouteCases
         Func<IsolationProject, IEnumerable<(string Label, Guid Id)>> ids,
         Func<Guid, IsolationProject, ProbeRequest> request,
         Func<ApiRoute, IsolationWorld, IEnumerable<RouteProbe>> extraMember,
-        Func<IsolationProject, ProbeRequest>? own = null) =>
+        Func<IsolationProject, ProbeRequest>? own = null,
+        int ownStatus = 200) =>
         Case(
             method,
             template,
@@ -2312,7 +2374,7 @@ public static partial class IsolationRouteCases
                 probes.AddRange(extraMember(route, w));
                 if (own is not null)
                 {
-                    probes.Add(OwnObject(route, "own object answers 200", OrgBAdmin(w), own(w.Acme2.Projects[0])));
+                    probes.Add(OwnObject(route, string.Create(CultureInfo.InvariantCulture, $"own object answers {ownStatus}"), OrgBAdmin(w), own(w.Acme2.Projects[0]), ownStatus));
                 }
 
                 return probes;
@@ -2337,14 +2399,33 @@ public static partial class IsolationRouteCases
                 request(w.Acme2.Projects[0].Id, Guid.CreateVersion7())),
         ];
 
+    /// <summary>
+    /// A link id of another tenant, and of org B's sibling project, in the path of org B's own project and requirement:
+    /// refused exactly like a random link id, so an unlink that looks the link up by its id alone deletes a row it
+    /// does not own and answers 204 here instead of 404.
+    /// </summary>
+    private static IEnumerable<RouteProbe> ForeignLinkUnderOwnRequirement(ApiRoute route, IsolationWorld w)
+    {
+        var own = w.Acme2.Projects[0];
+        ProbeRequest Unlink(Guid link) => new(HttpMethod.Delete, $"/v1/projects/{own.Id}/authoring/requirements/{own.AuthoringRequirementId}/links/{link}");
+
+        return
+        [
+            Pair(route, "org A link under org B's own requirement", ProbeExpect.NotFound, OrgBAdmin(w),
+                Unlink(w.Acme.Projects[0].AuthoringRequirementLinkId), Unlink(Guid.CreateVersion7())),
+            Pair(route, "org B sibling project's link under this requirement", ProbeExpect.NotFound, OrgBAdmin(w),
+                Unlink(w.Acme2.Projects[1].AuthoringRequirementLinkId), Unlink(Guid.CreateVersion7())),
+        ];
+    }
+
     // ---------------------------------------------------------------------------------------------------- helpers
 
     private static RouteProbe Pair(ApiRoute route, string name, ProbeExpect expect, ProbeCaller caller, ProbeRequest foreign, ProbeRequest random) =>
         new(route, name, runner => runner.PairAsync(route, name, expect, caller, foreign, random));
 
     /// <summary>Org B's own object with the same URL shape: the positive control (200) for a GET object case.</summary>
-    private static RouteProbe OwnObject(ApiRoute route, string name, ProbeCaller caller, ProbeRequest request) =>
-        new(route, name, runner => runner.OwnObjectAsync(route, name, caller, request));
+    private static RouteProbe OwnObject(ApiRoute route, string name, ProbeCaller caller, ProbeRequest request, int expectedStatus = 200) =>
+        new(route, name, runner => runner.OwnObjectAsync(route, name, caller, request, expectedStatus));
 
     /// <summary>
     /// An <c>If-Match</c> value for a row's <c>version</c>: the number in quotes (<c>"2"</c>), the tag shape the

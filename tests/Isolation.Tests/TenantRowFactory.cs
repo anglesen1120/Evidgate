@@ -166,12 +166,14 @@ internal sealed partial class TenantRowFactory
     /// <c>support_grant</c> (0115) is the second entry for a different reason: its <c>operator_user_id</c> is
     /// NOT NULL and references <c>public."user"</c>, which the app role deliberately holds no INSERT on
     /// (02.9.1 §8 T1), so the generated row needs a platform identity parent only the owner can write.
+    /// <c>tracker_oauth_state</c> (0139) is the third, for the same reason: its <c>user_id</c> references the same table.
     /// </remarks>
     internal static readonly IReadOnlySet<string> OwnerProvisionedTables =
         new HashSet<string>(StringComparer.Ordinal)
         {
             "public.healing_llm_budget",
             "public.support_grant",
+            "public.tracker_oauth_state",
         };
 
     /// <summary>

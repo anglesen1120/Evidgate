@@ -10,6 +10,7 @@ using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.Modules.Catalog.Contracts;
 using Evidgate.Modules.Identity.Authorization;
 using Evidgate.Testing;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
 using Xunit;
@@ -67,6 +68,12 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
         // (authoring rows are Tenancy.IntegrationTests' subject, and a seeded case here would
         // assert a state the writer never produced). The three authoring lists are scanned.
         "/v1/projects/{p}/authoring/manual-cases/{m}",
+
+        // The requirement detail and its history answer only for a requirement a write recorded; this suite records none
+        // (the tenancy tests own those rows), so the scan would see the 404. The list is scanned.
+        "/v1/projects/{p}/authoring/requirements/{r}",
+        "/v1/projects/{p}/authoring/requirements/{r}/versions",
+        "/v1/projects/{p}/authoring/requirements/{r}/coverage",
 
         // The intake read answers only for a row the intake route recorded; this suite records none (the tenancy
         // tests own the rows), so the scan would see the 404. Its 403/404 cases are in the isolation world.
@@ -139,6 +146,10 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
         // among them — and its body and effective discrepancy codes are asserted in Tenancy.IntegrationTests'
         // ReportComparisonTests.
         "/v1/runs/{r}/reports/{report_id}/comparison",
+
+        // The callback consumes one-time consent rather than reading a resource; TrackerCallbackEndpointTests covers
+        // the real-filter missing-tenant refusal, denial consumption and successful response/log/audit redaction.
+        "/v1/tracker-connections/{provider}/callback",
     ];
 
     /// <summary>The wire shape of the create bodies (snake_case, like the API).</summary>
@@ -302,6 +313,7 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
         var token = await CreateIngestTokenAsync(client, project);
         var apiToken = await CreateApiTokenAsync(client, project);
         var webhook = await CreateWebhookEndpointAsync(client, project);
+        var tracker = await SeedTrackerConnectionAsync(factory, org, project, membership);
 
         IngestTokenShape().IsMatch(token.Secret).ShouldBeTrue(
             "the ingest token secret must be the egt_ plaintext (02.4.2); the message must not echo the value");
@@ -324,6 +336,8 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
             apiToken.Secret,
             apiToken.Secret[^43..],
             webhook.Secret,
+            tracker.Access,
+            tracker.Refresh,
         ];
 
         // The routes whose path names a resource the identity routes do not create:
@@ -393,6 +407,7 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
         [
             ("/v1/projects/{p}/webhook-endpoints", webhook.Id),
             ("/v1/projects/{p}/webhook-endpoints/{e}", webhook.Id),
+            ("/v1/projects/{p}/tracker-connections", tracker.Id),
             ("/v1/cases/{c}", seeded.CaseId),
             ("/v1/cases/{c}/revisions", seeded.CaseRevisionId),
             ("/v1/suites/{s}", seeded.SuiteId),
@@ -490,6 +505,7 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
             // metadata only — the plaintext and the HMAC are never selected.
             ["/v1/projects/{p}/api-tokens"] = $"/v1/projects/{project}/api-tokens",
             ["/v1/projects/{p}/webhook-endpoints"] = $"/v1/projects/{project}/webhook-endpoints",
+            ["/v1/projects/{p}/tracker-connections"] = $"/v1/projects/{project}/tracker-connections",
             ["/v1/projects/{p}/webhook-endpoints/{e}"] = $"/v1/projects/{project}/webhook-endpoints/{webhookEndpointId}",
             ["/v1/projects/{p}/webhook-deliveries"] = $"/v1/projects/{project}/webhook-deliveries",
             // 03.6.1's draft page: a draft is a path, a body hash and a body reference — no secret among them.
@@ -521,6 +537,7 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
             ["/v1/projects/{p}/authoring/tree"] = $"/v1/projects/{project}/authoring/tree",
             ["/v1/projects/{p}/authoring/checklist-items"] = $"/v1/projects/{project}/authoring/checklist-items",
             ["/v1/projects/{p}/authoring/manual-cases"] = $"/v1/projects/{project}/authoring/manual-cases",
+            ["/v1/projects/{p}/authoring/requirements"] = $"/v1/projects/{project}/authoring/requirements",
             ["/v1/projects/{p}/authoring/versions"] = $"/v1/projects/{project}/authoring/versions",
             // 13.2.1-T1's AI settings reads: a project with no saved version answers the platform default document, an
             // empty history page and the platform template catalogue — bytes a member may read, no secret among them.
@@ -629,6 +646,29 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
             runId,
             releaseId,
             fixtureId);
+    }
+
+    private async Task<(Guid Id, string Access, string Refresh)> SeedTrackerConnectionAsync(
+        CiProducerJwtFactory factory, Guid org, Guid project, Guid membership)
+    {
+        var id = Guid.CreateVersion7();
+        var access = $"tracker-access-{Guid.NewGuid():N}";
+        var refresh = $"tracker-refresh-{Guid.NewGuid():N}";
+        var protector = factory.Services.GetRequiredService<IDataProtectionProvider>()
+            .CreateProtector("Evidgate.Trackers.Token.v1.linear");
+        await Fixture.SeedAsync(
+            """
+            insert into public.tracker_connection
+                (id, org_id, project_id, provider, created_by_membership_id,
+                 access_token_cipher, refresh_token_cipher, granted_scopes)
+            values (@id, @org, @project, 'linear', @membership, @access, @refresh, 'read')
+            """,
+            [
+                ("id", id), ("org", org), ("project", project), ("membership", membership),
+                ("access", protector.Protect(access)), ("refresh", protector.Protect(refresh)),
+            ],
+            Token);
+        return (id, access, refresh);
     }
 
     /// <summary>

@@ -229,6 +229,43 @@ public sealed partial class TenantGucTests
             ("org_id", orgId),
             ("account_id", creditAccountId),
             ("payload_hash", "sha256:" + new string('b', 64)));
+        // A platform identity parent for the tracker consent below.
+        var installer = Guid.CreateVersion7();
+        await scope.ExecuteAsync(
+            "insert into public.\"user\" (id, email) values (@id, 'installer@example.test')",
+            ("id", installer));
+        // The tracker tables (migration 0139): one live connection, one cached item and one pending consent, written by
+        // the owner so the fail-closed-zero assertions below have a row of each to hide. The consent names the account
+        // above because its FK requires one.
+        var trackerConnectionId = Guid.CreateVersion7();
+        await scope.ExecuteAsync(
+            """
+            insert into public.tracker_connection (id, org_id, project_id, provider, access_token_cipher)
+            values (@id, @org_id, @project_id, 'jira_cloud', 'probe-cipher')
+            """,
+            ("id", trackerConnectionId),
+            ("org_id", orgId),
+            ("project_id", projectId));
+        await scope.ExecuteAsync(
+            """
+            insert into public.tracker_item (id, org_id, project_id, connection_id, provider_id, provider_key, kind, content_hash)
+            values (@id, @org_id, @project_id, @connection_id, '10001', 'PROBE-1', 'story', @content_hash)
+            """,
+            ("id", Guid.CreateVersion7()),
+            ("org_id", orgId),
+            ("project_id", projectId),
+            ("connection_id", trackerConnectionId),
+            ("content_hash", "sha256:" + new string('a', 64)));
+        await scope.ExecuteAsync(
+            """
+            insert into public.tracker_oauth_state (id, org_id, project_id, user_id, provider, state_hash, redirect_uri, expires_at)
+            values (@id, @org_id, @project_id, @user_id, 'linear', @state_hash, 'https://app.example.test/callback', now() + interval '10 minutes')
+            """,
+            ("id", Guid.CreateVersion7()),
+            ("org_id", orgId),
+            ("project_id", projectId),
+            ("user_id", installer),
+            ("state_hash", (byte[])[.. Guid.NewGuid().ToByteArray(), .. Guid.NewGuid().ToByteArray()]));
         await scope.ExecuteAsync(
             """
             insert into public.retention_policy (id, org_id, project_id, artifact_days, metadata_days)
@@ -793,17 +830,31 @@ public sealed partial class TenantGucTests
             ("org_id", orgId),
             ("project_id", projectId),
             ("feature_node_id", featureNodeId));
+        var requirementVersionId = Guid.CreateVersion7();
         await scope.ExecuteAsync(
             """
             insert into public.requirement_version
                 (id, org_id, project_id, requirement_id, version_no, body, content_hash, source)
             values (@id, @org_id, @project_id, @requirement_id, 1, 'probe', @hash, 'manual')
             """,
-            ("id", Guid.CreateVersion7()),
+            ("id", requirementVersionId),
             ("org_id", orgId),
             ("project_id", projectId),
             ("requirement_id", requirementId),
             ("hash", "sha256:" + new string('e', 64)));
+        // A link pins that version to the checklist item above; exactly one target column is set.
+        await scope.ExecuteAsync(
+            """
+            insert into public.requirement_link
+                (id, org_id, project_id, requirement_id, requirement_version_id, checklist_item_id)
+            values (@id, @org_id, @project_id, @requirement_id, @requirement_version_id, @checklist_item_id)
+            """,
+            ("id", Guid.CreateVersion7()),
+            ("org_id", orgId),
+            ("project_id", projectId),
+            ("requirement_id", requirementId),
+            ("requirement_version_id", requirementVersionId),
+            ("checklist_item_id", checklistItemId));
         await scope.ExecuteAsync(
             """
             insert into public.usage_ledger_entry (id, org_id, project_id, metric, quantity, unit, period, billing_key, occurred_at)

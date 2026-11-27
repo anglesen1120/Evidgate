@@ -223,6 +223,17 @@ const EXPECTED = [
   ['/projects/{p}/authoring/manual-cases/{m}', 'delete', 'authoring:write', 'v1'],
   ['/projects/{p}/authoring/manual-cases/{m}/state', 'post', 'authoring:write', 'v1'],
   ['/projects/{p}/authoring/manual-cases/{m}/item', 'post', 'authoring:write', 'v1'],
+  // Requirements: CRUD, history and restore.
+  ['/projects/{p}/authoring/requirements', 'get', 'authoring:read', 'v1'],
+  ['/projects/{p}/authoring/requirements', 'post', 'authoring:write', 'v1'],
+  ['/projects/{p}/authoring/requirements/{r}', 'get', 'authoring:read', 'v1'],
+  ['/projects/{p}/authoring/requirements/{r}', 'patch', 'authoring:write', 'v1'],
+  ['/projects/{p}/authoring/requirements/{r}', 'delete', 'authoring:write', 'v1'],
+  ['/projects/{p}/authoring/requirements/{r}/versions', 'get', 'authoring:read', 'v1'],
+  ['/projects/{p}/authoring/requirements/{r}/restore', 'post', 'authoring:write', 'v1'],
+  ['/projects/{p}/authoring/requirements/{r}/coverage', 'get', 'authoring:read', 'v1'],
+  ['/projects/{p}/authoring/requirements/{r}/links', 'post', 'authoring:write', 'v1'],
+  ['/projects/{p}/authoring/requirements/{r}/links/{l}', 'delete', 'authoring:write', 'v1'],
   // 13.1.1-T3 (S80): the version timeline (routes 22, 23) and the four restore routes (6, 11, 18, 24).
   // 00 §9.3's authoring row carries them; the two reads are `authoring:read`, the four restores `authoring:write`.
   ['/projects/{p}/authoring/versions', 'get', 'authoring:read', 'v1'],
@@ -255,6 +266,12 @@ const EXPECTED = [
   // The requirement intake pair: recording one is gated by `authoring:generate`, reading it by `authoring:read`.
   ['/projects/{p}/authoring/intakes', 'post', 'authoring:generate', 'v1'],
   ['/projects/{p}/authoring/intakes/{i}', 'get', 'authoring:read', 'v1'],
+  // 13.10.4: the read-only tracker connections. The callback sits outside /projects/{p}: the browser returns with a
+  // session and no project, and the consent it consumes names the project.
+  ['/projects/{p}/tracker-connections/{provider}/authorize', 'post', 'project:write', 'v1'],
+  ['/tracker-connections/{provider}/callback', 'get', 'project:write', 'v1'],
+  ['/projects/{p}/tracker-connections', 'get', 'project:read', 'v1'],
+  ['/projects/{p}/tracker-connections/{c}', 'delete', 'project:write', 'v1'],
 ];
 
 const byKey = new Map(ops.map((o) => [`${o.method} ${o.path}`, o]));
@@ -329,12 +346,14 @@ const INLINE_PARAM_ALLOWED = new Set(['traceparent']);
 // own-profile write of 02.3.1-T3 = the body sets one column to one of two values, so a replay would write the
 // same state, and the `If-Match` version makes the retry that re-sends the already-applied version answer 412
 // instead of applying twice; the retention upsert = a PUT that writes the same two windows for the same body,
-// so a replay cannot create a second row or a different answer.
+// so a replay cannot create a second row or a different answer; tracker consent start creates only a
+// pending consent, nothing connected, so a retry mints a fresh state.
 const IDEM_EXEMPT = new Set([
   'post /ci/token',
   'post /projects/{p}/ingest-tokens',
   'post /projects/{p}/api-tokens',
   'post /ingest-tokens/{t}/rotate',
+  'post /projects/{p}/tracker-connections/{provider}/authorize',
   'post /runs/{r}/events',
   'post /drafts/{d}/pull-request',
   'post /jobs/{j}/heartbeat',
