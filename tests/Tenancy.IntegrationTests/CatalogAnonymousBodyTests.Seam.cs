@@ -16,7 +16,6 @@ public sealed partial class CatalogAnonymousBodyTests
     [InlineData("case-update")]
     [InlineData("fixture-create")]
     [InlineData("fixture-revision")]
-    [InlineData("git-binding")]
     public async Task CatalogWrite_AnonymousRequest_ReadsNoBodyBytes(string route)
     {
         await using var world = await StartAsync();

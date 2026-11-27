@@ -131,7 +131,6 @@
         "authoring:write",
         "case:read",
         "case:write",
-        "ci_binding:write",
         "decision:read",
         "draft:dry_run",
         "draft:merge_request",
@@ -365,16 +364,6 @@
       "reserved": false,
       "tenant_assignable": true,
       "admin": false
-    },
-    {
-      "code": "ci_binding:write",
-      "resource": "ci_binding",
-      "action": "write",
-      "description": "Create, change or disable a project CI binding, including the one-time repository challenge (02.4.1).",
-      "sensitive": false,
-      "reserved": false,
-      "tenant_assignable": true,
-      "admin": true
     },
     {
       "code": "decision:read",
@@ -843,7 +832,6 @@
     "organization:write",
     "project:create",
     "project:write",
-    "ci_binding:write",
     "api_token:*",
     "ingest_token:write",
     "service_identity:*",

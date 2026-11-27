@@ -5,6 +5,10 @@ The 00 §2 built-in role × permission matrix as the **plans** state it, one gra
 expectation `SeedMatrixTests.Every_Role_Permission_Cell_Matches_The_Overview_Fixture`
 compares the seeded catalogue against, on both the database rows and the real evaluator.
 
+The owner-approved GitHub removal pulls the permission cleanup forward from 02.11.1-T4:
+the retired CI-binding grant and permission axis are removed here alongside the catalogue.
+All other plan-derived cells and citations are unchanged; this fixture remains handcrafted.
+
 ## Shape
 
 `input.json`:
@@ -98,7 +102,7 @@ merely names the permission.
   `artifact:read_sensitive` is inferred). The holder is derived from the surrounding plan
   text, and `source` points at the owner of the authoritative text.
 
-87 of the 132 grants are `explicit`; the 45 `inferred` ones are listed here. The
+96 of the 140 grants are `explicit`; the 44 `inferred` ones are listed here. The
 `RoleMatrixFixture.InferredGrants` property exposes the same list.
 
 | Role                | Permission                | Citation (owner of the authoritative text) |
@@ -123,7 +127,6 @@ merely names the permission.
 | `tenant_admin`      | `artifact:read`           | 00 §9.3:346                                |
 | `tenant_admin`      | `artifact:write`          | 00 §9.3:334                                |
 | `tenant_admin`      | `audit:read`              | 02 §4.2:83                                 |
-| `tenant_admin`      | `ci_binding:write`        | 02 §4.2:81                                 |
 | `tenant_admin`      | `decision:read`           | 00 §9.3:336                                |
 | `tenant_admin`      | `ingest_token:write`      | 00 §9.3:356                                |
 | `tenant_admin`      | `membership:write`        | 02 §4.2:79                                 |
@@ -204,10 +207,9 @@ The rule, applied to each row:
 
 Considered and **not** included, because the plan line describes a one-time secret in the
 _response_ rather than a permission that gates secret-adjacent data — and the catalogue
-agrees (neither is flagged): `ci_binding:write` (02.4.1 §42, the one-time binding
-challenge), `webhook:write` (07.6.3 §60/§62, "secret once"), `service_identity:write`
-(02.5.1 §8:71, the enrolment token shown once). `ingest_token:read` is excluded too: 00
-§9.3:356 says the list "shows prefix and status only".
+agrees (neither is flagged): `webhook:write` (07.6.3 §60/§62, "secret once"),
+`service_identity:write` (02.5.1 §8:71, the enrolment token shown once).
+`ingest_token:read` is excluded too: 00 §9.3:356 says the list "shows prefix and status only".
 
 ## Comparison with `contracts/permissions.json`
 

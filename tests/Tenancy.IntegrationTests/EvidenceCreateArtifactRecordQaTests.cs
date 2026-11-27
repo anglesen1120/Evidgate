@@ -66,7 +66,7 @@ public sealed class EvidenceCreateArtifactRecordQaTests : IClassFixture<TenancyH
         string executionKey = ExecutionKey,
         int attemptNo = 1,
         string mediaType = ZipType) =>
-        new(runId ?? Guid.CreateVersion7(), executionKey, attemptNo, kind, mediaType, bytes, checksum, clientKey);
+        new(runId ?? Guid.CreateVersion7(), executionKey, attemptNo, kind, mediaType, bytes, checksum, clientKey, "ingest-token-owner");
 
     /// <summary>One mint through the real Mediator pipeline with the given published tenant and principal.</summary>
     private static async Task<Result<ArtifactRecord>> SendAsync(World world, Guid? publishedProject, RequestPrincipal principal, CreateArtifactRecord command)

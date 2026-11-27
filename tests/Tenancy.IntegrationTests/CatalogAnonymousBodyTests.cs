@@ -28,7 +28,6 @@ public sealed partial class CatalogAnonymousBodyTests(
     [InlineData("case-update")]
     [InlineData("fixture-create")]
     [InlineData("fixture-revision")]
-    [InlineData("git-binding")]
     public async Task CatalogWrite_AnonymousBodies_ReturnIdenticalUnauthenticatedEnvelope(string route)
     {
         await using var world = await StartAsync();
@@ -53,15 +52,7 @@ public sealed partial class CatalogAnonymousBodyTests(
         }
 
         var control = await SendBodyAsync(world, target, target.ValidBody, world.Admin);
-        if (route == "git-binding")
-        {
-            // This domain refusal proves the authenticated request progressed past authentication.
-            control.Answer.ErrorCode.ShouldBe("installation_not_owned", control.Text);
-        }
-        else
-        {
-            control.Answer.Status.ShouldBeOneOf(HttpStatusCode.OK, HttpStatusCode.Created);
-        }
+        control.Answer.Status.ShouldBeOneOf(HttpStatusCode.OK, HttpStatusCode.Created);
     }
 
     [Theory]
@@ -70,7 +61,6 @@ public sealed partial class CatalogAnonymousBodyTests(
     [InlineData("case-update")]
     [InlineData("fixture-create")]
     [InlineData("fixture-revision")]
-    [InlineData("git-binding")]
     public async Task CatalogWrite_SessionWithoutPermission_PreservesBodyValidationBeforeForbidden(string route)
     {
         await using var world = await StartAsync();
@@ -98,14 +88,7 @@ public sealed partial class CatalogAnonymousBodyTests(
         denied.Answer.ErrorCode.ShouldBe("forbidden");
 
         var control = await SendBodyAsync(world, target, target.ValidBody, world.Admin);
-        if (route == "git-binding")
-        {
-            control.Answer.ErrorCode.ShouldBe("installation_not_owned", control.Text);
-        }
-        else
-        {
-            control.Answer.Status.ShouldBeOneOf(HttpStatusCode.OK, HttpStatusCode.Created);
-        }
+        control.Answer.Status.ShouldBeOneOf(HttpStatusCode.OK, HttpStatusCode.Created);
     }
 
     [Theory]
@@ -114,7 +97,6 @@ public sealed partial class CatalogAnonymousBodyTests(
     [InlineData("case-update")]
     [InlineData("fixture-create")]
     [InlineData("fixture-revision")]
-    [InlineData("git-binding")]
     public async Task CatalogWrite_AuthorizedInvalidBody_PreservesValidationAnswer(string route)
     {
         await using var world = await StartAsync();
@@ -141,7 +123,6 @@ public sealed partial class CatalogAnonymousBodyTests(
     [InlineData("case-update")]
     [InlineData("fixture-create")]
     [InlineData("fixture-revision")]
-    [InlineData("git-binding")]
     public async Task CatalogWrite_AnotherTenantsIdWithValidBody_PreservesNotFound(string route)
     {
         await using var world = await StartAsync();

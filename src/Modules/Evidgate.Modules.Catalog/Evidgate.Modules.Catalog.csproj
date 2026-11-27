@@ -10,10 +10,6 @@
     <PackageReference Include="FluentValidation" />
     <!-- 03.1.1-T1.3: the evidgate.cases.yaml sidecar (TL T55). Used through its event-level Parser only. MIT. -->
     <PackageReference Include="YamlDotNet" />
-    <!-- RS256 App JWT for the GitHub App client. Version comes from Directory.Packages.props; MIT, registered in ADR-0002. -->
-    <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" />
-    <!-- P6: IHttpClientFactory resilience handlers (Polly v8) for the GitHub read client. -->
-    <PackageReference Include="Microsoft.Extensions.Http.Resilience" />
   </ItemGroup>
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
@@ -21,7 +17,6 @@
   <ItemGroup>
     <ProjectReference Include="..\Evidgate.Modules.Catalog.Contracts\Evidgate.Modules.Catalog.Contracts.csproj" />
     <ProjectReference Include="..\..\BuildingBlocks\SharedKernel\Evidgate.BuildingBlocks.SharedKernel.csproj" />
-    <ProjectReference Include="..\..\BuildingBlocks\GitHub\Evidgate.BuildingBlocks.GitHub.csproj" />
     <ProjectReference Include="..\..\BuildingBlocks\Persistence\Evidgate.BuildingBlocks.Persistence.csproj" />
     <ProjectReference Include="..\..\BuildingBlocks\Pipeline\Evidgate.BuildingBlocks.Pipeline.csproj" />
     <ProjectReference Include="..\..\BuildingBlocks\Contracts.Validation\Evidgate.BuildingBlocks.Contracts.Validation.csproj" />

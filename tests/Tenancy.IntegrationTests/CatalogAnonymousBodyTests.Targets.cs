@@ -64,12 +64,6 @@ public sealed partial class CatalogAnonymousBodyTests
                 "case:write",
                 await CaseETagAsync(world, caseId)),
             "fixture-create" => FixtureCreateTarget(world),
-            "git-binding" => new Target(
-                HttpMethod.Post,
-                $"/v1/projects/{world.Project}/git-repo-bindings",
-                """{"installation_id":1,"repository_id":5001}""",
-                4 * 1024,
-                "project:write"),
             _ => throw new ArgumentOutOfRangeException(nameof(route), route, "unknown catalog write route"),
         };
     }

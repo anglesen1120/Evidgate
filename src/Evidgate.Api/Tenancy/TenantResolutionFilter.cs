@@ -3,8 +3,6 @@ using Evidgate.BuildingBlocks.Pipeline.Authorization;
 using Evidgate.BuildingBlocks.Pipeline.Tenancy;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
-using Evidgate.Modules.Identity.Endpoints;
-using Evidgate.Modules.Identity.Login;
 
 namespace Evidgate.Api.Tenancy;
 
@@ -124,17 +122,6 @@ public sealed class TenantResolutionFilter(
     /// </summary>
     private static (Guid? Org, bool Named)? RequestedOrg(HttpContext http, bool allowHeader)
     {
-        // Keyed on the path, not the route template: the callback carries no `{o}`, and routing serves both the
-        // plain and the trailing-slash form, so the two must resolve the same org.
-        if (http.Request.Path.Value is { } path
-            && LoginTraceRedaction.WithoutTrailingSlash(path)
-                .Equals(GitHubInstallationEndpoints.CallbackPath, StringComparison.OrdinalIgnoreCase))
-        {
-            return GitHubInstallationEndpoints.CallbackOrg(http.Request.Query["state"]) is { } callbackOrg
-                ? (callbackOrg, true)
-                : null;
-        }
-
         if (http.Request.RouteValues.TryGetValue("o", out var route))
         {
             return Guid.TryParse(route?.ToString(), out var routeOrg) ? (routeOrg, true) : null;

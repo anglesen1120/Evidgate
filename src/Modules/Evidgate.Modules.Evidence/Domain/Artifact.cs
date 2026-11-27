@@ -224,7 +224,8 @@ internal sealed class Artifact
         string? failureCode = null,
         int version = 1,
         DateTimeOffset createdAt = default,
-        DateTimeOffset updatedAt = default)
+        DateTimeOffset updatedAt = default,
+        string? ownerCredentialId = null)
     {
         Id = id;
         OrgId = orgId;
@@ -246,6 +247,7 @@ internal sealed class Artifact
         Version = version;
         CreatedAt = createdAt;
         UpdatedAt = updatedAt;
+        OwnerCredentialId = ownerCredentialId;
     }
 
     /// <summary>
@@ -403,7 +405,8 @@ internal sealed class Artifact
         failureCode: failureCode,
         version: Version,
         createdAt: CreatedAt,
-        updatedAt: UpdatedAt);
+        updatedAt: UpdatedAt,
+        ownerCredentialId: OwnerCredentialId);
 
     /// <summary>UUIDv7 id (00 §7).</summary>
     public Guid Id { get; }
@@ -455,6 +458,12 @@ internal sealed class Artifact
 
     /// <summary>The failure code of a rejected artifact; null otherwise.</summary>
     public string? FailureCode { get; }
+
+    /// <summary>
+    /// The stable ingest-token id that minted the row, or null for a row minted before the column existed. It is
+    /// written once at insert and sits outside the app role's UPDATE grant, so no transition can change it.
+    /// </summary>
+    public string? OwnerCredentialId { get; }
 
     /// <summary>Optimistic-concurrency token (00 §7); the trigger owns the increment.</summary>
     public int Version { get; }
