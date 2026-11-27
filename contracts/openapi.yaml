@@ -7497,6 +7497,70 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '503':
           $ref: '#/components/responses/Unavailable'
+  /projects/{p}/authoring/intakes/{i}/spec-section:
+    post:
+      operationId: saveAuthoringIntakeSpecSection
+      tags: [authoring]
+      summary: Save a selection of a ready intake's extracted text as a spec_section requirement
+      description: >-
+        `authoring:write`. Records the code points `[start, end)` of the intake's extracted text as the
+        first version of a new `spec_section` requirement with `source = import`; an absent `start` is
+        0 and an absent `end` is the end of the text, so an empty body selects the whole text. Offsets
+        count code points, the unit `extracted_char_count` reports. The selection is NFC-normalised
+        and must fit the 20 000 code-point requirement body. The intake must be `ready` with extracted
+        text: any other state (an image intake has none) is 409 `invalid_transition`. A range outside
+        the text is 422 `request_invalid` (`details[].reason` `range_invalid` at `/start` or `/end`), a
+        selection of only whitespace `empty_selection`, a selection over the body cap `length` at
+        `/end`. The optional `parent_requirement_id` and `feature_node_id` must name live rows of the
+        same project, else 422 with that member's path and reason `not_found`. Unknown, another
+        tenant's or another project's intake is 404 `not_found` with the body a random id gets. An
+        unknown member is 422, a missing
+        `Idempotency-Key` 400 `request_invalid`, and a replay answers the stored 201 with no second
+        version or audit row. No model is called. A lock timeout is 503 `unavailable` with
+        `Retry-After`.
+      x-permission: authoring:write
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/AuthoringIntakeId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SaveSpecSectionRequest'
+      responses:
+        '201':
+          description: 'The requirement id, its first version and `ETag: "<version>"`'
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequirementWriteResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/TooLarge'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
   /projects/{p}/authoring/tree:
     get:
       operationId: listAuthoringTree
@@ -15685,6 +15749,23 @@ components:
         kind: { type: string, enum: [user_story, acceptance_criterion, epic, spec_section, other] }
         title: { type: string, minLength: 1, maxLength: 200 }
         body: { type: string, maxLength: 20000 }
+        reason: { type: [string, 'null'], minLength: 1, maxLength: 500 }
+        external_ref: { type: [string, 'null'], maxLength: 128 }
+        feature_node_id: { type: [string, 'null'], format: uuid }
+        parent_requirement_id: { type: [string, 'null'], format: uuid }
+    SaveSpecSectionRequest:
+      type: object
+      description: >-
+        Body of `saveAuthoringIntakeSpecSection`. `start` and `end` are code-point offsets into the
+        intake's extracted text (`start` inclusive, `end` exclusive); an absent member means the
+        start or the end of the text. `external_ref` is a label of the catalog reference alphabet,
+        never a tracker key.
+      additionalProperties: false
+      required: [title]
+      properties:
+        title: { type: string, minLength: 1, maxLength: 200 }
+        start: { type: integer, format: int32 }
+        end: { type: integer, format: int32 }
         reason: { type: [string, 'null'], minLength: 1, maxLength: 500 }
         external_ref: { type: [string, 'null'], maxLength: 128 }
         feature_node_id: { type: [string, 'null'], format: uuid }

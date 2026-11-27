@@ -266,6 +266,7 @@ const EXPECTED = [
   // The requirement intake pair: recording one is gated by `authoring:generate`, reading it by `authoring:read`.
   ['/projects/{p}/authoring/intakes', 'post', 'authoring:generate', 'v1'],
   ['/projects/{p}/authoring/intakes/{i}', 'get', 'authoring:read', 'v1'],
+  ['/projects/{p}/authoring/intakes/{i}/spec-section', 'post', 'authoring:write', 'v1'],
   // 13.10.4: the read-only tracker connections. The callback sits outside /projects/{p}: the browser returns with a
   // session and no project, and the consent it consumes names the project.
   ['/projects/{p}/tracker-connections/{provider}/authorize', 'post', 'project:write', 'v1'],

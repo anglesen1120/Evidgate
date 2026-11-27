@@ -2704,6 +2704,19 @@ export type CreateRequirementRequest = {
 };
 
 /**
+ * Body of `saveAuthoringIntakeSpecSection`. `start` and `end` are code-point offsets into the intake's extracted text (`start` inclusive, `end` exclusive); an absent member means the start or the end of the text. `external_ref` is a label of the catalog reference alphabet, never a tracker key.
+ */
+export type SaveSpecSectionRequest = {
+    title: string;
+    start?: number;
+    end?: number;
+    reason?: string | null;
+    external_ref?: string | null;
+    feature_node_id?: string | null;
+    parent_requirement_id?: string | null;
+};
+
+/**
  * Body of `updateRequirement`. An absent member is unchanged; an explicit `null` clears `external_ref`, `feature_node_id` or `parent_requirement_id`. At least one editable member is required.
  */
 export type UpdateRequirementRequest = {
@@ -3892,7 +3905,7 @@ export type AuthoringChangeV1 = unknown & {
 /**
  * Feature tree import document v1
  *
- * The import/export table of 13.1.1-T5 (route 25, AC13/AC14/AC15): one flat row set that carries the whole feature tree — nodes, their checklist items and each item's manual test cases — in a single document. The same table is what the CSV and XLSX readers produce and what every exporter writes, so the three formats validate against one contract; the CSV/XLSX column order is the CSV header (kind,key,parent_key,item_key,node_kind,title,description,precondition,steps,priority,state,code,position) and a JSON member of a row is that column name. Rows are ordered parent-first: a node's parent_key names a node row above it, an item's parent_key names its node, a case's item_key names its item. 'steps' is the stored {"steps":[…]} document of contracts/schemas/authoring-steps.v1.json, inlined here as $defs.steps because a row member is not a reference to another contract file: the two shapes must stay identical (1..100 steps, 2000 characters per field, closed members), which ContractSchemaRegistryTests.AuthoringImportSchema_IsDiscovered asserts field by field. Bounds: 1..5000 rows — the same 5000-row cap the route enforces with 413 payload_too_large (plan 13.1.1 §5 route 25, AC16) — a node title of 1..200 and an item/case title of 1..500 code points, a description and a precondition of at most 4000, and the priority/state/node_kind sets of plan 13.1.1 §4. No member is ever evaluated as a formula: the JSON format is never neutralised, because a JSON consumer does not evaluate cell text (AC16 covers CSV and XLSX only).
+ * The import/export table of 13.1.1-T5 (route 25, AC13/AC14/AC15): one flat row set that carries the whole feature tree — nodes, their checklist items and each item's manual test cases — in a single document. The same table is what the CSV and XLSX readers produce and what every exporter writes, so the three formats validate against one contract; the CSV/XLSX column order is the CSV header (kind,key,parent_key,item_key,node_kind,title,description,precondition,steps,priority,state,code,position) and a JSON member of a row is that column name. Rows are ordered parent-first: a node's parent_key names a node row above it, an item's parent_key names its node, a case's item_key names its item. 'steps' is the stored {"steps":[…]} document of contracts/schemas/authoring-steps.v1.json, inlined here as $defs.steps because a row member is not a reference to another contract file: the two shapes must stay identical (1..100 steps, 2000 characters per field, closed members), which ContractSchemaRegistryTests.AuthoringImportSchema_IsDiscovered asserts field by field. Bounds: 1..5000 rows — the same 5000-row cap the route enforces with 413 payload_too_large (plan 13.1.1 §5 route 25, AC16) — a node title of 1..200 and an item/case title of 1..500 code points, a description and a precondition of at most 4000, and the priority/state/node_kind sets of plan 13.1.1 §4. No member is ever evaluated as a formula: the JSON format is never neutralised, because a JSON consumer does not evaluate cell text (AC16 covers CSV and XLSX only). The same table also carries requirement rows (kind=requirement, see $defs.requirement): a file is either tree rows or requirement rows, never mixed, and requirements are imported only; the exporter never writes them.
  */
 export type AuthoringImportV1 = {
     /**
@@ -3910,7 +3923,7 @@ export type AuthoringImportV1 = {
         /**
          * The row's kind, and the member every if/then branch below selects on. A row with any other value is refused here rather than by the branches, so an unknown kind is one refusal at this member.
          */
-        kind: 'node' | 'item' | 'case';
+        kind: 'node' | 'item' | 'case' | 'requirement';
     }>;
 };
 
@@ -4013,6 +4026,38 @@ export type Node = {
  * The sibling position of a NEW row only: absent means append at the group's max + 1, and a position a live sibling already holds is refused with value_invalid at /position. Import never reorders an existing sibling. The upper bound is the sanity ceiling of a hand-written file — a sibling group holds at most 1000 nodes (NodeLimits.MaximumSiblingsPerGroup), so a position above 1e6 names nothing this module could ever store.
  */
 export type Position = number;
+
+/**
+ * One requirement row (13.10.1): the same 13-column table maps kind=requirement, key = the row's file-local key, parent_key = the key of a requirement row ABOVE it (absent for a top-level requirement), node_kind = the requirement kind, title = the requirement title, description = the requirement body, item_key = an optional feature node id (a GUID of a live feature node of the same project) and code = an optional external reference label. precondition, steps, priority, state and position are not members of a requirement row, so a file that fills them is refused at that column. A file holds requirement rows or tree rows (node/item/case), never both.
+ */
+export type Requirement = {
+    kind: 'requirement';
+    key: Key;
+    /**
+     * The key of a requirement row above this one, or absent for a top-level requirement.
+     */
+    parent_key?: Key;
+    /**
+     * Optional feature node id (a GUID, 36 characters) of a live feature node of the same project; the importer refuses any other value or a node of another project.
+     */
+    item_key?: Key;
+    /**
+     * The requirement kind, as stored.
+     */
+    node_kind: 'user_story' | 'acceptance_criterion' | 'epic' | 'spec_section' | 'other';
+    /**
+     * The requirement title, 1..200 code points.
+     */
+    title: string;
+    /**
+     * The requirement body, optional. At most 20000 code points AFTER NFC composition, which the importer enforces (a schema length would count the decomposed form), and at most 64 KiB per CSV/XLSX cell.
+     */
+    description?: string;
+    /**
+     * Optional external reference label (letters, digits and . _ : / # -, 1..128 characters), which is how a re-import finds a requirement it already stored.
+     */
+    code?: string;
+};
 
 /**
  * The manual test case steps document of contracts/schemas/authoring-steps.v1.json, inlined (a cross-file $ref would tie this contract to the steps file's own $id, and the two documents are validated by the same registry anyway). The bounds here are that file's bounds: a change to one must change the other, which ContractSchemaRegistryTests.AuthoringImportSchema_IsDiscovered checks member by member.
@@ -12959,6 +13004,79 @@ export type GetAuthoringIntakeResponses = {
 };
 
 export type GetAuthoringIntakeResponse = GetAuthoringIntakeResponses[keyof GetAuthoringIntakeResponses];
+
+export type SaveAuthoringIntakeSpecSectionData = {
+    body: SaveSpecSectionRequest;
+    headers: {
+        /**
+         * Client-supplied, ≤ 128 chars, unique per `(org_id, project_id, operation)` ≥ 24 h (00 §7/§9.1).
+         */
+        'Idempotency-Key': string;
+        /**
+         * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
+         */
+        'X-XSRF-TOKEN'?: string;
+    };
+    path: {
+        p: string;
+        /**
+         * The requirement intake id.
+         */
+        i: string;
+    };
+    query?: never;
+    url: '/projects/{p}/authoring/intakes/{i}/spec-section';
+};
+
+export type SaveAuthoringIntakeSpecSectionErrors = {
+    /**
+     * 400 request_invalid — a malformed or missing request header, e.g. the `Idempotency-Key` every mutating authoring route requires (00 §9.1)
+     */
+    400: ErrorEnvelope;
+    /**
+     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 409 conflict — e.g. `idempotency_conflict`, `run_closed` (00 §9.1/§9.2)
+     */
+    409: ErrorEnvelope;
+    /**
+     * 413 too large (00 §9.2): a request body over its published cap. For the caps that carry numbers (`manifest_bytes`, `run_body_bytes`, and the raw-report byte cap behind `report_bytes`) the one detail names the cap in `path` and carries `limit` and `actual`; `actual` is the declared length when the declaration alone was over, otherwise the bytes counted when the overrun was seen, so a missing or short `Content-Length` never hides it.
+     */
+    413: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type SaveAuthoringIntakeSpecSectionError = SaveAuthoringIntakeSpecSectionErrors[keyof SaveAuthoringIntakeSpecSectionErrors];
+
+export type SaveAuthoringIntakeSpecSectionResponses = {
+    /**
+     * The requirement id, its first version and `ETag: "<version>"`
+     */
+    201: RequirementWriteResponse;
+};
+
+export type SaveAuthoringIntakeSpecSectionResponse = SaveAuthoringIntakeSpecSectionResponses[keyof SaveAuthoringIntakeSpecSectionResponses];
 
 export type ListAuthoringTreeData = {
     body?: never;

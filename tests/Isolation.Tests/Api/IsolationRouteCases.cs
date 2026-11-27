@@ -541,6 +541,9 @@ public static partial class IsolationRouteCases
         ObjectCaseWith("GET", "/v1/projects/{p}/authoring/intakes/{i}", p => [("recorded intake", p.AuthoringIntakeId)],
             (id, p) => new(HttpMethod.Get, $"/v1/projects/{p.Id}/authoring/intakes/{id}"), (_, _) => [],
             own: p => new(HttpMethod.Get, $"/v1/projects/{p.Id}/authoring/intakes/{p.AuthoringIntakeId}")),
+        ObjectCaseWith("POST", "/v1/projects/{p}/authoring/intakes/{i}/spec-section", p => [("recorded intake", p.AuthoringIntakeId)],
+            (id, p) => new(HttpMethod.Post, $"/v1/projects/{p.Id}/authoring/intakes/{id}/spec-section",
+                new JsonObject { ["title"] = "intruder section" }), (_, _) => []),
         // 13.10.4: the tracker connection routes. The authorize and disconnect probes name a project and a random
         // connection; a project of another org answers the same 404 as a random one. The callback names no project: a
         // forged state is refused identically whatever org the caller names.

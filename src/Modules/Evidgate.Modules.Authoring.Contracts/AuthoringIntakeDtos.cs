@@ -58,3 +58,24 @@ public sealed record IntakeStatusResponse(
     Guid? ArtifactId,
     JsonElement Caps,
     int Version);
+
+/// <summary>
+/// The body of <c>POST /v1/projects/{p}/authoring/intakes/{i}/spec-section</c>: which code points of the intake's
+/// extracted text become one <c>spec_section</c> requirement. The route reads the raw body, so one bad member is answered
+/// with its own 422 path.
+/// </summary>
+/// <param name="Title">A 1..200 code-point title.</param>
+/// <param name="Start">The first selected code point; absent selects from the start of the text.</param>
+/// <param name="End">One past the last selected code point; absent selects to the end of the text.</param>
+/// <param name="Reason">An optional 1..500 code-point reason recorded on the first version.</param>
+/// <param name="ExternalRef">An optional label of the catalog reference alphabet, at most 128 characters.</param>
+/// <param name="FeatureNodeId">An optional live feature node of the same project.</param>
+/// <param name="ParentRequirementId">An optional live requirement of the same project.</param>
+public sealed record SaveSpecSectionRequest(
+    string Title,
+    int? Start = null,
+    int? End = null,
+    string? Reason = null,
+    string? ExternalRef = null,
+    Guid? FeatureNodeId = null,
+    Guid? ParentRequirementId = null);
