@@ -67,6 +67,10 @@ What each payload field may hold, and what it may not:
 | `request_id` / `trace_id` | an opaque request/trace identifier | a session cookie, a bearer token |
 | `metadata` | an allowlisted key with a short enumerated value (`AuditMetadata.AllowedKeys.cs`) | any key on the forbidden list (§4), free text (§6) |
 
+`metadata.report_hash` is the one value exempt from the long-run credential check: exactly `sha256:` followed by 64
+lowercase hex characters, under that key only. It is a 32-byte channel that is shape-checked and nothing more, so it is
+never widened — another key, prefix, uppercase digit or suffix is refused like any other long unbroken run.
+
 Two consequences a reader should not miss:
 
 1. **The rule is "never write it", not "remove it later".** No row can be erased: `revoke update, delete, truncate …

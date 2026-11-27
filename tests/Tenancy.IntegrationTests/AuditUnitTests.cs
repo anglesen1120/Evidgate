@@ -95,6 +95,23 @@ public sealed class AuditUnitTests
         }
     }
 
+    // The digest exemption is the one 32-byte channel in the metadata, so every shape beside `sha256:` + 64 lowercase
+    // hex stays refused; the valid form is the positive control that the key is exempt at all.
+    [Theory]
+    [InlineData("sha256:", "upper", "")]
+    [InlineData("sha512:", "lower", "")]
+    [InlineData("sha256:", "lower", "-extra")]
+    [InlineData("sha256:", "lower", "\n")]
+    public void Metadata_ReportDigestNearForm_IsRefused(string prefix, string casing, string suffix)
+    {
+        var hex = new string('a', 32) + new string('7', 32);
+        var near = prefix + (casing == "upper" ? hex.ToUpperInvariant() : hex) + suffix;
+
+        AuditMetadata.Validate(new Dictionary<string, string> { ["report_hash"] = "sha256:" + hex }).ShouldNotBeNull();
+        Should.Throw<ArgumentException>(() => AuditMetadata.Validate(new Dictionary<string, string> { ["report_hash"] = near }))
+            .Message.ShouldContain("credential");
+    }
+
     [Fact]
     public void AuditPayload_DenyList_IsOneListAndMatchesNormalisedKeys()
     {

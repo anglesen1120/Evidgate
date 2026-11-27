@@ -14,8 +14,8 @@ using Xunit;
 namespace Tenancy.IntegrationTests;
 
 // A call the redaction gate refuses: no provider call, one audit entry that names the rule, the segment and the
-// report digest, and a ledger row whose report digest is the stored report's. The pipeline is a hand-written double
-// because IRedactionPipeline is internal and cannot be proxied.
+// report digest, and a ledger row whose report digest is the stored report's. Most cases use a hand-written pipeline
+// double because IRedactionPipeline is internal and cannot be proxied; the real pipeline is driven in the sibling partial.
 public sealed partial class HealingLlmGatewayTests
 {
     [Theory]
@@ -136,6 +136,46 @@ public sealed partial class HealingLlmGatewayTests
         (await CountAsync(world, "healing_redaction_report")).ShouldBe(0, "the report rolls back with the row");
     }
 
+    // The hold is committed before the mask runs, so an audit write that fails after a refusal rolls the settlement back
+    // and would leave the hold charged although nothing was sent: it must be given back and the failure must surface.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task InvokeHealingLlm_ProvisionedBudgetAuditWriteFails_ReleasesHoldAndRollsBack(bool failsInFlush)
+    {
+        var provider = new StubProvider(_ => new HealingLlmResult(HealingLlmStatuses.Ok, "{}", 12, 0.01m));
+        var report = new RedactionReport(RedactionRules.Version, [new("residual_credentials", "segment:1", 1)]);
+        var failure = new IOException("audit write failed");
+        var audit = Substitute.For<IAuditTrail>();
+        if (failsInFlush)
+        {
+            audit.FlushAsync(Arg.Any<Guid>(), Arg.Any<ITenantDb>(), Arg.Any<CancellationToken>())
+                .Returns(Task.FromException<int>(failure));
+        }
+        else
+        {
+            audit.When(trail => trail.Record(Arg.Any<string>(), Arg.Any<AuditActor>())).Do(_ => throw failure);
+        }
+
+        await using var world = await StartAsync(services =>
+        {
+            services.Replace(ServiceDescriptor.Singleton<IHealingLlmProvider>(provider));
+            services.Replace(ServiceDescriptor.Singleton<IRedactionPipeline>(new InjectedLeakPipeline(report, blocked: true)));
+            services.Replace(ServiceDescriptor.Singleton(audit));
+        });
+        var database = await _fixture.SharedDatabaseAsync();
+        await SeedBudgetAsync(database, world);
+
+        var thrown = await Should.ThrowAsync<IOException>(() => InvokeAsync(world, AuthoringRequest(world.Project)));
+
+        thrown.ShouldBeSameAs(failure);
+        provider.Calls.ShouldBe(0);
+        (await UsedAsync(database, world)).ShouldBe((0m, 0), "nothing was sent, so the committed hold goes back");
+        (await ReadCallsAsync(world)).ShouldBeEmpty("the call row rolled back with the entry");
+        (await CountAsync(world, "healing_redaction_report")).ShouldBe(0);
+        (await ReadLeakAuditsAsync(world)).ShouldBeEmpty();
+    }
+
     private Task<World> StartLeakWorldAsync(StubProvider provider, IRedactionPipeline pipeline, CapturingLogger? logger = null) =>
         StartAsync(services =>
         {
@@ -197,6 +237,8 @@ public sealed partial class HealingLlmGatewayTests
     {
         public List<string> Messages { get; } = [];
 
+        public List<(LogLevel Level, EventId Id, string Message)> Events { get; } = [];
+
         public IDisposable? BeginScope<TState>(TState state)
             where TState : notnull => null;
 
@@ -211,6 +253,7 @@ public sealed partial class HealingLlmGatewayTests
         {
             ArgumentNullException.ThrowIfNull(formatter);
             Messages.Add(formatter(state, exception));
+            Events.Add((logLevel, eventId, formatter(state, exception)));
         }
     }
 }
