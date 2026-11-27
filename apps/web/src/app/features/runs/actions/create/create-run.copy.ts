@@ -11,7 +11,7 @@ export const CREATE_RUN_COPY = {
   replayHint: $localize`:@@runs.actions.create.replay-hint:Replay grants are not available yet. Choose Regular to create a run.`,
   grant: $localize`:@@runs.actions.create.grant:Replay grant ID (optional)`,
   ref: $localize`:@@runs.actions.create.ref:Ref identity (optional)`,
-  refHint: $localize`:@@runs.actions.create.ref-hint:Body-supplied identity is recorded as unverified. Verified CI claims take precedence.`,
+  refHint: $localize`:@@runs.actions.create.ref-hint:Body-supplied identity is recorded as declared by the producer and is never verified.`,
   kind: $localize`:@@runs.actions.create.kind:Ref kind (optional)`,
   none: $localize`:@@runs.actions.create.none:Not supplied`,
   branch: $localize`:@@runs.actions.create.branch:Branch`,

@@ -91,9 +91,8 @@ Every variable above is read **once in the constructor**; no callback reads `pro
 
 Attachment uploads additionally use the **CLI's own** environment surface — the one
 `evidgate artifacts upload` resolves — because the upload is the CLI's: `EVIDGATE_API_URL`,
-`EVIDGATE_PROJECT` and one token source (`EVIDGATE_OIDC_TOKEN`, the GitHub Actions pair
-`ACTIONS_ID_TOKEN_REQUEST_URL` + `ACTIONS_ID_TOKEN_REQUEST_TOKEN`, `EVIDGATE_INGEST_TOKEN`
-or `EVIDGATE_DEV_TOKEN`), plus `EVIDGATE_SPOOL_DIR` when you want the uploads to have a
+`EVIDGATE_PROJECT` and one token source (`EVIDGATE_INGEST_TOKEN` or
+`EVIDGATE_DEV_TOKEN`), plus `EVIDGATE_SPOOL_DIR` when you want the uploads to have a
 resume journal. All three of the url, the project and a token source are required: a missing
 one is the CLI's own `missing_config`, reported as `attachments_unconfigured`. That surface
 is resolved when the uploader is built, i.e. at the first attachment that is actually

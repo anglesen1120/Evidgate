@@ -69,20 +69,21 @@ describe('quickstart', () => {
     const upload = workflow.jobs.upload;
     expect(upload?.['runs-on']).toBe('ubuntu-24.04');
     expect(upload?.environment).toBe('evidgate-upload');
-    expect(upload?.permissions).toEqual({ contents: 'read', 'id-token': 'write' });
+    expect(upload?.permissions).toEqual({ contents: 'read' });
     expect(upload?.env?.EVIDGATE_API_URL).toBe('${{ vars.EVIDGATE_API_URL }}');
+    expect(upload?.env?.EVIDGATE_INGEST_TOKEN).toBe('${{ secrets.EVIDGATE_INGEST_TOKEN }}');
     expect(upload?.env?.EVIDGATE_PROJECT).toBe(sampleProject);
   });
 
-  // The rendered workflow is fork-safe: the default grants no `id-token`, and the
-  // token-minting job is never triggered by a pull_request event.
+  // The rendered workflow is fork-safe: the default grants nothing, and the only job that reads
+  // the ingest token is never triggered by a pull_request event.
   it('keeps the token out of the workflow default and off pull_request', () => {
     const workflow = githubWorkflow();
-    expect(workflow.permissions['id-token']).toBeUndefined();
+    expect(workflow.permissions).toEqual({});
     expect(Object.keys(workflow.on)).not.toContain('pull_request_target');
     expect(Object.keys(workflow.on)).not.toContain('workflow_run');
     const minting = Object.entries(workflow.jobs).filter(
-      ([, job]) => job.permissions?.['id-token'] === 'write',
+      ([, job]) => job.env?.EVIDGATE_INGEST_TOKEN !== undefined,
     );
     expect(minting).toHaveLength(1);
     const [name, job] = minting[0] ?? [];
@@ -101,8 +102,8 @@ describe('quickstart', () => {
   // No stored secret and no token-shaped value anywhere in either render.
   it('never renders a stored secret or a token-shaped value', () => {
     const forbiddenKey = /token|secret|password|key/i;
-    // `id-token` is a permission name, not a credential (the only allowed match).
-    const allowedKeys: Record<string, true> = { 'id-token': true };
+    // The ingest token is read from the environment secret by name, in the upload job only.
+    const allowedKeys: Record<string, true> = { EVIDGATE_INGEST_TOKEN: true };
     const tokenShape = /egt_|eyJ|[A-Za-z0-9+/=_-]{32,}/;
 
     walk(githubWorkflow(), (key, value) => {
@@ -112,7 +113,11 @@ describe('quickstart', () => {
         );
       }
       if (typeof value === 'string') {
-        expect(value.includes('secrets.'), `secrets. in value: ${value}`).toBe(false);
+        if (key === 'EVIDGATE_INGEST_TOKEN') {
+          expect(value).toBe('${{ secrets.EVIDGATE_INGEST_TOKEN }}');
+        } else {
+          expect(value.includes('secrets.'), `secrets. in value: ${value}`).toBe(false);
+        }
         // The `uses:` pins are 40-hex SHAs by design (asserted below), so they are the
         // one place a long hex run is expected.
         if (key !== 'uses') {
@@ -132,9 +137,7 @@ describe('quickstart', () => {
     const generic = renderQuickstart({ format: 'generic', project: sampleProject, version });
     expect(generic.includes('secrets.')).toBe(false);
     for (const line of generic.split('\n')) {
-      expect(/EVIDGATE_(INGEST|OIDC)_TOKEN\s*=/.test(line), `token assignment: ${line}`).toBe(
-        false,
-      );
+      expect(/EVIDGATE_INGEST_TOKEN\s*=/.test(line), `token assignment: ${line}`).toBe(false);
     }
   });
 

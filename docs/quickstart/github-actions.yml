@@ -2,8 +2,9 @@
 #
 # The stored settings are repository configuration VARIABLES: EVIDGATE_API_URL and
 # EVIDGATE_EXECUTION (Settings → Secrets and variables → Actions → Variables; the
-# execution key is a 64-hex digest, not a secret). No secret is stored: the CLI exchanges
-# the GitHub OIDC token for a short-lived Evidgate CI token.
+# execution key is a 64-hex digest, not a secret). The one secret is the project ingest
+# token: store it as the secret EVIDGATE_INGEST_TOKEN of the `evidgate-upload`
+# environment (create it with an expiry), never as a repository secret.
 #
 # Fork-safe by construction: `test` runs on pull_request and holds no Evidgate setting
 # and no token; `upload` mints the token only on a workflow_dispatch or push from the
@@ -47,18 +48,18 @@ jobs:
     # pull_request event.
     if: "${{ !cancelled() && ((github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') || (github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.test.result == 'success')) }}"
     runs-on: ubuntu-24.04
-    # An environment with no secrets: create it with required reviewers and a
-    # deployment branch rule for `main` before first use — its rules gate the job and
-    # it holds nothing a compromised step could read. Referencing an environment that
+    # The environment holds only the ingest token secret: create it with required
+    # reviewers and a deployment branch rule for `main` before first use — its rules
+    # gate the job, so only a trusted run can read the token. Referencing an environment that
     # does not exist auto-creates it with no protection rules:
     # https://docs.github.com/en/actions/deployment/targeting-different-environments/using-environments-for-deployment
     environment: evidgate-upload
-    # R3: per-job elevation. id-token write lets the CLI request the GitHub OIDC token.
+    # R3: read the code, nothing else; the Evidgate credential is not a GitHub permission.
     permissions:
       contents: read
-      id-token: write
     env:
       EVIDGATE_API_URL: ${{ vars.EVIDGATE_API_URL }}
+      EVIDGATE_INGEST_TOKEN: ${{ secrets.EVIDGATE_INGEST_TOKEN }}
       EVIDGATE_PROJECT: "my-project"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -67,8 +68,8 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22"
-      # Exchange the GitHub OIDC token for a short-lived Evidgate CI token. The token
-      # is written only to the 0600 cache, never printed.
+      # Exchange the ingest token for a short-lived Evidgate CI token. The token is
+      # written only to the 0600 cache, never printed.
       - run: npx --yes --package @evidgate/cli@0.0.0 -- evidgate auth login
       # Upload the manifest and keep its ids for the run step. Each id is registered
       # with ::add-mask:: before the $GITHUB_OUTPUT write: R4 in

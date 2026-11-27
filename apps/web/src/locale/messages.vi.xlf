@@ -2436,7 +2436,7 @@
 <trans-unit id="runs.list.column-ref" datatype="html"><source>Ref</source><target>Tham chiếu</target></trans-unit>
 <trans-unit id="runs.list.column-scope" datatype="html"><source>Run scope</source><target>Phạm vi lượt chạy</target></trans-unit>
 <trans-unit id="runs.list.column-created" datatype="html"><source>Created (UTC)</source><target>Thời điểm tạo (UTC)</target></trans-unit>
-<trans-unit id="runs.list.unverified-ref" datatype="html"><source>Unverified ref</source><target>Tham chiếu chưa xác minh</target></trans-unit>
+<trans-unit id="runs.list.unverified-ref" datatype="html"><source>Declared ref</source><target>Tham chiếu do bên gửi khai báo</target></trans-unit>
 <trans-unit id="runs.list.ref-unavailable" datatype="html"><source>Ref unavailable</source><target>Chưa có tham chiếu</target></trans-unit>
 <trans-unit id="runs.list.child" datatype="html"><source>Derived run</source><target>Lượt chạy phát sinh</target></trans-unit>
 <trans-unit id="onboarding.enable.intro" datatype="html"><source>Enabling collection records a decision for every run of this project. It does not gate any merge yet.</source><target>Bật thu thập sẽ ghi lại một quyết định cho mỗi lượt chạy của dự án này. Nó chưa chặn lần hợp nhất nào.</target></trans-unit>
@@ -2491,7 +2491,7 @@
 <trans-unit id="runs.detail.fork" datatype="html"><source>Fork</source><target>Bản phân nhánh</target></trans-unit>
 <trans-unit id="runs.detail.yes" datatype="html"><source>Yes</source><target>Có</target></trans-unit>
 <trans-unit id="runs.detail.no" datatype="html"><source>No</source><target>Không</target></trans-unit>
-<trans-unit id="runs.detail.unverified" datatype="html"><source>Unverified ref</source><target>Tham chiếu chưa xác minh</target></trans-unit>
+<trans-unit id="runs.detail.unverified" datatype="html"><source>Declared ref</source><target>Tham chiếu do bên gửi khai báo</target></trans-unit>
 <trans-unit id="runs.detail.evidence" datatype="html"><source>Evidence revision</source><target>Phiên bản bằng chứng</target></trans-unit>
 <trans-unit id="runs.detail.none" datatype="html"><source>None recorded</source><target>Chưa ghi nhận</target></trans-unit>
 <trans-unit id="runs.detail.context" datatype="html"><source>Execution context</source><target>Ngữ cảnh thực thi</target></trans-unit>
@@ -3468,7 +3468,7 @@
       <trans-unit id="runs.actions.create.replay-hint" datatype="html"><source>Replay grants are not available yet. Choose Regular to create a run.</source><target>Hiện chưa có quyền phát lại. Chọn Thông thường để tạo lượt chạy.</target></trans-unit>
       <trans-unit id="runs.actions.create.grant" datatype="html"><source>Replay grant ID (optional)</source><target>Mã quyền phát lại (không bắt buộc)</target></trans-unit>
       <trans-unit id="runs.actions.create.ref" datatype="html"><source>Ref identity (optional)</source><target>Định danh ref (không bắt buộc)</target></trans-unit>
-      <trans-unit id="runs.actions.create.ref-hint" datatype="html"><source>Body-supplied identity is recorded as unverified. Verified CI claims take precedence.</source><target>Định danh do nội dung yêu cầu cung cấp được ghi nhận là chưa xác minh. Thông tin CI đã xác minh được ưu tiên.</target></trans-unit>
+      <trans-unit id="runs.actions.create.ref-hint" datatype="html"><source>Body-supplied identity is recorded as declared by the producer and is never verified.</source><target>Định danh do nội dung yêu cầu cung cấp được ghi nhận là do bên gửi khai báo và không bao giờ được xác minh.</target></trans-unit>
       <trans-unit id="runs.actions.create.kind" datatype="html"><source>Ref kind (optional)</source><target>Loại ref (không bắt buộc)</target></trans-unit>
       <trans-unit id="runs.actions.create.none" datatype="html"><source>Not supplied</source><target>Chưa cung cấp</target></trans-unit>
       <trans-unit id="runs.actions.create.branch" datatype="html"><source>Branch</source><target>Nhánh</target></trans-unit>

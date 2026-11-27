@@ -11236,35 +11236,35 @@
         <source>CLI quickstart</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/health/cli-quickstart.component.ts</context>
-          <context context-type="linenumber">127</context>
+          <context context-type="linenumber">124</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.quickstart.hint" datatype="html">
         <source>Replace the API URL placeholder with your API root, without /v1. Run these commands with your CI variables and credentials injected. This snippet contains metadata only, not credentials.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/health/cli-quickstart.component.ts</context>
-          <context context-type="linenumber">128</context>
+          <context context-type="linenumber">125</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.quickstart.copy" datatype="html">
         <source>Copy CLI quickstart commands</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/health/cli-quickstart.component.ts</context>
-          <context context-type="linenumber">129</context>
+          <context context-type="linenumber">126</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.quickstart.copied" datatype="html">
         <source>CLI quickstart commands copied.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/health/cli-quickstart.component.ts</context>
-          <context context-type="linenumber">163</context>
+          <context context-type="linenumber">160</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.quickstart.copy-failed" datatype="html">
         <source>Copy was unavailable. Select the commands above and copy them manually.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/health/cli-quickstart.component.ts</context>
-          <context context-type="linenumber">170</context>
+          <context context-type="linenumber">167</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.record.health-caption" datatype="html">
@@ -11972,7 +11972,7 @@
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/steps/credential-record.component.ts</context>
-          <context context-type="linenumber">99</context>
+          <context context-type="linenumber">93</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.connect.scopes" datatype="html">
@@ -11983,7 +11983,7 @@
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/steps/credential-record.component.ts</context>
-          <context context-type="linenumber">100</context>
+          <context context-type="linenumber">94</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.connect.rotate-confirm-cancel" datatype="html">
@@ -12008,7 +12008,7 @@
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/steps/credential-record.component.ts</context>
-          <context context-type="linenumber">98</context>
+          <context context-type="linenumber">92</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/steps/field-details.ts</context>
@@ -12072,7 +12072,7 @@
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/steps/credential-record.component.ts</context>
-          <context context-type="linenumber">104</context>
+          <context context-type="linenumber">98</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.connect.rotate" datatype="html">
@@ -12269,49 +12269,49 @@
         <source>Active</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/steps/credential-record.component.ts</context>
-          <context context-type="linenumber">15</context>
+          <context context-type="linenumber">9</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.connect.rotated" datatype="html">
         <source>Rotated</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/steps/credential-record.component.ts</context>
-          <context context-type="linenumber">16</context>
+          <context context-type="linenumber">10</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.connect.expired" datatype="html">
         <source>Expired</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/steps/credential-record.component.ts</context>
-          <context context-type="linenumber">17</context>
+          <context context-type="linenumber">11</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.connect.revoked" datatype="html">
         <source>Revoked</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/steps/credential-record.component.ts</context>
-          <context context-type="linenumber">18</context>
+          <context context-type="linenumber">12</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.connect.expires" datatype="html">
         <source>Expires (UTC)</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/steps/credential-record.component.ts</context>
-          <context context-type="linenumber">101</context>
+          <context context-type="linenumber">95</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.connect.last-used" datatype="html">
         <source>Last used (UTC)</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/steps/credential-record.component.ts</context>
-          <context context-type="linenumber">102</context>
+          <context context-type="linenumber">96</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.connect.created" datatype="html">
         <source>Created (UTC)</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/steps/credential-record.component.ts</context>
-          <context context-type="linenumber">103</context>
+          <context context-type="linenumber">97</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.enable.intro" datatype="html">
@@ -17754,7 +17754,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="runs.actions.create.ref-hint" datatype="html">
-        <source>Body-supplied identity is recorded as unverified. Verified CI claims take precedence.</source>
+        <source>Body-supplied identity is recorded as declared by the producer and is never verified.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/actions/create/create-run.copy.ts</context>
           <context context-type="linenumber">14</context>
@@ -19265,7 +19265,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="runs.detail.unverified" datatype="html">
-        <source>Unverified ref</source>
+        <source>Declared ref</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/detail/run-header.component.ts</context>
           <context context-type="linenumber">82</context>
@@ -19711,7 +19711,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="runs.list.unverified-ref" datatype="html">
-        <source>Unverified ref</source>
+        <source>Declared ref</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/runs/list/run-list-table.component.ts</context>
           <context context-type="linenumber">119</context>
