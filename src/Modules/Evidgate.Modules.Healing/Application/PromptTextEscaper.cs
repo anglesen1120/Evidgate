@@ -6,8 +6,9 @@ namespace Evidgate.Modules.Healing.Application;
 
 /// <summary>
 /// Makes untrusted text inert inside a prompt block: markup characters become character references and characters
-/// that can hide or forge a delimiter are removed. Output is plain text that never contains a raw <c>&lt;</c>,
-/// <c>&gt;</c> or <c>&amp;</c>.
+/// that can hide or forge a delimiter are removed (<see cref="InvisibleCharacters"/>; a filler that reads as a space
+/// stays one space, so a keyword and its value keep their gap). Output is plain text that never contains a raw
+/// <c>&lt;</c>, <c>&gt;</c> or <c>&amp;</c>.
 /// </summary>
 internal static class PromptTextEscaper
 {
@@ -49,7 +50,7 @@ internal static class PromptTextEscaper
                 {
                     var rune = char.ConvertToUtf32(c, text[i + 1]);
                     i++;
-                    if (!IsInvisible(rune)) { builder.Append(c).Append(text[i]); }
+                    AppendRead(builder, rune, c, text[i]);
                 }
                 else
                 {
@@ -59,25 +60,28 @@ internal static class PromptTextEscaper
                 continue;
             }
 
-            if (c < 0x80)
-            {
-                if (!char.IsControl(c)) { builder.Append(c); }
-                continue;
-            }
-
             if (LookalikeMarkup.Contains(c))
             {
                 builder.Append("&#x").Append(((int)c).ToString("X", CultureInfo.InvariantCulture)).Append(';');
             }
-            else if (!IsInvisible(c))
+            else
             {
-                builder.Append(c);
+                AppendRead(builder, c, c, low: null);
             }
         }
     }
 
-    /// <summary>Control, format (zero-width, bidi), line/paragraph separator and unassigned code points: nothing a reader needs.</summary>
-    private static bool IsInvisible(int codePoint) =>
-        CharUnicodeInfo.GetUnicodeCategory(codePoint) is UnicodeCategory.Control or UnicodeCategory.Format
-            or UnicodeCategory.LineSeparator or UnicodeCategory.ParagraphSeparator or UnicodeCategory.OtherNotAssigned;
+    private static void AppendRead(StringBuilder builder, int scalar, char first, char? low)
+    {
+        switch (InvisibleCharacters.Classify(scalar))
+        {
+            case InvisibleKind.Space:
+                builder.Append(' ');
+                break;
+            case InvisibleKind.None:
+                builder.Append(first);
+                if (low is { } second) { builder.Append(second); }
+                break;
+        }
+    }
 }

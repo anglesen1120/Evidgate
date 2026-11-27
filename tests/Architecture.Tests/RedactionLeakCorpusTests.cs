@@ -13,7 +13,7 @@ namespace Architecture.Tests;
 /// value and a look-alike word are left byte-identical. Pure functions; no database. Secret-looking fixtures are built
 /// from fragments so no scanner sees a literal credential in the source.
 /// </summary>
-public sealed class RedactionLeakCorpusTests
+public sealed partial class RedactionLeakCorpusTests
 {
     private static readonly string Key = string.Concat("pass", "word");
     private static readonly string Secret = string.Concat("opaque", "-fixture-text");
@@ -147,6 +147,7 @@ public sealed class RedactionLeakCorpusTests
     [InlineData("whitespace run")]
     [InlineData("base64-looking runs")]
     [InlineData("unclosed brackets")]
+    [InlineData("unterminated quoted selectors")]
     public void Redact_WorstCase64KiB_StaysLinearAndFinishes(string shape)
     {
         var payload = WorstCase(shape);
@@ -185,6 +186,7 @@ public sealed class RedactionLeakCorpusTests
         var unit = shape switch
         {
             "near-miss prefixes" => ".fill( passwore=\"\n",
+            "unterminated quoted selectors" => ".fill(a\\'\n",
             "unclosed brackets" => ".fill(a(b(c(d(e(f(",
             "base64-looking runs" => new string('a', 1023) + "!",
             _ => Key + "=" + new string(' ', 65_000) + "x",
