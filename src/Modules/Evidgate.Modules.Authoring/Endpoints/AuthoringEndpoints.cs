@@ -53,6 +53,7 @@ public static class AuthoringEndpoints
         AuthoringNodeEndpoints.MapAuthoringNodeEndpoints(authoring);
         AuthoringChecklistEndpoints.MapAuthoringChecklistEndpoints(authoring);
         AuthoringManualCaseEndpoints.MapAuthoringManualCaseEndpoints(authoring);
+        AuthoringRequirementEndpoints.MapAuthoringRequirementEndpoints(authoring);
         AuthoringVersionEndpoints.MapAuthoringVersionEndpoints(authoring);
         AuthoringRestoreEndpoints.MapAuthoringRestoreEndpoints(authoring);
 

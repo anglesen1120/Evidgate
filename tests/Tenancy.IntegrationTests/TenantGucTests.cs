@@ -793,17 +793,31 @@ public sealed partial class TenantGucTests
             ("org_id", orgId),
             ("project_id", projectId),
             ("feature_node_id", featureNodeId));
+        var requirementVersionId = Guid.CreateVersion7();
         await scope.ExecuteAsync(
             """
             insert into public.requirement_version
                 (id, org_id, project_id, requirement_id, version_no, body, content_hash, source)
             values (@id, @org_id, @project_id, @requirement_id, 1, 'probe', @hash, 'manual')
             """,
-            ("id", Guid.CreateVersion7()),
+            ("id", requirementVersionId),
             ("org_id", orgId),
             ("project_id", projectId),
             ("requirement_id", requirementId),
             ("hash", "sha256:" + new string('e', 64)));
+        // A link pins that version to the checklist item above; exactly one target column is set.
+        await scope.ExecuteAsync(
+            """
+            insert into public.requirement_link
+                (id, org_id, project_id, requirement_id, requirement_version_id, checklist_item_id)
+            values (@id, @org_id, @project_id, @requirement_id, @requirement_version_id, @checklist_item_id)
+            """,
+            ("id", Guid.CreateVersion7()),
+            ("org_id", orgId),
+            ("project_id", projectId),
+            ("requirement_id", requirementId),
+            ("requirement_version_id", requirementVersionId),
+            ("checklist_item_id", checklistItemId));
         await scope.ExecuteAsync(
             """
             insert into public.usage_ledger_entry (id, org_id, project_id, metric, quantity, unit, period, billing_key, occurred_at)
