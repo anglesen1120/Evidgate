@@ -12,6 +12,8 @@ var IDEMPOTENCY_EXEMPT = {
     'the response carries a one-time secret and is never replayed, so no key can be honoured (00 §5.7 S3, 02.4.4)',
   'post /ingest-tokens/{t}/rotate':
     'the response carries a one-time secret and is never replayed, so no key can be honoured (00 §5.7 S3, 02.4.2)',
+  'post /projects/{p}/tracker-connections/{provider}/authorize':
+    'no connection is created: the route draws a one-time consent state and answers the tracker URL, so a retry mints a fresh state and only the callback that consumes one can bind (13.10.4)',
   'post /runs/{r}/events':
     'per-event event_id dedupe is the arbiter; a batch-level key cannot cover per-event acks (00 §9.4)',
   'post /drafts/{d}/pull-request': 'idempotent by (branch, commit) per 00 §9.3',

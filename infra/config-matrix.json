@@ -858,6 +858,126 @@
       "note": "`EVIDGATE:OAUTH:GITHUB:ClientSecret` (02.3.1-T1.3): OAuth client secret of the GitHub login client, declared once in `SecretNames` (`OauthGithubClientSecret`), resolved through `ISecretProvider` by `GitHubLoginOptionsSecretPostConfigure` — the property has an internal setter, so the binder never reads it from configuration — and never logged or put in an exception message. Absent with the client id, both GitHub routes answer 503 `unavailable` + `Retry-After` (no flag); staging and prod hold it in the provider secret store (10.1.1-T3), dev does not set it because the dev stack has no https origin to complete a login on."
     },
     {
+      "key": "EVIDGATE__TRACKERS__JIRACLOUD__CLIENTID",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "environment",
+        "prod": "environment"
+      },
+      "note": "`EVIDGATE:TRACKERS:JiraCloud:ClientId` (13.10.4): client id of the platform's Atlassian OAuth 2.0 (3LO) app for the read-only Jira Cloud connection; plain configuration, never a secret. Absent — or present without the client secret and redirect URI — leaves Jira Cloud unavailable: the authorize route answers 409 `tracker_provider_unavailable`, and the host still starts. dev sets nothing (no https origin for a consent redirect); staging and prod inject their own app's id."
+    },
+    {
+      "key": "EVIDGATE__TRACKERS__JIRACLOUD__CLIENTSECRET",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": true,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "secret-store",
+        "prod": "secret-store"
+      },
+      "note": "`EVIDGATE:TRACKERS:JiraCloud:ClientSecret` (13.10.4): client secret of the Atlassian OAuth app, declared once in `SecretNames` (`TrackersJiraCloudClientSecret`) and resolved through `ISecretProvider` by `TrackerOAuthOptionsSecretPostConfigure` — the property has an internal setter, so the binder never reads it from configuration — and never logged or put in an exception message. Absent with the client id, Jira Cloud stays unavailable; staging and prod hold it in the provider secret store (10.1.1-T3)."
+    },
+    {
+      "key": "EVIDGATE__TRACKERS__JIRACLOUD__REDIRECTURI",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "environment",
+        "prod": "environment"
+      },
+      "note": "`EVIDGATE:TRACKERS:JiraCloud:RedirectUri` (13.10.4): the callback URL registered with the Atlassian app, an absolute https URL with no userinfo, query or fragment whose path is exactly `/v1/tracker-connections/jira_cloud/callback`; any other value stops the host at start (`TrackerOAuthOptionsValidator`, the message names the key only). Plain configuration."
+    },
+    {
+      "key": "EVIDGATE__TRACKERS__LINEAR__CLIENTID",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "environment",
+        "prod": "environment"
+      },
+      "note": "`EVIDGATE:TRACKERS:Linear:ClientId` (13.10.4): client id of the platform's Linear OAuth application for the read-only Linear connection; plain configuration, never a secret. Absent — or present without the client secret and redirect URI — leaves Linear unavailable: the authorize route answers 409 `tracker_provider_unavailable`, and the host still starts. dev sets nothing; staging and prod inject their own application's id."
+    },
+    {
+      "key": "EVIDGATE__TRACKERS__LINEAR__CLIENTSECRET",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": true,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "secret-store",
+        "prod": "secret-store"
+      },
+      "note": "`EVIDGATE:TRACKERS:Linear:ClientSecret` (13.10.4): client secret of the Linear OAuth application, declared once in `SecretNames` (`TrackersLinearClientSecret`) and resolved through `ISecretProvider` by `TrackerOAuthOptionsSecretPostConfigure` — the property has an internal setter, so the binder never reads it from configuration — and never logged or put in an exception message. Absent with the client id, Linear stays unavailable; staging and prod hold it in the provider secret store (10.1.1-T3)."
+    },
+    {
+      "key": "EVIDGATE__TRACKERS__LINEAR__REDIRECTURI",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "environment",
+        "prod": "environment"
+      },
+      "note": "`EVIDGATE:TRACKERS:Linear:RedirectUri` (13.10.4): the callback URL registered with the Linear application, an absolute https URL with no userinfo, query or fragment whose path is exactly `/v1/tracker-connections/linear/callback`; any other value stops the host at start (`TrackerOAuthOptionsValidator`, the message names the key only). Plain configuration."
+    },
+    {
       "key": "EVIDGATE__OAUTH__GITHUB__AUTHORIZEURL",
       "scope": "runtime",
       "consumers": ["api", "migrator", "worker"],

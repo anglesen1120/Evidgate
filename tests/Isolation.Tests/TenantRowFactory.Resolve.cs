@@ -291,6 +291,21 @@ internal sealed partial class TenantRowFactory
             values["kind"] = "reserve";
         }
 
+        // A live connection holds an access token (0139 CHECK) and the column is nullable, so the generator, which fills
+        // only NOT NULL members, leaves it for this rule.
+        if (string.Equals(table, "public.tracker_connection", StringComparison.Ordinal))
+        {
+            values.TryAdd("access_token_cipher", "probe-cipher");
+
+            // The one-live-connection key is a partial unique index the constraint scan below does not see, so a
+            // corrupt row would duplicate the valid row's (org, project, provider) and answer 23505 before the
+            // foreign key under test; the other provider keeps the row valid and moves that key.
+            if (corruptedForeignKey is not null)
+            {
+                values["provider"] = "linear";
+            }
+        }
+
         // The linkage guard (0122) refuses an incident whose execution key is not its attempt's, and an
         // incident_attempt whose number or result is not its attempt's. Only a valid row can repeat them: a corrupt
         // row is refused by its foreign key first and keeps its random key, which keeps it off the valid row's

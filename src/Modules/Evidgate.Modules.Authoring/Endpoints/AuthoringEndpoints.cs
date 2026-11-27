@@ -49,6 +49,7 @@ public static class AuthoringEndpoints
         var authoring = group.MapGroup("/projects/{p}/authoring");
 
         AiSettingsEndpoints.MapAiSettingsEndpoints(group);
+        AuthoringTrackerEndpoints.MapAuthoringTrackerEndpoints(group);
 
         AuthoringNodeEndpoints.MapAuthoringNodeEndpoints(authoring);
         AuthoringChecklistEndpoints.MapAuthoringChecklistEndpoints(authoring);

@@ -218,6 +218,11 @@ artifact kinds also extend the artifact-kind enum (`CaptureOptionsView.kinds` no
   (06.2.2): a list replaces the kind's declared set, `[]` clears it and an
   omitted member leaves it untouched, so a replay stores the same set and the
   rules never accumulate.
+- `POST /v1/projects/{p}/tracker-connections/{provider}/authorize` — no
+  connection is created: the route draws a one-time consent `state` (only its
+  SHA-256 is stored, bound to the caller, org and project for ten minutes) and
+  answers the tracker URL; a retry mints a fresh state and nothing is bound
+  until the callback consumes one (13.10.4).
 - `POST /v1/auth/invite-token`, `POST /v1/auth/link/{provider}` — no resource
   is created: the first validates the presented token and stages it in the
   short-lived `__Host-evidgate_invite` cookie, the second answers a state cookie

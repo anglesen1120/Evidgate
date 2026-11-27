@@ -67,6 +67,30 @@
       "origin": "secret-store",
       "from": "provider secret store (10.1.1-T3), injected as an environment variable at deploy and resolved through ISecretProvider by GitHubLoginOptionsSecretPostConfigure (SecretNames.OauthGithubClientSecret, 02.3.1-T1.3); prod's own GitHub OAuth app, never staging's (AC4). Not required: until both halves are present the GitHub routes answer 503"
     },
+    "EVIDGATE__TRACKERS__JIRACLOUD__CLIENTID": {
+      "origin": "environment",
+      "from": "the prod Atlassian OAuth app client id injected at deploy (13.10.4); plain configuration, never a secret. Not required: without it, or without the secret and redirect URI, Jira Cloud stays unavailable and its authorize route answers 409"
+    },
+    "EVIDGATE__TRACKERS__JIRACLOUD__CLIENTSECRET": {
+      "origin": "secret-store",
+      "from": "provider secret store (10.1.1-T3), injected as an environment variable at deploy and resolved through ISecretProvider by TrackerOAuthOptionsSecretPostConfigure (SecretNames.TrackersJiraCloudClientSecret, 13.10.4); prod's own Atlassian app, never staging's. Not required: until all three keys are present Jira Cloud stays unavailable"
+    },
+    "EVIDGATE__TRACKERS__JIRACLOUD__REDIRECTURI": {
+      "origin": "environment",
+      "from": "the prod callback URL registered with the Atlassian app, injected at deploy (13.10.4); its path must be /v1/tracker-connections/jira_cloud/callback or the host refuses to start"
+    },
+    "EVIDGATE__TRACKERS__LINEAR__CLIENTID": {
+      "origin": "environment",
+      "from": "the prod Linear OAuth application client id injected at deploy (13.10.4); plain configuration, never a secret. Not required: without it, or without the secret and redirect URI, Linear stays unavailable and its authorize route answers 409"
+    },
+    "EVIDGATE__TRACKERS__LINEAR__CLIENTSECRET": {
+      "origin": "secret-store",
+      "from": "provider secret store (10.1.1-T3), injected as an environment variable at deploy and resolved through ISecretProvider by TrackerOAuthOptionsSecretPostConfigure (SecretNames.TrackersLinearClientSecret, 13.10.4); prod's own Linear application, never staging's. Not required: until all three keys are present Linear stays unavailable"
+    },
+    "EVIDGATE__TRACKERS__LINEAR__REDIRECTURI": {
+      "origin": "environment",
+      "from": "the prod callback URL registered with the Linear application, injected at deploy (13.10.4); its path must be /v1/tracker-connections/linear/callback or the host refuses to start"
+    },
     "EVIDGATE__RUNS__CANCEL__SOFTSTOPDELAY": {
       "origin": "environment",
       "from": "injected at deploy as a plain variable next to the rest of prod's configuration; the graceful window a producer gets before the kill deadline. Required at boot: no option default, a missing key binds to 00:00:00 and is refused"

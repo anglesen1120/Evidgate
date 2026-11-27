@@ -77,6 +77,30 @@
       "origin": "default",
       "from": "not set: the dev stack completes no federated login, so the secret is never materialised here; staging and prod resolve it through ISecretProvider from the provider secret store (10.1.1-T3)"
     },
+    "EVIDGATE__TRACKERS__JIRACLOUD__CLIENTID": {
+      "origin": "default",
+      "from": "not set: no Atlassian OAuth app is registered for a local https origin, so Jira Cloud stays unavailable and its authorize route answers 409 tracker_provider_unavailable (13.10.4)"
+    },
+    "EVIDGATE__TRACKERS__JIRACLOUD__CLIENTSECRET": {
+      "origin": "default",
+      "from": "not set: the dev stack completes no tracker consent, so the secret is never materialised here; staging and prod resolve it through ISecretProvider from the provider secret store (10.1.1-T3)"
+    },
+    "EVIDGATE__TRACKERS__JIRACLOUD__REDIRECTURI": {
+      "origin": "default",
+      "from": "not set: there is no https origin for a consent redirect in the dev stack (13.10.4)"
+    },
+    "EVIDGATE__TRACKERS__LINEAR__CLIENTID": {
+      "origin": "default",
+      "from": "not set: no Linear OAuth application is registered for a local https origin, so Linear stays unavailable and its authorize route answers 409 tracker_provider_unavailable (13.10.4)"
+    },
+    "EVIDGATE__TRACKERS__LINEAR__CLIENTSECRET": {
+      "origin": "default",
+      "from": "not set: the dev stack completes no tracker consent, so the secret is never materialised here; staging and prod resolve it through ISecretProvider from the provider secret store (10.1.1-T3)"
+    },
+    "EVIDGATE__TRACKERS__LINEAR__REDIRECTURI": {
+      "origin": "default",
+      "from": "not set: there is no https origin for a consent redirect in the dev stack (13.10.4)"
+    },
     "EVIDGATE__RUNS__CANCEL__SOFTSTOPDELAY": {
       "origin": "env-file",
       "value": "00:00:30",
