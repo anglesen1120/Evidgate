@@ -20,6 +20,16 @@ internal static class RedactionRules
 
     private static readonly SecretRedactor Secrets = new();
 
+    // The selector argument of a fill-style call: a literal or an expression such as SEL.a or sel('a,b') whose commas
+    // sit inside brackets or strings, brackets nested up to three deep. Every alternative starts with a different
+    // character and the plain-character class stops at a line break, so an unclosed bracket or quote costs one
+    // line, not the rest of the window.
+    private const string Quoted = @"'(?:\\.|[^'\\])*'|""(?:\\.|[^""\\])*""|`(?:\\.|[^`\\])*`";
+    private const string Group1 = @"[(\[](?>(?:" + Quoted + @"|[^()\[\]'""`])*)[)\]]";
+    private const string Group2 = @"[(\[](?>(?:" + Quoted + "|" + Group1 + @"|[^()\[\]'""`])*)[)\]]";
+    private const string Group3 = @"[(\[](?>(?:" + Quoted + "|" + Group2 + @"|[^()\[\]'""`])*)[)\]]";
+    private const string Selector = @"(?>(?:" + Quoted + "|" + Group3 + @"|[^,()\[\]'""`\r\n])+)";
+
     // Rules without look-around use the linear-time engine, so a long run of rule-shaped characters cannot cost
     // more than its length; the rest carry a match timeout, and a timeout masks the whole window.
     // An input value is left alone only when it is exactly the generated marker (an unquoted one also needs a closing
@@ -40,12 +50,12 @@ internal static class RedactionRules
         new("input_value", @"(""value""\s*:\s*)""(?!\[redacted:input_value\]"")(?:\\.|[^""\\])*""", Replacement: "$1\"[redacted:input_value]\"", Prefilter: "\"value\""),
         new(
             "input_value",
-            @"(\.(?:fill|type|pressSequentially)\(\s*(?:'[^']*'|""[^""]*""|`[^`]*`)\s*,\s*)(?:'(?!\[redacted:input_value\]')(?:\\.|[^'\\])*'|""(?!\[redacted:input_value\]"")(?:\\.|[^""\\])*""|`(?!\[redacted:input_value\]`)(?:\\.|[^`\\])*`)",
+            @"(\.(?:fill|type|pressSequentially)\((?>\s*)" + Selector + @"\s*,\s*)(?:'(?!\[redacted:input_value\]')(?:\\.|[^'\\])*'|""(?!\[redacted:input_value\]"")(?:\\.|[^""\\])*""|`(?!\[redacted:input_value\]`)(?:\\.|[^`\\])*`)",
             Replacement: "$1\"[redacted:input_value]\"",
             Prefilter: "("),
         new(
             "input_value",
-            @"(\.(?:fill|type|pressSequentially)\(\s*)(?:'(?!\[redacted:input_value\]')(?:\\.|[^'\\])*'|""(?!\[redacted:input_value\]"")(?:\\.|[^""\\])*""|`(?!\[redacted:input_value\]`)(?:\\.|[^`\\])*`)(?=\s*(?:\)|,\s*\{))",
+            @"(\.(?:fill|type|pressSequentially)\((?>\s*))(?:'(?!\[redacted:input_value\]')(?:\\.|[^'\\])*'|""(?!\[redacted:input_value\]"")(?:\\.|[^""\\])*""|`(?!\[redacted:input_value\]`)(?:\\.|[^`\\])*`)(?=\s*(?:\)|,\s*(?:\)|\{)))",
             Replacement: "$1\"[redacted:input_value]\"",
             Prefilter: "("),
     ];

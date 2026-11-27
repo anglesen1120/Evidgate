@@ -272,11 +272,16 @@ internal sealed partial class RedactionPipeline(TimeProvider clock) : IRedaction
             return;
         }
 
+        var maskedDecoded = WebUtility.HtmlDecode(masked);
         var expected = RedactionRules.Apply(decoded, new Dictionary<string, int>());
-        if (!string.Equals(expected, WebUtility.HtmlDecode(masked), StringComparison.Ordinal))
+        if (!string.Equals(expected, maskedDecoded, StringComparison.Ordinal))
         {
             AddHit(hits, "residual_html_entity", 1);
         }
+
+        // An entity can also be all that hides an invisible character or a look-alike letter from a rule, so the
+        // decoded masked text gets the same decoded-form scan as every other encoding.
+        Scan(maskedDecoded, "residual_html_entity", depth: 1, budget, hits);
     }
 
     /// <summary>The tokens of <paramref name="text"/> that decode to valid UTF-8 text, within the window's budget.</summary>
@@ -411,7 +416,7 @@ internal sealed partial class RedactionPipeline(TimeProvider clock) : IRedaction
         return cut >= 0 ? cut : FindCut(payload, position, limit, end, whitespaceOnly: false, budget);
     }
 
-    private static int FindCut(string payload, int position, int limit, int end, bool whitespaceOnly, ScanBudget budget)
+    internal static int FindCut(string payload, int position, int limit, int end, bool whitespaceOnly, ScanBudget budget)
     {
         var floor = position + (MaxWindowChars / 2);
         var failures = 0;
@@ -429,7 +434,14 @@ internal sealed partial class RedactionPipeline(TimeProvider clock) : IRedaction
                 return -1;
             }
 
-            if (SeamIsClosed(payload, position, cut, end))
+            // One attempt runs the rules over up to two windows, so the deadline is read again before its answer counts.
+            var closed = SeamIsClosed(payload, position, cut, end);
+            if (budget.Check())
+            {
+                return -1;
+            }
+
+            if (closed)
             {
                 return cut;
             }
@@ -461,34 +473,5 @@ internal sealed partial class RedactionPipeline(TimeProvider clock) : IRedaction
         var apart = RedactionRules.Apply(left, new Dictionary<string, int>())
             + RedactionRules.Apply(right, new Dictionary<string, int>());
         return string.Equals(joined, apart, StringComparison.Ordinal);
-    }
-
-    /// <summary>The deadline of one payload and the decode budget of the window being scanned.</summary>
-    private sealed class ScanBudget(TimeProvider clock)
-    {
-        private readonly long _start = clock.GetTimestamp();
-
-        internal bool Aborted { get; private set; }
-
-        internal int DecodedTokens { get; set; }
-
-        internal bool Truncated { get; set; }
-
-        internal void StartWindow()
-        {
-            DecodedTokens = 0;
-            Truncated = false;
-        }
-
-        /// <summary>True once the payload's time is spent; stays true afterwards.</summary>
-        internal bool Check()
-        {
-            if (!Aborted && clock.GetElapsedTime(_start) > Budget)
-            {
-                Aborted = true;
-            }
-
-            return Aborted;
-        }
     }
 }

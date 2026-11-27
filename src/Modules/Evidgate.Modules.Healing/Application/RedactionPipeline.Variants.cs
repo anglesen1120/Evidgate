@@ -39,7 +39,7 @@ internal sealed partial class RedactionPipeline
         {
             var width = ScalarWidth(text, i, out var scalar);
             var invisible = IsInvisible(scalar);
-            if (first < 0 && (invisible || (width == 1 && Fold(text[i]) != text[i])))
+            if (first < 0 && (invisible || Fold(scalar) != scalar))
             {
                 first = i;
             }
@@ -73,10 +73,14 @@ internal sealed partial class RedactionPipeline
                 inRun = false;
 
                 // A lone surrogate is kept as it is: it is not a scalar value, so no rule can read it as invisible.
-                folded.Append(width == 1 ? Fold(text[i]) : text[i]);
-                if (width == 2)
+                var mapped = Fold(scalar);
+                if (mapped != scalar)
                 {
-                    folded.Append(text[i + 1]);
+                    folded.Append((char)mapped);
+                }
+                else
+                {
+                    folded.Append(text, i, width);
                 }
             }
 
@@ -111,12 +115,81 @@ internal sealed partial class RedactionPipeline
             or >= 0xFFF0 and <= 0xFFF8
             or >= 0xE0000 and <= 0xE0FFF;
 
-    private static char Fold(char c) => c switch
+    // Compatibility spellings of the ASCII the rules are written in: fullwidth forms and U+3000, small-form
+    // punctuation, circled letters and digits, the mathematical alphanumeric block, the letter-like capitals, Kelvin
+    // and long s. Written out, not NFKC, so the result does not depend on the host's globalization data.
+    private static int Fold(int scalar) => scalar switch
     {
-        >= '\uFF01' and <= '\uFF5E' => (char)(c - 0xFEE0),
-        '\u3000' => ' ',
-        '\u212A' => 'K',
-        '\u017F' => 's',
-        _ => c,
+        >= 0xFF01 and <= 0xFF5E => scalar - 0xFEE0,
+        0x3000 => ' ',
+        0x212A => 'K',
+        0x017F => 's',
+        >= 0x2460 and <= 0x2468 => '1' + (scalar - 0x2460),
+        >= 0x24B6 and <= 0x24CF => 'A' + (scalar - 0x24B6),
+        >= 0x24D0 and <= 0x24E9 => 'a' + (scalar - 0x24D0),
+        0x24EA => '0',
+        >= 0x2100 and <= 0x214F => LetterLike(scalar),
+        >= 0xFE50 and <= 0xFE6B => SmallForm(scalar),
+        >= 0x1D400 and <= 0x1D6A3 => MathematicalLetter(scalar),
+        >= 0x1D7CE and <= 0x1D7FF => '0' + ((scalar - 0x1D7CE) % 10),
+        _ => scalar,
+    };
+
+    // The mathematical block is thirteen runs of 26 capitals then 26 small letters; the script, fraktur and
+    // double-struck holes live in the letter-like block, so LetterLike covers them.
+    private static int MathematicalLetter(int scalar)
+    {
+        var index = (scalar - 0x1D400) % 52;
+        return index < 26 ? 'A' + index : 'a' + (index - 26);
+    }
+
+    private static int LetterLike(int scalar) => scalar switch
+    {
+        0x2102 or 0x212D => 'C',
+        0x210A => 'g',
+        0x210B or 0x210C or 0x210D => 'H',
+        0x210E => 'h',
+        0x2110 or 0x2111 => 'I',
+        0x2112 => 'L',
+        0x2113 => 'l',
+        0x2115 => 'N',
+        0x2119 => 'P',
+        0x211A => 'Q',
+        0x211B or 0x211C or 0x211D => 'R',
+        0x2124 or 0x2128 => 'Z',
+        0x212C => 'B',
+        0x212F => 'e',
+        0x2130 => 'E',
+        0x2131 => 'F',
+        0x2133 => 'M',
+        0x2134 => 'o',
+        _ => scalar,
+    };
+
+    private static int SmallForm(int scalar) => scalar switch
+    {
+        0xFE50 => ',',
+        0xFE52 => '.',
+        0xFE54 => ';',
+        0xFE55 => ':',
+        0xFE56 => '?',
+        0xFE57 => '!',
+        0xFE59 => '(',
+        0xFE5A => ')',
+        0xFE5B => '{',
+        0xFE5C => '}',
+        0xFE5F => '#',
+        0xFE60 => '&',
+        0xFE61 => '*',
+        0xFE62 => '+',
+        0xFE63 => '-',
+        0xFE64 => '<',
+        0xFE65 => '>',
+        0xFE66 => '=',
+        0xFE68 => '\\',
+        0xFE69 => '$',
+        0xFE6A => '%',
+        0xFE6B => '@',
+        _ => scalar,
     };
 }

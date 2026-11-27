@@ -175,16 +175,17 @@ public sealed class SecretRedactor
     /// closing quote, then another key — is not read as one quoted value whose tail is then bare
     /// text: that shape falls through to the unquoted pattern, which masks to the end of the line.
     /// The value may not already be <see cref="Mask"/> and stop there, so a second pass (the
-    /// decorator and then the export processor) does not re-wrap a masked pair.
+    /// decorator and then the export processor) does not re-wrap a masked pair; a mask followed by more text is
+    /// not a masked pair, so its tail is still masked.
     /// </remarks>
     private readonly Regex _quotedSecretAssignment = new(
-        $@"{SecretIdentifier}[""']?\s*[=:]\s*(?!\s*\*\*\*(?=$|[\s;,\)\]}}]))(?<quote>"")(?<value>(?:\\.|""""|[^""\\])*)\k<quote>(?=$|[\s;,\)\]}}])",
+        $@"{SecretIdentifier}[""']?\s*[=:](?>\s*)(?!\*\*\*(?=[ \t]*(?:$|[\r\n;,\)\]}}])))(?<quote>"")(?<value>(?:\\.|""""|[^""\\])*)\k<quote>(?=$|[\s;,\)\]}}])",
         RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant,
         MatchTimeout);
 
     /// <summary>Same for single-quoted values (e.g. <c>Password='a;b'</c>, <c>'password': 'a;b'</c>).</summary>
     private readonly Regex _singleQuotedSecretAssignment = new(
-        $@"{SecretIdentifier}[""']?\s*[=:]\s*(?!\s*\*\*\*(?=$|[\s;,\)\]}}]))(?<quote>')(?<value>(?:\\.|''|[^'\\])*)\k<quote>(?=$|[\s;,\)\]}}])",
+        $@"{SecretIdentifier}[""']?\s*[=:](?>\s*)(?!\*\*\*(?=[ \t]*(?:$|[\r\n;,\)\]}}])))(?<quote>')(?<value>(?:\\.|''|[^'\\])*)\k<quote>(?=$|[\s;,\)\]}}])",
         RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant,
         MatchTimeout);
 
@@ -196,7 +197,7 @@ public sealed class SecretRedactor
     /// cannot parse is masked rather than half-emitted.
     /// </summary>
     private readonly Regex _secretAssignment = new(
-        $@"{SecretIdentifier}[""']?\s*[=:]\s*(?!\s*\*\*\*(?=$|[\s;,\)\]}}]))(?<value>[^;\r\n]*)",
+        $@"{SecretIdentifier}[""']?\s*[=:](?>\s*)(?!\*\*\*(?=[ \t]*(?:$|[\r\n;])))(?<value>[^;\r\n]*)",
         RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant,
         MatchTimeout);
 
@@ -207,7 +208,7 @@ public sealed class SecretRedactor
     /// <see cref="Mask"/>.
     /// </summary>
     private readonly Regex _cookieNameAssignment = new(
-        @"(?<key>__Host-[A-Za-z0-9_.\-]+|__Secure-[A-Za-z0-9_.\-]+)\s*=\s*(?!\s*\*\*\*(?=$|[\s;,\)\]}]))(?<value>[^;,\r\n]*)",
+        @"(?<key>__Host-[A-Za-z0-9_.\-]+|__Secure-[A-Za-z0-9_.\-]+)\s*=(?>\s*)(?!\*\*\*(?=[ \t]*(?:$|[\r\n;,])))(?<value>[^;,\r\n]*)",
         RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant,
         MatchTimeout);
 
@@ -222,7 +223,7 @@ public sealed class SecretRedactor
     /// JSON and object-literal form) masks the quoted value only, so the rest of a one-line body stays readable.
     /// </summary>
     private readonly Regex _authorizationHeader = new(
-        @"(?<key>[""']authorization[""'])\s*:\s*(?!(?>[ \t]*)\*\*\*(?=[ \t]*(?:$|[\r\n;,\)\]}])))(?<value>""(?:\\.|[^""\\])*""|'(?:\\.|[^'\\])*'|[^\r\n]+)|(?<key>authorization)\s*:\s*(?<value>[^\r\n]+)",
+        @"(?<key>[""']authorization[""'])\s*:\s*(?!(?>[ \t]*)\*\*\*(?=[ \t]*(?:$|[\r\n])))(?<value>""(?:\\.|[^""\\])*""|'(?:\\.|[^'\\])*'|[^\r\n]+)|(?<key>authorization)\s*:\s*(?<value>[^\r\n]+)",
         RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant,
         MatchTimeout);
 
