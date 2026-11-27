@@ -56,19 +56,6 @@ public static class SecretNames
     public const string TrackersLinearClientSecret = "EVIDGATE__TRACKERS__LINEAR__CLIENTSECRET";
 
     /// <summary>
-    /// PEM private key of the platform's GitHub App. Resolved per mint by the catalog
-    /// client through <see cref="ISecretProvider"/>; the value is never bound, logged or stored, and a
-    /// deployment may map a versioned secret-store name onto this key at injection time.
-    /// </summary>
-    public const string GitHubAppPrivateKey = "EVIDGATE__GITHUB__PRIVATEKEY";
-
-    /// <summary>
-    /// OAuth client secret of the platform's GitHub App, used only by the install callback's code exchange. Resolved
-    /// through <see cref="ISecretProvider"/> after the binder; never bound, logged or stored.
-    /// </summary>
-    public const string GitHubAppClientSecret = "EVIDGATE__GITHUB__CLIENTSECRET";
-
-    /// <summary>
     /// API key the healing adapter presents to its provider. Deployments name it in
     /// <c>EVIDGATE__HEALING__LLM__APIKEYSECRET</c>; the value is resolved per request and never stored.
     /// </summary>
@@ -116,8 +103,6 @@ public static class SecretNames
         OauthGithubClientSecret,
         TrackersJiraCloudClientSecret,
         TrackersLinearClientSecret,
-        GitHubAppPrivateKey,
-        GitHubAppClientSecret,
         HealingLlmApiKey,
         SessionPepper,
         SessionPreviousPepper,

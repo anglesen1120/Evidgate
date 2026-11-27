@@ -9,6 +9,8 @@ Legend: ✅ verified with a file:line · ⚠️ unverified · `[INFERENCE]` · `
 
 **Status: T3.1 written and T3.2 signed off as a review.** Every AC6 clause is mapped in §8, and five gaps that were not recorded before are added to the register (§7); the pepper-rehash gap, the rotation-audit gap and the `workflow_run` question were already STATUS §6 rows and are linked, not restated.
 
+> **Retired by the GitHub removal (D-NO-GITHUB, 2026-11-27; migrations 0134 and 0137):** `POST /v1/ci/token` now accepts only a project ingest token in the body (`{ingest_token}`). The GitHub OIDC grant, `GitHubOidc.cs`, the issuer/audience/JWKS options of `CiAuthOptions.cs`, the CI-binding commands and table (`ci_binding`), the `ci_token_issue` ledger and `evidgate_resolve.resolve_ci_binding` no longer exist. Everything in this page that describes them is dated evidence at `96e0f17`, kept so row ids stay stable: the "GitHub binding", "GitHub grant" and "OIDC token replay" text in §1–§2.5, all of §2.6 and §2.7, abuse cases 2, 3, 5 (binding half), 11, 12, 13, 14 and 15 in §4, and gaps T3-G2 (binding half) and T3-G5 (`ci_token_issue` half). Producer-token expiry, the ingest-token grant, redaction and the body cap still apply as written.
+
 ## 1. Scope and method
 
 Reviewed, at `96e0f17`:
@@ -85,6 +87,8 @@ The residual is bounded by the producer lifetime (at most 60 minutes plus 30 s s
 
 ### 2.6 OIDC claim validation
 
+*Retired by D-NO-GITHUB (migration 0134): there is no OIDC token to validate; the section is kept as dated evidence.*
+
 Everything below runs before any tenant scope opens (`CiTokenEndpoints.cs:106-113`).
 
 | Claim / property | Check | Code | Test |
@@ -112,6 +116,8 @@ Everything below runs before any tenant scope opens (`CiTokenEndpoints.cs:106-11
 JWKS hardening, all verified in `GitHubOidc.cs`: document capped at 256 KiB with a streaming cap (`:328-348`), 5 s fetch timeout (`:300`), single-flight refresh (`:243-292`), 10 min cache (`:217`), unknown-`kid` refresh no sooner than 30 s (`:220,257`), 15 s failure backoff (`:226,256`), 24 h stale grace (`:223,272-286`), and a typed client with `AllowAutoRedirect = false` and a 5 s timeout (`IdentityModule.cs:209-216`). Boot-time allowlist: `GithubJwksUri` must be https on the issuer's host (`CiSecrets.cs:122-128`) ✅.
 
 ### 2.7 The `workflow_run` question, and the `ExchangeCommands.cs:87` comment
+
+*Retired by D-NO-GITHUB (migrations 0134 and 0137): no `workflow_run` or fork-PR event reaches the server, because the server no longer reads GitHub events; the section is kept as dated evidence.*
 
 **Comment disposition — deny as written (partially).** The comment at `ExchangeCommands.cs:87` says a fork PR is refused because "a fork runs under another `repository_id` (no binding) or an unlisted workflow". The second half is the control that actually ships; the first half is only partly borne out by the shipped evidence. A fork's own `repository_id` path *is* tested: repo id `999_999` against unbound state returns `binding_mismatch` (`CiAuthTests.cs:350-351`, whose comment names a fork PR), and the case that models a fork PR's *token* mints the **upstream** `repository_id` and varies the workflow ref (`:352-354`). The refusal path is therefore tested; only the claim *semantics* — which `repository_id` GitHub actually puts in a fork-PR token — are `[INFERENCE]`: GitHub serves a `pull_request` OIDC token for the run in the **base** repository, whose `ref` is `refs/pull/<n>/merge` (`docs/security/customer-ci-recipe.md:69`, `:82` — repository evidence for the ref shape, GitHub documentation for the repository), so `repository_id` matches the base binding and the refusal comes from the **ref/workflow allowlists** (`ExchangeCommands.cs:84-89`). The comment and the test comment at `CiAuthTests.cs:350` should be corrected the next time either file is touched; no behaviour changes.
 

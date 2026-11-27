@@ -128,12 +128,6 @@ const EXPECTED = [
   ['/roles', 'get', 'role:read', 'v1'],
   ['/roles', 'post', 'role:write', 'v1'],
   ['/roles/{r}', 'patch', 'role:write', 'v1'],
-  // 02.4.3: the GitHub App installation surface — start and the callback act on the org's one
-  // binding (`ci_binding:write`), the read is `project:read`, disconnect is `ci_binding:write`.
-  ['/github/installations/start', 'post', 'ci_binding:write', 'v1'],
-  ['/github/installations/callback', 'get', 'ci_binding:write', 'v1'],
-  ['/github/installations', 'get', 'project:read', 'v1'],
-  ['/github/installations/{i}', 'delete', 'ci_binding:write', 'v1'],
   ['/projects/{p}/ingest-tokens', 'post', 'ingest_token:write', 'v1'],
   ['/projects/{p}/ingest-tokens', 'get', 'ingest_token:read', 'v1'],
   ['/ingest-tokens/{t}/rotate', 'post', 'ingest_token:write', 'v1'],
@@ -172,14 +166,10 @@ const EXPECTED = [
   ['/suite-revisions/{r}', 'get', 'suite:read', 'v1'],
   ['/suite-revisions/{r}/diff', 'get', 'suite:read', 'v1'],
   ['/suite-revisions/{r}/execution-plan', 'get', 'suite:plan_read', 'v1'],
-  // The binding route is declared by the catalog feature specification rather than the core table, so it is listed
-  // beside the catalog group it belongs to.
-  ['/projects/{p}/git-repo-bindings', 'post', 'project:write', 'v1'],
   ['/projects/{p}/fixtures', 'post', 'fixture:write', 'v1'],
   ['/projects/{p}/fixtures', 'get', 'suite:read', 'v1'],
   ['/fixtures/{f}', 'get', 'suite:read', 'v1'],
   ['/fixtures/{f}/revisions', 'post', 'fixture:write', 'v1'],
-  ['/webhooks/github', 'post', 'none', 'v1'],
   // The draft read/write pair is v1; its dry-run and PR operations are the v2 rows below. A draft's
   // un-nested routes evaluate the permission against the draft's own project, and another project's
   // draft and an unknown id both answer the same 404 (03.6.1 §8).
@@ -327,14 +317,12 @@ const cl = spec.components?.schemas?.CursorList?.properties ?? {};
 if (!('items' in cl) || !('next_cursor' in cl))
   fail('components', 'CursorList must have items + next_cursor (00 §9.1)');
 
-// shared params must be referenced, not reinvented (provider headers such as
-// X-Hub-Signature-256 are allowed inline)
-const INLINE_PARAM_ALLOWED = new Set(['X-Hub-Signature-256', 'traceparent']);
+// shared params must be referenced, not reinvented (only the tracing header is allowed inline)
+const INLINE_PARAM_ALLOWED = new Set(['traceparent']);
 // mutations document Idempotency-Key or are exempt — same list as the
 // spectral evgIdempotency function (keep both in sync; README lists them too).
 // Justifications: ci/token = every exchange mints fresh bearer credentials, never cached;
-// webhooks/github = delivery_id
-// dedupe (00 §9.3); events = per-event event_id dedupe (00 §9.4);
+// events = per-event event_id dedupe (00 §9.4);
 // pull-request = idempotent by (branch, commit) (00 §9.3); heartbeat =
 // extends only the current epoch (00 §9.3); ingest-tokens/api-tokens/rotate = the
 // response carries a one-time secret, and the replay store persists response bodies,
@@ -347,16 +335,13 @@ const INLINE_PARAM_ALLOWED = new Set(['X-Hub-Signature-256', 'traceparent']);
 // own-profile write of 02.3.1-T3 = the body sets one column to one of two values, so a replay would write the
 // same state, and the `If-Match` version makes the retry that re-sends the already-applied version answer 412
 // instead of applying twice; the retention upsert = a PUT that writes the same two windows for the same body,
-// so a replay cannot create a second row or a different answer; the GitHub install start of 02.4.3 = no
-// resource is created (a one-time state nonce the callback consumes), so a retry mints a fresh state; the tracker
-// consent start of 13.10.4 is the same (a pending consent, nothing connected).
+// so a replay cannot create a second row or a different answer; tracker consent start creates only a
+// pending consent, nothing connected, so a retry mints a fresh state.
 const IDEM_EXEMPT = new Set([
   'post /ci/token',
   'post /projects/{p}/ingest-tokens',
   'post /projects/{p}/api-tokens',
   'post /ingest-tokens/{t}/rotate',
-  'post /webhooks/github',
-  'post /github/installations/start',
   'post /projects/{p}/tracker-connections/{provider}/authorize',
   'post /runs/{r}/events',
   'post /drafts/{d}/pull-request',

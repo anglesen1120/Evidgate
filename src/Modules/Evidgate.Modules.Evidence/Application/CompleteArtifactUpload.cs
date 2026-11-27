@@ -189,7 +189,9 @@ internal sealed class CompleteArtifactUploadHandler(
             .SingleOrDefaultAsync(artifact => artifact.Id == command.ArtifactId, cancellationToken)
             .ConfigureAwait(false);
 
-        if (row is null)
+        // The verifier already refused another token; the row is re-checked here because the verdict was derived
+        // before this transaction and a command can reach the handler without passing the endpoint.
+        if (row is null || !ArtifactOwnership.Permits(row.OwnerCredentialId, command.CredentialId))
         {
             return Result.Failure<CompleteResponse>(EvidenceErrors.ArtifactNotFound);
         }

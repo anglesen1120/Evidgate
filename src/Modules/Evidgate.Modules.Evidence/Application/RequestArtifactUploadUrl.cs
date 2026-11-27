@@ -240,6 +240,7 @@ internal sealed class RequestArtifactUploadUrlHandler(
             command.MediaType,
             command.DeclaredBytes,
             command.Checksum,
+            command.CredentialId,
             cancellationToken,
             policy.DefaultSensitivity,
             run).ConfigureAwait(false);

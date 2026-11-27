@@ -54,7 +54,7 @@ public sealed class CiResolverTests
     }
 
     [Fact]
-    public async Task TheRetiredGithubExchangeObjects_DoNotExist_AndTheirPermissionSurvives()
+    public async Task TheRetiredGithubExchangeObjectsAndPermission_DoNotExist_AndIngestPermissionSurvives()
     {
         var database = await _fixture.SharedDatabaseAsync();
 
@@ -68,11 +68,18 @@ public sealed class CiResolverTests
             (await _fixture.ScalarAsync<bool>(database, $"select to_regprocedure('{function}') is null")).ShouldBeTrue(function);
         }
 
-        // The positive control: the permission shared with other operations is still catalogued and granted.
+        (await _fixture.ScalarAsync<long>(
+            database, "select count(*) from public.permission where code = 'ci_binding:write'")).ShouldBe(0);
+        (await _fixture.ScalarAsync<long>(
+            database, "select count(*) from public.role_permission where permission_code = 'ci_binding:write'")).ShouldBe(0);
+
+        // The positive control: ingest-token administration remains catalogued and granted.
+        (await _fixture.ScalarAsync<long>(
+            database, "select count(*) from public.permission where code = 'ingest_token:write'")).ShouldBe(1);
         (await _fixture.ScalarAsync<long>(
             database,
             "select count(*) from public.role_permission rp join public.role r on r.id = rp.role_id "
-            + "where r.org_id is null and rp.permission_code in ('ci_binding:write', 'ingest_token:write')")).ShouldBeGreaterThan(1);
+            + "where r.org_id is null and rp.permission_code = 'ingest_token:write'")).ShouldBeGreaterThan(0);
     }
 
     [Fact]

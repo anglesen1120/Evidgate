@@ -103,14 +103,6 @@ public static class Permissions
         public const string Write = "case:write";
     }
 
-    /// <summary>The <c>ci_binding</c> resource.</summary>
-    public static class CiBinding
-    {
-        /// ci_binding:write — Create, change or disable a project CI binding, including the one-time repository
-        /// challenge (02.4.1).
-        public const string Write = "ci_binding:write";
-    }
-
     /// <summary>The <c>decision</c> resource.</summary>
     public static class Decision
     {
@@ -368,7 +360,6 @@ public static class Permissions
         "billing:write",
         "case:read",
         "case:write",
-        "ci_binding:write",
         "decision:read",
         "draft:dry_run",
         "draft:merge_request",
@@ -432,7 +423,6 @@ public static class Permissions
             "audit:read",
             "billing:read",
             "billing:write",
-            "ci_binding:write",
             "healing:approve",
             "healing:configure",
             "healing:revoke",
@@ -477,7 +467,6 @@ public static class Permissions
         "billing:write",
         "case:read",
         "case:write",
-        "ci_binding:write",
         "decision:read",
         "draft:dry_run",
         "draft:merge_request",

@@ -1,7 +1,7 @@
 # @evidgate/cli
 
-The `evidgate` command-line client (04.2.1–04.2.4). It exchanges a CI OIDC
-identity for a short-lived producer token, uploads a run manifest and renders a
+The `evidgate` command-line client (04.2.1–04.2.4). It exchanges a project ingest
+token for a short-lived producer token, uploads a run manifest and renders a
 CI recipe. The process-level contract — exit codes, configuration, token
 sources, error codes and output rules — is
 [`contracts/cli.md`](../../contracts/cli.md).
@@ -84,16 +84,16 @@ The rendered examples are committed and kept equal to the renderer by a test:
 - [GitHub Actions workflow](../../docs/quickstart/github-actions.yml)
 - [generic shell script](../../docs/quickstart/generic.sh)
 
-The GitHub template stores no long-lived secret. `EVIDGATE_API_URL` and
-`EVIDGATE_EXECUTION` (the planned execution's 64-hex digest, passed to
-`--execution-key`) are repository **variables**, not secrets. The workflow grants
-nothing at the top level: the credential-free `test` job runs on
-`pull_request`/`push`, and the `upload` job requests `id-token: write` only on
-`workflow_dispatch` or a push to
-the default branch, so GitHub mints a short-lived OIDC JWT; the CLI exchanges
-that JWT at `POST /v1/ci/token` for a producer token that goes only to the 0600
-cache and is never printed. The generic template names its credential only
-(`EVIDGATE_OIDC_TOKEN`, else a masked `EVIDGATE_INGEST_TOKEN`).
+The GitHub template reads `EVIDGATE_INGEST_TOKEN` from the `evidgate-upload`
+environment secret of the same name; that environment contains no other secrets.
+`EVIDGATE_API_URL` and `EVIDGATE_EXECUTION` (the planned execution's 64-hex digest,
+passed to `--execution-key`) are repository **variables**, not secrets. The
+workflow grants nothing at the top level: the credential-free `test` job runs on
+`pull_request`/`push`, and the `upload` job grants only `contents: read` and runs
+on `workflow_dispatch` or a push to the default branch. `auth login` exchanges
+the ingest token at `POST /v1/ci/token` for a producer token that goes only to the
+0600 cache and is never printed. The generic template names only
+`EVIDGATE_INGEST_TOKEN`, injected through the CI's masked secret store.
 
 Current state: the pinned `@evidgate/cli@<version>` is not installable until
 04.9.2-T1 publishes the package; every step in the templates is a real command —

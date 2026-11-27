@@ -92,13 +92,12 @@ describe('tenantOrgInterceptor', () => {
     request.flush({ items: [] });
   });
 
-  it('adds no tenant to CI token exchange, auth routes or webhooks', () => {
+  it('adds no tenant to CI token exchange or auth routes', () => {
     harness.tenant.setOrg('o-1');
     const urls = [
       `${harness.origin}/v1/ci/token`,
       `${harness.origin}/v1/auth/sessions`,
       `${harness.origin}/v1/auth/logout`,
-      `${harness.origin}/v1/webhooks/github`,
     ];
 
     for (const url of urls) {

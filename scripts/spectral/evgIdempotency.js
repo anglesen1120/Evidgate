@@ -12,9 +12,6 @@ var IDEMPOTENCY_EXEMPT = {
     'the response carries a one-time secret and is never replayed, so no key can be honoured (00 §5.7 S3, 02.4.4)',
   'post /ingest-tokens/{t}/rotate':
     'the response carries a one-time secret and is never replayed, so no key can be honoured (00 §5.7 S3, 02.4.2)',
-  'post /webhooks/github': 'replay-safe by provider delivery_id dedupe (00 §9.3)',
-  'post /github/installations/start':
-    'no resource is created: the route draws a one-time state nonce and binds nothing, so a retry mints a fresh state and only the callback that consumes one can bind (02.4.3 AC1)',
   'post /projects/{p}/tracker-connections/{provider}/authorize':
     'no connection is created: the route draws a one-time consent state and answers the tracker URL, so a retry mints a fresh state and only the callback that consumes one can bind (13.10.4)',
   'post /runs/{r}/events':

@@ -93,42 +93,6 @@ public sealed partial class CatalogUnstorableBodyTests
             """{"seed_version":"\u0000","body_ref":"fixtures/orders/seed.sql","marker-zq7":"SECRETMARK"}""");
     }
 
-    [Fact]
-    public async Task GitRepoBinding_LoneSurrogateName_RefusesWithoutWritesOrRecord()
-    {
-        await using var world = await StartAsync();
-
-        await AssertRefusedAndRecoverAsync(world, GitBindingTarget(world),
-            """{"installation_id":1,"repository_id":5001,"\ud800":1,"marker-zq7":"SECRETMARK"}""");
-    }
-
-    [Fact]
-    public async Task GitRepoBinding_LoneSurrogateValue_RefusesWithoutWritesOrRecord()
-    {
-        await using var world = await StartAsync();
-
-        await AssertRefusedAndRecoverAsync(world, GitBindingTarget(world),
-            """{"installation_id":1,"repository_id":5001,"label":"\ud800","marker-zq7":"SECRETMARK"}""");
-    }
-
-    [Fact]
-    public async Task GitRepoBinding_NulValue_RefusesWithoutWritesOrRecord()
-    {
-        await using var world = await StartAsync();
-
-        await AssertRefusedAndRecoverAsync(world, GitBindingTarget(world),
-            """{"installation_id":1,"repository_id":5001,"label":"\u0000","marker-zq7":"SECRETMARK"}""");
-    }
-
-    private static Target GitBindingTarget(World world) =>
-        new(
-            HttpMethod.Post,
-            $"/v1/projects/{world.Project}/git-repo-bindings",
-            """{"installation_id":1,"repository_id":5001}""",
-            "git_repo_binding",
-            HttpStatusCode.Created,
-            Recover: false);
-
     private static Target FixtureCreateTarget(World world, string validBody = FixtureCreateBody) =>
         new(
             HttpMethod.Post,

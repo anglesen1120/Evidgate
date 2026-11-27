@@ -39,9 +39,27 @@ public sealed class EvidenceArtifactMinterRunProjectTests
         }
     }
 
-    private static ValueTask<Result<ArtifactRecord>> MintAsync(FixedRuns runs, RunPlanLookup? knownRun = null) =>
+    private static ValueTask<Result<ArtifactRecord>> MintAsync(
+        FixedRuns runs,
+        RunPlanLookup? knownRun = null,
+        string? ownerCredentialId = "ingest-token-owner") =>
         new ArtifactMinter(new ThrowingFactory(), runs)
-            .MintAsync(Org, Project, Guid.CreateVersion7(), ExecutionKey, 1, "trace", "application/zip", 1024, Checksum, CancellationToken.None, "normal", knownRun);
+            .MintAsync(Org, Project, Guid.CreateVersion7(), ExecutionKey, 1, "trace", "application/zip", 1024, Checksum, ownerCredentialId, CancellationToken.None, "normal", knownRun);
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    public async Task Mint_WithoutOwnerCredential_IsRefusedBeforeReadingTheRunOrInserting(string? ownerCredentialId)
+    {
+        var runs = new FixedRuns(new RunPlanLookup(Project, "active", true));
+
+        var result = await MintAsync(runs, ownerCredentialId: ownerCredentialId);
+
+        result.IsSuccess.ShouldBeFalse();
+        result.Error!.Code.ShouldBe("request_invalid");
+        runs.Calls.ShouldBe(0);
+        await Should.ThrowAsync<ReachedInsertException>(async () => await MintAsync(runs));
+    }
 
     [Fact]
     public async Task Mint_RunOfAnotherProject_IsRefusedBeforeAnyInsert()

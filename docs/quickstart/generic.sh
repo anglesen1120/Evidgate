@@ -5,7 +5,6 @@
 # the CLI authenticates with a short-lived credential the CI injects.
 #
 # Credential, by name only — never put a value in this file:
-#   EVIDGATE_OIDC_TOKEN    a short-lived OIDC JWT the project binding accepts, or
 #   EVIDGATE_INGEST_TOKEN  a project-scoped, revocable, rotatable ingest token
 #                          created with an expiry (02.4.2), injected by the CI's
 #                          masked secret store. Never committed, never echoed.

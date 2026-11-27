@@ -37,7 +37,6 @@ public sealed partial class ResolverTests : HarnessTest
         ["evidgate_resolve.member_organizations"] = ["org_id", "slug", "name", "status"],
         ["evidgate_resolve.resolve_ingest_token"] = ["org_id", "project_id", "binding_id", "status"],
         ["evidgate_resolve.resolve_api_token"] = ["org_id", "project_id", "token_id", "status"],
-        ["evidgate_resolve.installation_by_id"] = ["org_id", "status"],
         ["evidgate_resolve.login_upsert_identity"] = ["user_id", "status"],
         ["evidgate_resolve.session_create"] = ["session_id", "expires_at", "status"],
         ["evidgate_resolve.invite_by_secret"] = ["org_id", "membership_id"],
@@ -120,7 +119,6 @@ public sealed partial class ResolverTests : HarnessTest
         ["evidgate.exception_expiry_org_ids"] = "0126_policy_expiry_sweep.sql",
         ["evidgate.sweep_expired_exceptions"] = "0126_policy_expiry_sweep.sql",
         ["evidgate.replay_webhook_delivery"] = "0131_policy_webhooks.sql",
-        ["evidgate.purge_expired_github_install_state"] = "0108_identity_github_installation.sql:160",
         ["evidgate.list_dead_letter_tasks"] = "0104_platform_worker_role.sql:291",
         ["evidgate.replay_dead_letter_task"] = "0104_platform_worker_role.sql:352",
         ["evidgate.operator_grant_org"] = "0115_identity_support_grant.sql:208",
@@ -139,7 +137,6 @@ public sealed partial class ResolverTests : HarnessTest
         ("public.organization", RlsTableCatalog.OrganizationPredicate),
         ("public.ingest_token", RlsTableCatalog.TenantPredicate),
         ("public.api_token", RlsTableCatalog.TenantPredicate),
-        ("public.github_installation", RlsTableCatalog.TenantPredicate),
     ];
 
     /// <summary>

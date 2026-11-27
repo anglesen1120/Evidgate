@@ -13,7 +13,7 @@ namespace Tenancy.IntegrationTests;
 
 /// <summary>A completed upload replays its stored outcome after project deletion; a pending upload is refused.</summary>
 [Trait("Category", "Docker")]
-public sealed class EvidenceCompleteBindingTests(PostgresTenancyFixture fixture, SeaweedFsStore store, TenancyHostPool hosts)
+public sealed partial class EvidenceCompleteBindingTests(PostgresTenancyFixture fixture, SeaweedFsStore store, TenancyHostPool hosts)
     : IClassFixture<SeaweedFsStore>, IClassFixture<TenancyHostPool>
 {
     /// <summary>A well-formed execution key: sha256 hex (00 §7).</summary>

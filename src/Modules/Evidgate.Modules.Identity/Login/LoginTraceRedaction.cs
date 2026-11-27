@@ -12,17 +12,13 @@ namespace Evidgate.Modules.Identity.Login;
 /// <remarks>
 /// The rule is a path prefix on a code constant, not a tag-value pattern: the redaction has to hold for a
 /// value the routes themselves receive from the client, and only these routes carry an
-/// <c>authorization code</c>. The GitHub install callback is included for the same reason: its query
-/// carries the OAuth <c>code</c> and the install <c>state</c>. Nothing else about the span changes, so a
-/// covered span is still traceable by route, method, status code and duration.
+/// <c>authorization code</c>. Nothing else about the span changes, so a covered span is still traceable by
+/// route, method, status code and duration.
 /// </remarks>
 internal static class LoginTraceRedaction
 {
     /// <summary>The route prefix both federated-login routes are mounted under (<c>LoginEndpoints</c>).</summary>
     internal const string LoginPathPrefix = "/v1/auth/oidc/";
-
-    /// <summary>The GitHub install callback, whose query carries the OAuth <c>code</c> and the one-time <c>state</c>.</summary>
-    internal const string GitHubCallbackPath = "/v1/github/installations/callback";
 
     /// <summary>The span tag that carries the query string on its own.</summary>
     internal const string QueryTag = "url.query";
@@ -44,7 +40,6 @@ internal static class LoginTraceRedaction
     internal static bool IsLoginRoute(string? path) =>
         !string.IsNullOrEmpty(path)
         && (path.StartsWith(LoginPathPrefix, StringComparison.OrdinalIgnoreCase)
-            || WithoutTrailingSlash(path).Equals(GitHubCallbackPath, StringComparison.OrdinalIgnoreCase)
             || IsTrackerCallbackRoute(path));
 
     /// <summary>
@@ -69,7 +64,7 @@ internal static class LoginTraceRedaction
     }
 
     /// <summary>
-    /// <paramref name="path"/> without a trailing slash, so <c>/v1/github/installations/callback/</c> is the same
+    /// <paramref name="path"/> without a trailing slash, so tracker callbacks resolve to the same
     /// route as the form without it — routing accepts both, and so must every rule keyed on the path.
     /// </summary>
     /// <param name="path">A request path or route constant.</param>

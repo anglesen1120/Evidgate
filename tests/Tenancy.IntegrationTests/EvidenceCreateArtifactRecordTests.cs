@@ -29,6 +29,8 @@ public sealed class EvidenceCreateArtifactRecordTests : IClassFixture<TenancyHos
     /// <summary>A well-formed declared content address, <c>sha256:&lt;64 hex&gt;</c>.</summary>
     private const string Checksum = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
 
+    private const string OwnerCredentialId = "ingest-token-owner";
+
     private readonly PostgresTenancyFixture _fixture;
     private readonly TenancyHostPool _hosts;
     public EvidenceCreateArtifactRecordTests(PostgresTenancyFixture fixture, TenancyHostPool hosts) => (_fixture, _hosts) = (fixture, hosts);
@@ -70,7 +72,8 @@ public sealed class EvidenceCreateArtifactRecordTests : IClassFixture<TenancyHos
         string executionKey = ExecutionKey,
         int attemptNo = 1,
         string mediaType = "application/zip",
-        Guid? project = null)
+        Guid? project = null,
+        string? ownerCredentialId = OwnerCredentialId)
     {
         await using var services = world.Api.Services.CreateAsyncScope();
         var provider = services.ServiceProvider;
@@ -80,7 +83,7 @@ public sealed class EvidenceCreateArtifactRecordTests : IClassFixture<TenancyHos
 
         return await provider.GetRequiredService<IMediator>()
             .Send(
-                new CreateArtifactRecord(runId, executionKey, attemptNo, kind, mediaType, declaredBytes, checksum, clientObjectKey),
+                new CreateArtifactRecord(runId, executionKey, attemptNo, kind, mediaType, declaredBytes, checksum, clientObjectKey, ownerCredentialId),
                 TestContext.Current.CancellationToken);
     }
 
@@ -199,6 +202,23 @@ public sealed class EvidenceCreateArtifactRecordTests : IClassFixture<TenancyHos
 
     // ------------------------------------------------------------------ AC2: the created row
 
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    public async Task Mint_WithoutOwnerCredential_IsRefusedAndWritesNoRow(string? ownerCredentialId)
+    {
+        await using var world = await StartAsync();
+        var runId = await CreateRunAsync(world);
+
+        var result = await MintAsync(world, runId, ownerCredentialId: ownerCredentialId);
+
+        result.IsSuccess.ShouldBeFalse();
+        result.Error!.Code.ShouldBe(ApiErrorCode.RequestInvalid);
+        (await RowsAsync(world)).ShouldBe(0);
+        (await MintAsync(world, runId)).IsSuccess.ShouldBeTrue();
+        (await RowsAsync(world)).ShouldBe(1);
+    }
+
     [Fact]
     public async Task Mint_WithPlannedPair_AttemptIdNull()
     {
@@ -226,6 +246,8 @@ public sealed class EvidenceCreateArtifactRecordTests : IClassFixture<TenancyHos
             .ShouldBe(world.Org);
         (await _fixture.ScalarAsync<Guid>(world.Database, $"select project_id from public.artifact where id = '{record.ArtifactId}'"))
             .ShouldBe(world.Project);
+        (await _fixture.ScalarAsync<string>(world.Database, $"select owner_credential_id from public.artifact where id = '{record.ArtifactId}'"))
+            .ShouldBe(OwnerCredentialId);
     }
 
     [Fact]

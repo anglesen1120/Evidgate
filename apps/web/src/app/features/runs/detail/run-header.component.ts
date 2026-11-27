@@ -79,7 +79,7 @@ export class RunHeaderComponent {
     ref: $localize`:@@runs.detail.ref:Ref`,
     pr: $localize`:@@runs.detail.pr:Pull request number`,
     head: $localize`:@@runs.detail.head:Head commit`,
-    unverified: $localize`:@@runs.detail.unverified:Unverified ref`,
+    unverified: $localize`:@@runs.detail.unverified:Declared ref`,
     incomplete: $localize`:@@runs.detail.incomplete-summary:Collection is incomplete. Review the evidence panel for recorded missing reasons.`,
     viewEvidence: $localize`:@@runs.detail.view-evidence:View evidence`,
     evidence: $localize`:@@runs.detail.evidence:Evidence revision`,
