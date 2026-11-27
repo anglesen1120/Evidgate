@@ -177,7 +177,8 @@ public sealed class ReportSnapshotTests
     }
 
     [Theory]
-    [InlineData("\U0001D11E")] // 4 bytes a character, raw
+    [InlineData("a")] // 1 byte a character
+    [InlineData("\u20AC")] // BMP character: 3 bytes raw
     [InlineData("\u0001")] // control character: escaped to 6 bytes, the widest a character grows
     [InlineData("\"")] // quote: escaped to 2 bytes
     public void TaskPayload_AtTheRequestLimits_FitsTheQueuePayloadCap_WhateverTheText(string character)
@@ -191,10 +192,12 @@ public sealed class ReportSnapshotTests
     }
 
     [Fact]
-    public void TaskPayload_OverTheQueueCap_IsMeasuredInUtf8BytesNotCharacters()
+    public void TaskPayload_AstralTextAtTheRequestLimits_IsOverTheCap_SoTheCreateRefusesItExplicitly()
     {
-        // 10000 four-byte characters are 40000 bytes next to the 1000 ids (~39000): over, though far under 64K characters.
-        var over = TestReportTasks.ToJson(Payload(string.Concat(Enumerable.Repeat("\U0001D11E", 10000)), null));
+        // The encoder writes a character outside the BMP as a 12 byte surrogate pair escape; two such texts at the
+        // limits plus 1000 ids pass 64 KiB, and Fits is what turns that into the 422 instead of a queue 500.
+        var astral = string.Concat(Enumerable.Repeat("\U0001D11E", TestReportLimits.MaxTextCodePoints));
+        var over = TestReportTasks.ToJson(Payload(astral, astral));
         var under = TestReportTasks.ToJson(Payload(new string('a', 20000), null));
 
         TestReportTasks.Fits(over).ShouldBeFalse();

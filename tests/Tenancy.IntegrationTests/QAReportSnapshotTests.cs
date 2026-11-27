@@ -110,7 +110,7 @@ public sealed class QAReportSnapshotTests(PostgresTenancyFixture fixture)
 
         (await fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.test_report where job_id = '{edgePayload.JobId:D}'")).ShouldBe(1);
         // The builder's measure is the table check's: the stored row is exactly at the advertised limit.
-        (await fixture.ScalarAsync<long>(world.Database, $"select octet_length(payload::text) from public.test_report where job_id = '{edgePayload.JobId:D}'"))
+        (await fixture.ScalarAsync<int>(world.Database, $"select octet_length(payload::text) from public.test_report where job_id = '{edgePayload.JobId:D}'"))
             .ShouldBe(TestReportLimits.MaxPayloadBytes);
     }
 
