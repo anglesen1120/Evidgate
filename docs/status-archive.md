@@ -1787,3 +1787,7 @@ Closed by S692 (#1439, 43336fde): migration 0126 adds the owner-run `SECURITY DE
 ## Moved from status-carried.md by S693 (2026-11-27)
 
 | Dashboard API proposals (S674) | The dashboards label partial samples because the API lacks: `GET /projects/{p}/runs` descending order (or a latest-run projection on the project list), per-decision run counts, an audit project filter, an incidents total (and the incidents route itself, plan 08), a project total on the org project list, membership and pending-invite aggregates, and a credit balance in the usage summary. Contract work; each removes a "latest unavailable"/"sample" label. S676 evidence: the runs list still receives ascending `(created_at,id)` pages and now labels oldest-first order; `order=desc` remains a proposal, not an accepted parameter. Low-Medium. |
+
+## Moved from status-carried.md by S705 (2026-11-27)
+
+|Artifact completion producer guard (S703 F1)|Security review of #1463 (Medium): the artifact completion path no longer checks that the completing ingest token owns the artifact, because the CI-run-ref guard went with the OIDC binding. Another ingest token of the same project can complete or reject a pending artifact of another producer. A fix needs an artifact-to-credential column and a refusal test with a mutant that drops it; it does not fit the single migration 0134.|receiver: 02.11.1-T3|
