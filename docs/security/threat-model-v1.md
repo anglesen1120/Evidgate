@@ -89,9 +89,9 @@ Owns the org/project registry and the data-access contract: `org_id` on every bu
 | ID | STRIDE | Threat | Attacker | Impact | Disposition |
 |---|---|---|---|---|---|
 | TH-tenancy-1 | I, E | A query runs with the tenant GUC unset and returns all rows or errors instead of zero | Opportunistic attacker or defect | Cross-tenant read | control: NULL-safe RLS helpers plus `FORCE ROW LEVEL SECURITY` T2 — 02.6.1-T1 [implemented: migrations/0003_foundation_rls_probe.sql] |
-| TH-tenancy-2 | I | A cross-tenant read through a missing or mispaired composite foreign key | Attacker with a valid session | Cross-tenant disclosure | control: composite `(org_id, id)` foreign keys on tenant tables T3 — 02.1.1-T1 [implemented: migrations/0016_identity_ci_binding.sql] |
+| TH-tenancy-2 | I | A cross-tenant read through a missing or mispaired composite foreign key | Attacker with a valid session | Cross-tenant disclosure | control: composite `(org_id, id)` foreign keys on tenant tables T3 — 02.1.1-T1 [implemented: migrations/0018_identity_ingest_token.sql] |
 | TH-tenancy-3 | E | The application role bypasses RLS because it owns the table or holds `BYPASSRLS` | Insider or misconfiguration | Full cross-tenant compromise | control: app role is not the owner, no `BYPASSRLS`, `FORCE ROW LEVEL SECURITY` — 02.6.1-T1 [implemented: migrations/0001_foundation_roles.sql] |
-| TH-tenancy-4 | S, E | A pre-tenant resolver is abused to enumerate bindings or to return more than `(org_id, project_id, binding_id, status)` | Attacker probing the resolver | Tenant enumeration, timing oracle | control: `SECURITY DEFINER` resolvers, pinned `search_path`, `EXECUTE`-only T1/T80 — 02.6.1-T3, 11.2.1-T7 [implemented: migrations/0014_identity_resolve_member_orgs.sql] |
+| TH-tenancy-4 | S, E | A pre-tenant resolver is abused to enumerate tenants or to return more than its minimal tuple (the `resolve_ci_binding` tuple `(org_id, project_id, binding_id, status)` was retired by the GitHub removal, migration 0134) | Attacker probing the resolver | Tenant enumeration, timing oracle | control: `SECURITY DEFINER` resolvers, pinned `search_path`, `EXECUTE`-only T1/T80 — 02.6.1-T3, 11.2.1-T7 [implemented: migrations/0014_identity_resolve_member_orgs.sql] |
 | TH-tenancy-5 | E | `evidgate_operator` reads tenant data without an approved, unexpired grant (operator bypass) | Rogue platform operator | Undisclosed cross-tenant read | control: operator RLS via `evidgate.operator_grant_ok` T76 — 02.8.1-T1 [planned] |
 | TH-tenancy-6 | T | GUC misuse: a string-built `set_config`, or a tenant setting that outlives its transaction, leaks context between requests | Attacker or defect | Cross-tenant read or write | control: the tenant command interceptor C3 (a command on a connection without the tenant setting throws) — 01.4.2-T1 [implemented: src/BuildingBlocks/Persistence/Tenancy/TenantCommandInterceptor.cs] |
 | TH-tenancy-7 | I | A Dapper read-model query omits the tenant setting and returns foreign rows | Defect | Cross-tenant disclosure | control: tenant-isolation red-team suite over views, search and Dapper reads — 11.7.1-T1, 02.9.1-T3 [planned] |
@@ -335,7 +335,7 @@ The API and worker cross into PostgreSQL through `ITenantScope` (00 §5.4, §5.5
 | TH-database-4 | T | SQL injection through string-built SQL | Malicious input | Data tampering | control: parameterised SQL only (Dapper parameters, EF LINQ), no string-built SQL including `set_config` (00 §5.7 S1) — 01.4.2-T1, 11.7.1-T2 [planned] |
 | TH-database-5 | E | A new table ships without RLS or without `unique (org_id, id)` | Code defect | Silent isolation gap | control: an RLS lint in CI fails a table without `org_id`, a policy or `unique (org_id, id)` (T3) — 02.6.1-T2 [implemented: scripts/check-rls.py] |
 | TH-database-6 | I | A cross-tenant read succeeds through a view, search or a Dapper read model | Code defect | Cross-tenant disclosure | control: the tenant-isolation suite over API, FK, RLS, views and Dapper reads (NFR-11-1) — 02.9.1-T3, 11.7.1-T1 [planned] |
-| TH-database-7 | E | A `SECURITY DEFINER` resolver is abused to enumerate bindings or leak rows | Authenticated caller | Cross-tenant disclosure | control: `SECURITY DEFINER` resolvers with pinned `search_path`, a return limited to `(org_id, project_id, binding_id, status)`, app role `EXECUTE`-only (T1, T80) — the member_orgs resolvers (0014) and the ci-binding/ingest-token resolvers (0016/0018); the per-call audit is 02.7.1-T2.2, planned — 02.6.1-T3, 11.2.1-T7, 02.7.1-T2.2 [implemented: migrations/0014_identity_resolve_member_orgs.sql, migrations/0016_identity_ci_binding.sql, migrations/0018_identity_ingest_token.sql] |
+| TH-database-7 | E | A `SECURITY DEFINER` resolver is abused to enumerate tenants or leak rows | Authenticated caller | Cross-tenant disclosure | control: `SECURITY DEFINER` resolvers with pinned `search_path`, a minimal return tuple, app role `EXECUTE`-only (T1, T80) — the member_orgs resolvers (0014) and the ingest-token resolver (0018); the ci-binding resolver of 0016 was retired by the GitHub removal (migration 0134); the per-call audit is 02.7.1-T2.2, planned — 02.6.1-T3, 11.2.1-T7, 02.7.1-T2.2 [implemented: migrations/0014_identity_resolve_member_orgs.sql, migrations/0018_identity_ingest_token.sql] |
 | TH-database-8 | R | The audit chain is edited or truncated | Privileged insider | Unprovable audit | control: an append-only audit with a per-org hash chain serialised by `pg_advisory_xact_lock` (T8) — 02.7.1-T1, 11.5.2-T1 [implemented: migrations/0015_identity_audit_log.sql] |
 | TH-database-9 | I | The data-protection key ring is compromised, so stored ciphertext (webhook signing secrets, invite secrets) is decryptable | Insider or attacker with database access | Secret disclosure | control: data-protection keys stored in PostgreSQL and encrypted at rest by the provider, with a versioned key rotation runbook (00 §5.7 S8) — 10.7.1-T4, 11.3.1-T4 [planned] |
 
@@ -346,7 +346,7 @@ The customer’s trusted CI job exchanges its project ingest token at `POST /v1/
 | ID | STRIDE | Threat | Attacker | Impact | Disposition |
 |---|---|---|---|---|---|
 | TH-ci-1 | S | A stolen long-lived CI credential is replayed | Attacker holding the secret | Unauthorized project writes | control: restrict the project ingest token to a trusted job and least privilege, rotate or revoke it and bound producer lifetime — 02.4.2-T1, 11.2.1-T1 [planned] |
-| TH-ci-2 | S | A retired OIDC exchange is re-enabled at cutover | Untrusted caller | Unauthorized token mint | control: remove the grant and its resolver; prove only project ingest tokens exchange — 02.11.1-T2 [planned] |
+| TH-ci-2 | S | A retired OIDC exchange is re-enabled at cutover | Untrusted caller | Unauthorized token mint | control: the grant and its resolver are removed (GitHub removal, migration 0134); only project ingest tokens exchange — 02.11.1-T2 [implemented: migrations/0134_identity_github_removal.sql] |
 | TH-ci-3 | S | An ingest token is guessed or brute-forced | Unauthenticated attacker | Cross-tenant write | control: a ≥128-bit random ingest token with a public prefix (T5) — 02.4.2-T1 [implemented: src/Modules/Evidgate.Modules.Identity/Ci/IngestTokenFormat.cs] |
 | TH-ci-4 | S | A producer claims another project through its declared run metadata | CI producer | Cross-project evidence | control: scope writes from the authenticated project, never the declared repository/ref/attempt — 02.11.1-T2 [planned] |
 | TH-ci-5 | S | A retired repository receiver remains callable after cutover | Unauthenticated caller | Catalog tampering | control: remove the receiver and verify the route is unserved — 02.11.1-T3 [planned] |
@@ -446,8 +446,8 @@ Steps at each milestone exit:
 
 | State | Count |
 |---|---|
-| control (implemented) | 54 |
-| control (planned) | 100 |
+| control (implemented) | 51 |
+| control (planned) | 103 |
 | accepted | 3 |
 | open | 0 |
 

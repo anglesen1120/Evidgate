@@ -102,9 +102,9 @@ This invalidates tokens across all tenants and projects, with no overlap or per-
 
 **Audit event.** None emitted today for database credential or secret-store rotation [OPEN O-G].
 
-### 2.6 Provider keys and GitHub App key
+### 2.6 Provider keys
 
-The heading is retained for existing inventory links. The App key and its custody procedure were removed by D-NO-GITHUB; only the provider keys below are in scope.
+The GitHub App key and its custody procedure were removed by D-NO-GITHUB; only the provider keys below are in scope.
 
 **Where it lives.** `ISecretProvider` is the secret seam; V1 uses `EnvironmentSecretProvider`, with managed-store replacement a future DI swap (`ISecretProvider`; `EnvironmentSecretProvider.GetSecretAsync`). `SecretNames.All` is the registry (`SecretNames.All`):
 
