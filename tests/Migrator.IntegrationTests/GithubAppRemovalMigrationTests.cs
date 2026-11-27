@@ -277,10 +277,12 @@ public sealed class GithubAppRemovalMigrationTests(PostgresMigratorFixture fixtu
             (await PostgresMigratorFixture.ScalarAsync<long>(connection, ingest)).ShouldBe(1);
             foreach (var role in new[] { "evidgate_worker", "evidgate_worker_sched" })
             {
-                await PostgresMigratorFixture.ExecuteAsync(connection, $"reset role; set role {role}");
+                // Resolving the function name needs schema USAGE, which these roles lack: ask as the owner, then probe as the role.
+                await PostgresMigratorFixture.ExecuteAsync(connection, "reset role");
                 (await PostgresMigratorFixture.ScalarAsync<bool>(connection, $"""
                     select has_function_privilege('{role}', 'evidgate_resolve.resolve_ingest_token(text)', 'execute')
                     """)).ShouldBeFalse(role);
+                await PostgresMigratorFixture.ExecuteAsync(connection, $"set role {role}");
                 var denied = await Should.ThrowAsync<PostgresException>(
                     () => PostgresMigratorFixture.ScalarAsync<long>(connection, ingest));
                 denied.SqlState.ShouldBe(PostgresErrorCodes.InsufficientPrivilege);
