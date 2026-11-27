@@ -65,7 +65,7 @@ What each payload field may hold, and what it may not:
 | `object_type` / `object_id` | an id (`project:<uuid>`, an artifact, a request id) | a name, an address, a title a person wrote |
 | `before_hash` / `after_hash` | a content address (RFC 8785 + SHA-256 of the object) | the object itself, or a personal field in clear |
 | `request_id` / `trace_id` | an opaque request/trace identifier | a session cookie, a bearer token |
-| `metadata` | an allowlisted key with a short enumerated value (`AuditMetadata.cs:35-57`) | any key on the forbidden list (§4), free text (§6) |
+| `metadata` | an allowlisted key with a short enumerated value (`AuditMetadata.AllowedKeys.cs`) | any key on the forbidden list (§4), free text (§6) |
 
 Two consequences a reader should not miss:
 
@@ -87,7 +87,7 @@ identifying field names `display_name`, `email_address`, `ip_address`, `full_nam
 Matching is on the **whole key**, never a substring: the comparison form is the key in Unicode compatibility form
 (KC), then its letters and digits only, upper-cased (`AuditMetadata.NormalizeKey`, `AuditMetadata.cs:102-118`), so
 `Email`, `e-mail`, `E_MAIL`, `USER-AGENT`, `userAgent` and `USER AGENT` are all the same forbidden key, while
-`email_domain` survives as `EMAILDOMAIN`, is not equal to `EMAIL`, and stays allowlisted (`AuditMetadata.cs:37`) — a
+`email_domain` survives as `EMAILDOMAIN`, is not equal to `EMAIL`, and stays allowlisted (`AuditMetadata.AllowedKeys.cs:9`) — a
 domain is not a person. A key that still holds a non-ASCII letter or digit after form KC is refused as forbidden
 without consulting the list (fail closed): `еmail` with a Cyrillic `е` normalises to `ЕMAIL`, not `EMAIL`, while a
 fullwidth `ｅｍａｉｌ` normalises to `EMAIL` and matches the list normally.
@@ -117,7 +117,7 @@ Enforcement entry points:
 
 Proven by `AuditPayload_ForbiddenKeys_Rejected` and `AuditPayload_MutatedAfterDescribe_RefusedAtFlush` (AC10), with the
 pure walker cases in `AuditUnitTests`. Adding a key to the list is a review decision, like adding one to the allowlist
-(`AuditMetadata.cs:34`), and the list and this section move together.
+(`AuditMetadata.AllowedKeys.cs:7`), and the list and this section move together.
 
 ## 5. Erasure is a tombstone, not a row deletion
 
@@ -168,7 +168,7 @@ and `free_text` (§4) — those six, and no compound of them, because matching i
 allowlist is meant to admit enumerated values only ([audit-taxonomy](./audit-taxonomy.md) §8 item 5).
 
 One allowlisted key is still free text today, and this page does not pretend otherwise: `reason`, up to 256 characters
-with only the credential-shape regex applied (`AuditMetadata.cs:47,32`; gap **G7** in
+with only the credential-shape regex applied (`AuditMetadata.AllowedKeys.cs:19`, `AuditMetadata.cs:32`; gap **G7** in
 [audit-taxonomy](./audit-taxonomy.md) §7.2). Receiver: 02.7.1-T2.2 (drop the key or close its vocabulary to an
 enumerated set). Until that lands, an emitter that writes `reason` must pass a code, never prose — and a review that
 sees prose in a `reason` value treats it as the defect it is, not as a grey area.
