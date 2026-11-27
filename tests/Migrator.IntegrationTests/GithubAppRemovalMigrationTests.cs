@@ -29,10 +29,12 @@ public sealed class GithubAppRemovalMigrationTests(PostgresMigratorFixture fixtu
         select coalesce(jsonb_agg(to_jsonb(a) order by a.id), '[]'::jsonb)::text from public.platform_sweep_audit a
          where a.action in ('github_installation.resolve', 'github_install_state.purge')
         """;
+    // Matches a relation reference, not the bare word: the outbound replay definer writes the audit literal
+    // 'webhook_delivery.replay' and must not count.
     private const string RetiredDefinerScan = """
         select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
          where p.prosecdef and n.nspname in ('public', 'evidgate', 'evidgate_resolve')
-           and pg_get_functiondef(p.oid) ~* '\m(github_installation|github_install_state|git_repo_binding|catalog_sync|webhook_delivery)\M'
+           and pg_get_functiondef(p.oid) ~* '\m(from|join|into|update|table|only)\s+(public\.)?(github_installation|github_install_state|git_repo_binding|catalog_sync|webhook_delivery)\M'
         """;
 
     private static readonly string[] RetiredTables =
