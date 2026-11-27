@@ -339,7 +339,7 @@ public sealed class RequirementImporterTests
           from public.requirement r
           left join public.requirement p on p.org_id = r.org_id and p.id = r.parent_requirement_id
          where r.org_id = '{world.Org:D}' and r.project_id = '{world.Project:D}'
-         order by r.title
+         order by r.kind collate "C", r.title collate "C"
         """);
 
     /// <summary>One scalar of the world's project: <paramref name="select"/> names the table, the tenant filter is appended.</summary>
