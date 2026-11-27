@@ -139,6 +139,18 @@ public sealed class SecretRedactorShapeTests
             $"the masked pair must collapse to the mask, but the line was {inside.Length} characters");
     }
 
+    [Theory]
+    [InlineData("Password=***,\"public'=" + Canary)]
+    [InlineData("Password=***,'public\"=" + Canary)]
+    [InlineData("Password=***,public=" + Canary)]
+    public void A_Mask_Followed_By_A_Malformed_Sibling_Key_Does_Not_Hide_The_Tail(string text)
+    {
+        // The next-key exemption needs a key in matching quotes; a mismatched or bare tail is private text.
+        var redacted = Redactor.RedactText(text);
+
+        Assert.DoesNotContain(Canary, redacted, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void Unterminated_Quotes_Finish_And_Leak_Nothing()
     {

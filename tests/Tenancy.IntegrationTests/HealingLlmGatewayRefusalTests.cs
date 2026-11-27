@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Data.Common;
+using Evidgate.BuildingBlocks.Persistence.Audit;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.Modules.Healing.Application;
@@ -141,7 +142,7 @@ public sealed class HealingLlmGatewayRefusalTests
         HealingProviderKind kind) =>
         new(
             provider,
-            new HealingLlmCallRecorder(db, scopes),
+            new HealingLlmCallRecorder(db, scopes, new AuditTrail()),
             Availability(),
             new HealingLlmBudgetLedger(db, scopes),
             new HealingLlmTransactions((ITenantScopeFactory)scopes),

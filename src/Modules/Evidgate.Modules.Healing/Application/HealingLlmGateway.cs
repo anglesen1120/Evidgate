@@ -314,7 +314,8 @@ internal sealed partial class HealingLlmGateway(
     }
 
     /// <summary>
-    /// Commits the attempt row and the usage together. A settlement that fails keeps the hold (see the catch).
+    /// Commits the attempt row and the usage together. A settlement that fails keeps the hold (see the catches), except
+    /// for a refused call: nothing was sent, so a settlement that rolls back gives the hold back.
     /// </summary>
     private async Task<Guid> SettleAttemptAsync(
         Guid orgId,
@@ -325,6 +326,7 @@ internal sealed partial class HealingLlmGateway(
         HealingLlmReservation? reservation,
         RedactionReport report)
     {
+        var rolledBack = false;
         try
         {
             // The provider was paid whether or not the caller is still listening, so the settlement ignores cancellation.
@@ -334,22 +336,37 @@ internal sealed partial class HealingLlmGateway(
                     request.ProjectId,
                     async ct =>
                     {
-                        var id = await recorder
-                            .RecordAsync(request, attempt, status, result.Tokens, result.Cost, report, ct)
-                            .ConfigureAwait(false);
-
-                        if (reservation is not null)
+                        try
                         {
-                            await ledger.SettleAsync(request.ProjectId, reservation, result.Tokens, result.Cost, ct)
+                            var id = await recorder
+                                .RecordAsync(request, attempt, status, result.Tokens, result.Cost, report, ct)
                                 .ConfigureAwait(false);
-                        }
 
-                        return id;
+                            if (reservation is not null)
+                            {
+                                await ledger.SettleAsync(request.ProjectId, reservation, result.Tokens, result.Cost, ct)
+                                    .ConfigureAwait(false);
+                            }
+
+                            return id;
+                        }
+                        catch
+                        {
+                            rolledBack = true;
+                            throw;
+                        }
                     },
                     CancellationToken.None)
                 .ConfigureAwait(false);
 
             return callId;
+        }
+        catch when (rolledBack && status == HealingLlmStatuses.BlockedLeak)
+        {
+            // The hold was committed before the mask ran and the rollback took the row, its report and the audit entry
+            // with it. Nothing left the process, so the hold goes back in a fresh scope and the failure still surfaces.
+            await ReleaseAsync(orgId, request.ProjectId, reservation).ConfigureAwait(false);
+            throw;
         }
         catch (Exception exception) when (exception is DbException or IOException)
         {

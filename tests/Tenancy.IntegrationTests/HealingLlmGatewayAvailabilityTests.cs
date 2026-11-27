@@ -1,3 +1,4 @@
+using Evidgate.BuildingBlocks.Persistence.Audit;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.Modules.Healing.Application;
 using Evidgate.Modules.Healing.Contracts;
@@ -82,7 +83,7 @@ public sealed class HealingLlmGatewayAvailabilityTests
         HealingAvailability availability) =>
         new(
             provider,
-            new HealingLlmCallRecorder(db, scopes),
+            new HealingLlmCallRecorder(db, scopes, new AuditTrail()),
             new FixedAvailability(availability),
             new HealingLlmBudgetLedger(db, scopes),
             new HealingLlmTransactions((ITenantScopeFactory)scopes),

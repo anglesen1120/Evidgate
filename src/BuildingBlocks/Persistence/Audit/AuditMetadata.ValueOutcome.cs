@@ -27,6 +27,31 @@ public static partial class AuditMetadata
             : MetadataValueOutcome.Accepted;
     }
 
+    /// <summary>
+    /// True for the one value a long unbroken run is legitimate in: the <c>report_hash</c> digest, exactly
+    /// <c>sha256:</c> and 64 lowercase hex digits. A digest names content without carrying it, but the credential-shape
+    /// rule cannot tell it from a token, so it is judged by its exact form and only under its own key.
+    /// </summary>
+    private static bool IsContentDigest(string key, string? value)
+    {
+        const string prefix = "sha256:";
+        if (key != "report_hash" || value is null || value.Length != prefix.Length + 64
+            || !value.StartsWith(prefix, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        foreach (var character in value.AsSpan(prefix.Length))
+        {
+            if (character is not ((>= '0' and <= '9') or (>= 'a' and <= 'f')))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     /// <summary>Why a metadata value would be refused: the rule <see cref="Validate"/> enforces on every value.</summary>
     public enum MetadataValueOutcome
     {
