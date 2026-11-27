@@ -289,6 +289,46 @@ public sealed class TrackerConnectionSchemaTests
     }
 
     [Fact]
+    public async Task OAuthState_CompletedAndCancelled_NeedConsumedFirst_ExcludeEachOther_AndAreSetOnce()
+    {
+        await using var world = await RequirementTestWorld.StartAsync(_fixture);
+        var untaken = await ConsentAsync(world);
+        var completed = await ConsentAsync(world);
+        var cancelled = await ConsentAsync(world);
+
+        await using (var scope = await AppAsync(world))
+        {
+            (await scope.CaptureErrorAsync("update public.tracker_oauth_state set completed_at = now() where id = @id", ("id", untaken)))
+                .ConstraintName.ShouldBe("tracker_oauth_state_steps_check");
+        }
+
+        await using (var scope = await AppAsync(world))
+        {
+            (await scope.ExecuteAsync("update public.tracker_oauth_state set consumed_at = now(), completed_at = now() where id = @id", ("id", completed))).ShouldBe(1);
+            (await scope.ExecuteAsync("update public.tracker_oauth_state set consumed_at = now(), cancelled_at = now() where id = @id", ("id", cancelled))).ShouldBe(1);
+            await scope.CommitAsync();
+        }
+
+        await using (var scope = await AppAsync(world))
+        {
+            (await scope.CaptureErrorAsync("update public.tracker_oauth_state set cancelled_at = now() where id = @id", ("id", completed)))
+                .ConstraintName.ShouldBe("tracker_oauth_state_steps_check");
+        }
+
+        await using (var scope = await AppAsync(world))
+        {
+            (await scope.CaptureErrorAsync("update public.tracker_oauth_state set cancelled_at = null where id = @id", ("id", cancelled)))
+                .SqlState.ShouldBe(PostgresErrorCodes.CheckViolation);
+        }
+
+        await using (var scope = await AppAsync(world))
+        {
+            (await scope.CaptureErrorAsync("update public.tracker_oauth_state set completed_at = now() + interval '1 second' where id = @id", ("id", completed)))
+                .SqlState.ShouldBe(PostgresErrorCodes.CheckViolation);
+        }
+    }
+
+    [Fact]
     public async Task OAuthState_DigestOfTheWrongLength_IsRefused()
     {
         await using var world = await RequirementTestWorld.StartAsync(_fixture);

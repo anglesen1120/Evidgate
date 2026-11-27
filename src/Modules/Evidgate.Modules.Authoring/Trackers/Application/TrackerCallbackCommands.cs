@@ -13,7 +13,6 @@ using Evidgate.Modules.Authoring.Application;
 using Evidgate.Modules.Authoring.Application.Commands;
 using Evidgate.Modules.Authoring.Contracts;
 using Mediator;
-using Npgsql;
 
 namespace Evidgate.Modules.Authoring.Trackers.Application;
 
@@ -161,26 +160,28 @@ internal sealed class CompleteTrackerConnectionCommandHandler(
             return Result.Failure<TrackerConnectionDto>(missing);
         }
 
-        TrackerConnectionView view;
-        try
+        // The caller's own membership, through the module's one actor lookup, so the store holds no membership SQL.
+        var membershipId = await AuthoringRequestScope.ActorMembershipAsync(db, orgId, principals, cancellationToken).ConfigureAwait(false);
+
+        // Null means the consent was cancelled by a disconnect while the exchange ran, or another consent connected the
+        // project first; either way nothing was stored for this one.
+        var view = await store.CreateAsync(
+            new NewTrackerConnection(
+                consent.ProjectId,
+                consent.Provider,
+                consent.UserId,
+                command.Token.AccessToken,
+                command.Token.RefreshToken,
+                command.Token.ExpiresAt,
+                command.Token.GrantedScopes,
+                membershipId,
+                consent.ConsentId),
+            cancellationToken).ConfigureAwait(false);
+        if (view is null)
         {
-            view = await store.CreateAsync(
-                new NewTrackerConnection(
-                    consent.ProjectId,
-                    consent.Provider,
-                    consent.UserId,
-                    command.Token.AccessToken,
-                    command.Token.RefreshToken,
-                    command.Token.ExpiresAt,
-                    command.Token.GrantedScopes),
-                cancellationToken).ConfigureAwait(false);
-        }
-        catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.UniqueViolation)
-        {
-            // Two consents raced to completion; the partial unique index admits one live connection per provider.
             return Result.Failure<TrackerConnectionDto>(Error.Conflict(
                 ApiErrorCode.TrackerConnectionExists,
-                "the project already has a connection to that tracker; disconnect it first"));
+                "the connection was disconnected while it was being made, or the project already has a connection to that tracker; start again"));
         }
 
         audit.Describe(new AuditObject(

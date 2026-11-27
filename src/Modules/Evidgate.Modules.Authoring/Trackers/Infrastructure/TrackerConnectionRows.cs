@@ -23,6 +23,8 @@ internal sealed class TrackerConnectionRow
 /// <summary>The consent a take returned; the verifier is still ciphertext.</summary>
 internal sealed class TrackerConsentRow
 {
+    public Guid Id { get; set; }
+
     public Guid ProjectId { get; set; }
 
     public string Provider { get; set; } = string.Empty;

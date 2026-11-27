@@ -18,8 +18,11 @@ internal sealed class TrackerConnectionStore(
     TrackerTokenProtector protector,
     TimeProvider time) : ITrackerConnectionStore
 {
+    /// <summary>Unspent, unexpired consents one user may hold; a start past it is refused, as GitHub's install flow does.</summary>
+    internal const int MaxOpenConsentsPerUser = 10;
+
     /// <inheritdoc />
-    public async Task SaveConsentAsync(byte[] stateHash, PendingConsent consent, TimeSpan ttl, CancellationToken ct)
+    public async Task<bool> SaveConsentAsync(byte[] stateHash, PendingConsent consent, TimeSpan ttl, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(stateHash);
         ArgumentNullException.ThrowIfNull(consent);
@@ -33,6 +36,10 @@ internal sealed class TrackerConnectionStore(
 
         var now = time.GetUtcNow();
         await db.ExecuteAsync(
+            TrackerConnectionSql.ConsentLock,
+            new { lock_key = $"{orgId:D}:{consent.UserId:D}" },
+            ct).ConfigureAwait(false);
+        var stored = await db.ScalarAsync<Guid?>(
             TrackerConnectionSql.InsertConsent,
             new
             {
@@ -46,8 +53,10 @@ internal sealed class TrackerConnectionStore(
                 redirect_uri = consent.RedirectUri,
                 expires_at = now + ttl,
                 now,
+                max_open = MaxOpenConsentsPerUser,
             },
             ct).ConfigureAwait(false);
+        return stored is not null;
     }
 
     /// <inheritdoc />
@@ -64,7 +73,8 @@ internal sealed class TrackerConnectionStore(
         {
             var verifier = taken.PkceVerifierCipher is null ? null : protector.UnprotectPkceVerifier(taken.PkceVerifierCipher);
             return new ConsentLookup.Taken(new PendingConsent(
-                orgId, taken.ProjectId, userId, TrackerWire.ParseProvider(taken.Provider), taken.RedirectUri, verifier));
+                orgId, taken.ProjectId, userId, TrackerWire.ParseProvider(taken.Provider), taken.RedirectUri, verifier,
+                taken.Id));
         }
 
         // Nothing was consumed. The follow-up read only names the refusal; another tenant's digest is invisible under
@@ -87,7 +97,7 @@ internal sealed class TrackerConnectionStore(
     }
 
     /// <inheritdoc />
-    public async Task<TrackerConnectionView> CreateAsync(NewTrackerConnection connection, CancellationToken ct)
+    public async Task<TrackerConnectionView?> CreateAsync(NewTrackerConnection connection, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(connection);
 
@@ -101,6 +111,9 @@ internal sealed class TrackerConnectionStore(
                 project_id = connection.ProjectId,
                 provider = TrackerWire.Code(connection.Provider),
                 user_id = connection.UserId,
+                consent_id = connection.ConsentId,
+                membership_id = connection.MembershipId,
+                now = time.GetUtcNow(),
                 access_token_cipher = protector.ProtectToken(connection.Provider, connection.AccessToken),
                 refresh_token_cipher = connection.RefreshToken is null
                     ? null
@@ -110,7 +123,7 @@ internal sealed class TrackerConnectionStore(
             },
             ct).ConfigureAwait(false);
 
-        return TrackerWire.ToView(row ?? throw new InvalidOperationException("the connection upsert returned no row"));
+        return row is null ? null : TrackerWire.ToView(row);
     }
 
     /// <inheritdoc />
@@ -125,24 +138,39 @@ internal sealed class TrackerConnectionStore(
     }
 
     /// <inheritdoc />
+    public async Task<TrackerConnectionView?> FindLiveAsync(Guid projectId, TrackerProvider provider, CancellationToken ct)
+    {
+        var row = await db.QuerySingleOrDefaultAsync<TrackerConnectionRow>(
+            TrackerConnectionSql.FindLive,
+            new { org_id = scopes.Require().OrgId, project_id = projectId, provider = TrackerWire.Code(provider) },
+            ct).ConfigureAwait(false);
+        return row is null ? null : TrackerWire.ToView(row);
+    }
+
+    /// <inheritdoc />
     public async Task<bool> DisconnectAsync(Guid projectId, Guid connectionId, CancellationToken ct)
     {
         var orgId = scopes.Require().OrgId;
         var now = time.GetUtcNow();
-        var provider = await db.ScalarAsync<string>(
-            TrackerConnectionSql.Disconnect,
-            new { org_id = orgId, project_id = projectId, id = connectionId, now },
+        var live = await db.ScalarAsync<string>(
+            TrackerConnectionSql.LiveProvider,
+            new { org_id = orgId, project_id = projectId, id = connectionId },
             ct).ConfigureAwait(false);
-        if (provider is null)
+        if (live is null)
         {
             return false;
         }
 
-        // A consent still open for this project and provider would otherwise reconnect what was just disconnected.
+        // Consents go first: a completion locks its consent before the connection, so this order cannot deadlock with
+        // it, and an exchange still in flight finds its consent cancelled and stores nothing.
         await db.ExecuteAsync(
-            TrackerConnectionSql.SpendOpenConsents,
-            new { org_id = orgId, project_id = projectId, provider, now },
+            TrackerConnectionSql.CancelOpenConsents,
+            new { org_id = orgId, project_id = projectId, provider = live, now },
             ct).ConfigureAwait(false);
-        return true;
+        var disconnected = await db.ScalarAsync<string>(
+            TrackerConnectionSql.Disconnect,
+            new { org_id = orgId, project_id = projectId, id = connectionId, now },
+            ct).ConfigureAwait(false);
+        return disconnected is not null;
     }
 }

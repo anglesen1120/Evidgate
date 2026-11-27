@@ -1,6 +1,8 @@
 using System.Security.Cryptography;
+using System.Text.RegularExpressions;
 using Evidgate.Modules.Authoring.Trackers.Application;
 using Evidgate.Modules.Authoring.Trackers.Infrastructure;
+using Evidgate.Testing;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
@@ -175,7 +177,7 @@ public sealed class TrackerConnectionStoreTests
     }
 
     [Fact]
-    public async Task Create_ForTheLiveConnection_RefreshesItInPlaceAndKeepsAnUnreplacedRefreshToken()
+    public async Task Create_ForAConnectionNeedingReauth_ReplacesItInPlaceAndDropsTheOldRefreshToken()
     {
         await using var world = await RequirementTestWorld.StartAsync(_fixture);
         var clock = Clock();
@@ -186,10 +188,74 @@ public sealed class TrackerConnectionStoreTests
 
         second.Id.ShouldBe(first.Id);
         second.State.ShouldBe(TrackerConnectionState.Active);
+        Protector(world).UnprotectToken(TrackerProvider.JiraCloud, await Column(world, first.Id, "access_token_cipher")).ShouldBe("access-canary-token-2");
+        (await _fixture.ScalarAsync<bool>(world.Database, $"select refresh_token_cipher is null from public.tracker_connection where id = '{first.Id:D}'")).ShouldBeTrue();
+        (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.tracker_connection where org_id = '{world.Org:D}'")).ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task Create_ForAnActiveConnection_IsRefusedAndKeepsItsTokens()
+    {
+        await using var world = await RequirementTestWorld.StartAsync(_fixture);
+        var clock = Clock();
+        var first = await world.CreatedAsync(clock);
+        var attempt = await world.PreparedConnectionAsync(clock, NewConnection(world, access: "access-canary-token-2", refresh: "refresh-canary-token-2"));
+
+        (await world.WithStoreAsync(clock, (store, token) => store.CreateAsync(attempt, token))).ShouldBeNull();
+
         var protector = Protector(world);
-        protector.UnprotectToken(TrackerProvider.JiraCloud, await Column(world, first.Id, "access_token_cipher")).ShouldBe("access-canary-token-2");
+        protector.UnprotectToken(TrackerProvider.JiraCloud, await Column(world, first.Id, "access_token_cipher")).ShouldBe("access-canary-token-1");
         protector.UnprotectToken(TrackerProvider.JiraCloud, await Column(world, first.Id, "refresh_token_cipher")).ShouldBe("refresh-canary-token-1");
         (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.tracker_connection where org_id = '{world.Org:D}'")).ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task Create_ByTwoRacingConsents_StoresOneConnectionAndRefusesTheOther()
+    {
+        await using var world = await RequirementTestWorld.StartAsync(_fixture);
+        var clock = Clock();
+        var left = await world.PreparedConnectionAsync(clock, NewConnection(world, access: "access-canary-left"));
+        var right = await world.PreparedConnectionAsync(clock, NewConnection(world, access: "access-canary-right"));
+
+        var created = await Task.WhenAll(
+            world.WithStoreAsync(clock, (store, token) => store.CreateAsync(left, token)),
+            world.WithStoreAsync(clock, (store, token) => store.CreateAsync(right, token)));
+
+        created.Count(view => view is not null).ShouldBe(1);
+        (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.tracker_connection where org_id = '{world.Org:D}'")).ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task Create_AfterADisconnectCancelledItsConsent_StoresNothing()
+    {
+        await using var world = await RequirementTestWorld.StartAsync(_fixture);
+        var clock = Clock();
+        var first = await world.CreatedAsync(clock);
+        await _fixture.ExecuteAsync(world.Database, $"update public.tracker_connection set state = 'needs_reauth' where id = '{first.Id:D}'");
+        var exchangePending = await world.PreparedConnectionAsync(clock, NewConnection(world, access: "access-canary-token-2"));
+
+        (await world.WithStoreAsync(clock, (store, token) => store.DisconnectAsync(world.Project, first.Id, token))).ShouldBeTrue();
+        (await world.WithStoreAsync(clock, (store, token) => store.CreateAsync(exchangePending, token))).ShouldBeNull();
+
+        (await _fixture.ScalarAsync<long>(
+            world.Database,
+            $"select count(*) from public.tracker_connection where org_id = '{world.Org:D}' and state <> 'disconnected'")).ShouldBe(0);
+        (await _fixture.ScalarAsync<bool>(
+            world.Database,
+            $"select cancelled_at is not null and completed_at is null from public.tracker_oauth_state where id = '{exchangePending.ConsentId:D}'"))
+            .ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task Create_ForAnAlreadyCompletedConsent_IsRefused()
+    {
+        await using var world = await RequirementTestWorld.StartAsync(_fixture);
+        var clock = Clock();
+        var prepared = await world.PreparedConnectionAsync(clock);
+        var first = (await world.WithStoreAsync(clock, (store, token) => store.CreateAsync(prepared, token))).ShouldNotBeNull();
+        (await world.WithStoreAsync(clock, (store, token) => store.DisconnectAsync(world.Project, first.Id, token))).ShouldBeTrue();
+
+        (await world.WithStoreAsync(clock, (store, token) => store.CreateAsync(prepared, token))).ShouldBeNull();
     }
 
     [Fact]
@@ -283,17 +349,148 @@ public sealed class TrackerConnectionStoreTests
     public void ListSql_NamesNoCipherColumn_WhileTheWriteStatementsDo()
     {
         TrackerConnectionSql.List.ShouldNotContain("cipher");
+        TrackerConnectionSql.List.ShouldContain("order by (state = 'disconnected'), created_at desc, id desc");
+        TrackerConnectionSql.FindLive.ShouldNotContain("cipher");
         TrackerConnectionSql.ConsentState.ShouldNotContain("cipher");
         TrackerConnectionSql.Upsert.ShouldContain("access_token_cipher");
         TrackerConnectionSql.TakeConsent.ShouldContain("pkce_verifier_cipher");
     }
 
+    [Fact]
+    public void CipherColumns_AreNamedBySqlClassOrAsWriteBindingsOnly()
+    {
+        var trackers = Path.Combine(RepositoryPaths.RepoRoot, "src", "Modules", "Evidgate.Modules.Authoring", "Trackers");
+
+        // The store legitimately names both columns as the parameter names of the encrypted insert; any other mention
+        // (a select list, a string literal, another file) is a possible credential read and must live in the SQL class.
+        var binding = new Regex(@"^\s*(access|refresh)_token_cipher = ");
+        var offenders = Directory.EnumerateFiles(trackers, "*.cs", SearchOption.AllDirectories)
+            .Where(file => Path.GetFileName(file) != "TrackerConnectionSql.cs")
+            .SelectMany(file => File.ReadLines(file)
+                .Select((line, index) => (File: Path.GetFileName(file), Line: index + 1, Text: line))
+                .Where(entry => Regex.IsMatch(entry.Text, "(access|refresh)_token_cipher"))
+                .Where(entry => !(entry.File == "TrackerConnectionStore.cs" && binding.IsMatch(entry.Text) && !entry.Text.Contains('"'))))
+            .Select(entry => $"{entry.File}:{entry.Line}")
+            .ToList();
+
+        offenders.ShouldBeEmpty();
+        File.ReadAllText(Path.Combine(trackers, "Infrastructure", "TrackerConnectionSql.cs")).ShouldContain("access_token_cipher");
+    }
+
+    [Fact]
+    public async Task List_WithAHundredAndTenDisconnectedRows_StillListsTheLiveConnectionFirst()
+    {
+        await using var world = await RequirementTestWorld.StartAsync(_fixture);
+        var clock = Clock();
+        await _fixture.ExecuteAsync(world.Database, $"""
+            do $$
+            declare connection_id uuid;
+            begin
+              for step in 1..110 loop
+                connection_id := gen_random_uuid();
+                insert into public.tracker_connection (id, org_id, project_id, provider, access_token_cipher)
+                  values (connection_id, '{world.Org:D}', '{world.Project:D}', 'jira_cloud', 'cipher');
+                update public.tracker_connection
+                   set state = 'disconnected', access_token_cipher = null, disconnected_at = now()
+                 where id = connection_id;
+              end loop;
+            end $$;
+            """);
+        var live = await world.CreatedAsync(clock);
+
+        var listed = await world.WithStoreAsync(clock, (store, token) => store.ListAsync(world.Project, token));
+        var found = await world.WithStoreAsync(clock, (store, token) => store.FindLiveAsync(world.Project, TrackerProvider.JiraCloud, token));
+        var none = await world.WithStoreAsync(clock, (store, token) => store.FindLiveAsync(world.Project, TrackerProvider.Linear, token));
+
+        listed.Count.ShouldBe(100);
+        listed[0].Id.ShouldBe(live.Id);
+        found.ShouldNotBeNull().Id.ShouldBe(live.Id);
+        none.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task List_WithAnOlderLiveConnectionAndAHundredNewerDisconnectedOnes_StillListsTheLiveOne()
+    {
+        await using var world = await RequirementTestWorld.StartAsync(_fixture);
+        var clock = Clock();
+        var live = await world.CreatedAsync(clock);
+        await _fixture.ExecuteAsync(world.Database, $"""
+            do $$
+            declare connection_id uuid;
+            begin
+              for step in 1..110 loop
+                connection_id := gen_random_uuid();
+                insert into public.tracker_connection (id, org_id, project_id, provider, access_token_cipher)
+                  values (connection_id, '{world.Org:D}', '{world.Project:D}', 'linear', 'cipher');
+                update public.tracker_connection
+                   set state = 'disconnected', access_token_cipher = null, disconnected_at = now()
+                 where id = connection_id;
+              end loop;
+            end $$;
+            """);
+
+        var listed = await world.WithStoreAsync(clock, (store, token) => store.ListAsync(world.Project, token));
+
+        listed.Count.ShouldBe(100);
+        listed[0].Id.ShouldBe(live.Id);
+        listed.Skip(1).ShouldAllBe(view => view.State == TrackerConnectionState.Disconnected);
+    }
+
+    [Fact]
+    public async Task Consent_PastTheCap_IsRefused_AndOnlyOpenOnesCount()
+    {
+        await using var world = await RequirementTestWorld.StartAsync(_fixture);
+        var clock = Clock();
+        var hashes = Enumerable.Range(0, TrackerConnectionStore.MaxOpenConsentsPerUser).Select(_ => NewHash()).ToList();
+        foreach (var hash in hashes)
+        {
+            (await world.WithStoreAsync(clock, (store, token) => SaveAsync(store, hash, Consent(world), token))).ShouldBeTrue();
+        }
+
+        (await world.WithStoreAsync(clock, (store, token) => SaveAsync(store, NewHash(), Consent(world), token))).ShouldBeFalse();
+        (await world.WithStoreAsync(clock, (store, token) => store.TakeConsentAsync(hashes[0], world.User, token))).ShouldBeOfType<ConsentLookup.Taken>();
+        (await world.WithStoreAsync(clock, (store, token) => SaveAsync(store, NewHash(), Consent(world), token))).ShouldBeTrue();
+        (await world.WithStoreAsync(clock, (store, token) => SaveAsync(store, NewHash(), Consent(world), token))).ShouldBeFalse();
+
+        clock.Advance(Ttl + TimeSpan.FromSeconds(1));
+        (await world.WithStoreAsync(clock, (store, token) => SaveAsync(store, NewHash(), Consent(world), token))).ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task Consent_StartedConcurrentlyPastTheCap_NeverExceedsIt()
+    {
+        await using var world = await RequirementTestWorld.StartAsync(_fixture);
+        var clock = Clock();
+        var max = TrackerConnectionStore.MaxOpenConsentsPerUser;
+
+        var saved = await Task.WhenAll(Enumerable.Range(0, max + 5).Select(_ =>
+            world.WithStoreAsync(clock, (store, token) => SaveAsync(store, NewHash(), Consent(world), token))));
+
+        saved.Count(stored => stored).ShouldBe(max);
+        (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.tracker_oauth_state where org_id = '{world.Org:D}'")).ShouldBe(max);
+    }
+
+    [Fact]
+    public async Task Disconnect_LeavesAnExpiredUnspentConsentAlone()
+    {
+        await using var world = await RequirementTestWorld.StartAsync(_fixture);
+        var clock = Clock();
+        var view = await world.CreatedAsync(clock);
+        var hash = NewHash();
+        await world.WithStoreAsync(clock, (store, token) => SaveAsync(store, hash, Consent(world), token));
+        clock.Advance(Ttl + TimeSpan.FromSeconds(1));
+
+        (await world.WithStoreAsync(clock, (store, token) => store.DisconnectAsync(world.Project, view.Id, token))).ShouldBeTrue();
+
+        (await _fixture.ScalarAsync<bool>(
+            world.Database,
+            $"select consumed_at is null and cancelled_at is null from public.tracker_oauth_state where state_hash = decode('{Convert.ToHexString(hash)}', 'hex')"))
+            .ShouldBeTrue();
+    }
+
     private Task<string> Column(RequirementTestWorld world, Guid id, string column) =>
         _fixture.ScalarAsync<string>(world.Database, $"select {column} from public.tracker_connection where id = '{id:D}'");
 
-    private static async Task<bool> SaveAsync(ITrackerConnectionStore store, byte[] hash, PendingConsent consent, CancellationToken token)
-    {
-        await store.SaveConsentAsync(hash, consent, Ttl, token);
-        return true;
-    }
+    private static Task<bool> SaveAsync(ITrackerConnectionStore store, byte[] hash, PendingConsent consent, CancellationToken token) =>
+        store.SaveConsentAsync(hash, consent, Ttl, token);
 }

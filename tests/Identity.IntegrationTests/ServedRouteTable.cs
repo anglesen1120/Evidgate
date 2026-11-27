@@ -1122,10 +1122,12 @@ internal static class RouteRequests
         Add("GET", "/v1/projects/{p}/authoring/intakes/{i}", ctx =>
             new(HttpMethod.Get, $"/v1/projects/{ctx.ProjectId}/authoring/intakes/{Guid.NewGuid():D}"));
 
-        // 13.10.4: the tracker connection routes. The callback probe carries a state that names no consent, so a granted
-        // caller is refused by the consent check and a denied one by the permission stage that runs first.
+        // The tracker connection routes.
         Add("POST", "/v1/projects/{p}/tracker-connections/{provider}/authorize", ctx =>
             new(HttpMethod.Post, $"/v1/projects/{ctx.ProjectId}/tracker-connections/linear/authorize"));
+        // The probe's state names no consent and no org. This harness publishes the tenant itself, so a denied caller
+        // reaches authorization and answers 403. In production a state naming no org leaves no tenant, and the tenant
+        // requirement answers 401 before authorization (TrackerCallbackEndpointTests).
         Add("GET", "/v1/tracker-connections/{provider}/callback", _ =>
             new(HttpMethod.Get, "/v1/tracker-connections/linear/callback?code=probe&state=probe"));
         Add("GET", "/v1/projects/{p}/tracker-connections", ctx =>

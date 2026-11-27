@@ -4,13 +4,16 @@
 -- What: public.tracker_connection (one live connection per project and provider, tokens kept only as ciphertext),
 --   public.tracker_item (the read-through cache of tracker items), public.tracker_oauth_state (the single-use,
 --   expiring consent state) and requirement.tracker_item_id (the link 0132 deliberately left out), with their
---   composite tenant keys, guards, FORCE RLS policies and minimal grants.
+--   composite tenant keys, guards, FORCE RLS policies and column-scoped grants.
 -- Order: after 0138; the migrator refuses a gap, so 0137 and 0138 must land first.
 -- Lock: three new tables; requirement gets one nullable column and one composite key (the column is all NULL, so
 --   the key check scans nothing that matters). lock_timeout is 5 s.
 -- Scope of the app role: it may create a connection and move its state, tokens, scopes and upstream id, but it
 --   holds no UPDATE on create_issue_enabled (the write opt-in has no writer in this task) and no DELETE anywhere:
 --   a disconnect is the `disconnected` state with both token columns cleared. A disconnected row is terminal.
+--   The grants are column-scoped, not a token boundary: the app role can still SELECT the cipher columns, because
+--   the connect statement names them. Only the Trackers store's SQL class does so; the first task whose connector
+--   reads tokens must move that read behind a definer function or a dedicated role.
 -- Purge order for the owner erasure path: requirement rows lose tracker_item_id (or are deleted) first, then
 --   tracker_item, then tracker_connection and tracker_oauth_state, then the project.
 set local lock_timeout = '5s';
@@ -151,6 +154,11 @@ create table if not exists public.tracker_oauth_state (
   redirect_uri text not null,
   expires_at timestamptz not null,
   consumed_at timestamptz,
+  -- Set in the same transaction that stores the connection; a consent that is consumed but neither completed
+  -- nor cancelled is an exchange still in flight.
+  completed_at timestamptz,
+  -- Set by a disconnect of the project and provider while the exchange was in flight; completion refuses it.
+  cancelled_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   version integer not null default 1,
@@ -167,7 +175,11 @@ create table if not exists public.tracker_oauth_state (
   constraint tracker_oauth_state_pkce_check
     check (pkce_verifier_cipher is null or char_length(pkce_verifier_cipher) between 1 and 2048),
   constraint tracker_oauth_state_redirect_check check (char_length(redirect_uri) between 1 and 2048),
-  constraint tracker_oauth_state_expiry_check check (expires_at > created_at)
+  constraint tracker_oauth_state_expiry_check check (expires_at > created_at),
+  constraint tracker_oauth_state_steps_check check (
+    (completed_at is null or consumed_at is not null)
+    and (cancelled_at is null or consumed_at is not null)
+    and (completed_at is null or cancelled_at is null))
 );
 
 drop trigger if exists tracker_oauth_state_set_updated_at_and_version on public.tracker_oauth_state;
@@ -175,14 +187,16 @@ create trigger tracker_oauth_state_set_updated_at_and_version
   before update on public.tracker_oauth_state
   for each row execute function public.set_updated_at_and_version();
 
--- Lookups the composite project key and the user key need when those rows are purged; the expiry index
--- serves the sweep that removes spent and expired states.
+-- Lookups the composite project key and the user key need when those rows are purged. The open index serves the
+-- disconnect, which cancels the consents of one project and provider that have not completed; completed and
+-- cancelled rows leave it. No job removes spent or expired states yet (see migrations/README.md).
 create index if not exists tracker_oauth_state_project_idx
   on public.tracker_oauth_state (org_id, project_id);
 create index if not exists tracker_oauth_state_user_idx
   on public.tracker_oauth_state (user_id);
-create index if not exists tracker_oauth_state_expires_idx
-  on public.tracker_oauth_state (expires_at);
+create index if not exists tracker_oauth_state_open_idx
+  on public.tracker_oauth_state (org_id, project_id, provider)
+  where completed_at is null and cancelled_at is null;
 
 -- A connection never changes its identity, never leaves `disconnected`, never returns to a live state with a
 -- token, and keeps the first upstream handle it was given. A new connection starts live and read-only.
@@ -231,19 +245,24 @@ create trigger tracker_connection_guard
   before insert or update on public.tracker_connection
   for each row execute function evidgate.tracker_connection_guard();
 
--- A consent state is consumed once: only consumed_at may change, and only from NULL to a value.
+-- A consent state moves forward only: consumed_at, completed_at (the connection it produced was stored) and
+-- cancelled_at (a disconnect overtook the exchange) each go from NULL to a value once, and nothing else changes.
+-- The checks on the table keep completed and cancelled apart, so a cancelled consent can never complete.
 create or replace function evidgate.tracker_oauth_state_guard() returns trigger
   language plpgsql
   set search_path = ''
   as $$
   begin
-    if (to_jsonb(new) - array['consumed_at', 'updated_at', 'version'])
-       is distinct from (to_jsonb(old) - array['consumed_at', 'updated_at', 'version']) then
-      raise exception 'tracker_oauth_state_guard: only consumed_at may change'
+    if (to_jsonb(new) - array['consumed_at', 'completed_at', 'cancelled_at', 'updated_at', 'version'])
+       is distinct from
+       (to_jsonb(old) - array['consumed_at', 'completed_at', 'cancelled_at', 'updated_at', 'version']) then
+      raise exception 'tracker_oauth_state_guard: only consumed_at, completed_at and cancelled_at may change'
         using errcode = '23514';
     end if;
-    if old.consumed_at is not null or new.consumed_at is null then
-      raise exception 'tracker_oauth_state_guard: a consent state is consumed once'
+    if (old.consumed_at is not null and new.consumed_at is distinct from old.consumed_at)
+       or (old.completed_at is not null and new.completed_at is distinct from old.completed_at)
+       or (old.cancelled_at is not null and new.cancelled_at is distinct from old.cancelled_at) then
+      raise exception 'tracker_oauth_state_guard: each consent step is set once'
         using errcode = '23514';
     end if;
     return new;
@@ -318,6 +337,6 @@ revoke all on public.tracker_item from evidgate_worker_sched;
 
 revoke update, delete on public.tracker_oauth_state from evidgate_app;
 grant select, insert on public.tracker_oauth_state to evidgate_app;
-grant update (consumed_at) on public.tracker_oauth_state to evidgate_app;
+grant update (consumed_at, completed_at, cancelled_at) on public.tracker_oauth_state to evidgate_app;
 revoke all on public.tracker_oauth_state from evidgate_operator;
 revoke all on public.tracker_oauth_state from evidgate_worker_sched;

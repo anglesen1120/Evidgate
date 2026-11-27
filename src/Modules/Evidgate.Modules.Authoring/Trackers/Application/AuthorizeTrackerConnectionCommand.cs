@@ -49,6 +49,13 @@ internal sealed class AuthorizeTrackerConnectionCommandHandler(
     /// <summary>How long a consent can be completed.</summary>
     internal static readonly TimeSpan ConsentLifetime = TimeSpan.FromMinutes(10);
 
+    /// <summary>429: the user holds the maximum number of unspent consents; one is finished or expires.</summary>
+    private static readonly Error TooManyConsents = new(
+        ApiErrorCode.RateLimited,
+        "this user has too many open tracker connections in progress; finish one or wait for one to expire",
+        429,
+        Retryable: true);
+
     /// <inheritdoc />
     public async ValueTask<Result<TrackerAuthorizeResponse>> Handle(
         AuthorizeTrackerConnectionCommand command,
@@ -82,8 +89,9 @@ internal sealed class AuthorizeTrackerConnectionCommandHandler(
                 "this deployment has no OAuth client for that tracker"));
         }
 
-        var existing = await store.ListAsync(command.ProjectId, cancellationToken).ConfigureAwait(false);
-        if (existing.Any(connection => connection.Provider == command.Provider && connection.State != TrackerConnectionState.Disconnected))
+        // A connection that needs reauthorisation may be reconnected in place; any other live one must be disconnected first.
+        var live = await store.FindLiveAsync(command.ProjectId, command.Provider, cancellationToken).ConfigureAwait(false);
+        if (live is { State: not TrackerConnectionState.NeedsReauth })
         {
             return Result.Failure<TrackerAuthorizeResponse>(Error.Conflict(
                 ApiErrorCode.TrackerConnectionExists,
@@ -93,7 +101,10 @@ internal sealed class AuthorizeTrackerConnectionCommandHandler(
         var state = TrackerState.New(orgId);
         var verifier = command.Provider == TrackerProvider.Linear ? TrackerState.NewVerifier() : null;
         var consent = new PendingConsent(orgId, command.ProjectId, userId, command.Provider, provider.RedirectUri(command.Provider), verifier);
-        await store.SaveConsentAsync(TrackerState.Hash(state), consent, ConsentLifetime, cancellationToken).ConfigureAwait(false);
+        if (!await store.SaveConsentAsync(TrackerState.Hash(state), consent, ConsentLifetime, cancellationToken).ConfigureAwait(false))
+        {
+            return Result.Failure<TrackerAuthorizeResponse>(TooManyConsents);
+        }
 
         audit.Describe(new AuditObject(
             "tracker_connection",

@@ -9,10 +9,10 @@ namespace Evidgate.Modules.Authoring.Trackers.Infrastructure;
 internal static class TrackerServiceCollectionExtensions
 {
     /// <summary>
-    /// A provider call that has not answered by then is refused; the callback holds the browser's request open for it, so
-    /// it stays short. Redirects are off and every host is checked by <see cref="TrackerOutboundAllowlistHandler"/>.
+    /// The HttpClient timeout covers the response headers only; <see cref="TrackerProviderClient.Deadline"/> bounds the
+    /// body as well. Redirects are off and every host is checked by <see cref="TrackerOutboundAllowlistHandler"/>.
     /// </summary>
-    private static readonly TimeSpan ProviderTimeout = TimeSpan.FromSeconds(10);
+    private static readonly TimeSpan ProviderTimeout = TrackerProviderClient.Deadline;
 
     /// <summary>
     /// Registers the tracker connections. A provider with no client id or secret stays unavailable (its connect route

@@ -121,6 +121,77 @@ public sealed class TrackerConsentHandlerTests
     }
 
     [Fact]
+    public async Task Authorize_ForALiveConnection_IsRefusedUnlessItNeedsReauth()
+    {
+        var (scopes, principals, tenant) = Wiring(null);
+        var command = new AuthorizeTrackerConnectionCommand(Project, TrackerProvider.Linear);
+
+        var active = new FakeStore(new ConsentLookup.Unknown()) { Live = View(TrackerConnectionState.Active) };
+        var refused = await new AuthorizeTrackerConnectionCommandHandler(
+            Db(null), scopes, principals, tenant, active, new FakeProvider(), TimeProvider.System, Substitute.For<IAuditTrail>())
+            .Handle(command, TestContext.Current.CancellationToken);
+
+        refused.Error!.Status.ShouldBe(409);
+        refused.Error.Code.ShouldBe(ApiErrorCode.TrackerConnectionExists);
+        active.Saves.ShouldBe(0);
+
+        var reauth = new FakeStore(new ConsentLookup.Unknown()) { Live = View(TrackerConnectionState.NeedsReauth) };
+        var allowed = await new AuthorizeTrackerConnectionCommandHandler(
+            Db(null), scopes, principals, tenant, reauth, new FakeProvider(), TimeProvider.System, Substitute.For<IAuditTrail>())
+            .Handle(command, TestContext.Current.CancellationToken);
+
+        allowed.IsSuccess.ShouldBeTrue();
+        reauth.Saves.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task Authorize_PastTheOpenConsentCap_Answers429()
+    {
+        var (scopes, principals, tenant) = Wiring(null);
+        var store = new FakeStore(new ConsentLookup.Unknown()) { SaveResult = false };
+
+        var result = await new AuthorizeTrackerConnectionCommandHandler(
+            Db(null), scopes, principals, tenant, store, new FakeProvider(), TimeProvider.System, Substitute.For<IAuditTrail>())
+            .Handle(new AuthorizeTrackerConnectionCommand(Project, TrackerProvider.Linear), TestContext.Current.CancellationToken);
+
+        result.Error!.Status.ShouldBe(429);
+        result.Error.Code.ShouldBe(ApiErrorCode.RateLimited);
+    }
+
+    [Fact]
+    public async Task Complete_WhenTheStoreStoresNothing_AnswersConflict_AndPassesTheMemberAndConsent()
+    {
+        var (scopes, principals, tenant) = Wiring(null);
+        var member = Guid.NewGuid();
+        var consent = Consent() with { ConsentId = Guid.NewGuid() };
+        var store = new FakeStore(new ConsentLookup.Unknown());
+        var handler = new CompleteTrackerConnectionCommandHandler(Db(member), scopes, principals, tenant, store, Substitute.For<IAuditTrail>());
+
+        var result = await handler.Handle(
+            new CompleteTrackerConnectionCommand(consent, new TrackerToken("access", "refresh", null, ["read"])),
+            TestContext.Current.CancellationToken);
+
+        result.Error!.Status.ShouldBe(409);
+        result.Error.Code.ShouldBe(ApiErrorCode.TrackerConnectionExists);
+        store.LastCreate!.MembershipId.ShouldBe(member);
+        store.LastCreate.ConsentId.ShouldBe(consent.ConsentId);
+    }
+
+    [Fact]
+    public async Task Complete_WhenTheStoreStoresTheConnection_ReturnsIt()
+    {
+        var (scopes, principals, tenant) = Wiring(null);
+        var store = new FakeStore(new ConsentLookup.Unknown()) { Created = View(TrackerConnectionState.Active) };
+        var handler = new CompleteTrackerConnectionCommandHandler(Db(Guid.NewGuid()), scopes, principals, tenant, store, Substitute.For<IAuditTrail>());
+
+        var result = await handler.Handle(
+            new CompleteTrackerConnectionCommand(Consent() with { ConsentId = Guid.NewGuid() }, new TrackerToken("access", null, null, ["read"])),
+            TestContext.Current.CancellationToken);
+
+        result.IsSuccess.ShouldBeTrue();
+    }
+
+    [Fact]
     public void Commands_NeverPrintTheirSecrets()
     {
         var token = new TrackerToken("access-canary", "refresh-canary", null, ["read"]);
@@ -130,6 +201,8 @@ public sealed class TrackerConsentHandlerTests
         var text = string.Join(
             '|',
             token,
+            consent,
+            new NewTrackerConnection(Project, TrackerProvider.Linear, User, "access-canary", "refresh-canary", null, ["read"]),
             new CompleteTrackerConnectionCommand(consent, token),
             new TakeTrackerConsentCommand(TrackerProvider.Linear, state, "code-canary", null));
 
@@ -156,7 +229,10 @@ public sealed class TrackerConsentHandlerTests
     private static PendingConsent Consent() =>
         new(Org, Project, User, TrackerProvider.Linear, "https://evidgate.test/v1/tracker-connections/linear/callback", "verifier");
 
-    private static (TakeTrackerConsentCommandHandler Handler, FakeStore Store, IAuditTrail Audit) Build(FakeStore store, Guid? projectScope = null)
+    private static TrackerConnectionView View(TrackerConnectionState state) =>
+        new(Guid.NewGuid(), Project, TrackerProvider.Linear, state, ["read"], false, DateTimeOffset.UnixEpoch);
+
+    private static (ITenantScopeAccessor Scopes, IRequestPrincipalAccessor Principals, IRequestTenantContextAccessor Tenant) Wiring(Guid? projectScope)
     {
         var scope = Substitute.For<ITenantScope>();
         scope.OrgId.Returns(Org);
@@ -173,16 +249,51 @@ public sealed class TrackerConsentHandlerTests
         tenantContext.OrgId.Returns(Org);
         var tenant = Substitute.For<IRequestTenantContextAccessor>();
         tenant.Current.Returns(tenantContext);
+        return (scopes, principals, tenant);
+    }
 
+    private static ITenantDb Db(Guid? membership)
+    {
+        var db = Substitute.For<ITenantDb>();
+        db.ScalarAsync<int?>(Arg.Any<string>(), Arg.Any<object?>(), Arg.Any<CancellationToken>()).Returns(Task.FromResult<int?>(1));
+        db.ScalarAsync<Guid?>(Arg.Any<string>(), Arg.Any<object?>(), Arg.Any<CancellationToken>()).Returns(Task.FromResult(membership));
+        return db;
+    }
+
+    private static (TakeTrackerConsentCommandHandler Handler, FakeStore Store, IAuditTrail Audit) Build(FakeStore store, Guid? projectScope = null)
+    {
+        var (scopes, principals, tenant) = Wiring(projectScope);
         var audit = Substitute.For<IAuditTrail>();
         return (new TakeTrackerConsentCommandHandler(scopes, principals, tenant, store, audit), store, audit);
+    }
+
+    private sealed class FakeProvider : ITrackerProviderClient
+    {
+        public bool IsConfigured(TrackerProvider provider) => true;
+
+        public string RedirectUri(TrackerProvider provider) => "https://evidgate.test/v1/tracker-connections/linear/callback";
+
+        public string Authorize(TrackerProvider provider, string state, string? pkceVerifier) => "https://tracker.test/authorize";
+
+        public Task<TrackerToken?> ExchangeAsync(TrackerProvider provider, string code, string? pkceVerifier, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
     }
 
     private sealed class FakeStore(ConsentLookup lookup) : ITrackerConnectionStore
     {
         public int Takes { get; private set; }
 
+        public int Saves { get; private set; }
+
         public byte[]? LastHash { get; private set; }
+
+        public NewTrackerConnection? LastCreate { get; private set; }
+
+        public TrackerConnectionView? Live { get; init; }
+
+        public bool SaveResult { get; init; } = true;
+
+        public TrackerConnectionView? Created { get; init; }
 
         public Task<ConsentLookup> TakeConsentAsync(byte[] stateHash, Guid userId, CancellationToken ct)
         {
@@ -191,11 +302,20 @@ public sealed class TrackerConsentHandlerTests
             return Task.FromResult(lookup);
         }
 
-        public Task SaveConsentAsync(byte[] stateHash, PendingConsent consent, TimeSpan ttl, CancellationToken ct) =>
-            throw new NotSupportedException();
+        public Task<bool> SaveConsentAsync(byte[] stateHash, PendingConsent consent, TimeSpan ttl, CancellationToken ct)
+        {
+            Saves++;
+            return Task.FromResult(SaveResult);
+        }
 
-        public Task<TrackerConnectionView> CreateAsync(NewTrackerConnection connection, CancellationToken ct) =>
-            throw new NotSupportedException();
+        public Task<TrackerConnectionView?> CreateAsync(NewTrackerConnection connection, CancellationToken ct)
+        {
+            LastCreate = connection;
+            return Task.FromResult(Created);
+        }
+
+        public Task<TrackerConnectionView?> FindLiveAsync(Guid projectId, TrackerProvider provider, CancellationToken ct) =>
+            Task.FromResult(Live);
 
         public Task<IReadOnlyList<TrackerConnectionView>> ListAsync(Guid projectId, CancellationToken ct) =>
             throw new NotSupportedException();

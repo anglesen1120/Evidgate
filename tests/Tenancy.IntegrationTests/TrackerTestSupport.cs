@@ -6,6 +6,7 @@ using Evidgate.Modules.Authoring.Trackers.Infrastructure;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Time.Testing;
+using Shouldly;
 using Xunit;
 
 namespace Tenancy.IntegrationTests;
@@ -77,9 +78,31 @@ internal static class TrackerTestSupport
         new(project ?? world.Project, provider, world.User, access, refresh, null, ["read:jira-work", "offline_access"]);
 
     /// <summary>Creates a connection through the store and commits it.</summary>
-    internal static Task<TrackerConnectionView> CreatedAsync(
+    internal static async Task<TrackerConnectionView> CreatedAsync(
         this RequirementTestWorld world,
         FakeTimeProvider clock,
-        NewTrackerConnection? connection = null) =>
-        world.WithStoreAsync(clock, (store, token) => store.CreateAsync(connection ?? NewConnection(world), token));
+        NewTrackerConnection? connection = null)
+    {
+        var prepared = await world.PreparedConnectionAsync(clock, connection);
+        var view = await world.WithStoreAsync(clock, (store, token) => store.CreateAsync(prepared, token));
+        return view.ShouldNotBeNull();
+    }
+
+    internal static async Task<NewTrackerConnection> PreparedConnectionAsync(
+        this RequirementTestWorld world,
+        FakeTimeProvider clock,
+        NewTrackerConnection? connection = null)
+    {
+        var value = connection ?? NewConnection(world);
+        var hash = NewHash();
+        var pending = Consent(world, provider: value.Provider, project: value.ProjectId);
+        (await world.WithStoreAsync(clock, (store, token) => store.SaveConsentAsync(hash, pending, TimeSpan.FromMinutes(10), token)))
+            .ShouldBeTrue();
+        var taken = await world.WithStoreAsync(clock, (store, token) => store.TakeConsentAsync(hash, world.User, token));
+        return value with
+        {
+            MembershipId = await world.MembershipAsync(),
+            ConsentId = taken.ShouldBeOfType<ConsentLookup.Taken>().Consent.ConsentId,
+        };
+    }
 }

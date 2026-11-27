@@ -35,7 +35,10 @@ internal interface ITrackerProviderClient
     /// <param name="pkceVerifier">The PKCE verifier whose S256 challenge goes on the URL; ignored by Jira.</param>
     string Authorize(TrackerProvider provider, string state, string? pkceVerifier);
 
-    /// <summary>Exchanges <paramref name="code"/> for tokens; null when the provider refuses it or answers anything unusable.</summary>
+    /// <summary>
+    /// Exchanges <paramref name="code"/> for tokens; null when the provider refuses it, misses the deadline, or answers
+    /// anything unusable (including a token over the storable size).
+    /// </summary>
     /// <param name="provider">The provider.</param>
     /// <param name="code">The authorization code, used once.</param>
     /// <param name="pkceVerifier">The verifier of the consent that issued the code.</param>

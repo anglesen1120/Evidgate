@@ -32,7 +32,11 @@ internal sealed class TrackerProviderClient(
     /// <summary>The largest token response read, in bytes; a longer body is refused unread.</summary>
     internal const int MaxResponseBytes = 64 * 1024;
 
-    private const int MaxTokenLength = 8192;
+    /// <summary>
+    /// One deadline for the whole exchange, headers and body. The HttpClient timeout stops at the headers when the body
+    /// is read afterwards, so a body that stalls would otherwise hold the callback open.
+    /// </summary>
+    internal static readonly TimeSpan Deadline = TimeSpan.FromSeconds(10);
 
     /// <inheritdoc />
     public bool IsConfigured(TrackerProvider provider) => Settings(provider).IsConfigured;
@@ -91,9 +95,11 @@ internal sealed class TrackerProviderClient(
         }
 
         using var request = BuildExchange(provider, settings, code, pkceVerifier);
+        using var deadline = new CancellationTokenSource(Deadline, clock);
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, deadline.Token);
         try
         {
-            using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
+            using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, linked.Token)
                 .ConfigureAwait(false);
 
             // A redirect is not a success: it is never followed, so a token request cannot be replayed at another host.
@@ -102,7 +108,7 @@ internal sealed class TrackerProviderClient(
                 return null;
             }
 
-            var body = await BoundedHttpBody.ReadJsonAsync(response.Content, MaxResponseBytes, requireObject: true, cancellationToken)
+            var body = await BoundedHttpBody.ReadJsonAsync(response.Content, MaxResponseBytes, requireObject: true, linked.Token)
                 .ConfigureAwait(false);
             if (body.Status != BoundedBodyStatus.Ok)
             {
@@ -120,7 +126,7 @@ internal sealed class TrackerProviderClient(
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
-            // The client's own timeout: an outage of the provider, not a cancelled request.
+            // The deadline above, or the client's own timeout: an outage of the provider, not a cancelled request.
             return null;
         }
     }
@@ -165,13 +171,13 @@ internal sealed class TrackerProviderClient(
     private TrackerToken? Parse(TrackerProvider provider, JsonElement root)
     {
         var access = Text(root, "access_token");
-        if (string.IsNullOrEmpty(access) || access.Length > MaxTokenLength)
+        if (string.IsNullOrEmpty(access) || ExceedsTokenCap(access))
         {
             return null;
         }
 
         var refresh = Text(root, "refresh_token");
-        if (refresh is { Length: > MaxTokenLength })
+        if (refresh is not null && ExceedsTokenCap(refresh))
         {
             return null;
         }
@@ -191,6 +197,8 @@ internal sealed class TrackerProviderClient(
 
         return new TrackerToken(access, string.IsNullOrEmpty(refresh) ? null : refresh, expiresAt, scopes);
     }
+
+    private static bool ExceedsTokenCap(string token) => Encoding.UTF8.GetByteCount(token) > TrackerTokenProtector.MaxPlaintextBytes;
 
     // The grant must be exactly what was asked for: a wider grant is refused, never stored.
     private static bool ScopesMatch(JsonElement root, IReadOnlyList<string> expected)

@@ -12,6 +12,12 @@ namespace Evidgate.Modules.Authoring.Trackers.Infrastructure;
 /// </summary>
 internal sealed class TrackerTokenProtector(IDataProtectionProvider provider)
 {
+    /// <summary>
+    /// The largest plaintext token, in UTF-8 bytes, that is ever protected. After Data Protection framing and base64url
+    /// a 4096-byte token stays well under the 8192-character cipher column limit.
+    /// </summary>
+    internal const int MaxPlaintextBytes = 4096;
+
     private const string TokenPurposePrefix = "Evidgate.Trackers.Token.v1.";
     private const string PkcePurpose = "Evidgate.Trackers.Pkce.v1";
 

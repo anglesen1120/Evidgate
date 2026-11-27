@@ -69,8 +69,8 @@ internal static class AuthoringTrackerEndpoints
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(context);
-        // No tenant guard here, like the GitHub callback: a state that names no org leaves no tenant, and the pipeline's
-        // permission stage then refuses fail-closed (403) before anything is read or consumed.
+        // With no org in the state, tenant.Require() in TenantTransactionBehaviour runs before authorization;
+        // EnvelopeExceptionMiddleware maps that missing tenant to 401 without reading or consuming consent.
         context.Response.Headers.CacheControl = "no-store";
 
         var query = context.Request.Query;
