@@ -193,8 +193,8 @@ the member, so `store['token']()` and `row["signing_secret"]` are reported while
 stays masked. A loop variable named like a value (`*ngFor="let token of tokens"`) is skipped where
 it is DECLARED and still reported where the body READS it (`{{ token }}`), so rename the variable.
 It finally reports a one-time RESULT type held in state (`secretCarryingType`):
-`IssuedInvite`, `RotationResult`, `IngestTokenCreatedResponse`, `InviteIssuedView` and
-`CiBindingCreatedResponse` in a `/(Store|Flow|Track)$/` class field, accessor or constructor parameter property
+`IssuedInvite`, `RotationResult`, `IngestTokenCreatedResponse` and
+`InviteIssuedView` in a `/(Store|Flow|Track)$/` class field, accessor or constructor parameter property
 (at any depth, so `Signal<IssuedInvite | null>` is caught), in a `signal`/`computed`/`withState`
 type argument, or in a `…State`/`…Store` member — while a method that RETURNS one
 (`async rotate(): Promise<RotationResult | null>` in `secrets.store.ts`, `invite()` in

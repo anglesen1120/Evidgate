@@ -336,7 +336,7 @@ describe('RunListTableComponent', { timeout: 15_000 }, () => {
     expect(root.querySelectorAll('[data-run-unverified]')).toHaveLength(1);
     expect(
       ref.parentElement?.querySelector('[data-run-unverified]')?.getAttribute('aria-label'),
-    ).toBe('Unverified ref');
+    ).toBe('Declared ref');
     expect(
       root
         .querySelector('[data-run-unverified]')

@@ -209,7 +209,7 @@ describe('RunDetailPage', () => {
       'detail/việt⟨U+202E⟩<script>',
     );
     expect(root.querySelector('[data-run-ref]')?.textContent).not.toContain('\u202e');
-    expect(root.querySelector('[data-run-unverified]')?.textContent).toContain('Unverified ref');
+    expect(root.querySelector('[data-run-unverified]')?.textContent).toContain('Declared ref');
     expect(root.querySelector('script')).toBeNull();
   });
   it('null evidence revision says none recorded, never PASS', async () => {

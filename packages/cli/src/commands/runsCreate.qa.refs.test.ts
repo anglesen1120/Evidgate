@@ -19,6 +19,33 @@ import {
 describe('runs create — QA boundaries', () => {
   const { devEnv, ingestEnv } = useRunsCreateQaSpec();
 
+  // The CI's OIDC request variables are no credential source: the exchange is the only
+  // credential request, it goes to the API alone, and the declared ref still travels in the body.
+  it('sends_no_oidc_request_and_still_declares_the_ref', async () => {
+    const env = await ingestEnv();
+    const actionsUrl = 'https://actions.example.test/_apis/oidc?audience=evidgate';
+    const stub = stubDevFetch(() => created());
+    const code = await invoke(
+      createArgv(['--ci-ref', 'refs/heads/main']),
+      {
+        ...env,
+        ACTIONS_ID_TOKEN_REQUEST_URL: actionsUrl,
+        ACTIONS_ID_TOKEN_REQUEST_TOKEN: 'actions-request-token',
+      },
+      capture(),
+      stub.fetchImpl,
+    );
+    expect(code).toBe(0);
+    expect(stub.calls.length).toBeGreaterThan(0);
+    for (const call of stub.calls) {
+      expect(new URL(call.request.url).origin).toBe('https://api.evidgate.test');
+      expect(call.request.headers.get('authorization') ?? '').not.toContain(
+        'actions-request-token',
+      );
+    }
+    expect(sentBody(apiCalls(stub)[0]).ref).toEqual({ kind: 'branch', name: 'main' });
+  });
+
   // §9 / openapi `RunRefRequest`: the name boundary is 1..255, the PR form is
   // `refs/pull/<N>/merge` with a positive integer, and the CLI is a thin client (it does
   // not re-implement git's ref grammar), so a doubled slash is passed through.

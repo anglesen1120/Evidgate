@@ -202,7 +202,7 @@ describe('request body cap scan', () => {
       'fetch(new Request(u, ({ method: "GET" })))',
       'const request = new Request(u, { method: "GET" }); fetch(request)',
       'fetchPage(cursor)',
-      'fetchActionsIdToken(config, fetchImpl, deps)',
+      'fetchPage(config, fetchImpl, deps)',
       'Reflect.apply(page, null, [u])',
     ])('keeps the provably body-free form %s clean', (statement) => {
       expect(

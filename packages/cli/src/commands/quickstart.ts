@@ -1,8 +1,9 @@
 // `evidgate quickstart` — renders a CI recipe for this project to stdout or to a file. It is
 // a pure local template: no network call, no token read, no cache read (`requireToken:
-// false`). The GitHub template uses the OIDC exchange (`id-token: write`) so no long-lived
-// secret is ever stored; the only stored settings are the repository variables
-// `EVIDGATE_API_URL` and `EVIDGATE_EXECUTION` (a non-secret digest).
+// false`). The GitHub template reads the project ingest token from the environment secret
+// `EVIDGATE_INGEST_TOKEN` of the `evidgate-upload` environment, only in the upload job; the
+// other settings are the repository variables `EVIDGATE_API_URL` and `EVIDGATE_EXECUTION`
+// (a non-secret digest).
 //
 // The rendered CLI pin is the exact `version` from `packages/cli/package.json`
 // (`readCliVersion`), never a range or `latest`, so a generated workflow keeps working after
@@ -125,19 +126,20 @@ function npx(version: string, args: string): string {
  * `fixtures/ci-recipes/github-fork-safe.yml`): the workflow grants nothing at the top level;
  * the credential-free `test` job runs on `pull_request` and `push`; the `upload` job that
  * mints the token runs only on `workflow_dispatch` or a push to the default branch, inside the
- * secretless environment `evidgate-upload`, with `contents: read` + `id-token: write` so the
- * exchange step can present the GitHub OIDC JWT. `EVIDGATE_API_URL` and `EVIDGATE_EXECUTION`
- * are repository configuration VARIABLES — the only stored settings (`EVIDGATE_EXECUTION` is
- * the planned execution's 64-hex digest, not a secret). No `secrets.` reference exists. The
- * rules and their sources are in `docs/security/customer-ci-recipe.md`.
+ * environment `evidgate-upload`, with `contents: read` only. The ingest token is the one secret
+ * (`secrets.EVIDGATE_INGEST_TOKEN`, an environment secret, read by the `auth login` step alone).
+ * `EVIDGATE_API_URL` and `EVIDGATE_EXECUTION` are repository configuration VARIABLES
+ * (`EVIDGATE_EXECUTION` is the planned execution's 64-hex digest, not a secret). The rules and
+ * their sources are in `docs/security/customer-ci-recipe.md`.
  */
 function renderGithub(project: string, version: string): string {
   return `# Evidgate quickstart — GitHub Actions workflow (rendered by \`evidgate quickstart\`).
 #
 # The stored settings are repository configuration VARIABLES: EVIDGATE_API_URL and
 # EVIDGATE_EXECUTION (Settings → Secrets and variables → Actions → Variables; the
-# execution key is a 64-hex digest, not a secret). No secret is stored: the CLI exchanges
-# the GitHub OIDC token for a short-lived Evidgate CI token.
+# execution key is a 64-hex digest, not a secret). The one secret is the project ingest
+# token: store it as the secret EVIDGATE_INGEST_TOKEN of the \`evidgate-upload\`
+# environment (create it with an expiry), never as a repository secret.
 #
 # Fork-safe by construction: \`test\` runs on pull_request and holds no Evidgate setting
 # and no token; \`upload\` mints the token only on a workflow_dispatch or push from the
@@ -181,16 +183,15 @@ jobs:
     # pull_request event.
     if: "\${{ !cancelled() && ((github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') || (github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.test.result == 'success')) }}"
     runs-on: ubuntu-24.04
-    # An environment with no secrets: create it with required reviewers and a
-    # deployment branch rule for \`main\` before first use — its rules gate the job and
-    # it holds nothing a compromised step could read. Referencing an environment that
+    # The environment holds only the ingest token secret: create it with required
+    # reviewers and a deployment branch rule for \`main\` before first use — its rules
+    # gate the job, so only a trusted run can read the token. Referencing an environment that
     # does not exist auto-creates it with no protection rules:
     # https://docs.github.com/en/actions/deployment/targeting-different-environments/using-environments-for-deployment
     environment: evidgate-upload
-    # R3: per-job elevation. id-token write lets the CLI request the GitHub OIDC token.
+    # R3: read the code, nothing else; the Evidgate credential is not a GitHub permission.
     permissions:
       contents: read
-      id-token: write
     env:
       EVIDGATE_API_URL: \${{ vars.EVIDGATE_API_URL }}
       EVIDGATE_PROJECT: "${project}"
@@ -201,9 +202,12 @@ jobs:
       - uses: ${setupNodeAction}
         with:
           node-version: "22"
-      # Exchange the GitHub OIDC token for a short-lived Evidgate CI token. The token
-      # is written only to the 0600 cache, never printed.
-      - run: ${npx(version, 'auth login')}
+      # Exchange the ingest token for a short-lived Evidgate CI token. The token is
+      # written only to the 0600 cache, never printed. Only this step reads the secret;
+      # the steps below use the cached token.
+      - env:
+          EVIDGATE_INGEST_TOKEN: \${{ secrets.EVIDGATE_INGEST_TOKEN }}
+        run: ${npx(version, 'auth login')}
       # Upload the manifest and keep its ids for the run step. Each id is registered
       # with ::add-mask:: before the $GITHUB_OUTPUT write: R4 in
       # docs/security/customer-ci-recipe.md requires a masked payload there (the
@@ -272,7 +276,7 @@ jobs:
  * The generic template: a POSIX `sh` script, not YAML ([DECISION] V1 CI integration is
  * GitHub Actions; other CIs are per-project configuration, 00 §1 decision 2026-10-02).
  * `EVIDGATE_API_URL` comes from the CI's non-secret variables; the credential is named
- * only — `EVIDGATE_OIDC_TOKEN` or `EVIDGATE_INGEST_TOKEN` — and injected by the CI.
+ * only — `EVIDGATE_INGEST_TOKEN` — and injected by the CI.
  */
 function renderGeneric(project: string, version: string): string {
   return `#!/bin/sh
@@ -282,7 +286,6 @@ function renderGeneric(project: string, version: string): string {
 # the CLI authenticates with a short-lived credential the CI injects.
 #
 # Credential, by name only — never put a value in this file:
-#   EVIDGATE_OIDC_TOKEN    a short-lived OIDC JWT the project binding accepts, or
 #   EVIDGATE_INGEST_TOKEN  a project-scoped, revocable, rotatable ingest token
 #                          created with an expiry (02.4.2), injected by the CI's
 #                          masked secret store. Never committed, never echoed.

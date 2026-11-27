@@ -356,8 +356,8 @@ describe('apps/web lint boundaries (09.1.1 AC3, plan §8 T47 W1)', () => {
         'RotationResult',
         'RotationResult',
         'IngestTokenCreatedResponse',
-        'CiBindingCreatedResponse',
-        'CiBindingCreatedResponse',
+        'InviteIssuedView',
+        'InviteIssuedView',
       ]);
       for (const message of messages) {
         expect(message.message).toContain('may only be a RETURN value, never state');
