@@ -157,14 +157,16 @@ internal static class TestReportSourceSql
                order by v.version_no desc limit 1
             ) av on true
         ),
-        -- Stored size of every row read, summed before any JSON is built: over the cap, the arrays below stay empty and
-        -- the caller refuses the source, so an oversized source is never materialised twice.
+        -- Uncompressed size of what the arrays below will carry, summed before any JSON is built (pg_column_size would
+        -- count a compressed value at its stored size). Each row adds 160 bytes for its ids and keys.
         sizes as (
-          select (select coalesce(sum(pg_column_size(x)), 0) from nodes x)
-               + (select coalesce(sum(pg_column_size(x)), 0) from items x)
-               + (select coalesce(sum(pg_column_size(x)), 0) from pinned x)
-               + (select coalesce(sum(pg_column_size(x)), 0) from reqs x)
-               + (select coalesce(sum(pg_column_size(x)), 0) from links x) as bytes
+          select (select coalesce(sum(160 + octet_length(x.title)), 0) from nodes x)
+               + (select coalesce(sum(160 + octet_length(x.title) + coalesce(octet_length(x.description), 0)), 0) from items x)
+               + (select coalesce(sum(160 + octet_length(x.title) + coalesce(octet_length(x.description), 0)
+                                      + coalesce(octet_length(x.precondition), 0) + octet_length(x.steps::text)), 0) from pinned x)
+               + (select coalesce(sum(160 + octet_length(x.title) + octet_length(x.body)
+                                      + coalesce(octet_length(x.external_ref), 0)), 0) from reqs x)
+               + (select count(*) * 160 from links x) as bytes
         )
         select
           (select bytes from sizes)::bigint as bytes,

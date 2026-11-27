@@ -8,6 +8,14 @@ namespace Tenancy.IntegrationTests;
 [Trait("Category", "Docker")]
 public sealed class ReportSchemaTests
 {
+    private static readonly string[] InsertableColumns =
+    [
+        "id", "org_id", "project_id", "job_id", "scope_kind", "selected_ids", "sections", "language", "schema_version",
+        "pinned_versions", "payload", "content_hash", "created_by",
+    ];
+
+    private static readonly string[] ServerMaintainedColumns = ["created_at", "updated_at", "version"];
+
     private readonly PostgresTenancyFixture _fixture;
 
     public ReportSchemaTests(PostgresTenancyFixture fixture) => _fixture = fixture;
@@ -38,9 +46,21 @@ public sealed class ReportSchemaTests
                 .SqlState.ShouldBe(PostgresErrorCodes.InsufficientPrivilege);
         }
 
-        (await _fixture.HasTablePrivilegeAsync(world.Database, "evidgate_app", "test_report", "UPDATE")).ShouldBeFalse();
         (await _fixture.HasTablePrivilegeAsync(world.Database, "evidgate_app", "test_report", "DELETE")).ShouldBeFalse();
-        (await _fixture.HasTablePrivilegeAsync(world.Database, "evidgate_app", "test_report", "INSERT")).ShouldBeTrue();
+        foreach (var column in InsertableColumns)
+        {
+            (await ColumnPrivilegeAsync(world, column, "INSERT")).ShouldBeTrue($"{column} is written by the job");
+        }
+
+        foreach (var column in ServerMaintainedColumns)
+        {
+            (await ColumnPrivilegeAsync(world, column, "INSERT")).ShouldBeFalse($"{column} is maintained by the server");
+        }
+
+        foreach (var column in InsertableColumns.Concat(ServerMaintainedColumns))
+        {
+            (await ColumnPrivilegeAsync(world, column, "UPDATE")).ShouldBeFalse($"{column} is never updated");
+        }
     }
 
     [Fact]
@@ -117,6 +137,10 @@ public sealed class ReportSchemaTests
             Insert(world, Guid.CreateVersion7()).Replace($"'{world.Project:D}'", $"'{Guid.CreateVersion7():D}'", StringComparison.Ordinal),
             PostgresErrorCodes.ForeignKeyViolation);
     }
+
+    private Task<bool> ColumnPrivilegeAsync(RequirementTestWorld world, string column, string privilege) => _fixture.ScalarAsync<bool>(
+        world.Database,
+        $"select has_column_privilege('evidgate_app', 'public.test_report', '{column}', '{privilege}')");
 
     private async Task Refused(RequirementTestWorld world, string sql, string sqlState)
     {

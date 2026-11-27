@@ -10,8 +10,8 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Evidgate.Modules.Authoring.Application.Reports;
 
 /// <summary>
-/// The task a create enqueues: everything the build needs, by id and by the author's own words. It stays under the
-/// queue's 64 KiB payload cap at the request limits (1000 ids, two 2000 character texts).
+/// The task a create enqueues: everything the build needs, by id and by the author's own words. The create measures
+/// its serialized bytes against the queue's 64 KiB cap and refuses a request that would not fit, whatever the text.
 /// </summary>
 /// <param name="OrgId">The organization the job runs under.</param>
 /// <param name="ProjectId">The project of the report.</param>
@@ -44,7 +44,8 @@ internal static class TestReportTasks
     /// <summary>The aggregate the outbox row belongs to; its id is the job id.</summary>
     internal const string AggregateType = "authoring_test_report";
 
-    // Raw UTF-8 keeps a non-ASCII text at 2-4 bytes a character instead of six, so the payload cap holds at the limits.
+    // Raw UTF-8 keeps a non-ASCII text at 2-4 bytes a character instead of six; control characters and quotes still
+    // escape, which is why the size is measured on the serialized text and never assumed from the character count.
     private static readonly JsonSerializerOptions Wire = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
@@ -64,18 +65,24 @@ internal static class TestReportTasks
     /// <param name="payload">The task payload.</param>
     internal static string ToJson(ReportJobPayload payload) => JsonSerializer.Serialize(payload, Wire);
 
+    /// <summary>Whether the serialized task fits the queue's payload cap, counted in UTF-8 bytes like the outbox writer does.</summary>
+    /// <param name="json">The output of <see cref="ToJson"/>.</param>
+    internal static bool Fits(string json) =>
+        System.Text.Encoding.UTF8.GetByteCount(json) <= TestReportLimits.MaxTaskPayloadBytes;
+
     /// <summary>Writes the outbox row in the caller's scope transaction, so a rolled back create queues nothing.</summary>
     /// <param name="outbox">The outbox writer.</param>
     /// <param name="payload">The task payload.</param>
+    /// <param name="json">The payload's <see cref="ToJson"/> form, already measured by <see cref="Fits"/>.</param>
     /// <param name="cancellationToken">Cancellation.</param>
-    internal static Task<Guid> EnqueueAsync(IOutboxWriter outbox, ReportJobPayload payload, CancellationToken cancellationToken)
+    internal static Task<Guid> EnqueueAsync(IOutboxWriter outbox, ReportJobPayload payload, string json, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(outbox);
         ArgumentNullException.ThrowIfNull(payload);
 
         return outbox.EnqueueAsync(
             TaskType,
-            ToJson(payload),
+            json,
             AggregateType,
             payload.JobId,
             OutboxKey(payload.ProjectId, payload.JobId),

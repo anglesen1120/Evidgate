@@ -217,6 +217,22 @@ public sealed class ReportApiTests(PostgresTenancyFixture fixture)
     }
 
     [Fact]
+    public async Task Source_ByteCap_CountsUncompressedBytes_SoACompressibleTextIsNotUndercounted()
+    {
+        await using var world = await StartAsync(fixture);
+        var seed = await SeedAsync(world);
+        // 4000 identical characters compress to a few dozen stored bytes, so pg_column_size would read this under 3000.
+        await fixture.ExecuteAsync(world.Database, $"update public.checklist_item set description = repeat('a', 4000) where id = '{seed.Item:D}'");
+        var request = new ReportRequest(ReportScopeKinds.FeatureNodes, [seed.Node], OneSection, "vi", null, null);
+
+        var error = await Should.ThrowAsync<ReportBuildException>(() => ReadSourceAsync(world, request, 3000));
+        var read = await ReadSourceAsync(world, request, 100_000);
+
+        error.Message.ShouldStartWith(ReportBuildException.TooLarge);
+        read.Items.ShouldContain(item => item.Id == seed.Item);
+    }
+
+    [Fact]
     public async Task Build_ForARequirementScope_ReadsTheHeadAndItsLinks()
     {
         await using var world = await StartAsync(fixture);

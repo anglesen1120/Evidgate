@@ -1,3 +1,5 @@
+using System.Runtime.CompilerServices;
+
 namespace Evidgate.Modules.Authoring.Application.Reports.Sections;
 
 /// <summary>
@@ -60,9 +62,20 @@ internal sealed class TraceabilityMatrix
     internal IReadOnlyList<ReportCase> CasesOf(ReportRequirement requirement, bool stale) =>
         ReportOrder.Cases(ByRequirement[requirement.Id].Where(link => link.Stale == stale && link.Case is not null).Select(link => link.Case!).DistinctBy(testCase => testCase.Id));
 
+    private static readonly ConditionalWeakTable<ReportSource, TraceabilityMatrix> Shared = new();
+
+    /// <summary>The matrix of <paramref name="source"/>, built once however many sections read it.</summary>
+    /// <param name="source">The source the job read.</param>
+    internal static TraceabilityMatrix For(ReportSource source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+
+        return Shared.GetValue(source, Create);
+    }
+
     /// <summary>Expands every link once, drops a link whose target the source does not hold, and orders the result so the input order never reaches the output.</summary>
     /// <param name="source">The source the job read.</param>
-    internal static TraceabilityMatrix Create(ReportSource source)
+    private static TraceabilityMatrix Create(ReportSource source)
     {
         ArgumentNullException.ThrowIfNull(source);
 
@@ -70,6 +83,7 @@ internal sealed class TraceabilityMatrix
         var items = source.Items.ToDictionary(item => item.Id);
         var cases = source.Cases.ToDictionary(testCase => testCase.Id);
         var casesByItem = source.Cases.ToLookup(testCase => testCase.ChecklistItemId);
+        RefuseOversizeExpansion(source, requirements, items, cases, casesByItem);
 
         var links = new List<TraceLink>();
         foreach (var link in source.Links)
@@ -92,6 +106,40 @@ internal sealed class TraceabilityMatrix
         }
 
         return new TraceabilityMatrix(ReportOrder.Requirements(source.Requirements), ReportOrder.Cases(source.Cases), Canonical(links));
+    }
+
+    // An item link fans out to every case of the item, so the row count is the sum of those fan-outs; it is counted
+    // here, before any row exists, and a source that expands past the cap is a size outcome rather than an allocation.
+    private static void RefuseOversizeExpansion(
+        ReportSource source,
+        Dictionary<Guid, ReportRequirement> requirements,
+        Dictionary<Guid, ReportItem> items,
+        Dictionary<Guid, ReportCase> cases,
+        ILookup<Guid, ReportCase> casesByItem)
+    {
+        long rows = 0;
+        foreach (var link in source.Links)
+        {
+            if (!requirements.ContainsKey(link.RequirementId))
+            {
+                continue;
+            }
+
+            if (link.ManualTestCaseId is { } caseId && cases.ContainsKey(caseId))
+            {
+                rows++;
+            }
+
+            if (link.ChecklistItemId is { } itemId && items.ContainsKey(itemId))
+            {
+                rows += Math.Max(1, casesByItem[itemId].Count());
+            }
+
+            if (rows > TestReportLimits.MaxTraceRows)
+            {
+                throw new ReportBuildException(ReportBuildException.TooLarge, "the traceability matrix expands to more rows than one report may hold");
+            }
+        }
     }
 
     private static List<TraceLink> Canonical(List<TraceLink> links) =>

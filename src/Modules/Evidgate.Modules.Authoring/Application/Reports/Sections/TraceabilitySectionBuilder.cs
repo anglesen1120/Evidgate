@@ -16,7 +16,7 @@ internal sealed class TraceabilitySectionBuilder : IReportSectionBuilder
         ArgumentNullException.ThrowIfNull(source);
 
         var labels = ReportLabels.For(source.Request.Language);
-        var matrix = TraceabilityMatrix.Create(source);
+        var matrix = TraceabilityMatrix.For(source);
         var uncovered = matrix.Requirements.Where(requirement => !matrix.IsCovered(requirement)).ToList();
         var unlinked = matrix.Cases.Where(matrix.IsUnlinked).ToList();
         var staleLinks = matrix.Links.Where(link => link.Stale).ToList();

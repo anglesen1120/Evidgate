@@ -51,7 +51,7 @@ internal static class ReportSnapshotBuilder
         };
 
         var canonical = JsonCanonicalizer.Canonicalize(payload.ToJsonString());
-        if (Encoding.UTF8.GetByteCount(canonical) > TestReportLimits.MaxPayloadBytes)
+        if (StoredBytes(canonical) > TestReportLimits.MaxPayloadBytes)
         {
             throw new ReportBuildException(ReportBuildException.TooLarge, "the snapshot is larger than one report may be");
         }
@@ -77,5 +77,43 @@ internal static class ReportSnapshotBuilder
         })]);
 
         return new JsonObject { ["requirements"] = requirements, ["cases"] = cases }.ToJsonString();
+    }
+
+    /// <summary>
+    /// The UTF-8 size of the payload as the table's size check measures it, <c>octet_length(payload::text)</c>: the
+    /// canonical text plus the one space PostgreSQL writes after every <c>:</c> and <c>,</c> outside a string.
+    /// </summary>
+    /// <param name="canonical">The canonical payload text.</param>
+    internal static long StoredBytes(string canonical)
+    {
+        ArgumentNullException.ThrowIfNull(canonical);
+
+        long spaces = 0;
+        var inString = false;
+        for (var i = 0; i < canonical.Length; i++)
+        {
+            var c = canonical[i];
+            if (inString)
+            {
+                if (c == '\\')
+                {
+                    i++;
+                }
+                else if (c == '"')
+                {
+                    inString = false;
+                }
+            }
+            else if (c == '"')
+            {
+                inString = true;
+            }
+            else if (c is ',' or ':')
+            {
+                spaces++;
+            }
+        }
+
+        return Encoding.UTF8.GetByteCount(canonical) + spaces;
     }
 }

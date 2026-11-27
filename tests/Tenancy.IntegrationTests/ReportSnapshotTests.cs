@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Evidgate.BuildingBlocks.Canonicalization;
 using Evidgate.Modules.Authoring.Application.Reports;
+using Evidgate.Modules.Authoring.Application.Reports.Sections;
 using Shouldly;
 using Xunit;
 
@@ -151,30 +152,73 @@ public sealed class ReportSnapshotTests
     }
 
     [Fact]
-    public void TaskPayload_AtTheRequestLimits_FitsTheQueuePayloadCap()
+    public void Matrix_BuiltTwiceForOneSource_IsTheSameInstance()
     {
-        var astral = string.Concat(Enumerable.Repeat("\U0001D11E", TestReportLimits.MaxTextCodePoints));
-        var payload = new ReportJobPayload(
-            Guid.NewGuid(),
-            Guid.NewGuid(),
-            Guid.NewGuid(),
-            Guid.NewGuid(),
-            ReportScopeKinds.FeatureNodes,
-            [.. Enumerable.Range(0, TestReportLimits.MaxSelectedIds).Select(_ => Guid.NewGuid())],
-            ["a", "b", "c", "d"],
-            "vi",
-            astral,
-            astral);
+        var source = ReportSectionFixture.Source();
 
-        // The queue adds a short correlation stamp, so leave a kilobyte of room under 64 KiB.
-        Encoding.UTF8.GetByteCount(TestReportTasks.ToJson(payload)).ShouldBeLessThan(65536 - 1024);
+        TraceabilityMatrix.For(source).ShouldBeSameAs(TraceabilityMatrix.For(source));
     }
+
+    [Fact]
+    public void Matrix_ItemLinksExpandingPastTheRowCap_AreRefusedAsTooLargeBeforeAnyRowIsBuilt()
+    {
+        // 400 cases on one item reached by 400 item links is 160000 rows, over the cap; each input list is small.
+        var source = ReportSectionFixture.Source();
+        var template = source.Cases[0];
+        var cases = Enumerable.Range(0, 400).Select(n => template with { Id = ReportSectionFixture.Id(1000 + n), Code = "TC-X" + n });
+        var links = Enumerable.Range(0, 400).Select(n => new ReportLink(
+            ReportSectionFixture.Id(2000 + n), ReportSectionFixture.Covered, ReportSectionFixture.CurrentVersion, 2, ReportSectionFixture.Item, null));
+        var oversize = source with { Cases = [.. cases], Links = [.. links] };
+
+        var error = Should.Throw<ReportBuildException>(() => TraceabilityMatrix.For(oversize));
+
+        error.Message.ShouldStartWith(ReportBuildException.TooLarge + ":");
+        (400 * 400).ShouldBeGreaterThan(TestReportLimits.MaxTraceRows);
+    }
+
+    [Theory]
+    [InlineData("\U0001D11E")] // 4 bytes a character, raw
+    [InlineData("\u0001")] // control character: escaped to 6 bytes, the widest a character grows
+    [InlineData("\"")] // quote: escaped to 2 bytes
+    public void TaskPayload_AtTheRequestLimits_FitsTheQueuePayloadCap_WhateverTheText(string character)
+    {
+        var text = string.Concat(Enumerable.Repeat(character, TestReportLimits.MaxTextCodePoints));
+
+        var json = TestReportTasks.ToJson(Payload(text, text));
+
+        TestReportTasks.Fits(json).ShouldBeTrue();
+        Encoding.UTF8.GetByteCount(json).ShouldBeLessThanOrEqualTo(TestReportLimits.MaxTaskPayloadBytes);
+    }
+
+    [Fact]
+    public void TaskPayload_OverTheQueueCap_IsMeasuredInUtf8BytesNotCharacters()
+    {
+        // 10000 four-byte characters are 40000 bytes next to the 1000 ids (~39000): over, though far under 64K characters.
+        var over = TestReportTasks.ToJson(Payload(string.Concat(Enumerable.Repeat("\U0001D11E", 10000)), null));
+        var under = TestReportTasks.ToJson(Payload(new string('a', 20000), null));
+
+        TestReportTasks.Fits(over).ShouldBeFalse();
+        TestReportTasks.Fits(under).ShouldBeTrue();
+    }
+
+    private static ReportJobPayload Payload(string? strategy, string? environment) => new(
+        Guid.NewGuid(),
+        Guid.NewGuid(),
+        Guid.NewGuid(),
+        Guid.NewGuid(),
+        ReportScopeKinds.FeatureNodes,
+        [.. Enumerable.Range(0, TestReportLimits.MaxSelectedIds).Select(_ => Guid.NewGuid())],
+        ["a", "b", "c", "d"],
+        "vi",
+        strategy,
+        environment);
 
     [Theory]
     [InlineData(false, null, null, "pending", null)]
     [InlineData(true, "queued", null, "pending", null)]
     [InlineData(true, "active", null, "running", null)]
     [InlineData(true, "retry", "ReportBuildException: build_failed: x", "retry", null)]
+    [InlineData(true, "done", null, "failed", "build_failed")] // the job query re-checks publication before it answers this
     [InlineData(true, "dead_letter", "ReportBuildException: report_too_large: the snapshot is larger", "failed", "report_too_large")]
     [InlineData(true, "dead_letter", "ReportBuildException: build_failed: the project is not live", "failed", "build_failed")]
     [InlineData(true, "dead_letter", "NpgsqlException: password=hunter2", "failed", "build_failed")]

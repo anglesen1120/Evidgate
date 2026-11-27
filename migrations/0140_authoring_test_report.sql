@@ -26,7 +26,7 @@ create table if not exists public.test_report (
   content_hash text not null,
   created_by uuid,
   created_at timestamptz not null default now(),
-  -- 00 section 7 convention columns, inert here: no role may update a row.
+  -- Convention columns, inert here: no role may update a row.
   updated_at timestamptz not null default now(),
   version integer not null default 1,
   constraint test_report_pkey primary key (id),
@@ -49,7 +49,8 @@ create table if not exists public.test_report (
   constraint test_report_schema_version_check check (schema_version >= 1),
   constraint test_report_pinned_versions_check check (jsonb_typeof(pinned_versions) = 'object'),
   constraint test_report_payload_check check (jsonb_typeof(payload) = 'object'),
-  -- The snapshot is a size outcome, never a truncation: the job refuses a larger one before it inserts.
+  -- The snapshot is a size outcome, never a truncation: the job refuses a larger one before it inserts, measuring
+  -- the same octet_length(payload::text) this check does.
   constraint test_report_payload_size_check check (octet_length(payload::text) <= 8388608),
   constraint test_report_content_hash_check check (content_hash ~ '^sha256:[0-9a-f]{64}$'),
   constraint test_report_version_check check (version >= 1)

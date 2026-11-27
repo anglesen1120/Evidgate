@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.Modules.Authoring.Infrastructure.Persistence;
+using Npgsql;
 
 namespace Evidgate.Modules.Authoring.Application.Reports;
 
@@ -67,7 +68,22 @@ internal sealed class TestReportStore(ITenantDb db)
         ArgumentNullException.ThrowIfNull(payload);
         ArgumentNullException.ThrowIfNull(snapshot);
 
-        var rows = await db.ExecuteAsync(
+        int rows;
+        try
+        {
+            rows = await InsertRowAsync(payload, snapshot, cancellationToken).ConfigureAwait(false);
+        }
+        catch (PostgresException exception) when (exception.ConstraintName == "test_report_payload_size_check")
+        {
+            // The builder measures what this check measures; reaching it means the two drifted, and it is still a size outcome.
+            throw new ReportBuildException(ReportBuildException.TooLarge, "the snapshot is larger than the table accepts");
+        }
+
+        return rows == 1;
+    }
+
+    private Task<int> InsertRowAsync(ReportJobPayload payload, ReportSnapshot snapshot, CancellationToken cancellationToken) =>
+        db.ExecuteAsync(
             TestReportSql.Insert,
             new
             {
@@ -85,10 +101,7 @@ internal sealed class TestReportStore(ITenantDb db)
                 content_hash = snapshot.ContentHash,
                 created_by = payload.CreatedBy,
             },
-            cancellationToken).ConfigureAwait(false);
-
-        return rows == 1;
-    }
+            cancellationToken);
 
     /// <summary>The report a job published, or null.</summary>
     /// <param name="orgId">The organization of the open scope.</param>

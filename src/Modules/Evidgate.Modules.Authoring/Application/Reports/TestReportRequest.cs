@@ -6,7 +6,10 @@ namespace Evidgate.Modules.Authoring.Application.Reports;
 /// <summary>The bounds of one report: what a request may name and what a snapshot may hold.</summary>
 internal static class TestReportLimits
 {
-    /// <summary>The task payload is capped at 64 KiB and carries the ids, so the id list is capped well under it.</summary>
+    /// <summary>The queue's cap on the serialized task payload, in UTF-8 bytes (the outbox size check of 0006).</summary>
+    internal const int MaxTaskPayloadBytes = 65536;
+
+    /// <summary>The ids ride in the task payload; this many ids leave room for the two texts, and the create still measures the real bytes.</summary>
     internal const int MaxSelectedIds = 1000;
 
     /// <summary>Sections a request may name.</summary>
@@ -20,6 +23,9 @@ internal static class TestReportLimits
 
     /// <summary>Requirement links of one report.</summary>
     internal const int MaxLinks = 20000;
+
+    /// <summary>Requirement-to-case rows a traceability matrix may expand to; counted before any row is allocated.</summary>
+    internal const int MaxTraceRows = 100_000;
 
     /// <summary>Canonical payload bytes; the same bound the table's check keeps.</summary>
     internal const int MaxPayloadBytes = 8 * 1024 * 1024;

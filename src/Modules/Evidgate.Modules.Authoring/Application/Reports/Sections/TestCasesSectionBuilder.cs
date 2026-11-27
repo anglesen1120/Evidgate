@@ -15,7 +15,7 @@ internal sealed class TestCasesSectionBuilder : IReportSectionBuilder
         ArgumentNullException.ThrowIfNull(source);
 
         var labels = ReportLabels.For(source.Request.Language);
-        var matrix = TraceabilityMatrix.Create(source);
+        var matrix = TraceabilityMatrix.For(source);
         var features = new FeatureTree(source.Nodes);
         var featureOfItem = source.Items.ToDictionary(item => item.Id, item => item.FeatureNodeId);
 

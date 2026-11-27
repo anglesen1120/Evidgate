@@ -66,56 +66,70 @@ internal sealed class CreateTestReportCommandHandler(
         }
 
         var request = read.Value;
-        if (!ReportScopeKinds.IsSupported(request.ScopeKind))
-        {
-            return Result.Failure<TestReportJobAcceptedDto>(AuthoringErrors.Invalid(
-                "/scope_kind", "unsupported_scope", "this report scope has no source yet"));
-        }
-
-        if (registry.FirstUnsupported(request.Sections) is { } unsupported)
-        {
-            return Result.Failure<TestReportJobAcceptedDto>(AuthoringErrors.Invalid(
-                $"/sections/{unsupported}", "unsupported_section", "no builder serves this section"));
-        }
-
         var orgId = scopes.Require().OrgId;
-        var live = await reader.CountLiveAsync(orgId, command.ProjectId, request, cancellationToken).ConfigureAwait(false);
-        if (live != request.SelectedIds.Count)
+        if (await RefusalOfAsync(orgId, command.ProjectId, request, cancellationToken).ConfigureAwait(false) is { } unserved)
         {
-            // One answer for a missing, deleted and foreign id: the refusal is no oracle for what other projects hold.
-            return Result.Failure<TestReportJobAcceptedDto>(AuthoringErrors.Invalid(
-                "/selected_ids", "unknown_selection", "a selected id is not a live item of this project"));
+            return Result.Failure<TestReportJobAcceptedDto>(unserved);
         }
 
         var author = await AuthoringRequestScope.ActorMembershipAsync(db, orgId, principals, cancellationToken).ConfigureAwait(false);
         var jobId = Guid.CreateVersion7();
-        await TestReportTasks.EnqueueAsync(
-            outbox,
-            new ReportJobPayload(
-                orgId,
-                command.ProjectId,
-                jobId,
-                author,
-                request.ScopeKind,
-                request.SelectedIds,
-                request.Sections,
-                request.Language,
-                request.Strategy,
-                request.Environment),
-            cancellationToken).ConfigureAwait(false);
+        var payload = new ReportJobPayload(
+            orgId,
+            command.ProjectId,
+            jobId,
+            author,
+            request.ScopeKind,
+            request.SelectedIds,
+            request.Sections,
+            request.Language,
+            request.Strategy,
+            request.Environment);
+        var json = TestReportTasks.ToJson(payload);
+        if (!TestReportTasks.Fits(json))
+        {
+            // The queue would reject the row with a bare 500; the author is told which request was too big instead.
+            return Result.Failure<TestReportJobAcceptedDto>(AuthoringErrors.Invalid(
+                "/", "too_large", "the request is larger than the report queue accepts; select fewer ids or shorten the texts"));
+        }
 
-        // Ids, counts and enumerated names only: the strategy and the environment are customer text.
-        audit.Describe(new AuditObject(
-            "test_report",
-            jobId.ToString("D"),
-            Metadata: new Dictionary<string, string>(StringComparer.Ordinal)
-            {
-                ["mode"] = request.ScopeKind,
-                ["count"] = request.SelectedIds.Count.ToString(CultureInfo.InvariantCulture),
-                ["fields"] = string.Join(',', request.Sections),
-            },
-            ProjectId: command.ProjectId));
+        await TestReportTasks.EnqueueAsync(outbox, payload, json, cancellationToken).ConfigureAwait(false);
+
+        Describe(command.ProjectId, jobId, request);
 
         return Result.Success(new TestReportJobAcceptedDto(jobId), StatusCodes.Status202Accepted);
+    }
+
+    // Ids, counts and enumerated names only: the strategy and the environment are customer text.
+    private void Describe(Guid projectId, Guid jobId, ReportRequest request) => audit.Describe(new AuditObject(
+        "test_report",
+        jobId.ToString("D"),
+        Metadata: new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["mode"] = request.ScopeKind,
+            ["count"] = request.SelectedIds.Count.ToString(CultureInfo.InvariantCulture),
+            ["fields"] = string.Join(',', request.Sections),
+        },
+        ProjectId: projectId));
+
+    /// <summary>The refusal for a request the build could not serve, or null when it can be queued.</summary>
+    private async Task<Error?> RefusalOfAsync(Guid orgId, Guid projectId, ReportRequest request, CancellationToken cancellationToken)
+    {
+        if (!ReportScopeKinds.IsSupported(request.ScopeKind))
+        {
+            return AuthoringErrors.Invalid("/scope_kind", "unsupported_scope", "this report scope has no source yet");
+        }
+
+        if (registry.FirstUnsupported(request.Sections) is { } unsupported)
+        {
+            return AuthoringErrors.Invalid($"/sections/{unsupported}", "unsupported_section", "no builder serves this section");
+        }
+
+        var live = await reader.CountLiveAsync(orgId, projectId, request, cancellationToken).ConfigureAwait(false);
+
+        // One answer for a missing, deleted and foreign id: the refusal is no oracle for what other projects hold.
+        return live == request.SelectedIds.Count
+            ? null
+            : AuthoringErrors.Invalid("/selected_ids", "unknown_selection", "a selected id is not a live item of this project");
     }
 }

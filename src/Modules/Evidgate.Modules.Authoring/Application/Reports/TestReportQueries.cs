@@ -172,9 +172,23 @@ internal sealed class GetTestReportJobQueryHandler(
 
         var task = await store.JobTaskAsync(orgId, query.ProjectId, query.JobId, cancellationToken).ConfigureAwait(false);
 
-        return task is null
-            ? Result.Failure<TestReportJobDto>(AuthoringErrors.NotFound("the report job does not exist in this project"))
-            : Result.Success(TestReportJobStates.Map(query.JobId, task));
+        if (task is null)
+        {
+            return Result.Failure<TestReportJobDto>(AuthoringErrors.NotFound("the report job does not exist in this project"));
+        }
+
+        var mapped = TestReportJobStates.Map(query.JobId, task);
+        if (mapped.State != TestReportJobStates.Failed)
+        {
+            return Result.Success(mapped);
+        }
+
+        // The report and the task's completion commit together, but the two reads above are separate statements: a job
+        // that finished between them reads as done with no report. A task seen as finished means its report is
+        // committed, so one more look decides whether this is a failure or a publication.
+        return await store.ReportOfJobAsync(orgId, query.ProjectId, query.JobId, cancellationToken).ConfigureAwait(false) is { } published
+            ? Result.Success(new TestReportJobDto(query.JobId, TestReportJobStates.Complete, published, null))
+            : Result.Success(mapped);
     }
 }
 
