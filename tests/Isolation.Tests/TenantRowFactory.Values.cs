@@ -109,6 +109,14 @@ internal sealed partial class TenantRowFactory
             ("public.authoring_intake", "kind") => "text",
             ("public.authoring_intake", "media_type") => "text/plain",
             ("public.authoring_intake_slot", "slot") => Interlocked.Increment(ref _intakeSlot) % 64,
+            // test_report closes scope_kind, language and the content address in CHECKs, and wants non-empty
+            // selected_ids and sections arrays, so the generic text and '{}' candidates are rejected first.
+            ("public.test_report", "scope_kind") => "requirements",
+            ("public.test_report", "language") => "en",
+            ("public.test_report", "selected_ids") =>
+                "[\"" + Guid.CreateVersion7().ToString("D", CultureInfo.InvariantCulture) + "\"]",
+            ("public.test_report", "sections") => "[\"test_plan\"]",
+            ("public.test_report", "content_hash") => "sha256:" + new string('d', 64),
             ("public.project", "case_prefix") =>
                 "P" + Interlocked.Increment(ref _casePrefix).ToString("D4", CultureInfo.InvariantCulture),
             ("public.producer_slot", "producer_id") => "shard-1",

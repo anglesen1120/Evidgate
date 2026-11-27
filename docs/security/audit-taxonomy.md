@@ -169,6 +169,7 @@ The module totals below are the `4d1a7aa` snapshot without the four retired acti
 | 71 | `authoring.requirement.restore` | `src/Modules/Evidgate.Modules.Authoring/Application/Commands/RequirementRestoreCommand.cs:41` | Authoring | `RestoreRequirementCommand` | user | `requirement` / its id; metadata ids only, never title or body | — |
 | 72 | `authoring.requirement_link.create` | `src/Modules/Evidgate.Modules.Authoring/Application/Commands/RequirementLinkCommands.cs:43` | Authoring | `LinkRequirementCommand` | user | `requirement_link` / its id; metadata ids only, never title or body | — |
 | 73 | `authoring.requirement_link.remove` | `src/Modules/Evidgate.Modules.Authoring/Application/Commands/RequirementLinkCommands.cs:130` | Authoring | `UnlinkRequirementCommand` | user | `requirement_link` / its id; metadata ids only, never title or body | — |
+| 74 | `authoring.report.create` | `src/Modules/Evidgate.Modules.Authoring/Application/Reports/CreateTestReportCommand.cs:38` | Authoring | `CreateTestReportCommand` | user | `test_report` / the reserved job id; metadata ids, scope kind and sections only, never title or body | — |
 
 Notes on the rows that are easy to misread:
 

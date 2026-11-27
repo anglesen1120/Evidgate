@@ -8,6 +8,7 @@ using Evidgate.BuildingBlocks.Persistence.Tasks;
 using Evidgate.BuildingBlocks.Pipeline;
 using Evidgate.Modules.Authoring;
 using Evidgate.Modules.Authoring.Infrastructure.Intake.Jobs;
+using Evidgate.Modules.Authoring.Infrastructure.Reports;
 using Evidgate.Modules.Catalog;
 using Evidgate.Modules.Evidence;
 using Evidgate.Modules.Evidence.Infrastructure.Parsing.Runner;
@@ -105,6 +106,8 @@ public static class WorkerHost
         builder.Services.AddHealingModule(builder.Configuration, builder.Environment);
         // The requirement-intake extraction handler: it claims `extract_intake` tasks, so only the Worker composes it.
         builder.Services.AddAuthoringIntakeJobs();
+        // The report snapshot build handler: it claims `authoring_test_report_build` tasks, so only the Worker composes it.
+        builder.Services.AddAuthoringReportJobs();
 
         // 01.5.1-T1.2/T1.4: the durable task queue — claim loops per queue and the
         // cron schedule runner. Both are registered in every worker; the unique fire

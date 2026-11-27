@@ -75,6 +75,11 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
         "/v1/projects/{p}/authoring/requirements/{r}/versions",
         "/v1/projects/{p}/authoring/requirements/{r}/coverage",
 
+        // Reports and jobs need rows this scan does not create; the history page is scanned below.
+        // Isolation probes use persisted report and job ids to cover these object reads.
+        "/v1/projects/{p}/authoring/reports/{r}",
+        "/v1/projects/{p}/authoring/reports/jobs/{j}",
+
         // The intake read answers only for a row the intake route recorded; this suite records none (the tenancy
         // tests own the rows), so the scan would see the 404. Its 403/404 cases are in the isolation world.
         "/v1/projects/{p}/authoring/intakes/{i}",
@@ -538,6 +543,7 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
             ["/v1/projects/{p}/authoring/checklist-items"] = $"/v1/projects/{project}/authoring/checklist-items",
             ["/v1/projects/{p}/authoring/manual-cases"] = $"/v1/projects/{project}/authoring/manual-cases",
             ["/v1/projects/{p}/authoring/requirements"] = $"/v1/projects/{project}/authoring/requirements",
+            ["/v1/projects/{p}/authoring/reports"] = $"/v1/projects/{project}/authoring/reports",
             ["/v1/projects/{p}/authoring/versions"] = $"/v1/projects/{project}/authoring/versions",
             // 13.2.1-T1's AI settings reads: a project with no saved version answers the platform default document, an
             // empty history page and the platform template catalogue — bytes a member may read, no secret among them.

@@ -58,6 +58,10 @@ public sealed class PolicyPermissionContractTests
         ("Authoring", "getRequirementCoverage", "GetRequirementCoverageQueryHandler", "authoring:read"),
         ("Authoring", "createRequirementLink", "LinkRequirementCommandHandler", "authoring:write"),
         ("Authoring", "deleteRequirementLink", "UnlinkRequirementCommandHandler", "authoring:write"),
+        ("Authoring", "createTestReport", "CreateTestReportCommandHandler", "authoring:write"),
+        ("Authoring", "listTestReports", "ListTestReportsQueryHandler", "authoring:read"),
+        ("Authoring", "getTestReport", "GetTestReportQueryHandler", "authoring:read"),
+        ("Authoring", "getTestReportJob", "GetTestReportJobQueryHandler", "authoring:read"),
 
         // 13.1.1-T3: the version timeline (routes 22, 23) on authoring:read and the four restore routes
         // (6, 11, 18, 24) on authoring:write — the split §5's permission column states.

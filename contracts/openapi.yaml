@@ -9497,6 +9497,168 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '503':
           $ref: '#/components/responses/Unavailable'
+  /projects/{p}/authoring/reports:
+    post:
+      operationId: createTestReport
+      tags: [authoring]
+      summary: Queue one test-case report for a scope
+      description: >-
+        `authoring:write`. Reserves a report job and answers 202 with its `job_id`; the report is
+        built by a worker from the pinned head versions of the selected scope and published
+        immutably, so a later edit never rewrites it. Only `scope_kind` `feature_nodes` and
+        `requirements` are built. A refusal is 422 `request_invalid` with `details[].reason`
+        `unsupported_scope` (`manual_run`, `release`), `unsupported_section` (a section with no
+        builder yet) or `unknown_selection` (an id that is not a live item of this project); an
+        empty or oversized `selected_ids`/`sections` or an unknown member is 422 `request_invalid`
+        too. A task payload over its size limit is 413 `payload_too_large`, a missing
+        `Idempotency-Key` 400 `request_invalid`, and a replay answers the stored 202 with the same
+        `job_id` and no second job. A lock timeout is 503 `unavailable` with `Retry-After`.
+      x-permission: authoring:write
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTestReportRequest'
+      responses:
+        '202':
+          description: The reserved job; poll `getTestReportJob` for the outcome
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestReportJobAcceptedDto'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/TooLarge'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    get:
+      operationId: listTestReports
+      tags: [authoring]
+      summary: Cursor page of the project's published reports, newest first
+      description: >-
+        `authoring:read`. Published reports in `(created_at, id)` descending order, each with its
+        identity, scope kind, language and content hash but no payload. A `limit` outside 1..200 or
+        a garbled `cursor` is 422 `request_invalid` with `details[].path` naming the parameter.
+        Another tenant's project is 404 `not_found`; a credential scoped to a sibling project of
+        the same org is 403 `project_scope_mismatch`.
+      x-permission: authoring:read
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/AuthoringCursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Page of reports
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestReportListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /projects/{p}/authoring/reports/{r}:
+    get:
+      operationId: getTestReport
+      tags: [authoring]
+      summary: One published report with its payload
+      description: >-
+        `authoring:read`. The immutable snapshot: the scope, the pinned versions' numbers and the
+        rendered `payload`. A report of another project or tenant, or an unknown id, is 404
+        `not_found`.
+      x-permission: authoring:read
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/AuthoringReportId'
+      responses:
+        '200':
+          description: The report
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestReportDetailDto'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /projects/{p}/authoring/reports/jobs/{j}:
+    get:
+      operationId: getTestReportJob
+      tags: [authoring]
+      summary: Outcome of one queued report job
+      description: >-
+        `authoring:read`. `state` is `pending`, `running` or `retry` while the worker has not
+        finished, `complete` with the `report_id` once published, and `failed` with a
+        `failure_reason` when it gave up. A job id the project does not own is 404 `not_found`.
+      x-permission: authoring:read
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/AuthoringReportJobId'
+      responses:
+        '200':
+          description: The job outcome
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestReportJobDto'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
   /projects/{p}/authoring/versions:
     get:
       operationId: listAuthoringVersions
@@ -10981,6 +11143,22 @@ components:
       in: path
       required: true
       description: Requirement link id.
+      schema:
+        type: string
+        format: uuid
+    AuthoringReportId:
+      name: r
+      in: path
+      required: true
+      description: Published test report id.
+      schema:
+        type: string
+        format: uuid
+    AuthoringReportJobId:
+      name: j
+      in: path
+      required: true
+      description: Test report job id, the `job_id` of `createTestReport`.
       schema:
         type: string
         format: uuid
@@ -16047,6 +16225,104 @@ components:
           items:
             $ref: '#/components/schemas/RequirementCoverageCaseDto'
         next_code: { type: [string, 'null'] }
+    CreateTestReportRequest:
+      type: object
+      description: >-
+        Body of `createTestReport`. `selected_ids` name feature nodes or requirements of the project
+        according to `scope_kind`; `strategy` and `environment` are free text that is copied into
+        the report. The whole task payload must fit 64 KiB.
+      additionalProperties: false
+      required: [scope_kind, selected_ids, sections, language]
+      properties:
+        scope_kind: { type: string, enum: [feature_nodes, requirements, manual_run, release] }
+        selected_ids:
+          type: array
+          minItems: 1
+          maxItems: 1000
+          uniqueItems: true
+          items: { type: string, format: uuid }
+        sections:
+          type: array
+          minItems: 1
+          maxItems: 4
+          uniqueItems: true
+          items: { type: string, enum: [test_plan, test_cases, traceability, execution] }
+        language: { type: string, enum: [vi, en] }
+        strategy: { type: [string, 'null'], maxLength: 2000 }
+        environment: { type: [string, 'null'], maxLength: 2000 }
+    TestReportJobAcceptedDto:
+      type: object
+      description: The 202 body of `createTestReport`.
+      required: [job_id]
+      properties:
+        job_id: { type: string, format: uuid }
+    TestReportSummaryDto:
+      type: object
+      description: One row of the report list; the payload is only in `TestReportDetailDto`.
+      required: [report_id, job_id, scope_kind, language, content_hash, created_at]
+      properties:
+        report_id: { type: string, format: uuid }
+        job_id: { type: string, format: uuid }
+        scope_kind: { type: string, enum: [feature_nodes, requirements, manual_run, release] }
+        language: { type: string, enum: [vi, en] }
+        content_hash: { type: string, pattern: '^sha256:[0-9a-f]{64}$' }
+        created_at: { type: string, format: date-time }
+    TestReportListResponse:
+      type: object
+      description: 00 §9.1 keyset page of `TestReportSummaryDto`, newest first.
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/TestReportSummaryDto'
+        next_cursor: { type: [string, 'null'] }
+    TestReportDetailDto:
+      type: object
+      description: >-
+        The 200 body of `getTestReport`: the summary plus the scope, the schema version of `payload`
+        and the rendered payload itself.
+      required:
+        [
+          report_id,
+          job_id,
+          scope_kind,
+          language,
+          content_hash,
+          created_at,
+          schema_version,
+          selected_ids,
+          sections,
+          payload,
+        ]
+      properties:
+        report_id: { type: string, format: uuid }
+        job_id: { type: string, format: uuid }
+        scope_kind: { type: string, enum: [feature_nodes, requirements, manual_run, release] }
+        language: { type: string, enum: [vi, en] }
+        content_hash: { type: string, pattern: '^sha256:[0-9a-f]{64}$' }
+        created_at: { type: string, format: date-time }
+        schema_version: { type: integer, minimum: 1 }
+        selected_ids:
+          type: array
+          items: { type: string, format: uuid }
+        sections:
+          type: array
+          items: { type: string, enum: [test_plan, test_cases, traceability, execution] }
+        payload:
+          type: object
+          additionalProperties: true
+    TestReportJobDto:
+      type: object
+      description: >-
+        Outcome of one report job. `report_id` is set only when `state` is `complete`;
+        `failure_reason` only when it is `failed`.
+      required: [job_id, state, report_id, failure_reason]
+      properties:
+        job_id: { type: string, format: uuid }
+        state: { type: string, enum: [pending, running, retry, failed, complete] }
+        report_id: { type: [string, 'null'], format: uuid }
+        failure_reason: { type: [string, 'null'], enum: [report_too_large, build_failed, null] }
     ManualCaseListItemDto:
       type: object
       description: >-

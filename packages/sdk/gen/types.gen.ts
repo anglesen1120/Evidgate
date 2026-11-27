@@ -2887,6 +2887,73 @@ export type RequirementCoverageResponse = {
 };
 
 /**
+ * Body of `createTestReport`. `selected_ids` name feature nodes or requirements of the project according to `scope_kind`; `strategy` and `environment` are free text that is copied into the report. The whole task payload must fit 64 KiB.
+ */
+export type CreateTestReportRequest = {
+    scope_kind: 'feature_nodes' | 'requirements' | 'manual_run' | 'release';
+    selected_ids: Array<string>;
+    sections: Array<'test_plan' | 'test_cases' | 'traceability' | 'execution'>;
+    language: 'vi' | 'en';
+    strategy?: string | null;
+    environment?: string | null;
+};
+
+/**
+ * The 202 body of `createTestReport`.
+ */
+export type TestReportJobAcceptedDto = {
+    job_id: string;
+};
+
+/**
+ * One row of the report list; the payload is only in `TestReportDetailDto`.
+ */
+export type TestReportSummaryDto = {
+    report_id: string;
+    job_id: string;
+    scope_kind: 'feature_nodes' | 'requirements' | 'manual_run' | 'release';
+    language: 'vi' | 'en';
+    content_hash: string;
+    created_at: string;
+};
+
+/**
+ * 00 §9.1 keyset page of `TestReportSummaryDto`, newest first.
+ */
+export type TestReportListResponse = {
+    items: Array<TestReportSummaryDto>;
+    next_cursor: string | null;
+};
+
+/**
+ * The 200 body of `getTestReport`: the summary plus the scope, the schema version of `payload` and the rendered payload itself.
+ */
+export type TestReportDetailDto = {
+    report_id: string;
+    job_id: string;
+    scope_kind: 'feature_nodes' | 'requirements' | 'manual_run' | 'release';
+    language: 'vi' | 'en';
+    content_hash: string;
+    created_at: string;
+    schema_version: number;
+    selected_ids: Array<string>;
+    sections: Array<'test_plan' | 'test_cases' | 'traceability' | 'execution'>;
+    payload: {
+        [key: string]: unknown;
+    };
+};
+
+/**
+ * Outcome of one report job. `report_id` is set only when `state` is `complete`; `failure_reason` only when it is `failed`.
+ */
+export type TestReportJobDto = {
+    job_id: string;
+    state: 'pending' | 'running' | 'retry' | 'failed' | 'complete';
+    report_id: string | null;
+    failure_reason: 'report_too_large' | 'build_failed' | null;
+};
+
+/**
  * One row of the manual-case list (13.1.1-T2 + 13.1.1-T4). The list projection carries no `description`, `precondition` or `steps`; the two coverage members are authoring coverage — the live catalog cases this manual case is linked to — and are not 03.1.4's execution coverage.
  */
 export type ManualCaseListItemDto = {
@@ -4623,6 +4690,16 @@ export type AuthoringRequirementId = string;
  * Requirement link id.
  */
 export type AuthoringRequirementLinkId = string;
+
+/**
+ * Published test report id.
+ */
+export type AuthoringReportId = string;
+
+/**
+ * Test report job id, the `job_id` of `createTestReport`.
+ */
+export type AuthoringReportJobId = string;
 
 /**
  * The `next_code` of the previous coverage page; absent for the first page.
@@ -15632,6 +15709,222 @@ export type UnlinkManualCaseResponses = {
 };
 
 export type UnlinkManualCaseResponse = UnlinkManualCaseResponses[keyof UnlinkManualCaseResponses];
+
+export type ListTestReportsData = {
+    body?: never;
+    path: {
+        p: string;
+    };
+    query?: {
+        /**
+         * Opaque cursor from `next_cursor`; the order is the one the route declares (`(position, id)` for tree and checklist pages, `(code, id)` for manual cases, 00 §9.1).
+         */
+        cursor?: string;
+        limit?: number;
+    };
+    url: '/projects/{p}/authoring/reports';
+};
+
+export type ListTestReportsErrors = {
+    /**
+     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type ListTestReportsError = ListTestReportsErrors[keyof ListTestReportsErrors];
+
+export type ListTestReportsResponses = {
+    /**
+     * Page of reports
+     */
+    200: TestReportListResponse;
+};
+
+export type ListTestReportsResponse = ListTestReportsResponses[keyof ListTestReportsResponses];
+
+export type CreateTestReportData = {
+    body: CreateTestReportRequest;
+    headers: {
+        /**
+         * Client-supplied, ≤ 128 chars, unique per `(org_id, project_id, operation)` ≥ 24 h (00 §7/§9.1).
+         */
+        'Idempotency-Key': string;
+        /**
+         * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
+         */
+        'X-XSRF-TOKEN'?: string;
+    };
+    path: {
+        p: string;
+    };
+    query?: never;
+    url: '/projects/{p}/authoring/reports';
+};
+
+export type CreateTestReportErrors = {
+    /**
+     * 400 request_invalid — a malformed or missing request header, e.g. the `Idempotency-Key` every mutating authoring route requires (00 §9.1)
+     */
+    400: ErrorEnvelope;
+    /**
+     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 409 conflict — e.g. `idempotency_conflict`, `run_closed` (00 §9.1/§9.2)
+     */
+    409: ErrorEnvelope;
+    /**
+     * 413 too large (00 §9.2): a request body over its published cap. For the caps that carry numbers (`manifest_bytes`, `run_body_bytes`, and the raw-report byte cap behind `report_bytes`) the one detail names the cap in `path` and carries `limit` and `actual`; `actual` is the declared length when the declaration alone was over, otherwise the bytes counted when the overrun was seen, so a missing or short `Content-Length` never hides it.
+     */
+    413: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type CreateTestReportError = CreateTestReportErrors[keyof CreateTestReportErrors];
+
+export type CreateTestReportResponses = {
+    /**
+     * The reserved job; poll `getTestReportJob` for the outcome
+     */
+    202: TestReportJobAcceptedDto;
+};
+
+export type CreateTestReportResponse = CreateTestReportResponses[keyof CreateTestReportResponses];
+
+export type GetTestReportData = {
+    body?: never;
+    path: {
+        p: string;
+        /**
+         * Published test report id.
+         */
+        r: string;
+    };
+    query?: never;
+    url: '/projects/{p}/authoring/reports/{r}';
+};
+
+export type GetTestReportErrors = {
+    /**
+     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type GetTestReportError = GetTestReportErrors[keyof GetTestReportErrors];
+
+export type GetTestReportResponses = {
+    /**
+     * The report
+     */
+    200: TestReportDetailDto;
+};
+
+export type GetTestReportResponse = GetTestReportResponses[keyof GetTestReportResponses];
+
+export type GetTestReportJobData = {
+    body?: never;
+    path: {
+        p: string;
+        /**
+         * Test report job id, the `job_id` of `createTestReport`.
+         */
+        j: string;
+    };
+    query?: never;
+    url: '/projects/{p}/authoring/reports/jobs/{j}';
+};
+
+export type GetTestReportJobErrors = {
+    /**
+     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type GetTestReportJobError = GetTestReportJobErrors[keyof GetTestReportJobErrors];
+
+export type GetTestReportJobResponses = {
+    /**
+     * The job outcome
+     */
+    200: TestReportJobDto;
+};
+
+export type GetTestReportJobResponse = GetTestReportJobResponses[keyof GetTestReportJobResponses];
 
 export type ListAuthoringVersionsData = {
     body?: never;
