@@ -45,6 +45,8 @@ internal sealed record RequirementPlan(IReadOnlyList<RequirementPlannedRow> Rows
 /// </remarks>
 internal sealed class RequirementImportPlanner(ITenantDb db)
 {
+    private static readonly IReadOnlyList<RequirementImportSql.StoredRequirement> NoCandidates = [];
+
     /// <summary>Resolves every row, or collects the reasons the file is refused.</summary>
     /// <param name="orgId">The tenant.</param>
     /// <param name="projectId">The project.</param>
@@ -88,7 +90,7 @@ internal sealed class RequirementImportPlanner(ITenantDb db)
 
         foreach (var row in rows.Where(row => row.FeatureNodeId is { } node && !liveSet.Contains(node)))
         {
-            ImportSchema.Add(issues, row.Source.Index, "/item_key", "unknown_feature_node");
+            ImportSchema.Add(issues, row.Source.IssueIndex, "/item_key", "unknown_feature_node");
         }
     }
 
@@ -118,8 +120,18 @@ internal sealed class RequirementImportPlanner(ITenantDb db)
         IReadOnlyList<RequirementImportSql.StoredRequirement> stored,
         List<ImportIssue> issues)
     {
-        var byReference = stored.Where(entry => entry.ExternalRef is not null).ToLookup(entry => entry.ExternalRef!, StringComparer.Ordinal);
-        var byTitle = stored.ToLookup(entry => entry.Title, StringComparer.Ordinal);
+        var byReference = new Dictionary<string, List<RequirementImportSql.StoredRequirement>>(StringComparer.Ordinal);
+        var byIdentity = new Dictionary<(string Title, string Kind, Guid? ParentId), List<RequirementImportSql.StoredRequirement>>();
+        foreach (var entry in stored)
+        {
+            if (entry.ExternalRef is { } reference)
+            {
+                Retain(byReference, reference, entry);
+            }
+
+            Retain(byIdentity, (entry.Title, entry.Kind, entry.ParentRequirementId), entry);
+        }
+
         var resolvedIds = new Dictionary<string, Guid?>(StringComparer.Ordinal);
         var claimed = new HashSet<Guid>();
         var planned = new List<RequirementPlannedRow>(rows.Count);
@@ -133,10 +145,10 @@ internal sealed class RequirementImportPlanner(ITenantDb db)
             }
 
             var parentIsNew = row.ParentKey is not null && parentId is null;
-            var candidates = Candidates(row, byReference, byTitle, parentId, parentIsNew);
+            var candidates = Candidates(row, byReference, byIdentity, parentId, parentIsNew);
             if (candidates.Count > 1 || (candidates.Count == 1 && !claimed.Add(candidates[0].Id)))
             {
-                ImportSchema.Add(issues, row.Source.Index, row.ExternalRef is null ? "/title" : "/code", "ambiguous_match");
+                ImportSchema.Add(issues, row.Source.IssueIndex, row.ExternalRef is null ? "/title" : "/code", "ambiguous_match");
                 resolvedIds[row.Source.Key] = null;
 
                 continue;
@@ -150,21 +162,38 @@ internal sealed class RequirementImportPlanner(ITenantDb db)
         return planned;
     }
 
-    private static List<RequirementImportSql.StoredRequirement> Candidates(
+    /// <summary>Keeps at most two stored requirements per key: one is a match, two already make the key ambiguous.</summary>
+    private static void Retain<TKey>(
+        Dictionary<TKey, List<RequirementImportSql.StoredRequirement>> index,
+        TKey key,
+        RequirementImportSql.StoredRequirement entry)
+        where TKey : notnull
+    {
+        if (!index.TryGetValue(key, out var kept))
+        {
+            kept = new List<RequirementImportSql.StoredRequirement>(2);
+            index[key] = kept;
+        }
+
+        if (kept.Count < 2)
+        {
+            kept.Add(entry);
+        }
+    }
+
+    private static IReadOnlyList<RequirementImportSql.StoredRequirement> Candidates(
         RequirementImportRow row,
-        ILookup<string, RequirementImportSql.StoredRequirement> byReference,
-        ILookup<string, RequirementImportSql.StoredRequirement> byTitle,
+        Dictionary<string, List<RequirementImportSql.StoredRequirement>> byReference,
+        Dictionary<(string Title, string Kind, Guid? ParentId), List<RequirementImportSql.StoredRequirement>> byIdentity,
         Guid? parentId,
         bool parentIsNew)
     {
         if (row.ExternalRef is { } reference)
         {
-            return [.. byReference[reference]];
+            return byReference.TryGetValue(reference, out var named) ? named : NoCandidates;
         }
 
-        return parentIsNew
-            ? []
-            : [.. byTitle[row.Title].Where(entry => entry.Kind == row.Kind && entry.ParentRequirementId == parentId)];
+        return !parentIsNew && byIdentity.TryGetValue((row.Title, row.Kind, parentId), out var same) ? same : NoCandidates;
     }
 
     private static RequirementPlannedRow Plan(

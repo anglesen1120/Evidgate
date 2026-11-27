@@ -36,6 +36,7 @@ internal sealed class MarkdownScanner
     private int _fenceLength;
     private string _fenceOpening = string.Empty;
     private string _fenceInfo = string.Empty;
+    private bool _docString;
 
     /// <summary>True once the file holds more rows than <see cref="ImportLimits.MaxDataRows"/>.</summary>
     internal bool TooLarge => _rows.Count > ImportLimits.MaxDataRows;
@@ -153,7 +154,7 @@ internal sealed class MarkdownScanner
         }
 
         _storyIndex = _rows.Count;
-        _rows.Add(NewRow(_storyKey, null, "user_story", title, null));
+        _rows.Add(NewRow(_storyKey, null, "user_story", title, null, number));
     }
 
     private void EndStoryBody()
@@ -263,9 +264,26 @@ internal sealed class MarkdownScanner
 
     private void FeedRun(string line, int number)
     {
-        if (MarkdownLines.IsStep(line))
+        // A docstring is step argument text: its blank lines and any line inside belong to the criterion verbatim.
+        if (_docString)
         {
             _block.Add(line);
+            _docString = !MarkdownLines.ClosesDocString(line);
+
+            return;
+        }
+
+        if (MarkdownLines.IsStep(line) || MarkdownLines.IsTableRow(line))
+        {
+            _block.Add(line);
+
+            return;
+        }
+
+        if (MarkdownLines.OpensDocString(line))
+        {
+            _block.Add(line);
+            _docString = true;
 
             return;
         }
@@ -358,6 +376,7 @@ internal sealed class MarkdownScanner
         _mode = mode;
         _block.Clear();
         _blockLine = number;
+        _docString = false;
         _orphan = _storyKey is null;
         if (_orphan)
         {
@@ -387,10 +406,10 @@ internal sealed class MarkdownScanner
 
         _criteria++;
         var key = "a" + _criteria.ToString(System.Globalization.CultureInfo.InvariantCulture);
-        _rows.Add(NewRow(key, _storyKey, "acceptance_criterion", title, normalized));
+        _rows.Add(NewRow(key, _storyKey, "acceptance_criterion", title, normalized, number));
     }
 
-    private ImportRow NewRow(string key, string? parent, string kind, string title, string? body) => new(
+    private ImportRow NewRow(string key, string? parent, string kind, string title, string? body, int sourceLine) => new(
         _rows.Count + 1,
         ImportRowKind.Requirement,
         key,
@@ -404,7 +423,8 @@ internal sealed class MarkdownScanner
         null,
         null,
         null,
-        null);
+        null,
+        sourceLine);
 
     /// <summary>The lines joined with <c>\n</c>, without the blank lines at either end.</summary>
     private static string Joined(List<string> lines)

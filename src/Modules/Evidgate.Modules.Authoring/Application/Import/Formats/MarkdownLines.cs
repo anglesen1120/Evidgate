@@ -146,6 +146,28 @@ internal static class MarkdownLines
     /// <param name="line">The line.</param>
     internal static bool IsStep(string line) => StartsWithKeyword(line, StepKeywords, requireWordEnd: true);
 
+    /// <summary>True for a Gherkin data-table row: a <c>|</c> after optional indentation.</summary>
+    /// <param name="line">The line.</param>
+    internal static bool IsTableRow(string line)
+    {
+        Indent(line, out var start);
+
+        return start < line.Length && line[start] == '|';
+    }
+
+    /// <summary>True when the line opens a Gherkin docstring: <c>"""</c> after optional indentation, then an optional content type.</summary>
+    /// <param name="line">The line.</param>
+    internal static bool OpensDocString(string line)
+    {
+        Indent(line, out var start);
+
+        return string.CompareOrdinal(line, start, "\"\"\"", 0, 3) == 0;
+    }
+
+    /// <summary>True when the line closes a docstring: <c>"""</c> alone between optional spaces and tabs.</summary>
+    /// <param name="line">The line.</param>
+    internal static bool ClosesDocString(string line) => line.AsSpan().Trim(" \t").SequenceEqual("\"\"\"");
+
     /// <summary>True when the text opens a Gherkin document or step: Feature, Scenario, Given, When or Then.</summary>
     /// <param name="line">The first non-blank line of a fenced block.</param>
     internal static bool IsGherkinOpening(string line) => StartsWithKeyword(line, FenceKeywords, requireWordEnd: false);

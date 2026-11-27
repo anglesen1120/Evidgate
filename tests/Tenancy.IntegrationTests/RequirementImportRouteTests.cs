@@ -1,7 +1,9 @@
+using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
 using Evidgate.Modules.Authoring.Application.Import.Formats;
+using Npgsql;
 using Shouldly;
 using Xunit;
 using static Tenancy.IntegrationTests.AuthoringImportCalls;
@@ -97,6 +99,73 @@ public sealed class RequirementImportRouteTests : IClassFixture<TenancyHostPool>
         (await _fixture.ScalarAsync<int>(
             world.Database,
             $"select count(*)::int from public.requirement where org_id = '{world.Org:D}'")).ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task Import_ConcurrentSameFileWithDifferentKeys_CreatesOneRequirementPerReference()
+    {
+        await using var world = await StartAsync();
+        using var csv = new MemoryStream();
+        await CsvFormat.WriteAsync(
+            [
+                RequirementSample.Row(1, "s1", null, "user_story", "Checkout", code: "REQ-1"),
+                RequirementSample.Row(2, "s2", null, "user_story", "Shipping", code: "REQ-2"),
+            ],
+            csv,
+            TestContext.Current.CancellationToken);
+        var body = csv.ToArray();
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var connection = new NpgsqlConnection(_fixture.AppConnectionString(world.Database));
+        await connection.OpenAsync(cancellationToken);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+        await using var guard = new NpgsqlCommand(
+            "select pg_advisory_xact_lock(hashtextextended(@key, 0))", connection, transaction);
+        guard.Parameters.AddWithValue("key", $"requirement_import:{world.Org:D}:{world.Project:D}");
+        await guard.ExecuteNonQueryAsync(cancellationToken);
+        await using var pid = new NpgsqlCommand("select pg_backend_pid()", connection, transaction);
+        var blockerPid = (int)(await pid.ExecuteScalarAsync(cancellationToken))!;
+        Task<ImportAnswer> first;
+        Task<ImportAnswer> second;
+        using (ExecutionContext.SuppressFlow())
+        {
+            first = Task.Run(() => ImportAsync(
+                world.Client, world.As, world.Project, "csv", body, idempotencyKey: Guid.CreateVersion7().ToString("N")));
+            second = Task.Run(() => ImportAsync(
+                world.Client, world.As, world.Project, "csv", body, idempotencyKey: Guid.CreateVersion7().ToString("N")));
+        }
+
+        await WaitForImportWaitersAsync(world, blockerPid, first, second);
+        await transaction.CommitAsync(cancellationToken);
+        var answers = await Task.WhenAll(first, second);
+
+        answers.ShouldAllBe(answer => answer.Status == HttpStatusCode.OK);
+        answers.Sum(answer => answer.Count("created")).ShouldBe(2);
+        answers.Sum(answer => answer.Count("unchanged")).ShouldBe(2);
+        (await _fixture.ColumnAsync<string>(
+            world.Database,
+            $"select external_ref || '|' || count(*) from public.requirement where org_id = '{world.Org:D}' "
+                + "group by external_ref order by external_ref")).ShouldBe(["REQ-1|1", "REQ-2|1"]);
+    }
+
+    private async Task WaitForImportWaitersAsync(World world, int blockerPid, Task first, Task second)
+    {
+        var elapsed = Stopwatch.StartNew();
+        while (elapsed.Elapsed < TimeSpan.FromSeconds(4))
+        {
+            first.IsCompleted.ShouldBeFalse("the first import must wait for the project import lock");
+            second.IsCompleted.ShouldBeFalse("the second import must wait for the project import lock");
+            var waiting = await _fixture.ScalarAsync<int>(
+                world.Database,
+                $"select count(*)::int from pg_stat_activity where {blockerPid} = any(pg_blocking_pids(pid))");
+            if (waiting >= 2)
+            {
+                return;
+            }
+
+            await Task.Delay(25, TestContext.Current.CancellationToken);
+        }
+
+        throw new TimeoutException("both imports must overlap while waiting for the project import lock");
     }
 
     [Fact]

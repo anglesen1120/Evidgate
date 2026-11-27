@@ -1,5 +1,6 @@
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
+using Evidgate.Modules.Authoring.Infrastructure.Persistence;
 
 namespace Evidgate.Modules.Authoring.Application.Import;
 
@@ -13,6 +14,10 @@ namespace Evidgate.Modules.Authoring.Application.Import;
 /// writes then go through <see cref="RequirementWriter"/>, the one path that checks identity shape, references and the
 /// body cap and appends a version. Only a changed row is written: re-importing a file appends no version and writes no
 /// audit row (the report carries no batch id then).
+/// </para>
+/// <para>
+/// Applying imports of one project run one after the other: the project's advisory lock is taken before the plan is read
+/// and held until the scope commits, so a second file resolves against what the first wrote. A dry run takes no lock.
 /// </para>
 /// <para>
 /// The writer costs a few statements per row. That is accepted for the 5 000-row cap rather than a second write path
@@ -48,6 +53,11 @@ internal sealed class RequirementImporter(ITenantDb db, RequirementWriter writer
             return AuthoringImporter.Refusal(issues);
         }
 
+        if (!dryRun)
+        {
+            await LockProjectAsync(orgId, projectId, cancellationToken).ConfigureAwait(false);
+        }
+
         var plan = await planner.PlanAsync(orgId, projectId, accepted, cancellationToken).ConfigureAwait(false);
         if (!plan.IsAccepted)
         {
@@ -64,6 +74,16 @@ internal sealed class RequirementImporter(ITenantDb db, RequirementWriter writer
         return failure is null
             ? Result.Success(Report(Guid.CreateVersion7(), plan.Rows))
             : AuthoringErrors.Fail<ImportReport>(failure);
+    }
+
+    /// <summary>Bounds the wait, then takes the project's import lock; a timeout answers the retryable 503 of the caller.</summary>
+    private async Task LockProjectAsync(Guid orgId, Guid projectId, CancellationToken cancellationToken)
+    {
+        await AuthoringLockGuard.SetLockTimeoutAsync(db, cancellationToken).ConfigureAwait(false);
+        await db.ExecuteAsync(
+            RequirementImportSql.LockProject,
+            new { lock_key = $"requirement_import:{orgId:D}:{projectId:D}" },
+            cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>Writes the changed rows in file order, so a parent exists before its children; the first failure stops the batch.</summary>

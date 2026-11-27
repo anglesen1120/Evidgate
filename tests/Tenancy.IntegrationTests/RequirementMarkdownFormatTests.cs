@@ -35,6 +35,49 @@ public sealed class RequirementMarkdownFormatTests
     }
 
     [Fact]
+    public void Read_UnfencedGherkinTable_PreservesOneVerbatimCriterion()
+    {
+        const string block = "Given a cart\n  | item | quantity |\n  | book | 2 |\nWhen I pay\nThen it completes";
+        var parsed = Read("# Checkout\n" + block);
+
+        parsed.IsSuccess.ShouldBeTrue();
+        parsed.Rows.Count.ShouldBe(2);
+        parsed.Rows[1].Description.ShouldBe(block);
+    }
+
+    [Fact]
+    public void Read_UnfencedGherkinDocstringWithBlankLine_PreservesOneVerbatimCriterion()
+    {
+        const string block = "Given a message\n  \"\"\"text/plain\n  first\n\n  second\n  \"\"\"\nWhen I send it\nThen it arrives";
+        var parsed = Read("# Messaging\n" + block);
+
+        parsed.IsSuccess.ShouldBeTrue();
+        parsed.Rows.Count.ShouldBe(2);
+        parsed.Rows[1].Description.ShouldBe(block);
+    }
+
+    [Fact]
+    public void Read_BlankLineAfterUnfencedGherkin_EndsCriterion()
+    {
+        var parsed = Read("# Checkout\nGiven a cart\n\nWhen I pay\nThen it completes");
+
+        parsed.IsSuccess.ShouldBeTrue();
+        parsed.Rows.Count.ShouldBe(3);
+        parsed.Rows[1].Description.ShouldBe("Given a cart");
+        parsed.Rows[2].Description.ShouldBe("When I pay\nThen it completes");
+    }
+
+    [Fact]
+    public void Read_LeadingBlankLines_KeepsSourceLinesSeparateFromOrdinals()
+    {
+        var parsed = Read("\n\n# Story\n\n- Criterion");
+
+        parsed.IsSuccess.ShouldBeTrue();
+        parsed.Rows.Select(row => row.Index).ShouldBe([1, 2]);
+        parsed.Rows.Select(row => row.SourceLine).ShouldBe([3, 5]);
+    }
+
+    [Fact]
     public void Read_NestedItemsAndFencedContinuation_PreservesItemBoundaries()
     {
         var parsed = Read("# Story\n- Parent\n  ```gherkin\n  Given one\n  Then two\n  ```\n  - Child\n    continuation");

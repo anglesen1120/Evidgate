@@ -91,7 +91,7 @@ public sealed class RequirementImportRowsUnitTests
         ];
 
         RequirementImportValidator.MixedFamily(rows).ShouldBe(new ImportIssue(3, "/kind", "value_invalid"));
-        RequirementImportValidator.MixedFamily([rows[2], rows[0]]).ShouldBe(new ImportIssue(2, "/kind", "value_invalid"));
+        RequirementImportValidator.MixedFamily([rows[2], rows[0]]).ShouldBe(new ImportIssue(1, "/kind", "value_invalid"));
         RequirementImportValidator.MixedFamily(rows[..2]).ShouldBeNull();
         RequirementImportValidator.MixedFamily(rows[2..]).ShouldBeNull();
     }
@@ -125,6 +125,24 @@ public sealed class RequirementImportRowsUnitTests
             .ShouldBe([new ImportIssue(1, "/description", "length")]);
         RequirementImportValidator.Validate([RequirementSample.Row(1, "s1", null, Story, "T", decomposed + "e")]).Issues
             .ShouldBe([new ImportIssue(1, "/description", "length")]);
+    }
+
+    [Fact]
+    public void Validate_MarkdownRowRefusals_UseSourceLineInsteadOfOrdinal()
+    {
+        var parsed = MarkdownFormat.Read(Utf8("\n\n# Story\n- Criterion"));
+        parsed.IsSuccess.ShouldBeTrue();
+        var row = parsed.Rows[1] with { Title = " ", ItemKey = "not-a-guid", Precondition = "forbidden" };
+
+        var validated = RequirementImportValidator.Validate([parsed.Rows[0], row]);
+
+        validated.Issues.ShouldBe(
+        [
+            new ImportIssue(4, "/precondition", "value_invalid"),
+            new ImportIssue(4, "/title", "value_invalid"),
+            new ImportIssue(4, "/item_key", "value_invalid"),
+        ]);
+        row.Index.ShouldBe(2);
     }
 
     [Fact]

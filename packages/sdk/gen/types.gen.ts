@@ -3399,7 +3399,7 @@ export type ImportCountsDto = {
 export type ImportRowDto = {
     index: number;
     key: string;
-    kind: 'node' | 'item' | 'case';
+    kind: 'node' | 'item' | 'case' | 'requirement';
     outcome: 'create' | 'update' | 'restore' | 'unchanged';
     code: string | null;
 };
@@ -4683,6 +4683,11 @@ export type AuthoringInclude = string;
  * The file format of route 25: `csv`, `json` or `xlsx`. An absent or unknown value is 422 `request_invalid` with `details[].path = /format` and reason `unsupported_format` (13.1.1-T5).
  */
 export type AuthoringFormat = 'csv' | 'json' | 'xlsx';
+
+/**
+ * The file format of the import route: `csv`, `json`, `xlsx` or `markdown` (requirement rows only). An absent or unknown value is 422 `request_invalid` with `details[].path = /format` and reason `unsupported_format`. The export route does not accept `markdown`.
+ */
+export type AuthoringImportFormat = 'csv' | 'json' | 'xlsx' | 'markdown';
 
 /**
  * `true` answers the import report without writing anything — no version row, no code allocation, no audit row (13.1.1 AC13).
@@ -15838,9 +15843,9 @@ export type ImportAuthoringData = {
     };
     query: {
         /**
-         * The file format of route 25: `csv`, `json` or `xlsx`. An absent or unknown value is 422 `request_invalid` with `details[].path = /format` and reason `unsupported_format` (13.1.1-T5).
+         * The file format of the import route: `csv`, `json`, `xlsx` or `markdown` (requirement rows only). An absent or unknown value is 422 `request_invalid` with `details[].path = /format` and reason `unsupported_format`. The export route does not accept `markdown`.
          */
-        format: 'csv' | 'json' | 'xlsx';
+        format: 'csv' | 'json' | 'xlsx' | 'markdown';
         /**
          * `true` answers the import report without writing anything — no version row, no code allocation, no audit row (13.1.1 AC13).
          */

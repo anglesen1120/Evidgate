@@ -8,6 +8,12 @@ namespace Evidgate.Modules.Authoring.Infrastructure.Persistence;
 internal static class RequirementImportSql
 {
     /// <summary>
+    /// The transaction-scoped advisory lock that serialises the applying imports of one project, so two files resolved
+    /// against the same stored rows cannot both create what neither found. The key is one bound text, built in C#.
+    /// </summary>
+    internal const string LockProject = "select pg_advisory_xact_lock(hashtextextended(@lock_key, 0))";
+
+    /// <summary>
     /// The live requirements of the project a file's rows can match: by external reference, or by title (the kind and the
     /// parent are compared in memory, where the file's own new parents are known). The head hash is joined so an
     /// unchanged body is recognised without reading a body.

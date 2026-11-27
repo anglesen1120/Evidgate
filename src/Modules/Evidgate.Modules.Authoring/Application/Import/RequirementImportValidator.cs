@@ -84,17 +84,17 @@ internal static class RequirementImportValidator
     {
         if (row.ParentKey is { } parent && !keys.Contains(parent))
         {
-            ImportSchema.Add(issues, row.Index, "/parent_key", "unknown_parent");
+            ImportSchema.Add(issues, row.IssueIndex, "/parent_key", "unknown_parent");
         }
 
         if (!keys.Add(row.Key))
         {
-            ImportSchema.Add(issues, row.Index, "/key", "duplicate_key");
+            ImportSchema.Add(issues, row.IssueIndex, "/key", "duplicate_key");
         }
 
         if (row.Code is not null && !codes.Add(row.Code))
         {
-            ImportSchema.Add(issues, row.Index, "/code", "duplicate_key");
+            ImportSchema.Add(issues, row.IssueIndex, "/code", "duplicate_key");
         }
     }
 
@@ -105,7 +105,7 @@ internal static class RequirementImportValidator
 
         if (!RequirementRules.IsKind(row.NodeKind))
         {
-            ImportSchema.Add(issues, row.Index, "/node_kind", "value_invalid");
+            ImportSchema.Add(issues, row.IssueIndex, "/node_kind", "value_invalid");
         }
 
         var title = Title(row, issues);
@@ -113,7 +113,7 @@ internal static class RequirementImportValidator
 
         if (row.Code is not null && !RequirementRules.IsExternalRef(row.Code))
         {
-            ImportSchema.Add(issues, row.Index, "/code", "value_invalid");
+            ImportSchema.Add(issues, row.IssueIndex, "/code", "value_invalid");
         }
 
         Guid? feature = null;
@@ -125,7 +125,7 @@ internal static class RequirementImportValidator
             }
             else
             {
-                ImportSchema.Add(issues, row.Index, "/item_key", "value_invalid");
+                ImportSchema.Add(issues, row.IssueIndex, "/item_key", "value_invalid");
             }
         }
 
@@ -150,7 +150,7 @@ internal static class RequirementImportValidator
         {
             if (value is not null)
             {
-                ImportSchema.Add(issues, row.Index, path, "value_invalid");
+                ImportSchema.Add(issues, row.IssueIndex, path, "value_invalid");
             }
         }
     }
@@ -160,11 +160,11 @@ internal static class RequirementImportValidator
         var title = ImportText.Normalise(row.Title, out var invalid)?.Trim() ?? string.Empty;
         if (invalid)
         {
-            ImportSchema.Add(issues, row.Index, "/title", "invalid_text");
+            ImportSchema.Add(issues, row.IssueIndex, "/title", "invalid_text");
         }
         else if (title.Length == 0 || !AuthoringText.Fits(title, RequirementRules.MaximumTitleCodePoints))
         {
-            ImportSchema.Add(issues, row.Index, "/title", "value_invalid");
+            ImportSchema.Add(issues, row.IssueIndex, "/title", "value_invalid");
         }
 
         return title;
@@ -176,14 +176,14 @@ internal static class RequirementImportValidator
         var composed = ImportText.Normalise(row.Description, out var invalid) ?? string.Empty;
         if (invalid)
         {
-            ImportSchema.Add(issues, row.Index, "/description", "invalid_text");
+            ImportSchema.Add(issues, row.IssueIndex, "/description", "invalid_text");
 
             return string.Empty;
         }
 
         if (!RequirementRules.TryNormalizeBody(composed, out var normalized))
         {
-            ImportSchema.Add(issues, row.Index, "/description", "length");
+            ImportSchema.Add(issues, row.IssueIndex, "/description", "length");
 
             return string.Empty;
         }

@@ -39,6 +39,7 @@ internal enum ImportRowKind
 /// <param name="State">Item or case state as stored (draft/active/retired, draft/approved/retired); null means the creation default.</param>
 /// <param name="Code">Case code (<c>PREFIX-NNN</c>); null/empty on a new case means "allocate one".</param>
 /// <param name="Position">Sibling position; null means append.</param>
+/// <param name="SourceLine">Markdown only: the 1-based source line of the construct the row came from; null for every other format.</param>
 internal sealed record ImportRow(
     int Index,
     ImportRowKind Kind,
@@ -53,7 +54,12 @@ internal sealed record ImportRow(
     string? Priority,
     string? State,
     string? Code,
-    int? Position);
+    int? Position,
+    int? SourceLine = null)
+{
+    /// <summary>The position a refusal of this row reports: the source line when the reader kept one, else the data-row index.</summary>
+    internal int IssueIndex => SourceLine ?? Index;
+}
 
 /// <summary>One refusal found while reading or validating a file: becomes one <c>details[]</c> entry (00 §9.2, AC13/AC16).</summary>
 /// <param name="Index">The 1-based data-row position, or null for a file-level reason (zip caps, unsupported format).</param>

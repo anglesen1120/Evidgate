@@ -1,7 +1,9 @@
+using System.Text;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.Modules.Authoring.Application;
 using Evidgate.Modules.Authoring.Application.Import;
+using Evidgate.Modules.Authoring.Application.Import.Formats;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
 using Xunit;
@@ -179,6 +181,54 @@ public sealed class RequirementImporterTests
         again.IsSuccess.ShouldBeFalse();
         again.Error!.Details.ShouldBe([new Evidgate.BuildingBlocks.SharedKernel.Api.ErrorDetail("/title", "ambiguous_match", 1)]);
         (await Scalar<int>(world, "select count(*)::int from public.requirement_version")).ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task Import_MarkdownAmbiguousTitle_ReportsHeadingSourceLine()
+    {
+        await using var world = await StartAsync();
+        (await ImportAsync(
+            world,
+            world.Project,
+            [
+                RequirementSample.Row(1, "s1", null, "user_story", "Twin", "one"),
+                RequirementSample.Row(2, "s2", null, "user_story", "Twin", "two"),
+            ])).IsSuccess.ShouldBeTrue();
+        var parsed = MarkdownFormat.Read(Encoding.UTF8.GetBytes("\n\n# Twin\n- Criterion"));
+        parsed.IsSuccess.ShouldBeTrue();
+
+        var result = await ImportAsync(world, world.Project, parsed.Rows);
+
+        result.IsSuccess.ShouldBeFalse();
+        result.Error!.Details.ShouldBe([new Evidgate.BuildingBlocks.SharedKernel.Api.ErrorDetail("/title", "ambiguous_match", 3)]);
+        (await Scalar<int>(world, "select count(*)::int from public.requirement_version")).ShouldBe(2);
+
+        var unique = MarkdownFormat.Read(Encoding.UTF8.GetBytes("\n\n# Unique\n- Criterion"));
+        var accepted = await ImportAsync(world, world.Project, unique.Rows);
+        accepted.IsSuccess.ShouldBeTrue();
+        accepted.Value.Rows.Select(row => row.Index).ShouldBe([1, 2]);
+    }
+
+    [Fact]
+    public async Task Import_SameTitleUnderDifferentParentsOrKinds_ResolvesEachIdentity()
+    {
+        await using var world = await StartAsync();
+        ImportRow[] rows =
+        [
+            RequirementSample.Row(1, "s1", null, "user_story", "First"),
+            RequirementSample.Row(2, "a1", "s1", "acceptance_criterion", "Shared"),
+            RequirementSample.Row(3, "s2", null, "user_story", "Second"),
+            RequirementSample.Row(4, "a2", "s2", "acceptance_criterion", "Shared"),
+            RequirementSample.Row(5, "s3", null, "user_story", "Shared"),
+            RequirementSample.Row(6, "e1", null, "epic", "Shared"),
+        ];
+        (await ImportAsync(world, world.Project, rows)).IsSuccess.ShouldBeTrue();
+
+        var again = await ImportAsync(world, world.Project, rows);
+
+        again.IsSuccess.ShouldBeTrue();
+        again.Value.Counts.ShouldBe(new ImportCounts(0, 0, 0, 6));
+        (await Scalar<int>(world, "select count(*)::int from public.requirement_version")).ShouldBe(6);
     }
 
     [Fact]
