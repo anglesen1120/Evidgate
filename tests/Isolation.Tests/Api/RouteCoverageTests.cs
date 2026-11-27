@@ -232,6 +232,7 @@ public sealed class RouteCoverageTests
         // The requirement intake pair: the record route is the generation gate, the read the authoring read.
         ("POST", "/v1/projects/{p}/authoring/intakes", "authoring:generate"),
         ("GET", "/v1/projects/{p}/authoring/intakes/{i}", "authoring:read"),
+        ("POST", "/v1/projects/{p}/authoring/intakes/{i}/spec-section", "authoring:write"),
     ];
 
     /// <summary>

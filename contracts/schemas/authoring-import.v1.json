@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "authoring-import.v1.json",
   "title": "Feature tree import document v1",
-  "description": "The import/export table of 13.1.1-T5 (route 25, AC13/AC14/AC15): one flat row set that carries the whole feature tree — nodes, their checklist items and each item's manual test cases — in a single document. The same table is what the CSV and XLSX readers produce and what every exporter writes, so the three formats validate against one contract; the CSV/XLSX column order is the CSV header (kind,key,parent_key,item_key,node_kind,title,description,precondition,steps,priority,state,code,position) and a JSON member of a row is that column name. Rows are ordered parent-first: a node's parent_key names a node row above it, an item's parent_key names its node, a case's item_key names its item. 'steps' is the stored {\"steps\":[…]} document of contracts/schemas/authoring-steps.v1.json, inlined here as $defs.steps because a row member is not a reference to another contract file: the two shapes must stay identical (1..100 steps, 2000 characters per field, closed members), which ContractSchemaRegistryTests.AuthoringImportSchema_IsDiscovered asserts field by field. Bounds: 1..5000 rows — the same 5000-row cap the route enforces with 413 payload_too_large (plan 13.1.1 §5 route 25, AC16) — a node title of 1..200 and an item/case title of 1..500 code points, a description and a precondition of at most 4000, and the priority/state/node_kind sets of plan 13.1.1 §4. No member is ever evaluated as a formula: the JSON format is never neutralised, because a JSON consumer does not evaluate cell text (AC16 covers CSV and XLSX only).",
+  "description": "The import/export table of 13.1.1-T5 (route 25, AC13/AC14/AC15): one flat row set that carries the whole feature tree — nodes, their checklist items and each item's manual test cases — in a single document. The same table is what the CSV and XLSX readers produce and what every exporter writes, so the three formats validate against one contract; the CSV/XLSX column order is the CSV header (kind,key,parent_key,item_key,node_kind,title,description,precondition,steps,priority,state,code,position) and a JSON member of a row is that column name. Rows are ordered parent-first: a node's parent_key names a node row above it, an item's parent_key names its node, a case's item_key names its item. 'steps' is the stored {\"steps\":[…]} document of contracts/schemas/authoring-steps.v1.json, inlined here as $defs.steps because a row member is not a reference to another contract file: the two shapes must stay identical (1..100 steps, 2000 characters per field, closed members), which ContractSchemaRegistryTests.AuthoringImportSchema_IsDiscovered asserts field by field. Bounds: 1..5000 rows — the same 5000-row cap the route enforces with 413 payload_too_large (plan 13.1.1 §5 route 25, AC16) — a node title of 1..200 and an item/case title of 1..500 code points, a description and a precondition of at most 4000, and the priority/state/node_kind sets of plan 13.1.1 §4. No member is ever evaluated as a formula: the JSON format is never neutralised, because a JSON consumer does not evaluate cell text (AC16 covers CSV and XLSX only). The same table also carries requirement rows (kind=requirement, see $defs.requirement): a file is either tree rows or requirement rows, never mixed, and requirements are imported only; the exporter never writes them.",
   "type": "object",
   "additionalProperties": false,
   "required": ["format", "version", "rows"],
@@ -25,7 +25,7 @@
         "required": ["kind"],
         "properties": {
           "kind": {
-            "enum": ["node", "item", "case"],
+            "enum": ["node", "item", "case", "requirement"],
             "description": "The row's kind, and the member every if/then branch below selects on. A row with any other value is refused here rather than by the branches, so an unknown kind is one refusal at this member."
           }
         },
@@ -41,6 +41,10 @@
           {
             "if": { "properties": { "kind": { "const": "case" } }, "required": ["kind"] },
             "then": { "$ref": "#/$defs/case" }
+          },
+          {
+            "if": { "properties": { "kind": { "const": "requirement" } }, "required": ["kind"] },
+            "then": { "$ref": "#/$defs/requirement" }
           }
         ]
       }
@@ -163,6 +167,45 @@
           "description": "The case code, which is how a re-import finds its row (AC15): present must carry the project's own case_prefix (the manual_test_case code CHECK), absent or empty means 'allocate a fresh number'. A code that matches a live case updates it, one that matches a soft-deleted case restores it, and one whose prefix is not this project's prefix is code_conflict."
         },
         "position": { "$ref": "#/$defs/position" }
+      }
+    },
+    "requirement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "key", "node_kind", "title"],
+      "description": "One requirement row (13.10.1): the same 13-column table maps kind=requirement, key = the row's file-local key, parent_key = the key of a requirement row ABOVE it (absent for a top-level requirement), node_kind = the requirement kind, title = the requirement title, description = the requirement body, item_key = an optional feature node id (a GUID of a live feature node of the same project) and code = an optional external reference label. precondition, steps, priority, state and position are not members of a requirement row, so a file that fills them is refused at that column. A file holds requirement rows or tree rows (node/item/case), never both.",
+      "properties": {
+        "kind": { "const": "requirement" },
+        "key": { "$ref": "#/$defs/key" },
+        "parent_key": {
+          "$ref": "#/$defs/key",
+          "description": "The key of a requirement row above this one, or absent for a top-level requirement."
+        },
+        "item_key": {
+          "$ref": "#/$defs/key",
+          "description": "Optional feature node id (a GUID, 36 characters) of a live feature node of the same project; the importer refuses any other value or a node of another project."
+        },
+        "node_kind": {
+          "enum": ["user_story", "acceptance_criterion", "epic", "spec_section", "other"],
+          "description": "The requirement kind, as stored."
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "description": "The requirement title, 1..200 code points."
+        },
+        "description": {
+          "type": "string",
+          "description": "The requirement body, optional. At most 20000 code points AFTER NFC composition, which the importer enforces (a schema length would count the decomposed form), and at most 64 KiB per CSV/XLSX cell."
+        },
+        "code": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9._:/#-]+$",
+          "description": "Optional external reference label (letters, digits and . _ : / # -, 1..128 characters), which is how a re-import finds a requirement it already stored."
+        }
       }
     },
     "steps": {

@@ -7497,6 +7497,70 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '503':
           $ref: '#/components/responses/Unavailable'
+  /projects/{p}/authoring/intakes/{i}/spec-section:
+    post:
+      operationId: saveAuthoringIntakeSpecSection
+      tags: [authoring]
+      summary: Save a selection of a ready intake's extracted text as a spec_section requirement
+      description: >-
+        `authoring:write`. Records the code points `[start, end)` of the intake's extracted text as the
+        first version of a new `spec_section` requirement with `source = import`; an absent `start` is
+        0 and an absent `end` is the end of the text, so omitting both selects the whole text (`title` is always required). Offsets
+        count code points, the unit `extracted_char_count` reports. The selection is NFC-normalised
+        and must fit the 20 000 code-point requirement body. The intake must be `ready` with extracted
+        text: any other state (an image intake has none) is 409 `invalid_transition`. A range outside
+        the text is 422 `request_invalid` (`details[].reason` `range_invalid` at `/start` or `/end`), a
+        selection of only whitespace `empty_selection`, a selection over the body cap `length` at
+        `/end`. The optional `parent_requirement_id` and `feature_node_id` must name live rows of the
+        same project, else 422 with that member's path and reason `not_found`. Unknown, another
+        tenant's or another project's intake is 404 `not_found` with the body a random id gets. An
+        unknown member is 422, a missing
+        `Idempotency-Key` 400 `request_invalid`, and a replay answers the stored 201 with no second
+        version or audit row. No model is called. A lock timeout is 503 `unavailable` with
+        `Retry-After`.
+      x-permission: authoring:write
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/AuthoringIntakeId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SaveSpecSectionRequest'
+      responses:
+        '201':
+          description: 'The requirement id, its first version and `ETag: "<version>"`'
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequirementWriteResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/TooLarge'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
   /projects/{p}/authoring/tree:
     get:
       operationId: listAuthoringTree
@@ -9762,7 +9826,7 @@ paths:
     post:
       operationId: importAuthoring
       tags: [authoring]
-      summary: Import a feature tree from a CSV, XLSX or JSON file as one batch (13.1.1-T5)
+      summary: Import a feature tree or requirements from a CSV, XLSX, JSON or Markdown file as one batch
       description: >-
         13.1.1 §5 route 25 (`authoring:write`). The request body is the file itself and the
         required `format` query names it: `text/csv` (also accepted as `text/csv; charset=utf-8`; UTF-8, RFC 4180, the header being the
@@ -9801,12 +9865,20 @@ paths:
         replays the stored report without a second audit row, a different file under that key is 409
         `idempotency_conflict`. Another tenant's project is 404 `not_found`, a credential scoped to a
         sibling project 403 `project_scope_mismatch`, a lock timeout 503 `unavailable` with
-        `Retry-After`.
+        `Retry-After`. REQUIREMENT ROWS (13.10.1): a row with `kind = requirement` imports a user story,
+        acceptance criterion, epic, spec section or other requirement (`node_kind` is the requirement
+        kind, `description` the body of at most 20 000 code points after NFC, `item_key` an optional
+        feature node id of the same project, `code` an optional external reference, `parent_key` the key
+        of a requirement row above it). A file holds tree rows or requirement rows, never both. A
+        re-import matches a live requirement by `code`, else by kind, title and parent, and an
+        unchanged row writes no version. `format=markdown` (import only) reads a heading as a
+        `user_story`, a list item as an `acceptance_criterion` and a Given/When/Then block as one
+        criterion; its refusals carry the 1-based SOURCE LINE as `index`.
       x-permission: authoring:write
       x-version: v1
       parameters:
         - $ref: '#/components/parameters/ProjectId'
-        - $ref: '#/components/parameters/AuthoringFormat'
+        - $ref: '#/components/parameters/AuthoringImportFormat'
         - $ref: '#/components/parameters/AuthoringDryRun'
         - $ref: '#/components/parameters/IdempotencyKey'
         - $ref: '#/components/parameters/XsrfToken'
@@ -9814,6 +9886,10 @@ paths:
         required: true
         content:
           text/csv:
+            schema:
+              type: string
+              format: binary
+          text/markdown:
             schema:
               type: string
               format: binary
@@ -11203,6 +11279,17 @@ components:
       schema:
         type: string
         enum: [csv, json, xlsx]
+    AuthoringImportFormat:
+      name: format
+      in: query
+      required: true
+      description: >-
+        The file format of the import route: `csv`, `json`, `xlsx` or `markdown` (requirement rows
+        only). An absent or unknown value is 422 `request_invalid` with `details[].path = /format`
+        and reason `unsupported_format`. The export route does not accept `markdown`.
+      schema:
+        type: string
+        enum: [csv, json, xlsx, markdown]
     AuthoringDryRun:
       name: dry_run
       in: query
@@ -15867,6 +15954,23 @@ components:
         external_ref: { type: [string, 'null'], maxLength: 128 }
         feature_node_id: { type: [string, 'null'], format: uuid }
         parent_requirement_id: { type: [string, 'null'], format: uuid }
+    SaveSpecSectionRequest:
+      type: object
+      description: >-
+        Body of `saveAuthoringIntakeSpecSection`. `start` and `end` are code-point offsets into the
+        intake's extracted text (`start` inclusive, `end` exclusive); an absent member means the
+        start or the end of the text. `external_ref` is a label of the catalog reference alphabet,
+        never a tracker key.
+      additionalProperties: false
+      required: [title]
+      properties:
+        title: { type: string, minLength: 1, maxLength: 200 }
+        start: { type: integer, format: int32 }
+        end: { type: integer, format: int32 }
+        reason: { type: [string, 'null'], minLength: 1, maxLength: 500 }
+        external_ref: { type: [string, 'null'], maxLength: 128 }
+        feature_node_id: { type: [string, 'null'], format: uuid }
+        parent_requirement_id: { type: [string, 'null'], format: uuid }
     UpdateRequirementRequest:
       type: object
       description: >-
@@ -16959,7 +17063,7 @@ components:
       properties:
         index: { type: integer, minimum: 1 }
         key: { type: string, minLength: 1, maxLength: 64 }
-        kind: { type: string, enum: [node, item, case] }
+        kind: { type: string, enum: [node, item, case, requirement] }
         outcome: { type: string, enum: [create, update, restore, unchanged] }
         code: { type: [string, 'null'] }
     AiSettingsTemplateRef:

@@ -78,6 +78,8 @@ public sealed class PolicyPermissionContractTests
         // The requirement intake pair: recording one spends the generation gate, reading it is an authoring read.
         ("Authoring", "createAuthoringIntake", "CreateIntakeCommandHandler", "authoring:generate"),
         ("Authoring", "getAuthoringIntake", "GetIntakeQueryHandler", "authoring:read"),
+        // Saving a selection of a ready intake's text is a requirement write: the plain authoring write permission.
+        ("Authoring", "saveAuthoringIntakeSpecSection", "SaveSpecSectionCommandHandler", "authoring:write"),
     ];
 
     [Fact]

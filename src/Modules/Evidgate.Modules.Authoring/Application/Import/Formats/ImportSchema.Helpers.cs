@@ -25,11 +25,17 @@ internal static partial class ImportSchema
         {
             if (row.ValueKind == JsonValueKind.Object)
             {
+                // A requirement row's code is an external reference label, not a case code: it has its own pattern.
+                var requirement = row.TryGetProperty("kind", out var kind)
+                    && kind.ValueKind == JsonValueKind.String
+                    && kind.GetString() == "requirement";
+
                 foreach (var (member, pointer, pattern) in Anchored)
                 {
+                    var effective = requirement && member == "code" ? RequirementCode : pattern;
                     if (row.TryGetProperty(member, out var value)
                         && value.ValueKind == JsonValueKind.String
-                        && !pattern.IsMatch(value.GetString() ?? string.Empty))
+                        && !effective.IsMatch(value.GetString() ?? string.Empty))
                     {
                         Add(issues, index, pointer, "value_invalid");
                     }

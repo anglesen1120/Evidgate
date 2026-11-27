@@ -128,10 +128,10 @@ internal static class RequirementBody
             : Result.Success((versionId, reason));
     }
 
-    private static Error Required(string member) =>
+    internal static Error Required(string member) =>
         Error.Invalid($"{member} is required", [new ErrorDetail("/" + member, "required")]);
 
-    private static Error? Text(JsonElement body, string member, bool nullable, out string? value)
+    internal static Error? Text(JsonElement body, string member, bool nullable, out string? value)
     {
         value = null;
         if (!body.TryGetProperty(member, out var element) || (nullable && element.ValueKind == JsonValueKind.Null))
@@ -149,7 +149,7 @@ internal static class RequirementBody
         return null;
     }
 
-    private static Error? Id(JsonElement body, string member, out Guid? value)
+    internal static Error? Id(JsonElement body, string member, out Guid? value)
     {
         value = null;
         if (!body.TryGetProperty(member, out var element) || element.ValueKind == JsonValueKind.Null)

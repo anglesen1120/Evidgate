@@ -11,6 +11,13 @@ internal enum ImportRowKind
 
     /// <summary>A <c>manual_test_case</c> row; <see cref="ImportRow.ItemKey"/> is the owning item's key.</summary>
     Case,
+
+    /// <summary>
+    /// A <c>requirement</c> row: <see cref="ImportRow.NodeKind"/> is the requirement kind, <see cref="ImportRow.Description"/>
+    /// its body, <see cref="ImportRow.ItemKey"/> an optional feature node id and <see cref="ImportRow.Code"/> an optional
+    /// external reference. A file holds requirement rows or tree rows, never both.
+    /// </summary>
+    Requirement,
 }
 
 /// <summary>
@@ -19,7 +26,7 @@ internal enum ImportRowKind
 /// produced it; a reader refuses (never repairs) anything else with reason <c>invalid_text</c>/<c>value_invalid</c>.
 /// </summary>
 /// <param name="Index">The 1-based data-row position in the file (the header row is not counted); 0 is never a row.</param>
-/// <param name="Kind">node, item or case.</param>
+/// <param name="Kind">node, item, case or requirement.</param>
 /// <param name="Key">The row's file-local key (unique per file); export writes <c>n1…</c>, <c>i1…</c>, <c>c1…</c> in tree order.</param>
 /// <param name="ParentKey">Node row: parent node key or null. Item row: owning node key. Case row: null.</param>
 /// <param name="ItemKey">Case row: owning item key. Otherwise null.</param>
@@ -32,6 +39,7 @@ internal enum ImportRowKind
 /// <param name="State">Item or case state as stored (draft/active/retired, draft/approved/retired); null means the creation default.</param>
 /// <param name="Code">Case code (<c>PREFIX-NNN</c>); null/empty on a new case means "allocate one".</param>
 /// <param name="Position">Sibling position; null means append.</param>
+/// <param name="SourceLine">Markdown only: the 1-based source line of the construct the row came from; null for every other format.</param>
 internal sealed record ImportRow(
     int Index,
     ImportRowKind Kind,
@@ -46,12 +54,21 @@ internal sealed record ImportRow(
     string? Priority,
     string? State,
     string? Code,
-    int? Position);
+    int? Position,
+    int? SourceLine = null)
+{
+    /// <summary>The position a refusal of this row reports: the source line when the reader kept one, else the data-row index.</summary>
+    internal int IssueIndex => SourceLine ?? Index;
+}
 
 /// <summary>One refusal found while reading or validating a file: becomes one <c>details[]</c> entry (00 §9.2, AC13/AC16).</summary>
 /// <param name="Index">The 1-based data-row position, or null for a file-level reason (zip caps, unsupported format).</param>
 /// <param name="Path">A fixed member pointer such as <c>/title</c> or <c>/key</c>; never a cell value (S3).</param>
 /// <param name="Reason">AC13 reasons (<c>unknown_parent</c>, <c>orphan_row</c>, <c>duplicate_key</c>, <c>code_conflict</c>, <c>unsupported_format</c>, <c>value_invalid</c>, <c>steps_invalid</c>) or AC16 reasons (<c>zip_size_exceeded</c>, <c>zip_entries_exceeded</c>, <c>zip_ratio_exceeded</c>, <c>dtd_prohibited</c>, <c>macro_prohibited</c>) or <c>invalid_text</c>.</param>
+/// <remarks>
+/// <see cref="Index"/> is the 1-based data row for CSV, XLSX and JSON. For Markdown it is the 1-based source line of the
+/// construct that was refused (a row's own report index stays its ordinal).
+/// </remarks>
 internal sealed record ImportIssue(int? Index, string Path, string Reason);
 
 /// <summary>The outcome of reading one file: rows, or issues, or "too large" (413).</summary>
