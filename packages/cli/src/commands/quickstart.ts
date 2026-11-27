@@ -127,7 +127,7 @@ function npx(version: string, args: string): string {
  * the credential-free `test` job runs on `pull_request` and `push`; the `upload` job that
  * mints the token runs only on `workflow_dispatch` or a push to the default branch, inside the
  * environment `evidgate-upload`, with `contents: read` only. The ingest token is the one secret
- * (`secrets.EVIDGATE_INGEST_TOKEN`, an environment secret, read by that job alone).
+ * (`secrets.EVIDGATE_INGEST_TOKEN`, an environment secret, read by the `auth login` step alone).
  * `EVIDGATE_API_URL` and `EVIDGATE_EXECUTION` are repository configuration VARIABLES
  * (`EVIDGATE_EXECUTION` is the planned execution's 64-hex digest, not a secret). The rules and
  * their sources are in `docs/security/customer-ci-recipe.md`.
@@ -194,7 +194,6 @@ jobs:
       contents: read
     env:
       EVIDGATE_API_URL: \${{ vars.EVIDGATE_API_URL }}
-      EVIDGATE_INGEST_TOKEN: \${{ secrets.EVIDGATE_INGEST_TOKEN }}
       EVIDGATE_PROJECT: "${project}"
     steps:
       - uses: ${checkoutAction}
@@ -204,8 +203,11 @@ jobs:
         with:
           node-version: "22"
       # Exchange the ingest token for a short-lived Evidgate CI token. The token is
-      # written only to the 0600 cache, never printed.
-      - run: ${npx(version, 'auth login')}
+      # written only to the 0600 cache, never printed. Only this step reads the secret;
+      # the steps below use the cached token.
+      - env:
+          EVIDGATE_INGEST_TOKEN: \${{ secrets.EVIDGATE_INGEST_TOKEN }}
+        run: ${npx(version, 'auth login')}
       # Upload the manifest and keep its ids for the run step. Each id is registered
       # with ::add-mask:: before the $GITHUB_OUTPUT write: R4 in
       # docs/security/customer-ci-recipe.md requires a masked payload there (the

@@ -674,9 +674,8 @@ the request's `ref` member:
   another `refs/` namespace or a malformed PR ref — is exit 3 `usage` with the
   help pointer, before any token work.
 
-A `ref` in the body marks the run `unverified_ref=true` server side; a verified
-CI caller's own claim wins there (05.2.2-T1), so `--ci-ref` never overrides a
-verified identity.
+A `ref` in the body marks the run `unverified_ref=true` server side: the ref is
+recorded as declared by the producer and is never verified.
 
 Derived key (AC4): when `--idempotency-key` is omitted the CLI derives the key
 as the lowercase SHA-256 hex of the UTF-8 JSON encoding of this five-element
@@ -762,10 +761,10 @@ GitHub template (`--format github`, YAML):
   job that runs only on `workflow_dispatch` or a push to the default branch,
   inside the environment `evidgate-upload`, with
   `permissions: { contents: read }`; the `upload` job carries
-  `env` `EVIDGATE_API_URL: ${{ vars.EVIDGATE_API_URL }}` and
-  `EVIDGATE_INGEST_TOKEN: ${{ secrets.EVIDGATE_INGEST_TOKEN }}`. The ingest token
-  is an environment secret in `evidgate-upload`; that environment contains no
-  other secrets. On the artifact step, `EVIDGATE_EXECUTION: ${{ vars.EVIDGATE_EXECUTION }}`
+  `env` `EVIDGATE_API_URL: ${{ vars.EVIDGATE_API_URL }}`; only its `auth login`
+  step carries `EVIDGATE_INGEST_TOKEN: ${{ secrets.EVIDGATE_INGEST_TOKEN }}` in its
+  own `env`. The ingest token is an environment secret in `evidgate-upload`; that
+  environment contains no other secrets. On the artifact step, `EVIDGATE_EXECUTION: ${{ vars.EVIDGATE_EXECUTION }}`
   is the planned execution's 64-hex digest. API URL and execution are repository
   configuration variables, not secrets; `EVIDGATE_PROJECT: "<project>"` is rendered literal;
 - steps: `actions/checkout` (with `persist-credentials: false`) and

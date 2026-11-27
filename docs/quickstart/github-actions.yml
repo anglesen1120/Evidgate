@@ -59,7 +59,6 @@ jobs:
       contents: read
     env:
       EVIDGATE_API_URL: ${{ vars.EVIDGATE_API_URL }}
-      EVIDGATE_INGEST_TOKEN: ${{ secrets.EVIDGATE_INGEST_TOKEN }}
       EVIDGATE_PROJECT: "my-project"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -69,8 +68,11 @@ jobs:
         with:
           node-version: "22"
       # Exchange the ingest token for a short-lived Evidgate CI token. The token is
-      # written only to the 0600 cache, never printed.
-      - run: npx --yes --package @evidgate/cli@0.0.0 -- evidgate auth login
+      # written only to the 0600 cache, never printed. Only this step reads the secret;
+      # the steps below use the cached token.
+      - env:
+          EVIDGATE_INGEST_TOKEN: ${{ secrets.EVIDGATE_INGEST_TOKEN }}
+        run: npx --yes --package @evidgate/cli@0.0.0 -- evidgate auth login
       # Upload the manifest and keep its ids for the run step. Each id is registered
       # with ::add-mask:: before the $GITHUB_OUTPUT write: R4 in
       # docs/security/customer-ci-recipe.md requires a masked payload there (the

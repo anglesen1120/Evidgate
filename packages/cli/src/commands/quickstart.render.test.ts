@@ -24,7 +24,9 @@ interface Job {
   readonly environment?: string;
   readonly permissions?: Record<string, string>;
   readonly env?: Record<string, string>;
-  readonly steps: ReadonlyArray<Record<string, unknown>>;
+  readonly steps: ReadonlyArray<
+    Record<string, unknown> & { readonly env?: Record<string, string>; readonly run?: string }
+  >;
 }
 
 interface Workflow {
@@ -71,7 +73,14 @@ describe('quickstart', () => {
     expect(upload?.environment).toBe('evidgate-upload');
     expect(upload?.permissions).toEqual({ contents: 'read' });
     expect(upload?.env?.EVIDGATE_API_URL).toBe('${{ vars.EVIDGATE_API_URL }}');
-    expect(upload?.env?.EVIDGATE_INGEST_TOKEN).toBe('${{ secrets.EVIDGATE_INGEST_TOKEN }}');
+    expect(upload?.env?.EVIDGATE_INGEST_TOKEN).toBeUndefined();
+    const reading = upload?.steps.filter((step) => step.env?.EVIDGATE_INGEST_TOKEN !== undefined);
+    expect(reading).toHaveLength(1);
+    expect(reading?.[0]?.env?.EVIDGATE_INGEST_TOKEN).toBe('${{ secrets.EVIDGATE_INGEST_TOKEN }}');
+    expect(reading?.[0]?.run).toContain('auth login');
+    // The secret appears exactly once in the whole workflow: no workflow-level env, no other
+    // job or step can read it.
+    expect(JSON.stringify(githubWorkflow()).split('secrets.EVIDGATE_INGEST_TOKEN')).toHaveLength(2);
     expect(upload?.env?.EVIDGATE_PROJECT).toBe(sampleProject);
   });
 
@@ -82,8 +91,8 @@ describe('quickstart', () => {
     expect(workflow.permissions).toEqual({});
     expect(Object.keys(workflow.on)).not.toContain('pull_request_target');
     expect(Object.keys(workflow.on)).not.toContain('workflow_run');
-    const minting = Object.entries(workflow.jobs).filter(
-      ([, job]) => job.env?.EVIDGATE_INGEST_TOKEN !== undefined,
+    const minting = Object.entries(workflow.jobs).filter(([, job]) =>
+      job.steps.some((step) => step.env?.EVIDGATE_INGEST_TOKEN !== undefined),
     );
     expect(minting).toHaveLength(1);
     const [name, job] = minting[0] ?? [];

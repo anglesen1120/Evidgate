@@ -56,7 +56,9 @@
 //                               expression fails closed.
 //   R4-add-mask                 see "R4 shell heuristics" below.
 //   R5-no-long-lived-credential no `secrets` context reference other than
-//                               secrets.GITHUB_TOKEN in any `${{ }}` expression
+//                               secrets.GITHUB_TOKEN (and secrets.EVIDGATE_INGEST_TOKEN as the
+//                               env of one step, in a job with an `environment:` and an `if:`
+//                               that excludes pull_request) in any `${{ }}` expression
 //                               or `if:` condition (dot, bracket, toJSON(secrets)
 //                               and any other use); no job `secrets: inherit`
 //                               and no job `secrets:` map entry other than
@@ -271,6 +273,25 @@ function lintData(wf) {
     if (!Array.isArray(job.steps)) {
       add(PARSE, `workflow shape: ${jloc}.steps is not a list`);
       continue;
+    }
+    // R5: the ingest-token secret may only reach a job that waits on a protected environment
+    // and can never run for a pull_request.
+    if (
+      job.steps.some(
+        (st, i) =>
+          isObj(st) &&
+          isObj(st.env) &&
+          isIngestSecretEnv(
+            `jobs.${jobId}.steps[${i}].env.EVIDGATE_INGEST_TOKEN`,
+            st.env.EVIDGATE_INGEST_TOKEN,
+          ),
+      ) &&
+      !(typeof job.environment === 'string' && jobGuardedAgainstPullRequest(job.if))
+    ) {
+      add(
+        R5,
+        `${jloc} reads secrets.EVIDGATE_INGEST_TOKEN without both an \`environment:\` and an \`if:\` that excludes pull_request`,
+      );
     }
     job.steps.forEach((step, i) => {
       const sloc = `${jloc}.steps[${i}]${isObj(step) && typeof step.name === 'string' ? ` (${step.name})` : ''}`;
@@ -689,6 +710,16 @@ function scanExpressions(str) {
 
 const expressionsIn = (str) => scanExpressions(str).exprs;
 
+// The one secret a recipe may read: the project ingest token, as the env of a single step.
+// `jobs.<job>.steps[<n>].env.EVIDGATE_INGEST_TOKEN: ${{ secrets.EVIDGATE_INGEST_TOKEN }}`
+// and nothing looser (a job- or workflow-level env would expose it to every step).
+const INGEST_SECRET_PATH = /^jobs\.[^.]+\.steps\[\d+\]\.env\.EVIDGATE_INGEST_TOKEN$/;
+const INGEST_SECRET_VALUE = /^\$\{\{\s*secrets\.EVIDGATE_INGEST_TOKEN\s*\}\}$/;
+const isIngestSecretEnv = (path, value) =>
+  INGEST_SECRET_PATH.test(path) &&
+  typeof value === 'string' &&
+  INGEST_SECRET_VALUE.test(value.trim());
+
 function secretRefs(expr) {
   const bad = [];
   const re =
@@ -704,6 +735,7 @@ function secretRefs(expr) {
 
 function walk(node, path, key, add) {
   if (typeof node === 'string') {
+    if (isIngestSecretEnv(path, node)) return;
     if (INGEST_TOKEN_LITERAL.test(node)) {
       add(
         R5,
@@ -732,6 +764,7 @@ function walk(node, path, key, add) {
     for (const e of expressionsIn(k)) {
       for (const ref of secretRefs(e)) add(R5, `key ${p} references \`${ref}\``);
     }
+    if (key === 'env' && isIngestSecretEnv(p, v)) continue;
     if (key === 'env') checkVarsCredentials({ [k]: v }, path, add, { literal: true });
     if (key === 'env' && isEvidgateTokenName(k)) {
       add(
