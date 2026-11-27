@@ -186,6 +186,12 @@ public sealed class IsolationProject
     /// </summary>
     public required IReadOnlyList<Guid> DraftIds { get; init; }
 
+    /// <summary>The project's persisted test report (<c>{r}</c> of <c>…/authoring/reports/{r}</c>), inserted by the owner connection.</summary>
+    public required Guid ReportId { get; init; }
+
+    /// <summary>The job key that published <see cref="ReportId"/> (<c>{j}</c> of <c>…/authoring/reports/jobs/{j}</c>).</summary>
+    public required Guid ReportJobId { get; init; }
+
     /// <summary>
     /// A soft-deleted leaf <c>sub_category</c> node under <see cref="AuthoringChildNodeId"/> — the tombstone route 6
     /// restores (13.1.1-T3).
@@ -1035,6 +1041,9 @@ public sealed class IsolationWorld
                 drafts.Add(draft.GetProperty("id").GetGuid());
             }
 
+            var (reportId, reportJobId) = await ReportReadSeed.SeedAsync(ownerConnectionString, org, project, authoringRequirement, cancellationToken)
+                .ConfigureAwait(false);
+
             return new IsolationProject
             {
                 Id = project,
@@ -1077,6 +1086,8 @@ public sealed class IsolationWorld
                 AuthoringChangeId = authoringChange,
                 AuthoringIntakeId = authoringIntake,
                 DraftIds = drafts,
+                ReportId = reportId,
+                ReportJobId = reportJobId,
                 AuthoringDeletedNodeId = authoringRestorableNode,
                 AuthoringDeletedNodeVersion = authoringRestorableNodeVersion,
                 AuthoringDeletedItemId = authoringRestorableItem,

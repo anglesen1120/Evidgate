@@ -66,6 +66,9 @@ public static class AuthoringEndpoints
         // Requirement intake: create one and read where it stands.
         AuthoringIntakeEndpoints.MapAuthoringIntakeEndpoints(authoring);
 
+        // Test case reports: queue a snapshot build, read where it stands and read the published snapshot.
+        AuthoringTestReportEndpoints.MapAuthoringTestReportEndpoints(authoring);
+
         return group;
     }
 }

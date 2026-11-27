@@ -820,6 +820,21 @@ public sealed partial class TenantGucTests
             ("checklist_item_id", checklistItemId));
         await scope.ExecuteAsync(
             """
+            insert into public.test_report
+                (id, org_id, project_id, job_id, scope_kind, selected_ids, sections, language,
+                 schema_version, pinned_versions, payload, content_hash)
+            values (@id, @org_id, @project_id, @job_id, 'requirements',
+                jsonb_build_array(@requirement_id::text), '["test_plan"]'::jsonb, 'en',
+                1, '{}'::jsonb, '{}'::jsonb, @content_hash)
+            """,
+            ("id", Guid.CreateVersion7()),
+            ("org_id", orgId),
+            ("project_id", projectId),
+            ("job_id", Guid.CreateVersion7()),
+            ("requirement_id", requirementId),
+            ("content_hash", "sha256:" + new string('a', 64)));
+        await scope.ExecuteAsync(
+            """
             insert into public.usage_ledger_entry (id, org_id, project_id, metric, quantity, unit, period, billing_key, occurred_at)
             values (@id, @org_id, @project_id, 'results', 1, 'count', '2026-10', 'probe:guc', now())
             """,

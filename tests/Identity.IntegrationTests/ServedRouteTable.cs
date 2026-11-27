@@ -1027,6 +1027,17 @@ internal static class RouteRequests
             new JsonObject { ["checklist_item_id"] = ctx.ItemId.ToString() }, IdempotencyKey: Key()));
         Add("DELETE", "/v1/projects/{p}/authoring/requirements/{r}/links/{l}", ctx => new(HttpMethod.Delete, $"/v1/projects/{ctx.ProjectId}/authoring/requirements/{ctx.RequirementId}/links/{ctx.AuthoringVersionId}",
             IdempotencyKey: Key()));
+        Add("GET", "/v1/projects/{p}/authoring/reports", ctx => new(HttpMethod.Get, $"/v1/projects/{ctx.ProjectId}/authoring/reports"));
+        Add("POST", "/v1/projects/{p}/authoring/reports", ctx => new(HttpMethod.Post, $"/v1/projects/{ctx.ProjectId}/authoring/reports",
+            new JsonObject
+            {
+                ["scope_kind"] = "requirements",
+                ["selected_ids"] = new JsonArray { ctx.RequirementId.ToString() },
+                ["sections"] = new JsonArray { "test_plan" },
+                ["language"] = "en",
+            }, IdempotencyKey: Key()));
+        Add("GET", "/v1/projects/{p}/authoring/reports/{r}", ctx => new(HttpMethod.Get, $"/v1/projects/{ctx.ProjectId}/authoring/reports/{ctx.AuthoringVersionId}"));
+        Add("GET", "/v1/projects/{p}/authoring/reports/jobs/{j}", ctx => new(HttpMethod.Get, $"/v1/projects/{ctx.ProjectId}/authoring/reports/jobs/{ctx.AuthoringVersionId}"));
         // 13.1.1-T3: the version timeline (routes 22, 23) and the four restore routes (6, 11, 18, 24). The version id is
         // fresh, so a granted call answers 404 like the entity ids above; the restore routes carry If-Match exactly as
         // the spec declares them — routes 6/11/18 a row tag, route 24 none.

@@ -234,6 +234,10 @@ const EXPECTED = [
   ['/projects/{p}/authoring/requirements/{r}/coverage', 'get', 'authoring:read', 'v1'],
   ['/projects/{p}/authoring/requirements/{r}/links', 'post', 'authoring:write', 'v1'],
   ['/projects/{p}/authoring/requirements/{r}/links/{l}', 'delete', 'authoring:write', 'v1'],
+  ['/projects/{p}/authoring/reports', 'post', 'authoring:write', 'v1'],
+  ['/projects/{p}/authoring/reports', 'get', 'authoring:read', 'v1'],
+  ['/projects/{p}/authoring/reports/{r}', 'get', 'authoring:read', 'v1'],
+  ['/projects/{p}/authoring/reports/jobs/{j}', 'get', 'authoring:read', 'v1'],
   // 13.1.1-T3 (S80): the version timeline (routes 22, 23) and the four restore routes (6, 11, 18, 24).
   // 00 §9.3's authoring row carries them; the two reads are `authoring:read`, the four restores `authoring:write`.
   ['/projects/{p}/authoring/versions', 'get', 'authoring:read', 'v1'],

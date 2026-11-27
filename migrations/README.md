@@ -1400,3 +1400,12 @@ target)` and `session_revoke_audit_append(org, actor, object_type, object_id, me
 - Grants: `evidgate_app` holds SELECT, INSERT and DELETE (an unlink is a delete); UPDATE is revoked until the relink migration grants the pin column. Operator and sweep roles hold nothing. The table has no audit columns or version trigger and is listed in `SchemaConventionScan.Exemptions` like `manual_case_link`.
 - Purge order (owner erasure): delete `requirement_link` rows first, then `requirement_version` and `requirement` rows, and before any checklist item or manual test case a link names. Deleting a parent first fails with `23503`.
 - Locks: new table only; `lock_timeout` is 5 s. Numbering: the migrator refuses a gap, so apply only on a tree that holds `0137`. Rollback: stop the writer, then drop `requirement_link`; no other table changes.
+
+## Notes on test reports (`0140`)
+
+- `0140` adds `public.test_report`: one immutable snapshot per report job (scope kind and selected ids, ordered sections, `language` `vi|en`, `schema_version`, the pinned requirement and case versions, the canonical `payload` with display values, and its `content_hash`). `job_id` is the task's logical key and `unique (org_id, project_id, job_id)` makes a redelivered job publish one report. `payload` is capped at 8 MiB by `test_report_payload_size_check`; a larger source fails the job instead of being truncated.
+- Keys: `(org_id, project_id)` to `project` and the nullable `(org_id, created_by)` to `membership`; `unique (org_id, id)` and `unique (org_id, project_id, id)`. The scope kinds `manual_run` and `release` are allowed by the check although the routes refuse them until their source tables exist.
+- Guard (SQLSTATE `23514`): `test_report_immutable` refuses every UPDATE and any DELETE except by `evidgate_owner`. RLS is FORCE with `TO evidgate_app` and `TO evidgate_owner` policies.
+- Grants: `evidgate_app` holds SELECT and column-scoped INSERT only (`created_at`, `updated_at`, `version` stay at their defaults); the operator and sweep roles hold nothing.
+- Purge order (owner erasure): delete `test_report` rows before the project or the membership they name (`23503` otherwise).
+- Locks: new table only; `lock_timeout` is 5 s. Numbering: the migrator refuses a gap, so apply only on a tree that holds `0139`; `0139` belongs to another change and may not be on this branch yet. Rollback: stop the writer, then drop `test_report` and `evidgate.test_report_immutable()`.

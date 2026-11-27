@@ -204,6 +204,10 @@ public sealed class RouteCoverageTests
         ("GET", "/v1/projects/{p}/authoring/requirements/{r}/coverage", "authoring:read"),
         ("POST", "/v1/projects/{p}/authoring/requirements/{r}/links", "authoring:write"),
         ("DELETE", "/v1/projects/{p}/authoring/requirements/{r}/links/{l}", "authoring:write"),
+        ("POST", "/v1/projects/{p}/authoring/reports", "authoring:write"),
+        ("GET", "/v1/projects/{p}/authoring/reports", "authoring:read"),
+        ("GET", "/v1/projects/{p}/authoring/reports/{r}", "authoring:read"),
+        ("GET", "/v1/projects/{p}/authoring/reports/jobs/{j}", "authoring:read"),
         // 13.1.1-T3: the version timeline (routes 22, 23) and the four restore routes (6, 11, 18, 24).
         ("GET", "/v1/projects/{p}/authoring/versions", "authoring:read"),
         ("GET", "/v1/projects/{p}/authoring/versions/{v}", "authoring:read"),

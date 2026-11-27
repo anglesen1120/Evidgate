@@ -4,6 +4,7 @@ using Evidgate.Modules.Authoring.Application;
 using Evidgate.Modules.Authoring.Application.Commands;
 using Evidgate.Modules.Authoring.Application.Import;
 using Evidgate.Modules.Authoring.Application.Intake;
+using Evidgate.Modules.Authoring.Application.Reports;
 using Evidgate.Modules.Authoring.Contracts;
 using Evidgate.Modules.Authoring.Domain;
 using Evidgate.Modules.Authoring.Infrastructure.Persistence;
@@ -81,6 +82,12 @@ internal static class AuthoringModule
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IValidateOptions<IntakeCapsOptions>, IntakeCapsOptionsValidator>());
         services.TryAddSingleton<IntakeCapsResolver>();
         services.TryAddScoped<IntakePlanner>();
+
+        // The report snapshot: the registry of section builders (a section is a registration, not a code path in the
+        // job), the source read and the table. The build job itself is registered by the Worker only.
+        services.TryAddSingleton<ReportSectionRegistry>();
+        services.TryAddScoped<TestReportSourceReader>();
+        services.TryAddScoped<TestReportStore>();
 
         return services;
     }

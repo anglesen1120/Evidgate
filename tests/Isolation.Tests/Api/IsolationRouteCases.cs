@@ -1105,6 +1105,9 @@ public static partial class IsolationRouteCases
 
         // 03.5.1: the two org-level template reads; tenant resolution decides the org, RLS decides the rows.
         .. TemplateCases(),
+
+        // The report history, one report and one job outcome of the test-case reports.
+        .. ReportCases(),
     ];
 
     // ---------------------------------------------------------------------------------------------------- helpers

@@ -36,6 +36,9 @@ public sealed partial class AuthoringGuardFirstBoundaryTests
         "AuthoringRequirementEndpoints.GetCoverageAsync",
         "AuthoringRequirementEndpoints.ListAsync",
         "AuthoringRequirementEndpoints.ListVersionsAsync",
+        "AuthoringTestReportEndpoints.GetAsync",
+        "AuthoringTestReportEndpoints.JobAsync",
+        "AuthoringTestReportEndpoints.ListAsync",
         "AuthoringVersionEndpoints.GetAsync",
         "AuthoringVersionEndpoints.ListAsync",
     ];
