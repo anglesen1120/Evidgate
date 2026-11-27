@@ -125,18 +125,19 @@ public sealed partial class SecretRedactor
 
     /// <summary>
     /// An assignment value that is already <see cref="Mask"/>: the mask may end at the line, at a pair separator, or be
-    /// followed by the next quoted key (a one-line rendered pair list). Any other text after it is masked again.
+    /// followed by the next key in matching quotes (a one-line rendered pair list). Mismatched quotes are not a key, and
+    /// any other text after the mask is masked again.
     /// </summary>
     private const string MaskedAssignment =
-        @"\*\*\*(?=[ \t]*(?:$|[\r\n;]|,[ \t]*[""'][^""'\r\n]{0,200}[""'][ \t]*[=:]))";
+        @"\*\*\*(?=[ \t]*(?:$|[\r\n;]|,[ \t]*(?<nq>[""'])[^""'\r\n]{0,200}\k<nq>[ \t]*[=:]))";
 
     /// <summary>
     /// A quoted-name authorization value that is already <see cref="Mask"/> and nothing else: the mask may be followed
     /// by blanks and a line end, by closing brackets (a one-line JSON or object literal), or by a comma and the next
-    /// quoted key. Any other text after the mask is a private tail and is masked again.
+    /// key in matching quotes. Any other text after the mask is a private tail and is masked again.
     /// </summary>
     private const string MaskedAuthorization =
-        @"\*\*\*(?=[ \t]*(?:$|[\r\n]|[}\])](?:[ \t]*(?:$|[\r\n,;}\])]))|,[ \t]*(?:$|[\r\n]|[""'][^""'\r\n]{0,200}[""'][ \t]*:)))";
+        @"\*\*\*(?=[ \t]*(?:$|[\r\n]|[}\])](?:[ \t]*(?:$|[\r\n,;}\])]))|,[ \t]*(?:$|[\r\n]|(?<aq>[""'])[^""'\r\n]{0,200}\k<aq>[ \t]*:)))";
 
     /// <summary>
     /// Masks <c>Authorization: Bearer …</c> style header text. A quoted name (<c>"Authorization": "Basic …"</c>, the

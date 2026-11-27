@@ -96,6 +96,27 @@ internal static class RedactionRules
         RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase | RegexOptions.NonBacktracking,
         Regex.InfiniteMatchTimeout);
 
+    // One text that reaches the match code of every compiled rule above.
+    private const string WarmUpText =
+        "+84 912 345 678 +1 202 555 0123\n"
+        + "value=\"a\" value='a' value=a {\"value\":\"a\"} {value:'a'}\n"
+        + "x.fill('a', 'b') x.fill('b') x.sendKeys('b')";
+
+    // A compiled matcher is JIT-compiled by its first match, and that time counts against the match timeout: on a
+    // loaded host the first match of a rule can time out and mask a window that holds nothing. Matching once here
+    // spends it at type initialisation instead; the result is discarded.
+    static RedactionRules()
+    {
+        var discarded = new Dictionary<string, int>();
+        foreach (var rule in Catalogue)
+        {
+            if (!rule.Linear)
+            {
+                rule.Apply(WarmUpText, discarded);
+            }
+        }
+    }
+
     /// <summary>True when <paramref name="text"/> still holds the END line or label of a private key block.</summary>
     internal static bool HasResidualPrivateKey(string text) =>
         text.Contains("PRIVATE KEY", StringComparison.OrdinalIgnoreCase) && ResidualPrivateKey.IsMatch(text);

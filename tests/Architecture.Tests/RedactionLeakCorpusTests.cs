@@ -46,6 +46,8 @@ public sealed partial class RedactionLeakCorpusTests
         { "cookie, mask then tail", "__Host-sid=*** " + Secret, Secret, "cookie" },
         { "credential, mask then comma tail", Key + "=***," + Secret, Secret, "credential_assignment" },
         { "credential, mask then bracket tail", Key + "=***)" + Secret, Secret, "credential_assignment" },
+        { "credential, mask then mismatched sibling quotes", Key + "=***,\"public'=" + Secret, Secret, "credential_assignment" },
+        { "authorization, mask then mismatched sibling quotes", "\"authorization\": ***,\"public':" + Secret, Secret, "authorization_header" },
         { "cookie, mask then bracket tail", "__Host-sid=***)" + Secret, Secret, "cookie" },
         { "authorization, mask then comma tail", "\"authorization\": ***," + Secret, Secret, "authorization_header" },
         { "percent", "pass%77ord%3D" + Secret, Secret, "residual_urlencoded" },
