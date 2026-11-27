@@ -82,7 +82,7 @@ internal sealed class CreateRequirementCommandHandler(
             return Result.Failure<RequirementWriteResponse>(created.Error!);
         }
 
-        audit.Describe(new AuditObject("requirement", created.Value.RequirementId.ToString("D")));
+        audit.Describe(RequirementAudit.Created(command.ProjectId, created.Value));
 
         return Result.Success(RequirementResponses.Write(created.Value), StatusCodes.Status201Created);
     }

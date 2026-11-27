@@ -31,12 +31,12 @@ internal static partial class AuthoringRequirementEndpoints
     {
         ArgumentNullException.ThrowIfNull(authoring);
 
-        MapReads(authoring);
-        MapWrites(authoring);
-        MapLinkRoutes(authoring);
+        MapRequirementReadEndpoints(authoring);
+        MapRequirementWriteEndpoints(authoring);
+        MapRequirementLinkEndpoints(authoring);
     }
 
-    private static void MapReads(RouteGroupBuilder authoring)
+    private static void MapRequirementReadEndpoints(RouteGroupBuilder authoring)
     {
         authoring.MapGet("/requirements", ListAsync)
             .Produces<RequirementListResponse>(StatusCodes.Status200OK)
@@ -55,7 +55,7 @@ internal static partial class AuthoringRequirementEndpoints
             .WithSummary("A page of a requirement's history, newest first, capped by rows and by body bytes");
     }
 
-    private static void MapWrites(RouteGroupBuilder authoring)
+    private static void MapRequirementWriteEndpoints(RouteGroupBuilder authoring)
     {
         // The bodiless `.Produces(200)` keeps the C8 `Result<T>` wrapper out of the served OpenAPI document.
         authoring.MapPost("/requirements", CreateAsync)

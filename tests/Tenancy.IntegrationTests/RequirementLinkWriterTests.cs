@@ -184,7 +184,22 @@ public sealed class RequirementLinkWriterTests
             .ScalarAsync<int>("select pg_backend_pid()", null, cancellationToken);
 
         var pin = pinTheNewHead ? appended.Value.VersionId : head.VersionId;
-        var racing = TryAsync(world, head.RequirementId, targets.Item, null, pin);
+        Task<Result<RequirementLinkRow>> racing;
+        // A DI scope does not isolate the AsyncLocal tenant transaction; the contender needs its own execution flow.
+        using (ExecutionContext.SuppressFlow())
+        {
+            racing = Task.Run(async () =>
+            {
+                await using var linkServices = world.Api.Services.CreateAsyncScope();
+                await using var linkScope = await linkServices.ServiceProvider.GetRequiredService<ITenantScopeFactory>()
+                    .BeginAsync(world.Org, world.Project, false, cancellationToken);
+                var result = await linkServices.ServiceProvider.GetRequiredService<RequirementWriter>().CreateLinkAsync(
+                    world.Org, new RequirementLinkCreate(world.Project, head.RequirementId, targets.Item, null, pin, null), cancellationToken);
+                await linkScope.CommitAsync(cancellationToken);
+                return result;
+            }, cancellationToken);
+        }
+
         await RequirementLinkTestData.WaitUntilBlockedAsync(world, racing, editorPid);
         await edit.CommitAsync(cancellationToken);
         var linked = await racing;

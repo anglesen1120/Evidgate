@@ -99,18 +99,28 @@ public sealed class RequirementApiFollowupTests(PostgresTenancyFixture fixture)
                      'before', encode(before_hash, 'hex'), 'after', encode(after_hash, 'hex')) order by seq)::text
               from public.audit_log
              where org_id = '{world.Org:D}' and action in (
-               'authoring.requirement.update', 'authoring.requirement.restore', 'authoring.requirement.delete',
-               'authoring.requirement_link.create', 'authoring.requirement_link.remove')
+               'authoring.requirement.create', 'authoring.requirement.update', 'authoring.requirement.restore',
+               'authoring.requirement.delete', 'authoring.requirement_link.create', 'authoring.requirement_link.remove')
             """);
         json.ShouldNotContain("Secret");
         var rows = JsonDocument.Parse(json).RootElement.EnumerateArray().ToDictionary(row => row.GetProperty("action").GetString()!);
-        rows.Count.ShouldBe(5);
+        rows.Count.ShouldBe(6);
         foreach (var row in rows.Values)
         {
             row.GetProperty("project").GetGuid().ShouldBe(world.Project);
             row.GetProperty("metadata").TryGetProperty("version_no", out _).ShouldBeTrue();
-            row.GetProperty("metadata").TryGetProperty("previous_id", out _).ShouldBeTrue();
+            if (row.GetProperty("action").GetString() != "authoring.requirement.create")
+            {
+                row.GetProperty("metadata").TryGetProperty("previous_id", out _).ShouldBeTrue();
+            }
         }
+
+        var creation = rows["authoring.requirement.create"];
+        creation.GetProperty("before").ValueKind.ShouldBe(JsonValueKind.Null);
+        creation.GetProperty("metadata").GetProperty("version_no").GetString().ShouldBe("1");
+        creation.GetProperty("metadata").TryGetProperty("previous_id", out _).ShouldBeFalse();
+        creation.GetProperty("after").GetString().ShouldNotBeNullOrEmpty();
+        creation.GetProperty("after").GetString().ShouldBe(rows["authoring.requirement.update"].GetProperty("before").GetString());
 
         foreach (var moved in new[] { "authoring.requirement.update", "authoring.requirement.restore" })
         {
@@ -146,9 +156,27 @@ public sealed class RequirementApiFollowupTests(PostgresTenancyFixture fixture)
         windows.ShouldNotBeEmpty();
         foreach (var output in windows.SelectMany(node => node.GetProperty("Output").EnumerateArray()))
         {
-            System.Text.RegularExpressions.Regex.IsMatch(output.GetString()!, @"\bbody\b").ShouldBeFalse(output.GetString());
+            CarriesBodyColumn(output.GetString()!).ShouldBeFalse(output.GetString());
         }
     }
+
+    [Theory]
+    [InlineData("body", true)]
+    [InlineData("v_1.body", true)]
+    [InlineData("\"v_1\".\"body\"", true)]
+    [InlineData("(v_1.body)", true)]
+    [InlineData("(octet_length(v_1.body))", false)]
+    [InlineData("sum((octet_length(v_1.body))) OVER (?)", false)]
+    [InlineData("page.body_bytes", false)]
+    public void VersionHistoryWindowOutput_IdentifiesBodyColumnsRatherThanSizeExpressions(string output, bool carriesBody) =>
+        CarriesBodyColumn(output).ShouldBe(carriesBody);
+
+    private static bool CarriesBodyColumn(string output) =>
+        System.Text.RegularExpressions.Regex.IsMatch(
+            output.Trim().Trim('(', ')'),
+            """\A(?:(?:"[^"]+"|[A-Za-z_][A-Za-z_0-9]*)\.)*"?body"?\z""",
+            System.Text.RegularExpressions.RegexOptions.CultureInvariant,
+            TimeSpan.FromSeconds(1));
 
     private static void CollectNodes(JsonElement node, string type, List<JsonElement> found)
     {

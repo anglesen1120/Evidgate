@@ -19,7 +19,7 @@ internal static partial class AuthoringRequirementEndpoints
 {
     private static readonly string[] LinkMembers = ["checklist_item_id", "manual_test_case_id", "expected_version_id"];
 
-    private static void MapLinkRoutes(RouteGroupBuilder authoring)
+    private static void MapRequirementLinkEndpoints(RouteGroupBuilder authoring)
     {
         authoring.MapGet("/requirements/{r}/coverage", GetCoverageAsync)
             .Produces<RequirementCoverageResponse>(StatusCodes.Status200OK)

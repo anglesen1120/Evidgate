@@ -13,6 +13,20 @@ namespace Evidgate.Modules.Authoring.Application.Commands;
 /// </summary>
 internal static class RequirementAudit
 {
+    /// <summary>A new requirement has no previous head; its first version supplies the digest and number.</summary>
+    /// <param name="projectId">The project of the requirement.</param>
+    /// <param name="created">The first head the write produced.</param>
+    internal static AuditObject Created(Guid projectId, RequirementHead created) =>
+        new(
+            "requirement",
+            created.RequirementId.ToString("D"),
+            AfterHash: Digest(created.ContentHash),
+            Metadata: new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["version_no"] = created.VersionNo.ToString(CultureInfo.InvariantCulture),
+            },
+            ProjectId: projectId);
+
     /// <summary>A head-moving write (edit or restore): the previous head is the pin it moved from.</summary>
     /// <param name="projectId">The project of the requirement.</param>
     /// <param name="requirementId">The requirement.</param>
