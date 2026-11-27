@@ -64,15 +64,12 @@ export const KNOWN_API_SEGMENTS: ReadonlySet<string> = new Set<string>([
   'export',
   'finalize',
   'fixtures',
-  'git-repo-bindings',
-  'github',
   'head',
   'healing',
   'heartbeat',
   'import',
   'incidents',
   'ingest-tokens',
-  'installations',
   'intakes',
   'invite-token',
   'item',
@@ -131,7 +128,6 @@ export const KNOWN_API_SEGMENTS: ReadonlySet<string> = new Set<string>([
   'waivers',
   'webhook-deliveries',
   'webhook-endpoints',
-  'webhooks',
 ]);
 
 /**

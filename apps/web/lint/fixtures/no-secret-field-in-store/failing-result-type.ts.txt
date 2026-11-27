@@ -28,11 +28,11 @@ export class SecretsStore {
   readonly created = computed<IngestTokenCreatedResponse | null>(() => null);
 
   // A constructor parameter property is a field of the instance.
-  constructor(private readonly lastBinding: CiBindingCreatedResponse | null) {}
+  constructor(private readonly lastBinding: InviteIssuedView | null) {}
 }
 
 // The type-argument literal of a state call is the state, and one of its members is typed with a
 // one-time result too.
-export const feature = withState<{ lastBinding: CiBindingCreatedResponse | null }>({
+export const feature = withState<{ lastBinding: InviteIssuedView | null }>({
   lastBinding: null,
 });

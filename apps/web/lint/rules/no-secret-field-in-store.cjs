@@ -93,8 +93,8 @@
 //      secret (`*ngFor="let token of tokens"` then `{{ token }}` in the body) is still reported:
 //      the declaration is skipped, the body read is not, so rename the variable;
 //   7. a secret-carrying RESULT type held in state (`secretCarryingType`): `IssuedInvite`,
-//      `RotationResult`, `IngestTokenCreatedResponse`, `InviteIssuedView` and
-//      `CiBindingCreatedResponse` are the shapes a route answers with a ONE-TIME value, so a
+//      `RotationResult`, `IngestTokenCreatedResponse` and
+//      `InviteIssuedView` are the shapes a route answers with a ONE-TIME value, so a
 //      field, accessor or constructor parameter property of a `/(Store|Flow|Track)$/` class typed with one is
 //      reported at any depth (`Signal<IssuedInvite | null>`, `readonly last: RotationResult`), as
 //      is a `signal<...>()`/`computed<...>()`/`withState<...>()` type argument of one in a
@@ -200,7 +200,6 @@ const SECRET_CARRYING_TYPES = new Set([
   'RotationResult',
   'IngestTokenCreatedResponse',
   'InviteIssuedView',
-  'CiBindingCreatedResponse',
 ]);
 
 /** The calls whose type argument a Settings file must not fill with a secret-carrying type. */
@@ -1229,7 +1228,7 @@ module.exports = {
           }
         }
         // `signal<IssuedInvite | null>(null)`, `computed<RotationResult | null>(...)`,
-        // `withState<{ last: CiBindingCreatedResponse }>(...)`: the type argument holds the
+        // `withState<{ last: InviteIssuedView }>(...)`: the type argument holds the
         // one-time value in state, which is exactly what the return position does not (queue F16).
         if (RESULT_TYPE_CALLS.has(name)) {
           const argumentsNode = node.typeArguments ?? node.typeParameters;

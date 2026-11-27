@@ -279,7 +279,7 @@ export const indirectForms: ReadonlyArray<IndirectForm> = [
   [
     'exact fetch with a third argument',
     "fetch(u, { body: 'x' }, 'extra')",
-    'fetchActionsIdToken(config, fetchImpl, deps)',
+    'fetchPage(config, fetchImpl, deps)',
     'uncapped-fetch',
     'body in init',
   ],

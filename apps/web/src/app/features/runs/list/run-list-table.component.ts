@@ -116,7 +116,7 @@ export class RunListTableComponent {
     ref: $localize`:@@runs.list.column-ref:Ref`,
     scope: $localize`:@@runs.list.column-scope:Run scope`,
     created: $localize`:@@runs.list.column-created:Created (UTC)`,
-    unverified: $localize`:@@runs.list.unverified-ref:Unverified ref`,
+    unverified: $localize`:@@runs.list.unverified-ref:Declared ref`,
     unavailableRef: $localize`:@@runs.list.ref-unavailable:Ref unavailable`,
     original: $localize`:@@runs.list.original:Original run`,
     rerun: $localize`:@@runs.list.rerun:Rerun`,

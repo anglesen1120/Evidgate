@@ -21,7 +21,7 @@ const PRE_TENANT_PATHS: Readonly<Record<string, true>> = {
 };
 
 /** Route families whose first segment already identifies a non-tenant caller. */
-const PRE_TENANT_PREFIXES: readonly string[] = ['/v1/auth', '/v1/webhooks'];
+const PRE_TENANT_PREFIXES: readonly string[] = ['/v1/auth'];
 
 /** The `{o}` of a `/v1/orgs/{o}` path, which is also the tenant of every `/v1/orgs/{o}/…` read. */
 const ORG_SCOPE_PATH = /^\/v1\/orgs\/([^/]+)/;

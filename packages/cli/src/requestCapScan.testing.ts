@@ -30,7 +30,7 @@
  * of a fetch (`fetch(this.req)` needs member flow analysis; `fetch(req)` is reported); a fetch
  * whose first argument is an untyped parameter or typed `RequestInfo`; a fetch-named call (not
  * `fetch` itself, not a tracked alias) with more than two arguments, read as another function
- * (`fetchActionsIdToken(config, fetchImpl, deps)`). Alias and property names are file-wide, so a
+ * (`fetchPage(config, fetchImpl, deps)`). Alias and property names are file-wide, so a
  * same-named local that never holds a fetch is still treated as one (fail closed).
  *
  * Reported rather than passed: a `Request` input through `r.clone()`, a conditional, `??`/`||`/`&&`;
