@@ -6,9 +6,9 @@ namespace Evidgate.Modules.Healing.Application;
 
 /// <summary>
 /// Makes untrusted text inert inside a prompt block: markup characters become character references and characters
-/// that can hide or forge a delimiter are removed (<see cref="InvisibleCharacters"/>; a filler that reads as a space
-/// stays one space, so a keyword and its value keep their gap). Output is plain text that never contains a raw
-/// <c>&lt;</c>, <c>&gt;</c> or <c>&amp;</c>.
+/// that can hide or forge a delimiter are removed (<see cref="InvisibleCharacters"/>). Fillers keep a separating
+/// space for secret detection, but line and paragraph separators are dropped so they cannot forge prompt lines.
+/// Output never contains a raw <c>&lt;</c>, <c>&gt;</c> or <c>&amp;</c>.
 /// </summary>
 internal static class PromptTextEscaper
 {
@@ -75,7 +75,7 @@ internal static class PromptTextEscaper
     {
         switch (InvisibleCharacters.Classify(scalar))
         {
-            case InvisibleKind.Space:
+            case InvisibleKind.Space when scalar is not (0x2028 or 0x2029):
                 builder.Append(' ');
                 break;
             case InvisibleKind.None:

@@ -96,7 +96,7 @@ public sealed partial class SecretRedactor
     /// cannot parse is masked rather than half-emitted.
     /// </summary>
     private readonly Regex _secretAssignment = new(
-        $@"{SecretIdentifier}[""']?\s*[=:](?>\s*)(?!\*\*\*(?=[ \t]*(?:$|[\r\n;])))(?<value>[^;\r\n]*)",
+        $@"{SecretIdentifier}[""']?\s*[=:](?>\s*)(?!" + MaskedAssignment + @")(?<value>[^;\r\n]*)",
         RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant,
         MatchTimeout);
 
@@ -113,14 +113,27 @@ public sealed partial class SecretRedactor
 
     /// <summary>Masks a whole <c>Cookie</c>/<c>Set-Cookie</c> header value, whatever cookie names it carries.</summary>
     private readonly Regex _cookieHeader = new(
-        @"(?<key>set-cookie|cookie)\s*:\s*(?<value>[^\r\n]+)",
+        @"(?<key>set-cookie|cookie)\s*:(?>\s*)(?!" + MaskedHeaderLine + @")(?<value>[^\r\n]+)",
         RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant,
         MatchTimeout);
 
     /// <summary>
-    /// A value that is already <see cref="Mask"/> and nothing else: the mask may be followed by blanks and a line end,
-    /// by closing brackets (a one-line JSON or object literal), or by a comma and the next quoted key. Any other text
-    /// after the mask is a private tail and is masked again.
+    /// A header value that is already <see cref="Mask"/> and nothing else on its line. Anything after the mask (a second
+    /// cookie, a scheme tail) is private text and is masked again.
+    /// </summary>
+    private const string MaskedHeaderLine = @"\*\*\*(?=[ \t]*(?:$|[\r\n]))";
+
+    /// <summary>
+    /// An assignment value that is already <see cref="Mask"/>: the mask may end at the line, at a pair separator, or be
+    /// followed by the next quoted key (a one-line rendered pair list). Any other text after it is masked again.
+    /// </summary>
+    private const string MaskedAssignment =
+        @"\*\*\*(?=[ \t]*(?:$|[\r\n;]|,[ \t]*[""'][^""'\r\n]{0,200}[""'][ \t]*[=:]))";
+
+    /// <summary>
+    /// A quoted-name authorization value that is already <see cref="Mask"/> and nothing else: the mask may be followed
+    /// by blanks and a line end, by closing brackets (a one-line JSON or object literal), or by a comma and the next
+    /// quoted key. Any other text after the mask is a private tail and is masked again.
     /// </summary>
     private const string MaskedAuthorization =
         @"\*\*\*(?=[ \t]*(?:$|[\r\n]|[}\])](?:[ \t]*(?:$|[\r\n,;}\])]))|,[ \t]*(?:$|[\r\n]|[""'][^""'\r\n]{0,200}[""'][ \t]*:)))";
@@ -130,7 +143,7 @@ public sealed partial class SecretRedactor
     /// JSON and object-literal form) masks the quoted value only, so the rest of a one-line body stays readable.
     /// </summary>
     private readonly Regex _authorizationHeader = new(
-        @"(?<key>[""']authorization[""'])\s*:(?>\s*)(?!" + MaskedAuthorization + @")(?<value>""(?:\\.|[^""\\])*""|'(?:\\.|[^'\\])*'|[^\r\n]+)|(?<key>authorization)\s*:\s*(?<value>[^\r\n]+)",
+        @"(?<key>[""']authorization[""'])\s*:(?>\s*)(?!" + MaskedAuthorization + @")(?<value>""(?:\\.|[^""\\])*""|'(?:\\.|[^'\\])*'|[^\r\n]+)|(?<key>authorization)\s*:(?>\s*)(?!" + MaskedHeaderLine + @")(?<value>[^\r\n]+)",
         RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant,
         MatchTimeout);
 

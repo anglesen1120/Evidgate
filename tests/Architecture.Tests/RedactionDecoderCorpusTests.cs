@@ -32,7 +32,7 @@ public sealed class RedactionDecoderCorpusTests
         { "hex text", Hex(Key + "=" + Secret), Hex("document=" + Secret), Hex(Secret) },
         { "escaped numeric entity", Escape("pass&#119;ord=" + Secret), Escape("docu&#109;ent=" + Secret), Secret },
         { "entity under percent layer", "pass%26%23119%3Bord=" + Secret, "docu%26%23109%3Bent=" + Secret, Secret },
-        { "three percent layers", PercentLayers(Key + "=" + Secret, 3), PercentLayers("document=" + Secret, 3), Secret },
+        { "three percent layers", PercentLayers(Key + "=" + Secret, 3), PercentLayers("document=" + Secret, 3), PercentLayers(Secret, 3) },
     };
 
     [Theory]
@@ -47,6 +47,7 @@ public sealed class RedactionDecoderCorpusTests
         var outcome = Pipeline.Redact(payload);
 
         ContainsBytes(outcome.Text, forbidden).ShouldBeFalse(scenario);
+        ContainsBytes(outcome.Text, Secret).ShouldBeFalse(scenario);
         (outcome.Blocked || outcome.Report.Findings.Count > 0).ShouldBeTrue(scenario);
         if (outcome.Blocked)
         {

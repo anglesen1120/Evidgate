@@ -36,8 +36,9 @@ internal static class RedactionRules
     // What follows a literal value up to the end of its argument ('a' + 'b', 'a' + x). A stray quote is consumed as text.
     private const string ArgumentTail = @"(?>(?:" + Escaped + "|" + Quoted + "|" + Group3 + @"|[^,()\[\]'""`]|['""`])*)";
 
-    // The same for an object member, which also ends at the closing brace.
-    private const string MemberTail = @"(?>(?:" + Escaped + "|" + Quoted + "|" + Group3 + @"|[^,()\[\]{}'""`]|['""`])*)";
+    // The same for an object member, which also ends at the closing brace. It only follows the value when an operator
+    // or another literal does, so the whitespace before a closing brace or bracket is kept.
+    private const string MemberTail = @"(?:(?=\s*[-+.*/%?:&|'""`\\])(?>(?:" + Escaped + "|" + Quoted + "|" + Group3 + @"|[^,()\[\]{}'""`]|['""`])*))?";
 
     // A value literal that is not exactly the generated marker followed by the end of its argument. An unclosed quote
     // ends at the line end (a template literal at the end of the window) and is masked. A Python string prefix
@@ -55,6 +56,7 @@ internal static class RedactionRules
     // of the window: a string may wrap over lines, and masking too much is safer than leaving a line of the value.
     private const string MemberSingle = @"'(?!" + Marker + "'" + MemberEnd + @")(?>(?:\\.|[^'\\]|\\)*)(?:'|\z)";
     private const string MemberDouble = @"""(?!" + Marker + @"""" + MemberEnd + @")(?>(?:\\.|[^""\\]|\\)*)(?:""|\z)";
+    private const string MemberTemplate = @"`(?!" + Marker + "`" + MemberEnd + @")(?>(?:\\.|[^`\\]|\\)*)(?:`|\z)";
 
     // Calls whose first literal argument may be the typed text (the selector, when there is one, comes first).
     private const string TypeCall = @"\.(?:fill|type|pressSequentially|press_sequentially)(?:Async)?\(";
@@ -82,9 +84,9 @@ internal static class RedactionRules
         new("input_value", @"(\bvalue\s*=\s*)'(?!\[redacted:input_value\]')[^']*'", Replacement: "$1'[redacted:input_value]'", Prefilter: "value"),
         new("input_value", @"(\bvalue\s*=\s*)(?![""'\s]|\[redacted:input_value\](?:\s|/?>|\z))[^\s""'<>`=]+", Replacement: "$1\"[redacted:input_value]\"", Prefilter: "value"),
         new("input_value", @"(""value""\s*:\s*)(?:" + MemberDouble + ")" + MemberTail, Replacement: "$1\"[redacted:input_value]\"", Prefilter: "\"value\""),
-        new("input_value", @"([{,]\s*(?:value|'value'|""value"")\s*:\s*)(?:" + MemberSingle + "|" + MemberDouble + ")" + MemberTail, Replacement: "$1\"[redacted:input_value]\"", Prefilter: "value"),
+        new("input_value", @"([{,]\s*(?:value|'value'|""value"")\s*:\s*)(?:" + MemberSingle + "|" + MemberDouble + "|" + MemberTemplate + ")" + MemberTail, Replacement: "$1\"[redacted:input_value]\"", Prefilter: "value"),
         new("input_value", "(" + TypeCall + @"(?>\s*)" + Selector + @"\s*,\s*)(?:" + ValueLiteral + ")" + ArgumentTail, Replacement: "$1\"[redacted:input_value]\"", Prefilter: "("),
-        new("input_value", "(" + TypeCall + @"(?>\s*))(?:" + ValueLiteral + ")" + ArgumentTail + @"(?=\s*(?:\)|,(?>\s*)(?!['""`])))", Replacement: "$1\"[redacted:input_value]\"", Prefilter: "("),
+        new("input_value", "(" + TypeCall + @"(?>\s*))(?:" + ValueLiteral + ")" + ArgumentTail + @"(?=\s*(?:[)(\[]|\z|,(?>\s*)(?!['""`])))", Replacement: "$1\"[redacted:input_value]\"", Prefilter: "("),
         new("input_value", "(" + KeysCall + @"(?>\s*))(?:" + ValueLiteral + ")" + ArgumentTail, Replacement: "$1\"[redacted:input_value]\"", Prefilter: "("),
     ];
 

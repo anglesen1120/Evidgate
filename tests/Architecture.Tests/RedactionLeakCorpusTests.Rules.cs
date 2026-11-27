@@ -25,6 +25,9 @@ public sealed partial class RedactionLeakCorpusTests
         { "object concatenated value", "{value:'hun'+'" + Secret + "'}", Secret, "input_value" },
         { "JSON concatenated value", "{\"value\":\"hun\"+\"" + Secret + "\"}", Secret, "input_value" },
         { "object marker concatenated value", "{value:'[redacted:input_value]'+'" + Secret + "'}", Secret, "input_value" },
+        { "object template literal value", "{ value: `" + Secret + "` }", Secret, "input_value" },
+        { "fill truncated literal", "x.fill('" + Secret, Secret, "input_value" },
+        { "fill deeply nested tail", "x.fill('" + Secret + "' + a(b(c(d(e)))))", Secret, "input_value" },
         { "C# FillAsync", "locator.FillAsync(\"" + Secret + "\")", Secret, "input_value" },
         { "C# TypeAsync", "page.TypeAsync(SEL.a, \"" + Secret + "\")", Secret, "input_value" },
         { "C# PressSequentiallyAsync", "locator.PressSequentiallyAsync(\"" + Secret + "\")", Secret, "input_value" },
@@ -137,32 +140,41 @@ public sealed partial class RedactionLeakCorpusTests
         new SecretRedactor().RedactText(outcome.Text).ShouldBe(outcome.Text);
     }
 
+    [Fact]
+    public void Apply_PrettyPrintedJsonValue_KeepsTheWhitespaceAroundTheMarker()
+    {
+        var text = RedactionRules.Apply("{\n  \"value\": \"" + Secret + "\"\n}", new Dictionary<string, int>());
+
+        text.ShouldBe("{\n  \"value\": \"[redacted:input_value]\"\n}");
+    }
+
     [Theory]
-    [InlineData(".fill(a\\'\n")]
-    [InlineData(".fill(a\\'")]
-    [InlineData("\\'", ".fill('x' + ")]
-    public void Apply_UnterminatedQuotedSelectors_ScalesFrom16To64KiBWithoutTimeout(string repeat, string prefix = "")
+    [InlineData(".fill(a\\'\n", "", false)]
+    [InlineData(".fill(a\\'", "", false)]
+    [InlineData("\\'", ".fill('x' + ", true)]
+    public void Apply_UnterminatedQuotedSelectors_ScalesFrom16To64KiBWithoutTimeout(string repeat, string prefix, bool masked)
     {
         var large = (prefix + string.Concat(Enumerable.Repeat(repeat, 65536 / repeat.Length + 1)))[..65536];
         var small = large[..16384];
-        _ = MeasureSelectors(small);
-        _ = MeasureSelectors(large);
+        _ = MeasureSelectors(small, masked);
+        _ = MeasureSelectors(large, masked);
 
-        var smallTicks = Enumerable.Range(0, 3).Select(_ => MeasureSelectors(small)).Min();
-        var largeTicks = Enumerable.Range(0, 3).Select(_ => MeasureSelectors(large)).Min();
+        var smallTicks = Enumerable.Range(0, 3).Select(_ => MeasureSelectors(small, masked)).Min();
+        var largeTicks = Enumerable.Range(0, 3).Select(_ => MeasureSelectors(large, masked)).Min();
 
         // A linear scan grows fourfold; timer resolution and loaded hosts need headroom.
         largeTicks.ShouldBeLessThan((smallTicks * 10) + (Stopwatch.Frequency / 100));
     }
 
-    private static long MeasureSelectors(string payload)
+    // A literal whose argument never ends is masked up to the end of the text; the selector shapes stay unchanged.
+    private static long MeasureSelectors(string payload, bool masked)
     {
         var counts = new Dictionary<string, int>();
         var start = Stopwatch.GetTimestamp();
         var text = RedactionRules.Apply(payload, counts);
         var elapsed = Stopwatch.GetTimestamp() - start;
         counts.ShouldNotContainKey("regex_timeout");
-        text.ShouldBe(payload);
+        text.ShouldBe(masked ? ".fill(\"[redacted:input_value]\"" : payload);
         return elapsed;
     }
 }

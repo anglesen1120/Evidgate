@@ -74,7 +74,9 @@ internal sealed partial class RedactionPipeline
 
     internal static int FindCut(string payload, int position, int limit, int end, bool whitespaceOnly, ScanBudget budget)
     {
-        var floor = position + (MaxWindowChars / 2);
+        // A whitespace cut may sit anywhere in the window: a short line before one long unbreakable token is the only
+        // place the rest can be cut, and a cut inside that token is refused. Other cuts stay in the far half.
+        var floor = whitespaceOnly ? position + 1 : position + (MaxWindowChars / 2);
         var failures = 0;
         for (var cut = limit; cut >= floor && failures < MaxSeamAttempts;)
         {
