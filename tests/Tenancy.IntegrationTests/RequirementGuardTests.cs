@@ -1,3 +1,4 @@
+using Evidgate.Modules.Authoring.Application;
 using Evidgate.Modules.Authoring.Infrastructure.Persistence;
 using Npgsql;
 using Shouldly;
@@ -141,7 +142,8 @@ public sealed class RequirementGuardTests
             ("project_id", world.Project),
             ("requirement_id", head.RequirementId),
             ("before_version_no", 5),
-            ("limit", 50));
+            ("limit", 50),
+            ("max_bytes", RequirementWriter.MaximumVersionPageBytes));
 
         plan.ShouldContain("requirement_version_no_key", Case.Sensitive);
         plan.ShouldNotContain("\"Node Type\": \"Sort\"", Case.Sensitive);

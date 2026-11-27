@@ -124,7 +124,7 @@ public sealed class TrackerConsentHandlerTests
     public async Task Authorize_ForALiveConnection_IsRefusedUnlessItNeedsReauth()
     {
         var (scopes, principals, tenant) = Wiring(null);
-        var command = new AuthorizeTrackerConnectionCommand(Project, TrackerProvider.Linear);
+        var command = new AuthorizeTrackerConnectionCommand(Project, "linear");
 
         var active = new FakeStore(new ConsentLookup.Unknown()) { Live = View(TrackerConnectionState.Active) };
         var refused = await new AuthorizeTrackerConnectionCommandHandler(
@@ -152,7 +152,7 @@ public sealed class TrackerConsentHandlerTests
 
         var result = await new AuthorizeTrackerConnectionCommandHandler(
             Db(null), scopes, principals, tenant, store, new FakeProvider(), TimeProvider.System, Substitute.For<IAuditTrail>())
-            .Handle(new AuthorizeTrackerConnectionCommand(Project, TrackerProvider.Linear), TestContext.Current.CancellationToken);
+            .Handle(new AuthorizeTrackerConnectionCommand(Project, "linear"), TestContext.Current.CancellationToken);
 
         result.Error!.Status.ShouldBe(429);
         result.Error.Code.ShouldBe(ApiErrorCode.RateLimited);

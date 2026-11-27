@@ -48,6 +48,16 @@ public sealed class PolicyPermissionContractTests
         ("Authoring", "deleteManualCase", "DeleteManualCaseCommandHandler", "authoring:write"),
         ("Authoring", "setManualCaseState", "SetManualCaseStateCommandHandler", "authoring:write"),
         ("Authoring", "moveManualCase", "MoveManualTestCaseCommandHandler", "authoring:write"),
+        ("Authoring", "listRequirements", "ListRequirementsQueryHandler", "authoring:read"),
+        ("Authoring", "createRequirement", "CreateRequirementCommandHandler", "authoring:write"),
+        ("Authoring", "getRequirement", "GetRequirementQueryHandler", "authoring:read"),
+        ("Authoring", "updateRequirement", "UpdateRequirementCommandHandler", "authoring:write"),
+        ("Authoring", "deleteRequirement", "DeleteRequirementCommandHandler", "authoring:write"),
+        ("Authoring", "listRequirementVersions", "ListRequirementVersionsQueryHandler", "authoring:read"),
+        ("Authoring", "restoreRequirement", "RestoreRequirementCommandHandler", "authoring:write"),
+        ("Authoring", "getRequirementCoverage", "GetRequirementCoverageQueryHandler", "authoring:read"),
+        ("Authoring", "createRequirementLink", "LinkRequirementCommandHandler", "authoring:write"),
+        ("Authoring", "deleteRequirementLink", "UnlinkRequirementCommandHandler", "authoring:write"),
 
         // 13.1.1-T3: the version timeline (routes 22, 23) on authoring:read and the four restore routes
         // (6, 11, 18, 24) on authoring:write — the split §5's permission column states.

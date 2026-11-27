@@ -91,8 +91,14 @@ internal sealed partial class TenantRowFactory
             var requiredIntakeNode = string.Equals(table, "public.authoring_intake", StringComparison.Ordinal)
                 && string.Equals(foreignKey.Name, "authoring_intake_feature_node_fk", StringComparison.Ordinal)
                 && !string.Equals(corruptedForeignKey, "authoring_intake_artifact_fk", StringComparison.Ordinal);
+            // A requirement link names exactly one target (0138 CHECK) although both target keys are nullable: the
+            // item is the generated one unless the case key is the one under test.
+            var requiredLinkItem = string.Equals(table, "public.requirement_link", StringComparison.Ordinal)
+                && string.Equals(foreignKey.Name, "requirement_link_item_fk", StringComparison.Ordinal)
+                && !string.Equals(corruptedForeignKey, "requirement_link_case_fk", StringComparison.Ordinal);
             if (!(corruptedForeignKey is not null && corrupted)
                 && !requiredIntakeNode
+                && !requiredLinkItem
                 && ownColumns.Length > 0
                 && ownColumns.Any(column => !_schema.ColumnsOf(table).Single(c => string.Equals(c.Name, column, StringComparison.Ordinal)).NotNull))
             {
@@ -144,7 +150,15 @@ internal sealed partial class TenantRowFactory
             Assign(deferred.Key, deferred.Parent, tenantParentOrg, onlyUnset: true, ref assigned);
             if (!assigned)
             {
+                // A requirement link's requirement key shares project_id with the project and item keys, which
+                // must stay satisfied: only the requirement id moves, so the project and item keys hold and the
+                // pinned version, which names the requirement too, is the one other key the move can break.
+                var keptProject = values.GetValueOrDefault("project_id");
                 Assign(deferred.Key, deferred.Parent, tenantParentOrg, onlyUnset: false, ref assigned);
+                if (string.Equals(deferred.Key.Name, "requirement_link_requirement_fk", StringComparison.Ordinal) && keptProject is not null)
+                {
+                    values["project_id"] = keptProject;
+                }
             }
         }
 
@@ -317,16 +331,16 @@ internal sealed partial class TenantRowFactory
         // the row's own org, so the key differs from the valid row's while the row stays valid everywhere
         // else (a same-org parent is what the valid row names) and the corrupted key remains the only
         // rejection. Only a tenant parent can be regenerated here: a catalogue parent is not org-scoped and
-        // a generated scalar already differs from the valid row's.
+        // a generated scalar already differs from the valid row's. A NULLS NOT DISTINCT key counts a column
+        // the row omits as NULL, so two rows that both omit a nullable key column still duplicate each other.
+        // A parent whose column another enforced foreign key also names (a project id) is moved only after the
+        // parents that own a key column alone, because moving the shared column would break the other foreign
+        // keys and the rejection would no longer be the corrupted one.
         if (corruptedForeignKey is not null && _created.TryGetValue((table, org), out var validRow))
         {
             foreach (var uniqueKey in _schema.UniqueKeysOf(table))
             {
-                var duplicatesValidRow = uniqueKey.Columns.All(column =>
-                    values.TryGetValue(column, out var value)
-                    && validRow.Values.TryGetValue(column, out var validValue)
-                    && Equals(value, validValue));
-                if (!duplicatesValidRow)
+                if (!KeyDuplicates(uniqueKey, values, validRow.Values))
                 {
                     continue;
                 }
@@ -335,8 +349,10 @@ internal sealed partial class TenantRowFactory
                 // A candidate must share a non-tenant column with the key: `org_id` is in every composite key
                 // and in every tenant foreign key, so an overlap on it alone would leave the key exactly as
                 // it was. A foreign key that shares a column with the corruption is never touched.
-                var candidates = _schema.ForeignKeysOf(table)
+                var enforced = _schema.ForeignKeysOf(table)
                     .Where(foreignKey => foreignKey.Columns.All(values.ContainsKey))
+                    .ToArray();
+                var candidates = enforced
                     .Where(foreignKey => foreignKey.Columns.Any(column =>
                         !string.Equals(column, TenantFkScan.TenantColumn, StringComparison.Ordinal)
                         && uniqueKey.Columns.Contains(column)))
@@ -345,7 +361,8 @@ internal sealed partial class TenantRowFactory
                         .Where(column => !string.Equals(column, TenantFkScan.TenantColumn, StringComparison.Ordinal))
                         .Intersect(corruptedColumns, StringComparer.Ordinal)
                         .Any())
-                    .OrderBy(foreignKey => foreignKey.Columns.Length)
+                    .OrderBy(foreignKey => OwnsKeyColumn(foreignKey, enforced, uniqueKey) ? 0 : 1)
+                    .ThenBy(foreignKey => foreignKey.Columns.Length)
                     .ThenBy(foreignKey => foreignKey.Name, StringComparer.Ordinal)
                     .ToArray();
 
@@ -355,21 +372,22 @@ internal sealed partial class TenantRowFactory
                     // The valid row's own parent cannot be reused: its key is exactly what duplicates, so a
                     // second parent of the same org is created beside the cached one.
                     var parent = await CreateBesideCacheAsync(replacement.PrincipalTable, org, cancellationToken);
+                    var owned = OwnedColumns(replacement, enforced);
+                    var ownsKeyColumn = OwnsKeyColumn(replacement, enforced, uniqueKey);
 
                     for (var index = 0; index < replacement.Columns.Length; index++)
                     {
-                        if (!string.Equals(replacement.Columns[index], TenantFkScan.TenantColumn, StringComparison.Ordinal))
+                        var column = replacement.Columns[index];
+                        if (!string.Equals(column, TenantFkScan.TenantColumn, StringComparison.Ordinal)
+                            && (!ownsKeyColumn || owned.Contains(column)))
                         {
-                            values[replacement.Columns[index]] = parent.Values[replacement.PrincipalColumns[index]];
+                            values[column] = parent.Values[replacement.PrincipalColumns[index]];
                         }
                     }
 
                     // The replacement must actually move the key: one that left every key column equal to
                     // the valid row's would still answer 23505, so the next candidate gets its turn.
-                    moved = !uniqueKey.Columns.All(column =>
-                        values.TryGetValue(column, out var value)
-                        && validRow.Values.TryGetValue(column, out var validValue)
-                        && Equals(value, validValue));
+                    moved = !KeyDuplicates(uniqueKey, values, validRow.Values);
                     if (moved)
                     {
                         break;
@@ -385,6 +403,41 @@ internal sealed partial class TenantRowFactory
 
         return values;
     }
+
+    /// <summary>
+    /// True when a row built from <paramref name="values"/> would collide with the valid row on
+    /// <paramref name="uniqueKey"/>. Under NULLS NOT DISTINCT a nullable column both rows omit is NULL on both
+    /// sides and counts as equal; a column with a default is not omitted, the database fills it, so it never does.
+    /// </summary>
+    private bool KeyDuplicates(ScannedUniqueKey uniqueKey, Dictionary<string, object> values, IReadOnlyDictionary<string, object> validValues)
+    {
+        var columns = _schema.ColumnsOf(uniqueKey.Table);
+        return uniqueKey.Columns.All(column =>
+        {
+            var hasValue = values.TryGetValue(column, out var value);
+            var validHasValue = validValues.TryGetValue(column, out var validValue);
+            if (hasValue && validHasValue)
+            {
+                return Equals(value, validValue);
+            }
+
+            return uniqueKey.NullsNotDistinct
+                && !hasValue
+                && !validHasValue
+                && columns.Any(scanned => string.Equals(scanned.Name, column, StringComparison.Ordinal) && !scanned.NotNull && !scanned.HasDefault);
+        });
+    }
+
+    /// <summary>The non-tenant columns of <paramref name="foreignKey"/> that no other enforced foreign key of the row names.</summary>
+    private static string[] OwnedColumns(ScannedForeignKey foreignKey, ScannedForeignKey[] enforced) =>
+        foreignKey.Columns
+            .Where(column => !string.Equals(column, TenantFkScan.TenantColumn, StringComparison.Ordinal)
+                && !enforced.Any(other => !string.Equals(other.Name, foreignKey.Name, StringComparison.Ordinal) && other.Columns.Contains(column)))
+            .ToArray();
+
+    /// <summary>True when <paramref name="foreignKey"/> alone owns at least one column of <paramref name="uniqueKey"/>.</summary>
+    private static bool OwnsKeyColumn(ScannedForeignKey foreignKey, ScannedForeignKey[] enforced, ScannedUniqueKey uniqueKey) =>
+        OwnedColumns(foreignKey, enforced).Any(column => uniqueKey.Columns.Contains(column));
 
     /// <summary>The parent row for <paramref name="org"/>: the generated one, or (when allowed) a freshly created and inserted one.</summary>
     private async Task<GeneratedRow> ResolveParentAsync(

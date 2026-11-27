@@ -213,6 +213,10 @@ internal static class SchemaConventionScan
             "public.release_decision",
             SchemaRule.AuditColumns | SchemaRule.VersionTrigger,
             "Append-only release decisions (migration 0129): `release_decision_immutable` refuses every UPDATE and DELETE and the app role holds SELECT + INSERT, so a row keeps `created_at` only, like `evaluation`; a changed input set is a new row and the newest by `created_at` is the current decision."),
+        new SchemaExemption(
+            "public.requirement_link",
+            SchemaRule.AuditColumns | SchemaRule.VersionTrigger,
+            "A requirement link is insert-or-delete (migration 0138): the app role holds SELECT, INSERT and DELETE but UPDATE is revoked, so the row keeps created_at only — no updated_at/version and no version trigger. A repeat link is answered by `requirement_link_target_key` rather than by a version bump. Its tenant key, composite FKs (requirement, pinned version, item, case) and RLS are NOT exempt."),
     ];
 
     /// <summary>

@@ -21,8 +21,8 @@ namespace Evidgate.Modules.Authoring.Trackers.Application;
 /// Nothing is connected by this call.
 /// </summary>
 /// <param name="ProjectId">The project from the route.</param>
-/// <param name="Provider">The tracker from the route.</param>
-internal sealed record AuthorizeTrackerConnectionCommand(Guid ProjectId, TrackerProvider Provider)
+/// <param name="Provider">The tracker wire name from the route; the handler refuses an unknown one after authorization.</param>
+internal sealed record AuthorizeTrackerConnectionCommand(Guid ProjectId, string Provider)
     : ICommand<Result<TrackerAuthorizeResponse>>;
 
 /// <summary>Handler of <see cref="AuthorizeTrackerConnectionCommand"/>.</summary>
@@ -82,7 +82,12 @@ internal sealed class AuthorizeTrackerConnectionCommandHandler(
             return Result.Failure<TrackerAuthorizeResponse>(missing);
         }
 
-        if (!provider.IsConfigured(command.Provider))
+        if (!TrackerProviders.TryParse(command.Provider, out var kind))
+        {
+            return Result.Failure<TrackerAuthorizeResponse>(Error.NotFound("no such tracker"));
+        }
+
+        if (!provider.IsConfigured(kind))
         {
             return Result.Failure<TrackerAuthorizeResponse>(Error.Conflict(
                 ApiErrorCode.TrackerProviderUnavailable,
@@ -90,7 +95,7 @@ internal sealed class AuthorizeTrackerConnectionCommandHandler(
         }
 
         // A connection that needs reauthorisation may be reconnected in place; any other live one must be disconnected first.
-        var live = await store.FindLiveAsync(command.ProjectId, command.Provider, cancellationToken).ConfigureAwait(false);
+        var live = await store.FindLiveAsync(command.ProjectId, kind, cancellationToken).ConfigureAwait(false);
         if (live is { State: not TrackerConnectionState.NeedsReauth })
         {
             return Result.Failure<TrackerAuthorizeResponse>(Error.Conflict(
@@ -99,8 +104,8 @@ internal sealed class AuthorizeTrackerConnectionCommandHandler(
         }
 
         var state = TrackerState.New(orgId);
-        var verifier = command.Provider == TrackerProvider.Linear ? TrackerState.NewVerifier() : null;
-        var consent = new PendingConsent(orgId, command.ProjectId, userId, command.Provider, provider.RedirectUri(command.Provider), verifier);
+        var verifier = kind == TrackerProvider.Linear ? TrackerState.NewVerifier() : null;
+        var consent = new PendingConsent(orgId, command.ProjectId, userId, kind, provider.RedirectUri(kind), verifier);
         if (!await store.SaveConsentAsync(TrackerState.Hash(state), consent, ConsentLifetime, cancellationToken).ConfigureAwait(false))
         {
             return Result.Failure<TrackerAuthorizeResponse>(TooManyConsents);
@@ -111,13 +116,13 @@ internal sealed class AuthorizeTrackerConnectionCommandHandler(
             command.ProjectId.ToString("D", CultureInfo.InvariantCulture),
             Metadata: new Dictionary<string, string>
             {
-                ["provider"] = TrackerProviders.ToWire(command.Provider),
+                ["provider"] = TrackerProviders.ToWire(kind),
                 ["outcome"] = "consent_started",
             },
             ProjectId: command.ProjectId));
 
         return Result.Success(new TrackerAuthorizeResponse(
-            provider.Authorize(command.Provider, state, verifier),
+            provider.Authorize(kind, state, verifier),
             clock.GetUtcNow().Add(ConsentLifetime)));
     }
 }

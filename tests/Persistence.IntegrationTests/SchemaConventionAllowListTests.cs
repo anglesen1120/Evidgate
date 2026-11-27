@@ -62,6 +62,7 @@ public sealed class SchemaConventionAllowListTests
         ("public.platform_operator_audit", SchemaRule.VersionTrigger),
         ("public.incident_attempt", SchemaRule.AuditColumns | SchemaRule.VersionTrigger),
         ("public.release_decision", SchemaRule.AuditColumns | SchemaRule.VersionTrigger),
+        ("public.requirement_link", SchemaRule.AuditColumns | SchemaRule.VersionTrigger),
     ];
 
     [Fact]

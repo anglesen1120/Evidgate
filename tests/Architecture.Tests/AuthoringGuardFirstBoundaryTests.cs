@@ -45,12 +45,20 @@ public sealed partial class AuthoringGuardFirstBoundaryTests
         "AuthoringNodeEndpoints.UpdateNodeAsync",
         "AuthoringNodeEndpoints.ReorderNodesAsync",
         "AuthoringNodeEndpoints.DeleteNodeAsync",
+        "AuthoringRequirementEndpoints.CreateAsync",
+        "AuthoringRequirementEndpoints.CreateLinkAsync",
+        "AuthoringRequirementEndpoints.DeleteAsync",
+        "AuthoringRequirementEndpoints.DeleteLinkAsync",
+        "AuthoringRequirementEndpoints.PatchAsync",
+        "AuthoringRequirementEndpoints.RestoreAsync",
         "AuthoringRestoreEndpoints.RestoreNodeAsync",
         "AuthoringRestoreEndpoints.RestoreChecklistItemAsync",
         "AuthoringRestoreEndpoints.RestoreManualCaseAsync",
         "AuthoringRestoreEndpoints.RestoreVersionAsync",
         "AuthoringImportEndpoints.ImportAsync",
         "AuthoringIntakeEndpoints.CreateAsync",
+        "AuthoringTrackerEndpoints.AuthorizeAsync",
+        "AuthoringTrackerEndpoints.DisconnectAsync",
     ];
 
     [Fact]

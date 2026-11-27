@@ -6,6 +6,7 @@ using Mediator;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Evidgate.Modules.Authoring.Endpoints;
 
@@ -48,7 +49,6 @@ internal static class AuthoringTrackerEndpoints
 
     private static async Task<Result<TrackerAuthorizeResponse>> AuthorizeAsync(
         Guid p,
-        string provider,
         HttpContext context,
         IMediator mediator,
         CancellationToken cancellationToken)
@@ -57,26 +57,29 @@ internal static class AuthoringTrackerEndpoints
         RawBodyGuard.RequireAuthenticatedTenant(context.RequestServices);
         context.Response.Headers.CacheControl = "no-store";
 
-        return TrackerProviders.TryParse(provider, out var kind)
-            ? await mediator.Send(new AuthorizeTrackerConnectionCommand(p, kind), cancellationToken).ConfigureAwait(false)
-            : Result.Failure<TrackerAuthorizeResponse>(Error.NotFound("no such tracker"));
+        return await mediator.Send(
+            new AuthorizeTrackerConnectionCommand(p, RouteProvider(context)),
+            cancellationToken).ConfigureAwait(false);
     }
 
+    // Reads and consumes the state-bound consent in short units outside one transaction, so the callback cannot be
+    // one mediator message (see TrackerCallbackService); the architecture scan names it as the one such delegate.
     private static async Task<Result<TrackerConnectionDto>> CallbackAsync(
-        string provider,
         HttpContext context,
-        TrackerCallbackService callback,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(context);
-        // With no org in the state, tenant.Require() in TenantTransactionBehaviour runs before authorization;
-        // EnvelopeExceptionMiddleware maps that missing tenant to 401 without reading or consuming consent.
+        // With no org in the state, the guard throws the missing-tenant 401 before anything is read or consumed.
+        RawBodyGuard.RequireAuthenticatedTenant(context.RequestServices);
         context.Response.Headers.CacheControl = "no-store";
 
         var query = context.Request.Query;
+        var callback = context.RequestServices.GetRequiredService<TrackerCallbackService>();
 
-        return await callback.CompleteAsync(provider, query["code"], query["state"], query["error"], cancellationToken).ConfigureAwait(false);
+        return await callback.CompleteAsync(RouteProvider(context), query["code"], query["state"], query["error"], cancellationToken).ConfigureAwait(false);
     }
+
+    private static string RouteProvider(HttpContext context) => context.Request.RouteValues["provider"] as string ?? string.Empty;
 
     private static async Task<Result<TrackerConnectionListResponse>> ListAsync(
         Guid p,

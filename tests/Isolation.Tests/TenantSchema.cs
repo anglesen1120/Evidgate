@@ -20,8 +20,12 @@ internal sealed record ScannedColumn(string Table, string Name, string StoreType
 /// </summary>
 internal sealed record ScannedForeignKey(string Table, string Name, string PrincipalTable, string[] Columns, string[] PrincipalColumns);
 
-/// <summary>One valid, immediate, non-partial unique key, as its column list sorted ordinal (so comparisons are order-insensitive).</summary>
-internal sealed record ScannedUniqueKey(string Table, string[] Columns);
+/// <summary>
+/// One valid, immediate, non-partial unique key, as its column list sorted ordinal (so comparisons are order-insensitive).
+/// <paramref name="NullsNotDistinct"/> is true when two NULLs in the key count as equal, so a row that omits a nullable
+/// key column still collides with another row that omits it.
+/// </summary>
+internal sealed record ScannedUniqueKey(string Table, string[] Columns, bool NullsNotDistinct);
 
 /// <summary>
 /// The relation catalogue of one database as the composite-FK suite reads it
@@ -141,7 +145,8 @@ internal sealed class TenantSchema
             select n.nspname || '.' || c.relname,
                    (select array_agg(a.attname::text order by a.attname::text)
                       from generate_series(0, i.indnkeyatts - 1) as s(ord)
-                      join pg_attribute a on a.attrelid = i.indrelid and a.attnum = i.indkey[s.ord])
+                      join pg_attribute a on a.attrelid = i.indrelid and a.attnum = i.indkey[s.ord]),
+                   i.indnullsnotdistinct
               from pg_index i
               join pg_class c on c.oid = i.indrelid
               join pg_namespace n on n.oid = c.relnamespace
@@ -182,7 +187,7 @@ internal sealed class TenantSchema
         {
             var keyColumns = (string[])row[1]!;
             Array.Sort(keyColumns, StringComparer.Ordinal);
-            uniqueKeys.Add(new ScannedUniqueKey((string)row[0]!, keyColumns));
+            uniqueKeys.Add(new ScannedUniqueKey((string)row[0]!, keyColumns, (bool)row[2]!));
         }
 
         return new TenantSchema(tables, columns, foreignKeys, uniqueKeys);

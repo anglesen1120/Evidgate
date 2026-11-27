@@ -223,6 +223,17 @@ const EXPECTED = [
   ['/projects/{p}/authoring/manual-cases/{m}', 'delete', 'authoring:write', 'v1'],
   ['/projects/{p}/authoring/manual-cases/{m}/state', 'post', 'authoring:write', 'v1'],
   ['/projects/{p}/authoring/manual-cases/{m}/item', 'post', 'authoring:write', 'v1'],
+  // Requirements: CRUD, history and restore.
+  ['/projects/{p}/authoring/requirements', 'get', 'authoring:read', 'v1'],
+  ['/projects/{p}/authoring/requirements', 'post', 'authoring:write', 'v1'],
+  ['/projects/{p}/authoring/requirements/{r}', 'get', 'authoring:read', 'v1'],
+  ['/projects/{p}/authoring/requirements/{r}', 'patch', 'authoring:write', 'v1'],
+  ['/projects/{p}/authoring/requirements/{r}', 'delete', 'authoring:write', 'v1'],
+  ['/projects/{p}/authoring/requirements/{r}/versions', 'get', 'authoring:read', 'v1'],
+  ['/projects/{p}/authoring/requirements/{r}/restore', 'post', 'authoring:write', 'v1'],
+  ['/projects/{p}/authoring/requirements/{r}/coverage', 'get', 'authoring:read', 'v1'],
+  ['/projects/{p}/authoring/requirements/{r}/links', 'post', 'authoring:write', 'v1'],
+  ['/projects/{p}/authoring/requirements/{r}/links/{l}', 'delete', 'authoring:write', 'v1'],
   // 13.1.1-T3 (S80): the version timeline (routes 22, 23) and the four restore routes (6, 11, 18, 24).
   // 00 §9.3's authoring row carries them; the two reads are `authoring:read`, the four restores `authoring:write`.
   ['/projects/{p}/authoring/versions', 'get', 'authoring:read', 'v1'],
