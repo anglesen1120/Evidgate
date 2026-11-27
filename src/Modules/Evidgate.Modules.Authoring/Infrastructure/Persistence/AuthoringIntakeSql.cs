@@ -73,6 +73,28 @@ internal static class AuthoringIntakeSql
         """;
 
     /// <summary>
+    /// The state, the code-point count and the selected code points of one intake's extracted text. The offsets are
+    /// clamped inside the text in <c>bigint</c> before they reach <c>substr</c>, so an out-of-range request reads an
+    /// empty slice instead of failing, and only the selection is ever returned, never the whole text.
+    /// </summary>
+    internal const string Selection = """
+        select s.state,
+               s.char_count,
+               case when s.text is null then null
+                    else substr(s.text, cast(s.from_at as integer) + 1, cast(greatest(s.to_at - s.from_at, 0) as integer))
+               end as selection
+          from (select i.state,
+                       i.extracted_text as text,
+                       char_length(i.extracted_text) as char_count,
+                       least(greatest(cast(@start_at as bigint), 0), char_length(i.extracted_text)) as from_at,
+                       least(coalesce(cast(@end_at as bigint), char_length(i.extracted_text)), char_length(i.extracted_text)) as to_at
+                  from public.authoring_intake i
+                 where i.org_id = @org_id
+                   and i.project_id = @project_id
+                   and i.id = @id) s
+        """;
+
+    /// <summary>
     /// How many unfinished intakes of the tenant were created before one, stopping at <c>@bound</c>: the queue position the
     /// <c>eta_class</c> is judged from, bounded so a deep queue costs no more than a shallow one. The state list and the
     /// order match <c>authoring_intake_pending_created_idx</c>, so the count walks that partial index and never the

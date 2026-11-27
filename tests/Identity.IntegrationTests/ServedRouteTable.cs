@@ -1124,6 +1124,10 @@ internal static class RouteRequests
                 IdempotencyKey: Key()));
         Add("GET", "/v1/projects/{p}/authoring/intakes/{i}", ctx =>
             new(HttpMethod.Get, $"/v1/projects/{ctx.ProjectId}/authoring/intakes/{Guid.NewGuid():D}"));
+        Add("POST", "/v1/projects/{p}/authoring/intakes/{i}/spec-section", ctx =>
+            new(HttpMethod.Post, $"/v1/projects/{ctx.ProjectId}/authoring/intakes/{Guid.NewGuid():D}/spec-section",
+                new JsonObject { ["title"] = "probe section" },
+                IdempotencyKey: Key()));
 
         // The tracker connection routes.
         Add("POST", "/v1/projects/{p}/tracker-connections/{provider}/authorize", ctx =>

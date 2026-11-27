@@ -43,7 +43,8 @@ namespace Evidgate.Modules.Authoring.Application.Import;
 internal sealed partial class AuthoringImporter(
     ITenantDb db,
     AuthoringCodeAllocator allocator,
-    ManualCaseStepsValidator steps)
+    ManualCaseStepsValidator steps,
+    RequirementWriter requirements)
 {
     /// <summary>The JSON shape of the payloads the set-based statements consume (snake_case, nulls kept).</summary>
     private static readonly JsonSerializerOptions PayloadJsonOptions = new()
@@ -53,6 +54,8 @@ internal sealed partial class AuthoringImporter(
     };
 
     private readonly ImportValidator validator = new(steps);
+
+    private readonly RequirementImporter requirementImporter = new(db, requirements);
 
     /// <summary>Imports one file's rows (route 25), or reports what it would do.</summary>
     /// <param name="orgId">The tenant of the open scope.</param>
@@ -166,6 +169,18 @@ internal sealed partial class AuthoringImporter(
         {
             return AuthoringErrors.Fail<ImportReport>(AuthoringErrors.NotFound(
                 "no project with that id is visible in this tenant"));
+        }
+
+        if (RequirementImportValidator.MixedFamily(rows) is { } mixed)
+        {
+            return Refusal([mixed]);
+        }
+
+        if (rows[0].Kind == ImportRowKind.Requirement)
+        {
+            return await requirementImporter
+                .ImportAsync(orgId, projectId, actorMembershipId, rows, dryRun, cancellationToken)
+                .ConfigureAwait(false);
         }
 
         var validation = validator.Validate(rows, casePrefix);

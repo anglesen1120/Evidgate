@@ -114,6 +114,7 @@ export const KNOWN_API_SEGMENTS: ReadonlySet<string> = new Set<string>([
   'security-events',
   'session',
   'sessions',
+  'spec-section',
   'start',
   'state',
   'suite-revisions',

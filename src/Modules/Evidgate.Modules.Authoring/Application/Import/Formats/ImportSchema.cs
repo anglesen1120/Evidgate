@@ -317,4 +317,10 @@ internal static partial class ImportSchema
                 RegexOptions.CultureInvariant,
                 TimeSpan.FromSeconds(1))),
     ];
+
+    /// <summary>The exact-end form of <c>$defs.requirement.properties.code.pattern</c>: an external reference label.</summary>
+    private static readonly Regex RequirementCode = new(
+        @"^[A-Za-z0-9._:/#-]+\z",
+        RegexOptions.CultureInvariant,
+        TimeSpan.FromSeconds(1));
 }

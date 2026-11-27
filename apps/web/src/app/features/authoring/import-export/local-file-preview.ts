@@ -1,6 +1,7 @@
-import type { ImportAuthoringData } from '@evidgate/sdk';
+import type { ExportAuthoringData } from '@evidgate/sdk';
 
-export type AuthoringFormat = ImportAuthoringData['query']['format'];
+// The web screens handle the tree formats both ways; markdown is an API-only requirement import format.
+export type AuthoringFormat = ExportAuthoringData['query']['format'];
 export const IMPORT_BYTE_CAP = 5 * 1024 * 1024;
 export const IMPORT_ROW_CAP = 5000;
 export const IMPORT_COLUMNS = [

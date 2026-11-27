@@ -375,12 +375,7 @@ internal static class XlsxWriter
     /// <returns>The column's text, or null for a column the row's kind leaves empty.</returns>
     private static string? TextOf(ImportRow row, string column) => column switch
     {
-        "kind" => row.Kind switch
-        {
-            ImportRowKind.Node => "node",
-            ImportRowKind.Item => "item",
-            _ => "case",
-        },
+        "kind" => ImportRows.KindName(row.Kind),
         "key" => row.Key,
         "parent_key" => row.ParentKey,
         "item_key" => row.ItemKey,

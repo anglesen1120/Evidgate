@@ -35,6 +35,44 @@ internal static class AuthoringIntakeEndpoints
         authoring.MapGet("/intakes/{i}", GetAsync)
             .Produces<IntakeStatusResponse>(StatusCodes.Status200OK)
             .WithSummary("Read the state of one requirement intake");
+
+        authoring.MapPost("/intakes/{i}/spec-section", SaveSpecSectionAsync)
+            .Accepts<SaveSpecSectionRequest>("application/json")
+            .Produces<RequirementWriteResponse>(StatusCodes.Status201Created)
+            .Produces(StatusCodes.Status200OK)
+            .WithSummary("Save a selection of an intake's extracted text as a spec_section requirement");
+    }
+
+    private static async Task<Result<RequirementWriteResponse>> SaveSpecSectionAsync(
+        Guid p,
+        Guid i,
+        HttpContext context,
+        IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        RawBodyGuard.RequireAuthenticatedTenant(context.RequestServices);
+
+        var (body, readError) = await AuthoringEndpointSupport.ReadBodyAsync(context, cancellationToken).ConfigureAwait(false);
+        if (readError is not null)
+        {
+            return Result.Failure<RequirementWriteResponse>(readError);
+        }
+
+        if (AuthoringEndpointSupport.UnknownMembers(body, SpecSectionBody.Members, "spec section") is { } unknown)
+        {
+            return Result.Failure<RequirementWriteResponse>(unknown);
+        }
+
+        var result = await mediator.Send(
+            new SaveSpecSectionCommand(p, i, body, AuthoringEndpointSupport.IdempotencyKey(context)),
+            cancellationToken).ConfigureAwait(false);
+        if (result.IsSuccess)
+        {
+            AuthoringEndpointSupport.SetVersionETag(context, result.Value.Version);
+        }
+
+        return result;
     }
 
     private static async Task<Result<CreateIntakeResponse>> CreateAsync(
