@@ -1,3 +1,4 @@
+using Evidgate.BuildingBlocks.Persistence.Audit;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.Modules.Healing.Contracts;
 
@@ -15,7 +16,7 @@ namespace Evidgate.Modules.Healing.Application;
 /// attempt of a call also writes the call's redaction report, in the same statement, so a call row never names a report
 /// hash that has no report behind it; later attempts of the same call carry the same hash.
 /// </remarks>
-internal sealed class HealingLlmCallRecorder(ITenantDb db, ITenantScopeAccessor scopes)
+internal sealed class HealingLlmCallRecorder(ITenantDb db, ITenantScopeAccessor scopes, IAuditTrail audit)
 {
     /// <summary>Records one attempt and returns the row id (the value a generation stores as its <c>ai_run_id</c>).</summary>
     /// <param name="request">The call the attempt belongs to; its attribution columns are copied verbatim.</param>
@@ -62,6 +63,15 @@ internal sealed class HealingLlmCallRecorder(ITenantDb db, ITenantScopeAccessor 
                 },
                 cancellationToken)
             .ConfigureAwait(false);
+
+        // A refusal is the one outcome that is also an audit event; it commits with the row and its report, so a
+        // call that was refused always has its entry and a rolled-back one has neither.
+        if (status == HealingLlmStatuses.BlockedLeak)
+        {
+            await HealingLeakAudit
+                .WriteAsync(audit, db, orgId, request.ProjectId, id, redaction, cancellationToken)
+                .ConfigureAwait(false);
+        }
 
         return id;
     }

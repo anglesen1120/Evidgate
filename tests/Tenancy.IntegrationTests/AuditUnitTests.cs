@@ -74,6 +74,45 @@ public sealed class AuditUnitTests
         AuditMetadata.Validate(new Dictionary<string, string> { ["slug"] = "acme", ["count"] = "3" }).ShouldNotBeNull();
 
     [Fact]
+    public void Metadata_ReportDigest_IsAcceptedOnlyUnderItsOwnKeyAndExactForm()
+    {
+        var digest = "sha256:" + new string('a', 64);
+
+        AuditMetadata.Validate(new Dictionary<string, string>
+        {
+            ["rule_id"] = "residual_credentials",
+            ["segment_ordinal"] = "2",
+            ["report_hash"] = digest,
+        }).ShouldNotBeNull();
+
+        // The same value is a long unbroken run anywhere else, and a near-digest is not exempt under its own key.
+        Should.Throw<ArgumentException>(() => AuditMetadata.Validate(new Dictionary<string, string> { ["slug"] = digest }))
+            .Message.ShouldContain("credential");
+        foreach (var near in new[] { digest.ToUpperInvariant(), digest + "a", "sha256:" + new string('a', 63) + "g", new string('a', 71) })
+        {
+            Should.Throw<ArgumentException>(() => AuditMetadata.Validate(new Dictionary<string, string> { ["report_hash"] = near }))
+                .Message.ShouldContain("credential");
+        }
+    }
+
+    // The digest exemption is the one 32-byte channel in the metadata, so every shape beside `sha256:` + 64 lowercase
+    // hex stays refused; the valid form is the positive control that the key is exempt at all.
+    [Theory]
+    [InlineData("sha256:", "upper", "")]
+    [InlineData("sha512:", "lower", "")]
+    [InlineData("sha256:", "lower", "-extra")]
+    [InlineData("sha256:", "lower", "\n")]
+    public void Metadata_ReportDigestNearForm_IsRefused(string prefix, string casing, string suffix)
+    {
+        var hex = new string('a', 32) + new string('7', 32);
+        var near = prefix + (casing == "upper" ? hex.ToUpperInvariant() : hex) + suffix;
+
+        AuditMetadata.Validate(new Dictionary<string, string> { ["report_hash"] = "sha256:" + hex }).ShouldNotBeNull();
+        Should.Throw<ArgumentException>(() => AuditMetadata.Validate(new Dictionary<string, string> { ["report_hash"] = near }))
+            .Message.ShouldContain("credential");
+    }
+
+    [Fact]
     public void AuditPayload_DenyList_IsOneListAndMatchesNormalisedKeys()
     {
         // 11.9.2-T2.2 (AC10): the one list, mirrored in docs/security/audit-and-deletion-rule.md §4.
